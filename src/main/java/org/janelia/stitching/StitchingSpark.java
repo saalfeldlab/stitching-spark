@@ -73,10 +73,7 @@ public class StitchingSpark implements Runnable, Serializable {
 		params.virtual = true;
 		job.setParams( params );
 		
-		final SparkConf conf = new SparkConf()
-				.setAppName( "StitchingSpark" )
-				.setMaster( "local[7]" )
-				.set( "spark.executor.memory", "10g" );
+		final SparkConf conf = new SparkConf().setAppName( "StitchingSpark" );
 		final JavaSparkContext sparkContext = new JavaSparkContext( conf );
 		stitchWithSpark( sparkContext, overlappingTiles );
 		sparkContext.close();
