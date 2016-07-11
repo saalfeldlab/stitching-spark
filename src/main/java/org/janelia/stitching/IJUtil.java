@@ -2,11 +2,13 @@ package org.janelia.stitching;
 
 import java.awt.Rectangle;
 import java.io.File;
+import java.util.ArrayList;
 
 import ij.gui.Roi;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
 import mpicbg.stitching.ImageCollectionElement;
+import scala.Tuple2;
 
 /**
  * @author pisarevi
@@ -36,6 +38,7 @@ public class IJUtil {
 	}
 	
 	// taken from CollectionStitchingImgLib (it is made protected there)
+	// TODO: pull request making it public, then remove it from here
 	public static Roi getROI( final ImageCollectionElement e1, final ImageCollectionElement e2 )
 	{
 		final int start[] = new int[ 2 ], end[] = new int[ 2 ];

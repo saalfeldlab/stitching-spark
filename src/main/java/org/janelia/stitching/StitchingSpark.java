@@ -1,9 +1,7 @@
 package org.janelia.stitching;
 
-import java.awt.Rectangle;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -15,15 +13,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 
-import com.google.gson.Gson;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
-
 import ij.gui.Roi;
-import mpicbg.models.Model;
 import mpicbg.models.Tile;
-import mpicbg.models.TranslationModel2D;
-import mpicbg.models.TranslationModel3D;
 import mpicbg.stitching.ComparePair;
 import mpicbg.stitching.GlobalOptimization;
 import mpicbg.stitching.ImageCollectionElement;
@@ -32,33 +23,77 @@ import mpicbg.stitching.PairWiseStitchingImgLib;
 import mpicbg.stitching.PairWiseStitchingResult;
 import mpicbg.stitching.StitchingParameters;
 import scala.Tuple2;
-import stitching.utils.Log;
 
 /**
  * @author pisarevi
  *
  */
 
-public class StitchingSpark {
-	
-	static StitchingParameters params;
-	
-	public static void stitchWithSpark( 
-			final JavaSparkContext sc, 
-			final StitchingJob job, 
-			final StitchingParameters paramsLocal, 
-			final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles ) {
+public class StitchingSpark implements Runnable, Serializable {
+
+	public static void main( String[] args ) {
 		
-		params = paramsLocal;
+		final StitchingArguments stitchingArgs = new StitchingArguments( args );
+		if ( !stitchingArgs.parsedSuccessfully() )
+			System.exit( 1 );
 		
-		final JavaRDD< Tuple2< TileInfo, TileInfo > > rdd = sc.parallelize( overlappingTiles );
+		StitchingSpark st = new StitchingSpark( stitchingArgs );
+		st.run();
+	}
+	
+	private static final long serialVersionUID = 6006962943789087537L;
+	private StitchingArguments args;
+	private StitchingJob job;
+	
+	public StitchingSpark( final StitchingArguments args ) {
+		this.args = args;
+	}
+	
+	@Override
+	public void run() {
+		job = new StitchingJob( args );
+		try {
+			job.prepareTiles();
+		} catch ( final Exception e ) {
+			System.out.println( "Aborted: " + e.getMessage() );
+			System.exit( 2 );
+		}
+		
+		final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = findOverlappingTiles( job.getTiles() );
+		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
+		
+		final StitchingParameters params = new StitchingParameters();
+		params.dimensionality = job.getDimensionality();
+		params.channel1 = 0;
+		params.channel2 = 0;
+		params.timeSelect = 0;
+		params.checkPeaks = 5;
+		params.computeOverlap = true;
+		params.subpixelAccuracy = false;
+		params.virtual = true;
+		job.setParams( params );
+		
+		final SparkConf conf = new SparkConf()
+				.setAppName( "StitchingSpark" )
+				.setMaster( "local[7]" )
+				.set( "spark.executor.memory", "10g" );
+		final JavaSparkContext sparkContext = new JavaSparkContext( conf );
+		stitchWithSpark( sparkContext, overlappingTiles );
+		sparkContext.close();
+		
+		System.out.println( "done" );
+	}
+
+	private void stitchWithSpark( final JavaSparkContext sparkContext, final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles ) {
+		
+		final JavaRDD< Tuple2< TileInfo, TileInfo > > rdd = sparkContext.parallelize( overlappingTiles );
 		final JavaRDD< SerializablePairWiseStitchingResult > pairwiseStitching = rdd.map(
 				new Function< Tuple2< TileInfo, TileInfo >, SerializablePairWiseStitchingResult >() {
 					
 					private static final long serialVersionUID = -2907426581991906327L;
 
 					@Override
-					public SerializablePairWiseStitchingResult call( Tuple2< TileInfo, TileInfo > pairOfTiles ) throws Exception {
+					public SerializablePairWiseStitchingResult call( final Tuple2< TileInfo, TileInfo > pairOfTiles ) throws Exception {
 						
 						System.out.println( "Stitching tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + "...");
 						
@@ -66,18 +101,17 @@ public class StitchingSpark {
 						final ImageCollectionElement el2 = IJUtil.createElement( job, pairOfTiles._2 );
 						
 						final ComparePair pair = new ComparePair(
-								new ImagePlusTimePoint( el1.open( params.virtual ), el1.getIndex(), 1, el1.getModel(), el1 ),
-								new ImagePlusTimePoint( el2.open( params.virtual ), el2.getIndex(), 1, el2.getModel(), el2 ) );
+								new ImagePlusTimePoint( el1.open( job.getParams().virtual ), el1.getIndex(), 1, el1.getModel(), el1 ),
+								new ImagePlusTimePoint( el2.open( job.getParams().virtual ), el2.getIndex(), 1, el2.getModel(), el2 ) );
 						
             			final Roi roi1 = IJUtil.getROI( pair.getTile1().getElement(), pair.getTile2().getElement() );
             			final Roi roi2 = IJUtil.getROI( pair.getTile2().getElement(), pair.getTile1().getElement() ); 
 						
         				final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
-        						pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint1(), params );
+        						pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint1(), job.getParams() );
         				
-        				String logstr = "Stitched tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + System.lineSeparator() +
-        								"   CrossCorr=" + result.getCrossCorrelation() + ", PhaseCorr=" + result.getPhaseCorrelation() + ", RelShift=" + Arrays.toString( result.getOffset() );
-        				System.out.println( logstr );
+        				System.out.println( "Stitched tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + System.lineSeparator() +
+        								"   CrossCorr=" + result.getCrossCorrelation() + ", PhaseCorr=" + result.getPhaseCorrelation() + ", RelShift=" + Arrays.toString( result.getOffset() ) );
         				
         		    	el1.close();
         		    	el2.close();
@@ -90,6 +124,8 @@ public class StitchingSpark {
 		
 		System.out.println( "Stitched all tiles pairwise, perform global optimization on them..." );
 		
+		// Create fake tile objects so that they don't hold any image data
+		// required by the GlobalOptimization
 		final TreeMap< Integer, Tile< ? > > tiles = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult pair : stitchedPairs ) {
 			for ( final TileInfo tileInfo : new TileInfo[] { pair.getPairOfTiles()._1, pair.getPairOfTiles()._2 } ) {
@@ -98,7 +134,7 @@ public class StitchingSpark {
 						final ImageCollectionElement el = IJUtil.createElement( job, tileInfo );
 						final Tile< ? > tile = new ImagePlusTimePoint( null, el.getIndex(), 1, el.getModel(), el );
 						tiles.put( tileInfo.getIndex(), tile );
-					} catch ( Exception e ) {
+					} catch ( final Exception e ) {
 						e.printStackTrace();
 					}
 				}
@@ -116,20 +152,19 @@ public class StitchingSpark {
 			
 			comparePairs.addElement( comparePair );
 		}
-		final ArrayList< ImagePlusTimePoint > optimized = GlobalOptimization.optimize( comparePairs, comparePairs.get( 0 ).getTile1(), params );
+		final ArrayList< ImagePlusTimePoint > optimized = GlobalOptimization.optimize( comparePairs, comparePairs.get( 0 ).getTile1(), job.getParams() );
 		
 		System.out.println( "Global optimization done" );
-		
 		
 		// output the result
 		System.out.println( "Results: " );
 		for ( final ImagePlusTimePoint imt : optimized )
-			Log.info( imt.getImpId() + ": " + imt.getModel() );
+			System.out.println( imt.getImpId() + ": " + imt.getModel() );
 		
-		writeResultsToFile( job, optimized );
+		outputResults( optimized );
 	}
 	
-	private static void writeResultsToFile( final StitchingJob job, final ArrayList< ImagePlusTimePoint > stitched ) {
+	private void outputResults( final ArrayList< ImagePlusTimePoint > stitched ) {
 		
 		final TileInfo[] inputs = job.getTiles();
 		final TileInfo[] results = new TileInfo[ inputs.length ];
@@ -154,53 +189,9 @@ public class StitchingSpark {
 		
 		try {
 			job.saveTiles( results );
-		} catch (IOException e) {
+		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
-	}
-	
-	public static void performStitching( final StitchingJob job ) {
-		
-		final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = findOverlappingTiles( job.getTiles() );
-		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
-		
-		final StitchingParameters params = new StitchingParameters();
-		params.dimensionality = job.getDimensionality();
-		params.fusionMethod = 7; // this means "Don't fuse images". Why is this not a enum?
-		params.channel1 = 0;
-		params.channel2 = 0;
-		params.timeSelect = 0;
-		params.checkPeaks = 5;
-		params.computeOverlap = true;
-		params.subpixelAccuracy = false;
-		params.virtual = true;
-		
-		final SparkConf conf = new SparkConf()
-				.setAppName( "StitchingSpark" )
-				.setMaster( "local[7]" )
-				.set( "spark.executor.memory", "10g" );
-		final JavaSparkContext sc = new JavaSparkContext( conf );
-		stitchWithSpark( sc, job, params, overlappingTiles );
-		sc.close();
-	}
-
-	public static void main( String[] args ) {
-		
-		final StitchingArguments arguments = new StitchingArguments( args );
-		if ( !arguments.parsedSuccessfully() )
-			System.exit( 1 );
-		
-		final StitchingJob job = new StitchingJob( arguments );
-		try {
-			job.prepareTiles();
-		} catch ( final Exception e ) {
-			System.out.println( "Aborted: " + e.getMessage() );
-			System.exit( 2 );
-		}
-		
-		performStitching( job );
-		
-		System.out.println( "done" );
 	}
 	
 	

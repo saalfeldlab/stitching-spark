@@ -5,11 +5,16 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
+
+import org.apache.commons.io.IOUtils;
 
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
+
+import mpicbg.stitching.StitchingParameters;
 
 /**
  * @author pisarevi
@@ -20,18 +25,25 @@ public class StitchingJob implements Serializable {
 	
 	private static final long serialVersionUID = 2619120742300093982L;
 	
-	private StitchingArguments arguments;
+	private StitchingArguments args;
+	private transient StitchingParameters params;
 	private String baseImagesFolder; 
 	private TileInfo[] tiles;
 	private int dimensionality;
 	
-	public StitchingJob( StitchingArguments arguments ) {
-		this.arguments = arguments;
-		baseImagesFolder = new File( arguments.getInput() ).getAbsoluteFile().getParent();
+	public StitchingJob( final StitchingArguments args ) {
+		this.args = args;
+		baseImagesFolder = new File( args.getInput() ).getAbsoluteFile().getParent();
 	}
 	
-	protected StitchingJob( ) {
-		
+	protected StitchingJob( ) {	}
+	
+	public StitchingParameters getParams() {
+		return params;
+	}
+	
+	public void setParams( final StitchingParameters params ) {
+		this.params = params;
 	}
 	
 	public TileInfo[] getTiles() {
@@ -55,12 +67,12 @@ public class StitchingJob implements Serializable {
 	}
 	
 	private void loadTiles() throws FileNotFoundException {
-		final JsonReader reader = new JsonReader( new FileReader( arguments.getInput() ) );
+		final JsonReader reader = new JsonReader( new FileReader( args.getInput() ) );
 		tiles = new Gson().fromJson( reader, TileInfo[].class );
 	}
 	
 	public void saveTiles( final TileInfo[] resultingTiles ) throws IOException {
-		final StringBuilder output = new StringBuilder( arguments.getInput() );
+		final StringBuilder output = new StringBuilder( args.getInput() );
 		int lastDotIndex = output.lastIndexOf( "." );
 		if ( lastDotIndex == -1 )
 			lastDotIndex = output.length();
@@ -85,5 +97,16 @@ public class StitchingJob implements Serializable {
 		
 		// Everything is correct
 		this.dimensionality = tiles[ 0 ].getDimensionality();
+	}
+	
+	
+	// TODO: pull request for making StitchingParameters serializable, then remove it
+	private void writeObject( final ObjectOutputStream stream ) throws IOException {
+		stream.defaultWriteObject();
+		stream.write( new Gson().toJson( params ).getBytes() );
+	}
+	private void readObject( final ObjectInputStream stream ) throws IOException, ClassNotFoundException {
+		stream.defaultReadObject();
+		params = new Gson().fromJson( IOUtils.toString(stream), StitchingParameters.class );
 	}
 }
