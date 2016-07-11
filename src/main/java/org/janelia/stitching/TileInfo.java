@@ -37,7 +37,9 @@ public class TileInfo implements Serializable {
 	}
 	
 	public void setSize( final int[] size ) {
-		this.size= size;
+		this.size = size;
+		for ( final int s : size )
+			assert s >= 0;
 	}
 	
 	public int getIndex() {

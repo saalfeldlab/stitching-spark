@@ -2,18 +2,20 @@ package org.janelia.stitching;
 
 import java.awt.Rectangle;
 import java.io.File;
+import java.util.ArrayList;
 
 import ij.gui.Roi;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
 import mpicbg.stitching.ImageCollectionElement;
+import scala.Tuple2;
 
 /**
  * @author pisarevi
  *
  */
 
-public class IJUtil {
+public class Utils {
 
 	public static ImageCollectionElement createElement( final StitchingJob job, final TileInfo tile ) throws Exception {
 		
@@ -33,6 +35,31 @@ public class IJUtil {
 			throw new Exception( "Not supported" );
 		}
 		return e;
+	}
+	
+	public static ArrayList< Tuple2< TileInfo, TileInfo > > findOverlappingTiles( final TileInfo[] tiles ) {
+		
+		final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = new ArrayList<>();
+		for ( int i = 0; i < tiles.length; i++ )
+			for ( int j = i + 1; j < tiles.length; j++ )
+				if ( overlap( tiles[ i ], tiles[ j ] ) )
+					overlappingTiles.add( new Tuple2< TileInfo, TileInfo >( tiles[ i ], tiles[ j ] ) );
+		return overlappingTiles;
+	}
+	
+	public static boolean overlap( final TileInfo t1, final TileInfo t2 ) {
+		assert t1.getDimensionality() == t2.getDimensionality();
+		
+		for ( int d = 0; d < t1.getDimensionality(); d++ ) {
+			
+			final float p1 = t1.getPosition()[ d ], p2 = t2.getPosition()[ d ];
+			final int s1 = t1.getSize()[ d ], s2 = t2.getSize()[ d ];
+			
+			if ( !( ( p2 >= p1 && p2 <= p1 + s1 ) || 
+					( p1 >= p2 && p1 <= p2 + s2 ) ) )
+				return false;
+		}
+		return true;
 	}
 	
 	// taken from CollectionStitchingImgLib (it is made protected there)

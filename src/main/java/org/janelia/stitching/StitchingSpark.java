@@ -59,7 +59,7 @@ public class StitchingSpark implements Runnable, Serializable {
 			System.exit( 2 );
 		}
 		
-		final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = findOverlappingTiles( job.getTiles() );
+		final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = Utils.findOverlappingTiles( job.getTiles() );
 		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
 		
 		final StitchingParameters params = new StitchingParameters();
@@ -97,15 +97,15 @@ public class StitchingSpark implements Runnable, Serializable {
 						
 						System.out.println( "Stitching tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + "...");
 						
-						final ImageCollectionElement el1 = IJUtil.createElement( job, pairOfTiles._1 );
-						final ImageCollectionElement el2 = IJUtil.createElement( job, pairOfTiles._2 );
+						final ImageCollectionElement el1 = Utils.createElement( job, pairOfTiles._1 );
+						final ImageCollectionElement el2 = Utils.createElement( job, pairOfTiles._2 );
 						
 						final ComparePair pair = new ComparePair(
 								new ImagePlusTimePoint( el1.open( job.getParams().virtual ), el1.getIndex(), 1, el1.getModel(), el1 ),
 								new ImagePlusTimePoint( el2.open( job.getParams().virtual ), el2.getIndex(), 1, el2.getModel(), el2 ) );
 						
-            			final Roi roi1 = IJUtil.getROI( pair.getTile1().getElement(), pair.getTile2().getElement() );
-            			final Roi roi2 = IJUtil.getROI( pair.getTile2().getElement(), pair.getTile1().getElement() ); 
+            			final Roi roi1 = Utils.getROI( pair.getTile1().getElement(), pair.getTile2().getElement() );
+            			final Roi roi2 = Utils.getROI( pair.getTile2().getElement(), pair.getTile1().getElement() ); 
 						
         				final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
         						pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint1(), job.getParams() );
@@ -131,7 +131,7 @@ public class StitchingSpark implements Runnable, Serializable {
 			for ( final TileInfo tileInfo : new TileInfo[] { pair.getPairOfTiles()._1, pair.getPairOfTiles()._2 } ) {
 				if ( !tiles.containsKey( tileInfo.getIndex() ) ) {
 					try {
-						final ImageCollectionElement el = IJUtil.createElement( job, tileInfo );
+						final ImageCollectionElement el = Utils.createElement( job, tileInfo );
 						final Tile< ? > tile = new ImagePlusTimePoint( null, el.getIndex(), 1, el.getModel(), el );
 						tiles.put( tileInfo.getIndex(), tile );
 					} catch ( final Exception e ) {
@@ -192,31 +192,5 @@ public class StitchingSpark implements Runnable, Serializable {
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
-	}
-	
-	
-	private static ArrayList< Tuple2< TileInfo, TileInfo > > findOverlappingTiles( final TileInfo[] tiles ) {
-		
-		final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = new ArrayList<>();
-		for ( int i = 0; i < tiles.length; i++ )
-			for ( int j = i + 1; j < tiles.length; j++ )
-				if ( overlap( tiles[ i ], tiles[ j ] ) )
-					overlappingTiles.add( new Tuple2< TileInfo, TileInfo >( tiles[ i ], tiles[ j ] ) );
-		return overlappingTiles;
-	}
-	
-	private static boolean overlap( final TileInfo t1, final TileInfo t2 ) {
-		assert t1.getDimensionality() == t2.getDimensionality();
-		
-		for ( int d = 0; d < t1.getDimensionality(); d++ ) {
-			
-			final float p1 = t1.getPosition()[ d ], p2 = t2.getPosition()[ d ];
-			final int s1 = t1.getSize()[ d ], s2 = t2.getSize()[ d ];
-			
-			if ( !( ( p2 >= p1 && p2 <= p1 + s1 ) || 
-					( p1 >= p2 && p1 <= p2 + s2 ) ) )
-				return false;
-		}
-		return true;
 	}
 }
