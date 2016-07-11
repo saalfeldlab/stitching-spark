@@ -205,7 +205,7 @@ public class StitchingSpark implements Runnable, Serializable {
 		return overlappingTiles;
 	}
 	
-	private static boolean overlap( TileInfo t1, TileInfo t2 ) {
+	private static boolean overlap( final TileInfo t1, final TileInfo t2 ) {
 		assert t1.getDimensionality() == t2.getDimensionality();
 		
 		for ( int d = 0; d < t1.getDimensionality(); d++ ) {

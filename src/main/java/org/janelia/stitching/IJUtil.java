@@ -2,13 +2,11 @@ package org.janelia.stitching;
 
 import java.awt.Rectangle;
 import java.io.File;
-import java.util.ArrayList;
 
 import ij.gui.Roi;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
 import mpicbg.stitching.ImageCollectionElement;
-import scala.Tuple2;
 
 /**
  * @author pisarevi
