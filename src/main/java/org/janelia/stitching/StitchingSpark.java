@@ -107,8 +107,6 @@ public class StitchingSpark implements Runnable, Serializable {
         				final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
         						pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint1(), job.getParams() );
         				
-        				System.out.println( "Subpixel accuracy set to " + job.getParams().subpixelAccuracy );
-        				
         				System.out.println( "Stitched tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + System.lineSeparator() +
         								"   CrossCorr=" + result.getCrossCorrelation() + ", PhaseCorr=" + result.getPhaseCorrelation() + ", RelShift=" + Arrays.toString( result.getOffset() ) );
         				
