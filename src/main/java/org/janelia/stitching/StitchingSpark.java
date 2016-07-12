@@ -69,7 +69,7 @@ public class StitchingSpark implements Runnable, Serializable {
 		params.timeSelect = 0;
 		params.checkPeaks = 5;
 		params.computeOverlap = true;
-		params.subpixelAccuracy = false;
+		params.subpixelAccuracy = true;
 		params.virtual = true;
 		job.setParams( params );
 		
@@ -92,7 +92,7 @@ public class StitchingSpark implements Runnable, Serializable {
 					@Override
 					public SerializablePairWiseStitchingResult call( final Tuple2< TileInfo, TileInfo > pairOfTiles ) throws Exception {
 						
-						System.out.println( "Stitching tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + "...");
+						System.out.println( "Stitching tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + "..." );
 						
 						final ImageCollectionElement el1 = Utils.createElement( job, pairOfTiles._1 );
 						final ImageCollectionElement el2 = Utils.createElement( job, pairOfTiles._2 );
@@ -106,6 +106,8 @@ public class StitchingSpark implements Runnable, Serializable {
 						
         				final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
         						pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint1(), job.getParams() );
+        				
+        				System.out.println( "Subpixel accuracy set to " + job.getParams().subpixelAccuracy );
         				
         				System.out.println( "Stitched tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + System.lineSeparator() +
         								"   CrossCorr=" + result.getCrossCorrelation() + ", PhaseCorr=" + result.getPhaseCorrelation() + ", RelShift=" + Arrays.toString( result.getOffset() ) );
