@@ -11,10 +11,13 @@ public class TileInfo implements Serializable {
 	
 	private static final long serialVersionUID = -3986869827110711078L;
 	
+	// required
 	private String file;
 	private float[] position;
+	
+	// optional
 	private int[] size;
-	private int index;
+	private Integer index;
 	
 	public String getFile() {
 		return file;
@@ -42,16 +45,15 @@ public class TileInfo implements Serializable {
 			assert s >= 0;
 	}
 	
-	public int getIndex() {
+	public Integer getIndex() {
 		return index;
 	}
 	
-	public void setIndex( final int index ) {
+	public void setIndex( final Integer index ) {
 		this.index = index;
 	}
 	
 	public int getDimensionality() {
-		assert position.length == size.length;
-		return size.length;
+		return position.length;
 	}
 }

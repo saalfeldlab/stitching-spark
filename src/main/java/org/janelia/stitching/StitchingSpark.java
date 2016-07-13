@@ -56,6 +56,7 @@ public class StitchingSpark implements Runnable, Serializable {
 			job.prepareTiles();
 		} catch ( final Exception e ) {
 			System.out.println( "Aborted: " + e.getMessage() );
+			e.printStackTrace();
 			System.exit( 2 );
 		}
 		

@@ -14,6 +14,8 @@ import org.apache.commons.io.IOUtils;
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 
+import ij.ImagePlus;
+import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.StitchingParameters;
 
 /**
@@ -60,10 +62,8 @@ public class StitchingJob implements Serializable {
 	
 	public void prepareTiles() throws Exception {
 		loadTiles();
+		setUpTiles();
 		validateTiles();
-		
-		for ( int i = 0; i < tiles.length; i++ )
-			tiles[ i ].setIndex( i );
 	}
 	
 	private void loadTiles() throws FileNotFoundException {
@@ -83,10 +83,34 @@ public class StitchingJob implements Serializable {
 		writer.close();
 	}
 	
+	private void setUpTiles() throws Exception {
+		
+		for ( int i = 0; i < tiles.length; i++ ) {
+			if ( tiles[ i ].getFile() == null || tiles[ i ].getPosition() == null )
+				throw new IllegalArgumentException( "Required parameters missing" );
+			
+			if ( tiles[ i ].getIndex() == null )
+				tiles[ i ].setIndex( i );
+			
+			if ( tiles[ i ].getSize() == null ) {
+				final ImageCollectionElement el = Utils.createElement( this, tiles[ i ] );
+				final ImagePlus imp = el.open( true );
+				
+				// FIXME: workaround for misinterpreting slices as timepoints when no metadata is present 
+				int[] size = el.getDimensions();
+				if ( size.length == 2 && imp.getNFrames() > 1 )
+					size = new int[] { size[ 0 ], size[ 1 ], imp.getNFrames() };
+				
+				tiles[ i ].setSize( size );
+				el.close();
+			}
+		}
+	}
+	
 	private void validateTiles() throws IllegalArgumentException {
 		if ( tiles.length < 2 )
 			throw new IllegalArgumentException( "There must be at least 2 tiles in the dataset" );
-
+		
 		for ( int i = 0; i < tiles.length; i++ )
 			if ( tiles[ i ].getPosition().length != tiles[ i ].getSize().length )
 				throw new IllegalArgumentException( "Incorrect dimensionality" );
