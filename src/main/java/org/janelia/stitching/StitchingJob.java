@@ -63,12 +63,20 @@ public class StitchingJob implements Serializable {
 	public void prepareTiles() throws Exception {
 		loadTiles();
 		setUpTiles();
-		validateTiles();
 	}
 	
 	private void loadTiles() throws FileNotFoundException {
 		final JsonReader reader = new JsonReader( new FileReader( args.getInput() ) );
 		tiles = new Gson().fromJson( reader, TileInfo[].class );
+		
+		boolean malformed = ( tiles == null );
+		if ( !malformed )
+			for ( final TileInfo tile : tiles )
+				if ( tile == null )
+					malformed = true;
+		
+		if ( malformed )
+			throw new NullPointerException( "Malformed input JSON file" );
 	}
 	
 	public void saveTiles( final TileInfo[] resultingTiles ) throws IOException {
@@ -87,27 +95,14 @@ public class StitchingJob implements Serializable {
 		
 		for ( int i = 0; i < tiles.length; i++ ) {
 			if ( tiles[ i ].getFile() == null || tiles[ i ].getPosition() == null )
-				throw new IllegalArgumentException( "Required parameters missing" );
+				throw new NullPointerException( "Some of required parameters are missing (file or position)" );
 			
 			if ( tiles[ i ].getIndex() == null )
 				tiles[ i ].setIndex( i );
-			
-			if ( tiles[ i ].getSize() == null ) {
-				final ImageCollectionElement el = Utils.createElement( this, tiles[ i ] );
-				final ImagePlus imp = el.open( true );
-				
-				// FIXME: workaround for misinterpreting slices as timepoints when no metadata is present 
-				int[] size = el.getDimensions();
-				if ( size.length == 2 && imp.getNFrames() > 1 )
-					size = new int[] { size[ 0 ], size[ 1 ], imp.getNFrames() };
-				
-				tiles[ i ].setSize( size );
-				el.close();
-			}
 		}
 	}
 	
-	private void validateTiles() throws IllegalArgumentException {
+	public void validateTiles() throws IllegalArgumentException {
 		if ( tiles.length < 2 )
 			throw new IllegalArgumentException( "There must be at least 2 tiles in the dataset" );
 		

@@ -13,6 +13,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 
+import ij.ImagePlus;
 import ij.gui.Roi;
 import mpicbg.models.Tile;
 import mpicbg.stitching.ComparePair;
@@ -60,6 +61,19 @@ public class StitchingSpark implements Runnable, Serializable {
 			System.exit( 2 );
 		}
 		
+		final ArrayList< TileInfo > unknownSizeTiles = new ArrayList<>();
+		for ( final TileInfo tile : job.getTiles() )
+			if ( tile.getSize() == null )
+				unknownSizeTiles.add( tile );
+		
+		final SparkConf conf = new SparkConf().setAppName( "StitchingSpark" );
+		final JavaSparkContext sparkContext = new JavaSparkContext( conf );
+		
+		if ( !unknownSizeTiles.isEmpty() )
+			queryTileSize( sparkContext, unknownSizeTiles );
+		
+		job.validateTiles();
+		
 		final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = Utils.findOverlappingTiles( job.getTiles() );
 		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
 		
@@ -74,14 +88,49 @@ public class StitchingSpark implements Runnable, Serializable {
 		params.virtual = true;
 		job.setParams( params );
 		
-		final SparkConf conf = new SparkConf().setAppName( "StitchingSpark" );
-		final JavaSparkContext sparkContext = new JavaSparkContext( conf );
 		stitchWithSpark( sparkContext, overlappingTiles );
-		sparkContext.close();
 		
+		sparkContext.close();
 		System.out.println( "done" );
 	}
+	
+	
+	private void queryTileSize( final JavaSparkContext sparkContext, final ArrayList< TileInfo > unknownSizeTiles ) {
+		
+		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( unknownSizeTiles );
+		final JavaRDD< TileInfo > tileSize = rdd.map(
+				new Function< TileInfo, TileInfo >() {
+					
+					private static final long serialVersionUID = -4991255417353136684L;
 
+					@Override
+					public TileInfo call( final TileInfo tile ) throws Exception {
+						final ImageCollectionElement el = Utils.createElement( job, tile );
+						final ImagePlus imp = el.open( true );
+						
+						// FIXME: workaround for misinterpreting slices as timepoints when no metadata is present 
+						int[] size = el.getDimensions();
+						if ( size.length == 2 && imp.getNFrames() > 1 )
+							size = new int[] { size[ 0 ], size[ 1 ], imp.getNFrames() };
+						
+						tile.setSize( size );
+						el.close();
+						return tile;
+					}
+				});
+		
+		final List< TileInfo > knownSizeTiles = tileSize.collect();
+		
+		final TileInfo[] tiles = job.getTiles();
+		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
+		for ( final TileInfo tile : tiles )
+			tilesMap.put( tile.getIndex(), tile );
+		
+		for ( final TileInfo knownSizeTile : knownSizeTiles )
+			tilesMap.get( knownSizeTile.getIndex() ).setSize( knownSizeTile.getSize() );
+	}
+
+	
 	private void stitchWithSpark( final JavaSparkContext sparkContext, final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles ) {
 		
 		final JavaRDD< Tuple2< TileInfo, TileInfo > > rdd = sparkContext.parallelize( overlappingTiles );
