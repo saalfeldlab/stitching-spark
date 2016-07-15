@@ -14,8 +14,6 @@ import org.apache.commons.io.IOUtils;
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 
-import ij.ImagePlus;
-import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.StitchingParameters;
 
 /**
@@ -25,8 +23,15 @@ import mpicbg.stitching.StitchingParameters;
 
 public class StitchingJob implements Serializable {
 	
-	private static final long serialVersionUID = 2619120742300093982L;
+	public enum Mode {
+		Default,
+		NoFuse,
+		FuseOnly
+	}
 	
+	private static final long serialVersionUID = 2619120742300093982L;
+
+	private Mode mode;
 	private StitchingArguments args;
 	private transient StitchingParameters params;
 	private String baseImagesFolder; 
@@ -35,10 +40,25 @@ public class StitchingJob implements Serializable {
 	
 	public StitchingJob( final StitchingArguments args ) {
 		this.args = args;
+		
+		if ( args.getNoFuse() && args.getFuseOnly() )
+			throw new IllegalArgumentException( "Incompatible arguments" );
+		
+		if ( args.getNoFuse() )
+			mode = Mode.NoFuse;
+		else if ( args.getFuseOnly() )
+			mode = Mode.FuseOnly;
+		else
+			mode = Mode.Default;
+		
 		baseImagesFolder = new File( args.getInput() ).getAbsoluteFile().getParent();
 	}
 	
 	protected StitchingJob( ) {	}
+	
+	public Mode getMode() {
+		return mode;
+	}
 	
 	public StitchingParameters getParams() {
 		return params;
@@ -79,7 +99,7 @@ public class StitchingJob implements Serializable {
 			throw new NullPointerException( "Malformed input JSON file" );
 	}
 	
-	public void saveTiles( final TileInfo[] resultingTiles ) throws IOException {
+	public void saveTiles() throws IOException {
 		final StringBuilder output = new StringBuilder( args.getInput() );
 		int lastDotIndex = output.lastIndexOf( "." );
 		if ( lastDotIndex == -1 )
@@ -87,7 +107,7 @@ public class StitchingJob implements Serializable {
 		output.insert( lastDotIndex, "_output" );
 		
 		final FileWriter writer = new FileWriter( output.toString() );
-		writer.write( new Gson().toJson( resultingTiles ) );
+		writer.write( new Gson().toJson( tiles ) );
 		writer.close();
 	}
 	

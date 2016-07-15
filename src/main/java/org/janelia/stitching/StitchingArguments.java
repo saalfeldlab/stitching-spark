@@ -19,6 +19,14 @@ public class StitchingArguments implements Serializable {
 			usage = "Path to a tile registration JSON file.")
 	private String input;
 	
+	@Option(name = "--nofuse", required = false,
+			usage = "Don't fuse images and only output the resulting tile configuration")
+	private boolean noFuse;
+	
+	@Option(name = "--fuseonly", required = false,
+			usage = "Only fuse images assuming that input tile configuration is already correct")
+	private boolean fuseOnly;
+	
 	private boolean parsedSuccessfully = false;
 	
 	public StitchingArguments( String[] args ) {
@@ -32,9 +40,7 @@ public class StitchingArguments implements Serializable {
 		}
 	}
 	
-	protected StitchingArguments() {
-	
-	}
+	protected StitchingArguments() { }
 	
 	public boolean parsedSuccessfully() {
 		return parsedSuccessfully;
@@ -42,5 +48,13 @@ public class StitchingArguments implements Serializable {
 
 	public String getInput() {
 		return input;
+	}
+	
+	public boolean getNoFuse() {
+		return noFuse;
+	}
+	
+	public boolean getFuseOnly() {
+		return fuseOnly;
 	}
 }

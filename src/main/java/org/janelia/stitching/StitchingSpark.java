@@ -23,6 +23,10 @@ import mpicbg.stitching.ImagePlusTimePoint;
 import mpicbg.stitching.PairWiseStitchingImgLib;
 import mpicbg.stitching.PairWiseStitchingResult;
 import mpicbg.stitching.StitchingParameters;
+import net.imglib2.KDTree;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.type.numeric.integer.UnsignedByteType;
 import scala.Tuple2;
 
 /**
@@ -33,7 +37,6 @@ import scala.Tuple2;
 public class StitchingSpark implements Runnable, Serializable {
 
 	public static void main( String[] args ) {
-		
 		final StitchingArguments stitchingArgs = new StitchingArguments( args );
 		if ( !stitchingArgs.parsedSuccessfully() )
 			System.exit( 1 );
@@ -43,6 +46,8 @@ public class StitchingSpark implements Runnable, Serializable {
 	}
 	
 	private static final long serialVersionUID = 6006962943789087537L;
+	private static final int FusionSubregionSize = 100;
+	
 	private StitchingArguments args;
 	private StitchingJob job;
 	
@@ -66,7 +71,7 @@ public class StitchingSpark implements Runnable, Serializable {
 			if ( tile.getSize() == null )
 				unknownSizeTiles.add( tile );
 		
-		final SparkConf conf = new SparkConf().setAppName( "StitchingSpark" );
+		final SparkConf conf = new SparkConf().setAppName( "Stitching" );
 		final JavaSparkContext sparkContext = new JavaSparkContext( conf );
 		
 		if ( !unknownSizeTiles.isEmpty() )
@@ -74,21 +79,39 @@ public class StitchingSpark implements Runnable, Serializable {
 		
 		job.validateTiles();
 		
-		final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = Utils.findOverlappingTiles( job.getTiles() );
-		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
-		
-		final StitchingParameters params = new StitchingParameters();
-		params.dimensionality = job.getDimensionality();
-		params.channel1 = 0;
-		params.channel2 = 0;
-		params.timeSelect = 0;
-		params.checkPeaks = 5;
-		params.computeOverlap = true;
-		params.subpixelAccuracy = true;
-		params.virtual = true;
-		job.setParams( params );
-		
-		stitchWithSpark( sparkContext, overlappingTiles );
+		// Compute shifts
+		if ( job.getMode() != StitchingJob.Mode.FuseOnly ) {
+			final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = Utils.findOverlappingTiles( job.getTiles() );
+			System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
+			
+			final StitchingParameters params = new StitchingParameters();
+			params.dimensionality = job.getDimensionality();
+			params.channel1 = 0;
+			params.channel2 = 0;
+			params.timeSelect = 0;
+			params.checkPeaks = 5;
+			params.computeOverlap = true;
+			params.subpixelAccuracy = false;
+			params.virtual = true;
+			job.setParams( params );
+			
+			computeShifts( sparkContext, overlappingTiles );
+	
+			try {
+				job.saveTiles();
+			} catch ( final IOException e ) {
+				e.printStackTrace();
+			}
+		}
+
+		// Fuse
+		if ( job.getMode() != StitchingJob.Mode.NoFuse ) {
+			
+			final Boundaries boundaries = Utils.findBoundaries( job.getTiles() );
+			final ArrayList< TileInfo > subregions = Utils.divideSpace( boundaries, FusionSubregionSize );
+			
+			fuse( sparkContext, subregions );
+		}
 		
 		sparkContext.close();
 		System.out.println( "done" );
@@ -131,7 +154,7 @@ public class StitchingSpark implements Runnable, Serializable {
 	}
 
 	
-	private void stitchWithSpark( final JavaSparkContext sparkContext, final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles ) {
+	private void computeShifts( final JavaSparkContext sparkContext, final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles ) {
 		
 		final JavaRDD< Tuple2< TileInfo, TileInfo > > rdd = sparkContext.parallelize( overlappingTiles );
 		final JavaRDD< SerializablePairWiseStitchingResult > pairwiseStitching = rdd.map(
@@ -173,14 +196,14 @@ public class StitchingSpark implements Runnable, Serializable {
 		
 		// Create fake tile objects so that they don't hold any image data
 		// required by the GlobalOptimization
-		final TreeMap< Integer, Tile< ? > > tiles = new TreeMap<>();
+		final TreeMap< Integer, Tile< ? > > fakeTileImagesMap = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult pair : stitchedPairs ) {
 			for ( final TileInfo tileInfo : new TileInfo[] { pair.getPairOfTiles()._1, pair.getPairOfTiles()._2 } ) {
-				if ( !tiles.containsKey( tileInfo.getIndex() ) ) {
+				if ( !fakeTileImagesMap.containsKey( tileInfo.getIndex() ) ) {
 					try {
 						final ImageCollectionElement el = Utils.createElement( job, tileInfo );
 						final Tile< ? > tile = new ImagePlusTimePoint( null, el.getIndex(), 1, el.getModel(), el );
-						tiles.put( tileInfo.getIndex(), tile );
+						fakeTileImagesMap.put( tileInfo.getIndex(), tile );
 					} catch ( final Exception e ) {
 						e.printStackTrace();
 					}
@@ -191,8 +214,8 @@ public class StitchingSpark implements Runnable, Serializable {
 		final Vector< ComparePair > comparePairs = new Vector<>();
 		for ( final SerializablePairWiseStitchingResult pair : stitchedPairs ) {
 			final ComparePair comparePair = new ComparePair( 
-					(ImagePlusTimePoint)tiles.get( pair.getPairOfTiles()._1.getIndex() ), 
-					(ImagePlusTimePoint)tiles.get( pair.getPairOfTiles()._2.getIndex() ) );
+					(ImagePlusTimePoint)fakeTileImagesMap.get( pair.getPairOfTiles()._1.getIndex() ), 
+					(ImagePlusTimePoint)fakeTileImagesMap.get( pair.getPairOfTiles()._2.getIndex() ) );
 
 			comparePair.setRelativeShift( pair.getOffset() );
 			comparePair.setCrossCorrelation( pair.getCrossCorrelation() );
@@ -203,41 +226,54 @@ public class StitchingSpark implements Runnable, Serializable {
 		
 		System.out.println( "Global optimization done" );
 		
-		// output the result
-		System.out.println( "Results: " );
-		for ( final ImagePlusTimePoint imt : optimized )
-			System.out.println( imt.getImpId() + ": " + imt.getModel() );
+		// Process the result updating the tiles position within the job object
+		final TileInfo[] tiles = job.getTiles();
+		assert tiles.length == optimized.size();
 		
-		outputResults( optimized );
-	}
-	
-	private void outputResults( final ArrayList< ImagePlusTimePoint > stitched ) {
+		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
+		for ( final TileInfo tile : tiles )
+			tilesMap.put( tile.getIndex(), tile );
 		
-		final TileInfo[] inputs = job.getTiles();
-		final TileInfo[] results = new TileInfo[ inputs.length ];
-		assert results.length == stitched.size();
-		
-		for ( int i = 0; i < stitched.size(); i++ ) {
-			results[ i ] = new TileInfo();
-			results[ i ].setFile( inputs[ i ].getFile() );
-			results[ i ].setSize( inputs[ i ].getSize() );
-			results[ i ].setIndex( i );
-			
+		for ( final ImagePlusTimePoint optimizedTile : optimized ) {
 			final double[] pos = new double[ job.getDimensionality() ];
-			stitched.get( i ).getModel().applyInPlace( pos );
+			optimizedTile.getModel().applyInPlace( pos );
 			
 			// TODO: avoid this stupid conversion
 			final float[] posFloat = new float[ pos.length ];
 			for ( int j = 0; j < pos.length; j++ )
-				posFloat[ j ] = (float)pos[j];
+				posFloat[ j ] = (float)pos[ j ];
 			
-			results[ i ].setPosition( posFloat );
+			tilesMap.get( optimizedTile.getImpId() ).setPosition( posFloat );
 		}
+	}
+	
+	
+	private void fuse( final JavaSparkContext sparkContext, final ArrayList< TileInfo > subregions ) {
+
+		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( subregions );
+		final JavaRDD< TileInfo > fused = rdd.map(
+				new Function< TileInfo, TileInfo >() {
+
+					private static final long serialVersionUID = 8324712817942470416L;
+
+					@Override
+					public TileInfo call( final TileInfo subregion ) throws Exception {
+						
+						// TODO: optimize with KD interval tree or smth similar
+						ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
+						for ( final TileInfo tile : job.getTiles() )
+							if ( Utils.overlap( tile, subregion ) )
+								tilesWithinSubregion.add( tile );
+						
+						// TODO: fuse tiles within subregion
+						
+						return subregion;
+					}
+				});
 		
-		try {
-			job.saveTiles( results );
-		} catch ( final IOException e ) {
-			e.printStackTrace();
-		}
+		final List< TileInfo > output = fused.collect();
+		System.out.println( "Obtained " + output.size() + " tiles" );
+		
+		// TODO: save fused tiles configuration into separate file
 	}
 }

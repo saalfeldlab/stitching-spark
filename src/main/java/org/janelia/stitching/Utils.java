@@ -46,6 +46,7 @@ public class Utils {
 		return e;
 	}
 	
+	
 	public static ArrayList< Tuple2< TileInfo, TileInfo > > findOverlappingTiles( final TileInfo[] tiles ) {
 		
 		final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = new ArrayList<>();
@@ -70,6 +71,63 @@ public class Utils {
 		}
 		return true;
 	}
+	
+	
+	public static Boundaries findBoundaries( final TileInfo[] tiles ) {
+		
+		if ( tiles.length == 0 )
+			return null;
+		
+		final int dim = tiles[ 0 ].getDimensionality();
+		
+		final Boundaries boundaries = new Boundaries( dim );
+		for ( int d = 0; d < dim; d++ ) {
+			boundaries.setMin( d, Float.MAX_VALUE );
+			boundaries.setMax( d, Float.MIN_VALUE );
+		}
+			
+		for ( final TileInfo tile : tiles ) {
+			assert dim == tile.getDimensionality();
+			
+			for ( int d = 0; d < dim; d++ ) {
+				boundaries.setMin( d, Math.min( boundaries.getMin( d ), tile.getPosition( d ) ) );
+				boundaries.setMax( d, Math.max( boundaries.getMax( d ), tile.getPosition( d ) + tile.getSize( d ) ) );
+			}
+		}
+		
+		return boundaries;
+	}
+	
+	public static ArrayList< TileInfo > divideSpace( final Boundaries space, final int subregionSize ) {
+		
+		assert ( subregionSize > 0 );
+		if ( subregionSize <= 0 )
+			return null;
+
+		final ArrayList< TileInfo > subregions = new ArrayList<>();
+		divideSpaceRecursive( space, subregions, subregionSize, new TileInfo( space.getDimensionality() ), 0 );
+		
+		for ( int i = 0; i < subregions.size(); i++ )
+			subregions.get( i ).setIndex( i );
+		return subregions;
+	}
+	private static void divideSpaceRecursive( final Boundaries space, final ArrayList< TileInfo > subregions, final int subregionSize, final TileInfo currSubregion, final int currDim ) {
+		
+		if ( currDim == space.getDimensionality() ) {
+			subregions.add( currSubregion );
+			return;
+		}
+		
+		for ( float coord = space.getMin( currDim ); coord < space.getMax( currDim ); coord += subregionSize ) {
+			
+			final TileInfo newSubregion = currSubregion.clone();
+			newSubregion.setPosition( currDim, coord );
+			newSubregion.setSize( currDim, Math.min( subregionSize, (int)Math.ceil( space.getMax( currDim ) - coord ) ) );
+			
+			divideSpaceRecursive( space, subregions, subregionSize, newSubregion, currDim + 1 );
+		}
+	}
+	
 	
 	// taken from CollectionStitchingImgLib (it is made protected there)
 	// TODO: pull request making it public, then remove it from here
