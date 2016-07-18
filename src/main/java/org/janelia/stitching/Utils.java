@@ -82,16 +82,16 @@ public class Utils {
 		
 		final Boundaries boundaries = new Boundaries( dim );
 		for ( int d = 0; d < dim; d++ ) {
-			boundaries.setMin( d, Float.MAX_VALUE );
-			boundaries.setMax( d, Float.MIN_VALUE );
+			boundaries.setMin( d, Integer.MAX_VALUE );
+			boundaries.setMax( d, Integer.MIN_VALUE );
 		}
 			
 		for ( final TileInfo tile : tiles ) {
 			assert dim == tile.getDimensionality();
 			
 			for ( int d = 0; d < dim; d++ ) {
-				boundaries.setMin( d, Math.min( boundaries.getMin( d ), tile.getPosition( d ) ) );
-				boundaries.setMax( d, Math.max( boundaries.getMax( d ), tile.getPosition( d ) + tile.getSize( d ) ) );
+				boundaries.setMin( d, Math.min( boundaries.getMin(d), (int)Math.floor( tile.getPosition(d) ) ) );
+				boundaries.setMax( d, Math.max( boundaries.getMax(d), (int)Math.ceil( tile.getPosition(d) ) + tile.getSize(d) ) );
 			}
 		}
 		
@@ -99,9 +99,8 @@ public class Utils {
 	}
 	
 	public static ArrayList< TileInfo > divideSpace( final Boundaries space, final int subregionSize ) {
-		
-		assert ( subregionSize > 0 );
-		if ( subregionSize <= 0 )
+		assert space.validate() && subregionSize > 0;
+		if ( !space.validate() || subregionSize <= 0 )
 			return null;
 
 		final ArrayList< TileInfo > subregions = new ArrayList<>();
@@ -118,11 +117,11 @@ public class Utils {
 			return;
 		}
 		
-		for ( float coord = space.getMin( currDim ); coord < space.getMax( currDim ); coord += subregionSize ) {
+		for ( int coord = space.getMin( currDim ); coord < space.getMax( currDim ); coord += subregionSize ) {
 			
 			final TileInfo newSubregion = currSubregion.clone();
 			newSubregion.setPosition( currDim, coord );
-			newSubregion.setSize( currDim, Math.min( subregionSize, (int)Math.ceil( space.getMax( currDim ) - coord ) ) );
+			newSubregion.setSize( currDim, Math.min( subregionSize, space.getMax(currDim) - coord ) );
 			
 			divideSpaceRecursive( space, subregions, subregionSize, newSubregion, currDim + 1 );
 		}

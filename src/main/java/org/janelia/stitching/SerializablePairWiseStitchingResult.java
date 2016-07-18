@@ -14,10 +14,10 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 
 	private static final long serialVersionUID = -8084090265269616284L;
 	
-	Tuple2< TileInfo, TileInfo > pairOfTiles;
-	float[] offset;
-	float crossCorrelation, phaseCorrelation;
-	boolean isValidOverlap = true;
+	private Tuple2< TileInfo, TileInfo > pairOfTiles;
+	private float[] offset;
+	private float crossCorrelation, phaseCorrelation;
+	private boolean isValidOverlap = true;
 
 	public SerializablePairWiseStitchingResult( final Tuple2< TileInfo, TileInfo > pairOfTiles, final float[] offset, final float crossCorrelation, final float phaseCorrelation ) {
 		init( pairOfTiles, offset, crossCorrelation, phaseCorrelation );

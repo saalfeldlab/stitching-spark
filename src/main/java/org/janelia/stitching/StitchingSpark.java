@@ -23,10 +23,6 @@ import mpicbg.stitching.ImagePlusTimePoint;
 import mpicbg.stitching.PairWiseStitchingImgLib;
 import mpicbg.stitching.PairWiseStitchingResult;
 import mpicbg.stitching.StitchingParameters;
-import net.imglib2.KDTree;
-import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgFactory;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
 import scala.Tuple2;
 
 /**
@@ -260,7 +256,7 @@ public class StitchingSpark implements Runnable, Serializable {
 					public TileInfo call( final TileInfo subregion ) throws Exception {
 						
 						// TODO: optimize with KD interval tree or smth similar
-						ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
+						final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 						for ( final TileInfo tile : job.getTiles() )
 							if ( Utils.overlap( tile, subregion ) )
 								tilesWithinSubregion.add( tile );
