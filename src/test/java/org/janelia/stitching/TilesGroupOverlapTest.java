@@ -3,11 +3,15 @@ package org.janelia.stitching;
 import org.junit.Assert;
 import org.junit.Test;
 
+/**
+ * @author pisarevi
+ *
+ */
+
 public class TilesGroupOverlapTest {
 	
 	@Test
 	public void test() {
-		
 		final TileInfo[] tiles = new TileInfo[ 5 ];
 	
 		for ( int i = 0; i < tiles.length; i++ )

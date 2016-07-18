@@ -1,5 +1,10 @@
 package org.janelia.stitching;
 
+/**
+ * @author pisarevi
+ *
+ */
+
 public class Boundaries {
 	
 	private int[] min, max;

@@ -3,6 +3,11 @@ package org.janelia.stitching;
 import org.junit.Assert;
 import org.junit.Test;
 
+/**
+ * @author pisarevi
+ *
+ */
+
 public class BoundariesTest {
 
 	private int cnt;

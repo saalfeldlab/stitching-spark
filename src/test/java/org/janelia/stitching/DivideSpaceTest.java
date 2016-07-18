@@ -6,11 +6,15 @@ import java.util.Random;
 import org.junit.Assert;
 import org.junit.Test;
 
+/**
+ * @author pisarevi
+ *
+ */
+
 public class DivideSpaceTest {
 
 	@Test
 	public void test1d() {
-		
 		final Boundaries space = new Boundaries( 1 );
 		space.setMin( 0, 10 );	space.setMax( 0, 40 );
 		final ArrayList< TileInfo > res = Utils.divideSpace( space, 14 );
@@ -23,7 +27,6 @@ public class DivideSpaceTest {
 	
 	@Test
 	public void randomTestSubregionsCount() {
-
 		final Random rnd = new Random();
 		final Boundaries space = new Boundaries( rnd.nextInt(5) + 1 );
 		for ( int d = 0; d < space.getDimensionality(); d++ ) {

@@ -3,11 +3,15 @@ package org.janelia.stitching;
 import org.junit.Assert;
 import org.junit.Test;
 
+/**
+ * @author pisarevi
+ *
+ */
+
 public class TilesPairwiseOverlapTest {
 
 	@Test
 	public void test1d() {
-		
 		final TileInfo t1 = new TileInfo(), t2 = new TileInfo();
 		
 		// overlap
@@ -37,7 +41,6 @@ public class TilesPairwiseOverlapTest {
 	
 	@Test
 	public void test2d() {
-		
 		final TileInfo t1 = new TileInfo(), t2 = new TileInfo();
 		
 		// overlap
@@ -73,7 +76,6 @@ public class TilesPairwiseOverlapTest {
 
 	@Test
 	public void test3d() {
-		
 		final TileInfo t1 = new TileInfo(), t2 = new TileInfo();
 		
 		// overlap
