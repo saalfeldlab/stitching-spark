@@ -20,9 +20,12 @@ public class DivideSpaceTest {
 		final ArrayList< TileInfo > res = Utils.divideSpace( space, 14 );
 		Assert.assertEquals( 3, res.size() );
 		
-		Assert.assertEquals( 10.f, res.get( 0 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 14, res.get( 0 ).getSize( 0 ) );
-		Assert.assertEquals( 24.f, res.get( 1 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 14, res.get( 1 ).getSize( 0 ) );
-		Assert.assertEquals( 38.f, res.get( 2 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 2, res.get( 2 ).getSize( 0 ) );
+		for ( int i = 0; i < res.size(); i++ )
+			Assert.assertEquals( i, (int)res.get(i).getIndex() );
+		
+		Assert.assertEquals( 10, res.get( 0 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 14, res.get( 0 ).getSize( 0 ) );
+		Assert.assertEquals( 24, res.get( 1 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 14, res.get( 1 ).getSize( 0 ) );
+		Assert.assertEquals( 38, res.get( 2 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 2,  res.get( 2 ).getSize( 0 ) );
 	}
 	
 	@Test

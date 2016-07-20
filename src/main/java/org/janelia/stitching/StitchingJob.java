@@ -23,6 +23,8 @@ import mpicbg.stitching.StitchingParameters;
 
 public class StitchingJob implements Serializable {
 	
+	private static final int DefaultFusionSubregionSize = 512;
+	
 	public enum Mode {
 		Default,
 		NoFuse,
@@ -34,9 +36,10 @@ public class StitchingJob implements Serializable {
 	private Mode mode;
 	private StitchingArguments args;
 	private transient StitchingParameters params;
-	private String baseImagesFolder; 
+	private String baseFolder; 
 	private TileInfo[] tiles;
 	private int dimensionality;
+	private int subregionSize;
 	
 	public StitchingJob( final StitchingArguments args ) {
 		this.args = args;
@@ -51,7 +54,15 @@ public class StitchingJob implements Serializable {
 		else
 			mode = Mode.Default;
 		
-		baseImagesFolder = new File( args.getInput() ).getAbsoluteFile().getParent();
+		if ( mode != Mode.NoFuse ) {
+			subregionSize = args.getSubregionSize();
+			if ( subregionSize <= 0 ) {
+				subregionSize = DefaultFusionSubregionSize;
+				System.out.println( "No subregion size for fusion is present, using default one (" + subregionSize + ")" );
+			}
+		}
+		
+		baseFolder = new File( args.getInput() ).getAbsoluteFile().getParent();
 	}
 	
 	protected StitchingJob( ) {	}
@@ -72,12 +83,20 @@ public class StitchingJob implements Serializable {
 		return tiles;
 	}
 	
-	public String getBaseImagesFolder() {
-		return baseImagesFolder;
+	public void setTiles( final TileInfo[] tiles ) {
+		this.tiles = tiles;
+	}
+	
+	public String getBaseFolder() {
+		return baseFolder;
 	}
 	
 	public int getDimensionality() {
 		return dimensionality;
+	}
+	
+	public int getSubregionSize() {
+		return subregionSize;
 	}
 	
 	public void prepareTiles() throws Exception {
@@ -99,14 +118,8 @@ public class StitchingJob implements Serializable {
 			throw new NullPointerException( "Malformed input JSON file" );
 	}
 	
-	public void saveTiles() throws IOException {
-		final StringBuilder output = new StringBuilder( args.getInput() );
-		int lastDotIndex = output.lastIndexOf( "." );
-		if ( lastDotIndex == -1 )
-			lastDotIndex = output.length();
-		output.insert( lastDotIndex, "_output" );
-		
-		final FileWriter writer = new FileWriter( output.toString() );
+	public void saveTiles( final String output ) throws IOException {
+		final FileWriter writer = new FileWriter( output );
 		writer.write( new Gson().toJson( tiles ) );
 		writer.close();
 	}

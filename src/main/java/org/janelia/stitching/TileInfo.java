@@ -13,12 +13,12 @@ public class TileInfo implements Serializable {
 	
 	private Integer index;
 	private String file;
-	private float[] position;
-	private int[] size;
+	private double[] position;
+	private long[] size;
 	
 	public TileInfo( final int dim ) {
-		position = new float[ dim ];
-		size = new int[ dim ];
+		position = new double[ dim ];
+		size = new long[ dim ];
 	}
 	
 	protected TileInfo() { }
@@ -31,38 +31,38 @@ public class TileInfo implements Serializable {
 		this.file = file;
 	}
 	
-	public float getPosition( final int d ) {
+	public double getPosition( final int d ) {
 		return position[ d ];
 	}
 	
-	public void setPosition( final int d, final float val ) {
+	public void setPosition( final int d, final double val ) {
 		position[ d ] = val;
 	}
 	
-	public float[] getPosition() {
+	public double[] getPosition() {
 		return position;
 	}
 	
-	public void setPosition( final float[] position ) {
+	public void setPosition( final double[] position ) {
 		this.position = position;
 	}
 	
-	public int getSize( final int d ) {
+	public long getSize( final int d ) {
 		return size[ d ];
 	}
 	
-	public void setSize( final int d, final int val ) {
+	public void setSize( final int d, final long val ) {
 		assert val >= 0;
 		size[ d ] = val;
 	}
 	
-	public int[] getSize() {
+	public long[] getSize() {
 		return size;
 	}
 	
-	public void setSize( final int[] size ) {
+	public void setSize( final long[] size ) {
 		this.size = size;
-		for ( final int s : size )
+		for ( final long s : size )
 			assert s >= 0;
 	}
 	
@@ -76,6 +76,15 @@ public class TileInfo implements Serializable {
 	
 	public int getDimensionality() {
 		return position.length;
+	}
+	
+	public Boundaries getBoundaries() {
+		final Boundaries b = new Boundaries( getDimensionality() );
+		for ( int d = 0; d < getDimensionality(); d++ ) {
+			b.setMin( d, (long)Math.floor( getPosition(d) ) );
+			b.setMax( d, (long)Math.ceil( getPosition(d) ) + getSize(d) );
+		}
+		return b;
 	}
 	
 	@Override

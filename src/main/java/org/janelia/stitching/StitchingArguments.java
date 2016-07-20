@@ -27,6 +27,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Only fuse images assuming that input tile configuration is already correct")
 	private boolean fuseOnly;
 	
+	@Option(name = "-s", aliases = { "--size" }, required = false,
+			usage = "Size of an individual tile when fusing")
+	private int subregionSize;
+	
 	private boolean parsedSuccessfully = false;
 	
 	public StitchingArguments( String[] args ) {
@@ -56,5 +60,9 @@ public class StitchingArguments implements Serializable {
 	
 	public boolean getFuseOnly() {
 		return fuseOnly;
+	}
+	
+	public int getSubregionSize() {
+		return subregionSize;
 	}
 }

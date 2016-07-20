@@ -1,9 +1,11 @@
 package org.janelia.stitching;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.Vector;
@@ -13,8 +15,10 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 
+import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
+import mpicbg.models.InvertibleBoundable;
 import mpicbg.models.Tile;
 import mpicbg.stitching.ComparePair;
 import mpicbg.stitching.GlobalOptimization;
@@ -23,7 +27,18 @@ import mpicbg.stitching.ImagePlusTimePoint;
 import mpicbg.stitching.PairWiseStitchingImgLib;
 import mpicbg.stitching.PairWiseStitchingResult;
 import mpicbg.stitching.StitchingParameters;
+import net.imglib2.Cursor;
+import net.imglib2.Point;
+import net.imglib2.RandomAccess;
+import net.imglib2.img.Img;
+import net.imglib2.img.ImgFactory;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.img.imageplus.ImagePlusImgFactory;
+import net.imglib2.type.numeric.integer.UnsignedShortType;
+import net.imglib2.view.IntervalView;
+import net.imglib2.view.Views;
 import scala.Tuple2;
+import stitching.utils.Log;
 
 /**
  * @author pisarevi
@@ -42,7 +57,6 @@ public class StitchingSpark implements Runnable, Serializable {
 	}
 	
 	private static final long serialVersionUID = 6006962943789087537L;
-	private static final int FusionSubregionSize = 100;
 	
 	private StitchingArguments args;
 	private StitchingJob job;
@@ -75,38 +89,35 @@ public class StitchingSpark implements Runnable, Serializable {
 		
 		job.validateTiles();
 		
+		final StitchingParameters params = new StitchingParameters();
+		params.dimensionality = job.getDimensionality();
+		params.channel1 = 0;
+		params.channel2 = 0;
+		params.timeSelect = 0;
+		params.checkPeaks = 5;
+		params.computeOverlap = true;
+		params.subpixelAccuracy = false;
+		params.virtual = true;
+		job.setParams( params );
+		
 		// Compute shifts
 		if ( job.getMode() != StitchingJob.Mode.FuseOnly ) {
 			final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = Utils.findOverlappingTiles( job.getTiles() );
 			System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
 			
-			final StitchingParameters params = new StitchingParameters();
-			params.dimensionality = job.getDimensionality();
-			params.channel1 = 0;
-			params.channel2 = 0;
-			params.timeSelect = 0;
-			params.checkPeaks = 5;
-			params.computeOverlap = true;
-			params.subpixelAccuracy = false;
-			params.virtual = true;
-			job.setParams( params );
-			
 			computeShifts( sparkContext, overlappingTiles );
-	
-			try {
-				job.saveTiles();
-			} catch ( final IOException e ) {
-				e.printStackTrace();
-			}
 		}
 
 		// Fuse
 		if ( job.getMode() != StitchingJob.Mode.NoFuse ) {
 			
 			final Boundaries boundaries = Utils.findBoundaries( job.getTiles() );
-			final ArrayList< TileInfo > subregions = Utils.divideSpace( boundaries, FusionSubregionSize );
+			final ArrayList< TileInfo > subregions = Utils.divideSpace( boundaries, job.getSubregionSize() );
 			
-			fuse( sparkContext, subregions );
+			final String fusedFolder = job.getBaseFolder() + "/fused";
+			new File( fusedFolder ).mkdirs();
+			
+			fuse( sparkContext, subregions, fusedFolder );
 		}
 		
 		sparkContext.close();
@@ -128,9 +139,9 @@ public class StitchingSpark implements Runnable, Serializable {
 						final ImagePlus imp = el.open( true );
 						
 						// FIXME: workaround for misinterpreting slices as timepoints when no metadata is present 
-						int[] size = el.getDimensions();
+						long[] size = Conversions.toLongArray( el.getDimensions() );
 						if ( size.length == 2 && imp.getNFrames() > 1 )
-							size = new int[] { size[ 0 ], size[ 1 ], imp.getNFrames() };
+							size = new long[] { size[ 0 ], size[ 1 ], imp.getNFrames() };
 						
 						tile.setSize( size );
 						el.close();
@@ -140,6 +151,8 @@ public class StitchingSpark implements Runnable, Serializable {
 		
 		final List< TileInfo > knownSizeTiles = tileSize.collect();
 		
+		System.out.println( "Obtained image size for all tiles" );
+		
 		final TileInfo[] tiles = job.getTiles();
 		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
 		for ( final TileInfo tile : tiles )
@@ -147,6 +160,12 @@ public class StitchingSpark implements Runnable, Serializable {
 		
 		for ( final TileInfo knownSizeTile : knownSizeTiles )
 			tilesMap.get( knownSizeTile.getIndex() ).setSize( knownSizeTile.getSize() );
+		
+		try {
+			job.saveTiles( Utils.addFilenameSuffix( args.getInput(), "_sized" ) );
+		} catch ( final IOException e ) {
+			e.printStackTrace();
+		}
 	}
 
 	
@@ -221,6 +240,8 @@ public class StitchingSpark implements Runnable, Serializable {
 		final ArrayList< ImagePlusTimePoint > optimized = GlobalOptimization.optimize( comparePairs, comparePairs.get( 0 ).getTile1(), job.getParams() );
 		
 		System.out.println( "Global optimization done" );
+		for ( final ImagePlusTimePoint imt : optimized )
+			Log.info( imt.getImpId() + ": " + imt.getModel() );
 		
 		// Process the result updating the tiles position within the job object
 		final TileInfo[] tiles = job.getTiles();
@@ -233,18 +254,18 @@ public class StitchingSpark implements Runnable, Serializable {
 		for ( final ImagePlusTimePoint optimizedTile : optimized ) {
 			final double[] pos = new double[ job.getDimensionality() ];
 			optimizedTile.getModel().applyInPlace( pos );
-			
-			// TODO: avoid this stupid conversion
-			final float[] posFloat = new float[ pos.length ];
-			for ( int j = 0; j < pos.length; j++ )
-				posFloat[ j ] = (float)pos[ j ];
-			
-			tilesMap.get( optimizedTile.getImpId() ).setPosition( posFloat );
+			tilesMap.get( optimizedTile.getImpId() ).setPosition( pos );
+		}
+		
+		try {
+			job.saveTiles( Utils.addFilenameSuffix( args.getInput(), "_shifted" ) );
+		} catch ( final IOException e ) {
+			e.printStackTrace();
 		}
 	}
 	
 	
-	private void fuse( final JavaSparkContext sparkContext, final ArrayList< TileInfo > subregions ) {
+	private void fuse( final JavaSparkContext sparkContext, final ArrayList< TileInfo > subregions, final String fusedFolder ) {
 
 		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( subregions );
 		final JavaRDD< TileInfo > fused = rdd.map(
@@ -254,22 +275,114 @@ public class StitchingSpark implements Runnable, Serializable {
 
 					@Override
 					public TileInfo call( final TileInfo subregion ) throws Exception {
-						
 						// TODO: optimize with KD interval tree or smth similar
 						final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 						for ( final TileInfo tile : job.getTiles() )
 							if ( Utils.overlap( tile, subregion ) )
 								tilesWithinSubregion.add( tile );
 						
-						// TODO: fuse tiles within subregion
+						if ( tilesWithinSubregion.isEmpty() )
+							return null;
+						
+						subregion.setFile( fusedFolder + "/tile" + subregion.getIndex() + ".tif" );
+						System.out.println( "Starting to fuse tiles within subregion " + subregion.getIndex() );
+						
+						// TODO: support different kinds of RealType
+						
+						final Boundaries subregionBoundaries = subregion.getBoundaries();
+						final ArrayList< IntervalView< UnsignedShortType > > intervals = new ArrayList<>();
+						final ArrayList< InvertibleBoundable > models = new ArrayList<>();
+						
+						for ( final TileInfo tile : tilesWithinSubregion ) {
+							System.out.println( "[Subregion " + subregion.getIndex() + "] Loading image " + (intervals.size()+1) + " of " + tilesWithinSubregion.size() );
+							
+							final ImagePlus imp = IJ.openImage( tile.getFile() );
+							
+							final Boundaries tileBoundariesWithinSubregion = tile.getBoundaries();
+							final long[] tileImageOffset = new long[ tile.getDimensionality() ];
+							for ( int d = 0; d < tileImageOffset.length; d++ )
+								tileImageOffset[ d ] = Math.max( 0, subregionBoundaries.getMin(d) - tileBoundariesWithinSubregion.getMin(d) ) / 10;
+							
+							for ( int d = 0; d < subregion.getDimensionality(); d++ ) {
+								tileBoundariesWithinSubregion.setMin( d, Math.max( tileBoundariesWithinSubregion.getMin(d), subregionBoundaries.getMin(d) ) );
+								tileBoundariesWithinSubregion.setMax( d, Math.min( tileBoundariesWithinSubregion.getMax(d), subregionBoundaries.getMax(d) ) );
+								
+								// Set relative coordinates
+								tileBoundariesWithinSubregion.setMin( d, tileBoundariesWithinSubregion.getMin(d) - subregionBoundaries.getMin(d) );
+								tileBoundariesWithinSubregion.setMax( d, tileBoundariesWithinSubregion.getMax(d) - subregionBoundaries.getMin(d) );
+							}
+							
+							final long[] tileImageDimensions = tileBoundariesWithinSubregion.getDimensions();
+							final IntervalView< UnsignedShortType > interval = Views.offsetInterval( 
+									ImageJFunctions.wrapShort( imp ), tileImageOffset, tileImageDimensions );
+							intervals.add( interval );
+
+							final double[] tileSubregionOffset = new double[ tile.getDimensionality() ];
+							for ( int d = 0; d < tileSubregionOffset.length; d++ )
+								tileSubregionOffset[ d ] = Math.max( 0, tile.getPosition(d) - subregionBoundaries.getMin(d) );
+							models.add( (InvertibleBoundable) TileModelFactory.createOffsetModel( tileSubregionOffset ) );
+						}
+						
+						// Create output image
+						final ImgFactory< UnsignedShortType > f = new ImagePlusImgFactory<>();
+						System.out.println( "subregion: " + Arrays.toString( subregionBoundaries.getDimensions() ) );
+						final Img< UnsignedShortType > out = f.create( subregionBoundaries.getDimensions(), new UnsignedShortType() );
+						System.out.println( "out interval size = " + out.size() );
+						
+						// Draw all intervals onto it one by one
+						final RandomAccess< UnsignedShortType > randomAccess = out.randomAccess();
+						for ( int i = 0; i < intervals.size(); i++ ) {
+							final IntervalView< UnsignedShortType > interval = intervals.get( i );
+							
+							// Prepare offset to map the input image to the output image
+							final double[] pos = new double[ interval.numDimensions() ];
+				  			models.get( i ).applyInPlace( pos );
+				  			final Point origin = new Point( pos.length );
+				  			for ( int d = 0; d < pos.length; d++ )
+				  				origin.setPosition( (long)Math.floor( pos[d] ), d );
+				  			
+							System.out.println( "  Processing tile " + (i+1) + " of " + intervals.size() + ".." );
+							String debug = "";
+							for ( int d = 0; d < interval.numDimensions(); d++ )
+								debug += "("+(interval.min(d)+origin.getLongPosition(d))+","+(interval.max(d)+origin.getLongPosition(d))+"),";
+							System.out.println( "  interval: size=" + interval.size()+";   " + debug );
+				  			
+				  			// Copy input to output
+							final Cursor< UnsignedShortType > cursorInput = interval.localizingCursor();
+							while ( cursorInput.hasNext()) {
+								cursorInput.fwd();
+								
+								final Point p = new Point( origin );
+								p.move( cursorInput );
+								randomAccess.setPosition( p );
+								
+								randomAccess.get().set( cursorInput.get() );
+						    }
+						}
+						
+						System.out.println( "Saving the resulting file  for subregion " + subregion.getIndex() );
+						
+						final ImagePlus outImp = ImageJFunctions.wrap( out, "" );
+						IJ.saveAsTiff( outImp, subregion.getFile() );
+						
+						System.out.println( "Completed for subregion " + subregion.getIndex() );
+						
+						outImp.close();
 						
 						return subregion;
 					}
 				});
 		
 		final List< TileInfo > output = fused.collect();
+		output.removeAll( Collections.singleton( null ) );
 		System.out.println( "Obtained " + output.size() + " tiles" );
 		
-		// TODO: save fused tiles configuration into separate file
+		job.setTiles( output.toArray( new TileInfo[ 0 ] ) );
+		
+		try {
+			job.saveTiles( Utils.addFilenameSuffix( args.getInput(), "_fused" ) );
+		} catch ( final IOException e ) {
+			e.printStackTrace();
+		}
 	}
 }

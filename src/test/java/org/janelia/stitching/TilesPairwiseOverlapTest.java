@@ -15,26 +15,26 @@ public class TilesPairwiseOverlapTest {
 		final TileInfo t1 = new TileInfo(), t2 = new TileInfo();
 		
 		// overlap
-		t1.setPosition( new float[] { 5.f } ); 	t1.setSize( new int[] { 10 } );
-		t2.setPosition( new float[] { -5.f } ); t2.setSize( new int[] { 12 } );
+		t1.setPosition( new double[] { 5. } ); 	t1.setSize( new long[] { 10 } );
+		t2.setPosition( new double[] { -5. } ); t2.setSize( new long[] { 12 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// intersection
-		t1.setPosition( new float[] { 2.f } ); t1.setSize( new int[] { 3 } );
-		t2.setPosition( new float[] { 5.f } ); t2.setSize( new int[] { 2 } );
+		// longersection
+		t1.setPosition( new double[] { 2. } ); t1.setSize( new long[] { 3 } );
+		t2.setPosition( new double[] { 5. } ); t2.setSize( new long[] { 2 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
 		// one inside another
-		t1.setPosition( new float[] { 0.f } ); t1.setSize( new int[] { 5 } );
-		t2.setPosition( new float[] { 1.f } ); t2.setSize( new int[] { 2 } );
+		t1.setPosition( new double[] { 0. } ); t1.setSize( new long[] { 5 } );
+		t2.setPosition( new double[] { 1. } ); t2.setSize( new long[] { 2 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// no intersection
-		t1.setPosition( new float[] { 100.f } ); t1.setSize( new int[] { 1 } );
-		t2.setPosition( new float[] { 500.f } ); t2.setSize( new int[] { 1 } );
+		// no longersection
+		t1.setPosition( new double[] { 100. } ); t1.setSize( new long[] { 1 } );
+		t2.setPosition( new double[] { 500. } ); t2.setSize( new long[] { 1 } );
 		Assert.assertFalse( Utils.overlap( t1, t2 ) );
 		Assert.assertFalse( Utils.overlap( t2, t1 ) );
 	}
@@ -44,32 +44,32 @@ public class TilesPairwiseOverlapTest {
 		final TileInfo t1 = new TileInfo(), t2 = new TileInfo();
 		
 		// overlap
-		t1.setPosition( new float[] { 5.f, 2.5f } );  t1.setSize( new int[] { 10, 10 } );
-		t2.setPosition( new float[] { -5.f, 10.f } ); t2.setSize( new int[] { 20, 20 } );
+		t1.setPosition( new double[] { 5., 2.5 } );  t1.setSize( new long[] { 10, 10 } );
+		t2.setPosition( new double[] { -5., 10. } ); t2.setSize( new long[] { 20, 20 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// intersection (segment)
-		t1.setPosition( new float[] { 0.f, 0.f } ); t1.setSize( new int[] { 3, 4 } );
-		t2.setPosition( new float[] { 3.f, 2.f } ); t2.setSize( new int[] { 2, 5 } );
+		// longersection (segment)
+		t1.setPosition( new double[] { 0., 0. } ); t1.setSize( new long[] { 3, 4 } );
+		t2.setPosition( new double[] { 3., 2. } ); t2.setSize( new long[] { 2, 5 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// intersection (point)
-		t1.setPosition( new float[] { 0.f, 0.f } ); t1.setSize( new int[] { 3, 4 } );
-		t2.setPosition( new float[] { 3.f, 4.f } ); t2.setSize( new int[] { 2, 5 } );
+		// longersection (polong)
+		t1.setPosition( new double[] { 0., 0. } ); t1.setSize( new long[] { 3, 4 } );
+		t2.setPosition( new double[] { 3., 4. } ); t2.setSize( new long[] { 2, 5 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
 		// one inside another
-		t1.setPosition( new float[] { 2.f, 3.f } ); t1.setSize( new int[] { 50, 30 } );
-		t2.setPosition( new float[] { 8.f, 6.f } ); t2.setSize( new int[] { 2, 5 } );
+		t1.setPosition( new double[] { 2., 3. } ); t1.setSize( new long[] { 50, 30 } );
+		t2.setPosition( new double[] { 8., 6. } ); t2.setSize( new long[] { 2, 5 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// no intersection
-		t1.setPosition( new float[] { 0.f, 0.f } );  t1.setSize( new int[] { 5, 6 } );
-		t2.setPosition( new float[] { 2.f, 10.f } ); t2.setSize( new int[] { 3, 4 } );
+		// no longersection
+		t1.setPosition( new double[] { 0., 0. } );  t1.setSize( new long[] { 5, 6 } );
+		t2.setPosition( new double[] { 2., 10. } ); t2.setSize( new long[] { 3, 4 } );
 		Assert.assertFalse( Utils.overlap( t1, t2 ) );
 		Assert.assertFalse( Utils.overlap( t2, t1 ) );
 	}
@@ -79,20 +79,20 @@ public class TilesPairwiseOverlapTest {
 		final TileInfo t1 = new TileInfo(), t2 = new TileInfo();
 		
 		// overlap
-		t1.setPosition( new float[] { 0.f, 0.f, 0.f } ); t1.setSize( new int[] { 3, 4, 5 } );
-		t2.setPosition( new float[] { 2.f, 3.f, 4.f } ); t2.setSize( new int[] { 20, 20, 20 } );
+		t1.setPosition( new double[] { 0., 0., 0. } ); t1.setSize( new long[] { 3, 4, 5 } );
+		t2.setPosition( new double[] { 2., 3., 4. } ); t2.setSize( new long[] { 20, 20, 20 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// intersection
-		t1.setPosition( new float[] { 0.f, 0.f, 0.f } ); t1.setSize( new int[] { 3, 4, 5 } );
-		t2.setPosition( new float[] { 3.f, 4.f, 5.f } ); t2.setSize( new int[] { 1, 2, 3 } );
+		// longersection
+		t1.setPosition( new double[] { 0., 0., 0. } ); t1.setSize( new long[] { 3, 4, 5 } );
+		t2.setPosition( new double[] { 3., 4., 5. } ); t2.setSize( new long[] { 1, 2, 3 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// no intersection
-		t1.setPosition( new float[] { 0.f, 0.f, 0.f } );  t1.setSize( new int[] { 3, 4, 5 } );
-		t2.setPosition( new float[] { 1.f, 2.f, 10.f } ); t2.setSize( new int[] { 3, 4, 5 } );
+		// no longersection
+		t1.setPosition( new double[] { 0., 0., 0. } );  t1.setSize( new long[] { 3, 4, 5 } );
+		t2.setPosition( new double[] { 1., 2., 10. } ); t2.setSize( new long[] { 3, 4, 5 } );
 		Assert.assertFalse( Utils.overlap( t1, t2 ) );
 		Assert.assertFalse( Utils.overlap( t2, t1 ) );
 	}

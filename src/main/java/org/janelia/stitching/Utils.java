@@ -6,8 +6,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 
 import ij.gui.Roi;
-import mpicbg.models.TranslationModel2D;
-import mpicbg.models.TranslationModel3D;
 import mpicbg.stitching.ImageCollectionElement;
 import scala.Tuple2;
 
@@ -17,7 +15,16 @@ import scala.Tuple2;
  */
 
 public class Utils {
-
+	
+	public static String addFilenameSuffix( final String filename, final String suffix ) {
+		final StringBuilder ret = new StringBuilder( filename );
+		int lastDotIndex = ret.lastIndexOf( "." );
+		if ( lastDotIndex == -1 )
+			lastDotIndex = ret.length();
+		ret.insert( lastDotIndex, suffix );
+		return ret.toString();
+	}
+	
 	public static ImageCollectionElement createElement( final StitchingJob job, final TileInfo tile ) throws Exception {
 		
 		File file;
@@ -25,24 +32,12 @@ public class Utils {
 		if ( Paths.get( filePath ).isAbsolute() )
 			file = new File( filePath );
 		else
-			file = new File( job.getBaseImagesFolder(), filePath );
+			file = new File( job.getBaseFolder(), filePath );
 		
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
-		e.setOffset( tile.getPosition() );
+		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.getDimensionality() );
-		switch ( e.getDimensionality() ) {
-		case 3:
-			e.setModel( new TranslationModel3D() );
-			break;
-			
-		case 2:
-			e.setModel( new TranslationModel2D() );
-			break;
-
-		default:
-			throw new Exception( "Not supported" );
-		}
-		
+		e.setModel( TileModelFactory.createDefaultModel( e.getDimensionality() ) );
 		return e;
 	}
 	
@@ -62,8 +57,8 @@ public class Utils {
 		
 		for ( int d = 0; d < t1.getDimensionality(); d++ ) {
 			
-			final float p1 = t1.getPosition()[ d ], p2 = t2.getPosition()[ d ];
-			final int s1 = t1.getSize()[ d ], s2 = t2.getSize()[ d ];
+			final double p1 = t1.getPosition()[ d ], p2 = t2.getPosition()[ d ];
+			final long s1 = t1.getSize()[ d ], s2 = t2.getSize()[ d ];
 			
 			if ( !( ( p2 >= p1 && p2 <= p1 + s1 ) || 
 					( p1 >= p2 && p1 <= p2 + s2 ) ) )
@@ -117,7 +112,7 @@ public class Utils {
 			return;
 		}
 		
-		for ( int coord = space.getMin( currDim ); coord < space.getMax( currDim ); coord += subregionSize ) {
+		for ( long coord = space.getMin( currDim ); coord < space.getMax( currDim ); coord += subregionSize ) {
 			
 			final TileInfo newSubregion = currSubregion.clone();
 			newSubregion.setPosition( currDim, coord );

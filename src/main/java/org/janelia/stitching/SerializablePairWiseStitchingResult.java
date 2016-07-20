@@ -20,21 +20,17 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 	private boolean isValidOverlap = true;
 
 	public SerializablePairWiseStitchingResult( final Tuple2< TileInfo, TileInfo > pairOfTiles, final float[] offset, final float crossCorrelation, final float phaseCorrelation ) {
-		init( pairOfTiles, offset, crossCorrelation, phaseCorrelation );
-	}
-	
-	public SerializablePairWiseStitchingResult( final Tuple2< TileInfo, TileInfo > pairOfTiles, PairWiseStitchingResult other ) {
-		init( pairOfTiles, other.getOffset(), other.getCrossCorrelation(), other.getPhaseCorrelation() );
-	}
-	
-	protected SerializablePairWiseStitchingResult() { }
-	
-	private void init( final Tuple2< TileInfo, TileInfo > pairOfTiles, final float[] offset, final float crossCorrelation, final float phaseCorrelation ) {
 		this.pairOfTiles = pairOfTiles;
 		this.offset = offset;
 		this.crossCorrelation = crossCorrelation;
 		this.phaseCorrelation = phaseCorrelation;
 	}
+	
+	public SerializablePairWiseStitchingResult( final Tuple2< TileInfo, TileInfo > pairOfTiles, PairWiseStitchingResult other ) {
+		this( pairOfTiles, other.getOffset(), other.getCrossCorrelation(), other.getPhaseCorrelation() );
+	}
+	
+	protected SerializablePairWiseStitchingResult() { }
 	
 	public Tuple2< TileInfo, TileInfo > getPairOfTiles() { return pairOfTiles; }
 	public int getNumDimensions() { return offset.length; }
