@@ -20,7 +20,7 @@ public class TilesPairwiseOverlapTest {
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// longersection
+		// intersection
 		t1.setPosition( new double[] { 2. } ); t1.setSize( new long[] { 3 } );
 		t2.setPosition( new double[] { 5. } ); t2.setSize( new long[] { 2 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
@@ -32,7 +32,7 @@ public class TilesPairwiseOverlapTest {
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// no longersection
+		// no intersection
 		t1.setPosition( new double[] { 100. } ); t1.setSize( new long[] { 1 } );
 		t2.setPosition( new double[] { 500. } ); t2.setSize( new long[] { 1 } );
 		Assert.assertFalse( Utils.overlap( t1, t2 ) );
@@ -49,13 +49,13 @@ public class TilesPairwiseOverlapTest {
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// longersection (segment)
+		// intersection (segment)
 		t1.setPosition( new double[] { 0., 0. } ); t1.setSize( new long[] { 3, 4 } );
 		t2.setPosition( new double[] { 3., 2. } ); t2.setSize( new long[] { 2, 5 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// longersection (polong)
+		// intersection (point)
 		t1.setPosition( new double[] { 0., 0. } ); t1.setSize( new long[] { 3, 4 } );
 		t2.setPosition( new double[] { 3., 4. } ); t2.setSize( new long[] { 2, 5 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
@@ -67,7 +67,7 @@ public class TilesPairwiseOverlapTest {
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// no longersection
+		// no intersection
 		t1.setPosition( new double[] { 0., 0. } );  t1.setSize( new long[] { 5, 6 } );
 		t2.setPosition( new double[] { 2., 10. } ); t2.setSize( new long[] { 3, 4 } );
 		Assert.assertFalse( Utils.overlap( t1, t2 ) );
@@ -84,13 +84,13 @@ public class TilesPairwiseOverlapTest {
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// longersection
+		// intersection
 		t1.setPosition( new double[] { 0., 0., 0. } ); t1.setSize( new long[] { 3, 4, 5 } );
 		t2.setPosition( new double[] { 3., 4., 5. } ); t2.setSize( new long[] { 1, 2, 3 } );
 		Assert.assertTrue( Utils.overlap( t1, t2 ) );
 		Assert.assertTrue( Utils.overlap( t2, t1 ) );
 		
-		// no longersection
+		// no intersection
 		t1.setPosition( new double[] { 0., 0., 0. } );  t1.setSize( new long[] { 3, 4, 5 } );
 		t2.setPosition( new double[] { 1., 2., 10. } ); t2.setSize( new long[] { 3, 4, 5 } );
 		Assert.assertFalse( Utils.overlap( t1, t2 ) );

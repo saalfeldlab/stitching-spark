@@ -6,22 +6,22 @@ import mpicbg.models.TranslationModel3D;
 
 public class TileModelFactory {
 
-	public static Model<?> createDefaultModel( final int dim ) throws Exception {
+	public static Model< ? > createDefaultModel( final int dim ) throws Exception {
 		return createModel( dim, null );
 	}
 	
-	public static Model<?> createOffsetModel( final TileInfo tile ) throws Exception {
+	public static Model< ? > createOffsetModel( final TileInfo tile ) throws Exception {
 		return createModel( tile.getDimensionality(), tile );
 	}
 	
-	public static Model<?> createOffsetModel( final double[] offset ) throws Exception {
+	public static Model< ? > createOffsetModel( final double[] offset ) throws Exception {
 		final int dim = offset.length;
 		final TileInfo tile = new TileInfo( dim );
 		tile.setPosition( offset );
 		return createModel( dim, tile );
 	}
 	
-	private static Model<?> createModel( final int dim, final TileInfo tile ) throws Exception {
+	private static Model< ? > createModel( final int dim, final TileInfo tile ) throws Exception {
 		switch ( dim ) {
 		case 2:
 			TranslationModel2D m2d = new TranslationModel2D();
