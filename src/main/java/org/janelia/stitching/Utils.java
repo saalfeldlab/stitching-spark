@@ -25,15 +25,15 @@ public class Utils {
 		return ret.toString();
 	}
 	
+	public static String getAbsoluteImagePath( final StitchingJob job, final TileInfo tile ) {
+		String filePath = tile.getFile();
+		if ( !Paths.get( filePath ).isAbsolute() )
+			filePath = Paths.get( job.getBaseFolder(), filePath ).toString();
+		return filePath; 
+	}
+	
 	public static ImageCollectionElement createElement( final StitchingJob job, final TileInfo tile ) throws Exception {
-		
-		File file;
-		final String filePath = tile.getFile();
-		if ( Paths.get( filePath ).isAbsolute() )
-			file = new File( filePath );
-		else
-			file = new File( job.getBaseFolder(), filePath );
-		
+		final File file = new File( getAbsoluteImagePath( job, tile) );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
 		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.getDimensionality() );

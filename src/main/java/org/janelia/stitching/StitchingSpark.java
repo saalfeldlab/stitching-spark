@@ -142,7 +142,7 @@ public class StitchingSpark implements Runnable, Serializable {
 						long[] size = Conversions.toLongArray( el.getDimensions() );
 						if ( size.length == 2 && imp.getNFrames() > 1 )
 							size = new long[] { size[ 0 ], size[ 1 ], imp.getNFrames() };
-						
+												
 						tile.setSize( size );
 						el.close();
 						return tile;
@@ -296,7 +296,7 @@ public class StitchingSpark implements Runnable, Serializable {
 						for ( final TileInfo tile : tilesWithinSubregion ) {
 							System.out.println( "[Subregion " + subregion.getIndex() + "] Loading image " + (intervals.size()+1) + " of " + tilesWithinSubregion.size() );
 							
-							final ImagePlus imp = IJ.openImage( tile.getFile() );
+							final ImagePlus imp = IJ.openImage( Utils.getAbsoluteImagePath( job, tile ) );
 							
 							final Boundaries tileBoundariesWithinSubregion = tile.getBoundaries();
 							final long[] tileImageOffset = new long[ tile.getDimensionality() ];
