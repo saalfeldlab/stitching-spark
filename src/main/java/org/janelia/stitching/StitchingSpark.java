@@ -15,10 +15,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 
-import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
-import mpicbg.models.InvertibleBoundable;
 import mpicbg.models.Tile;
 import mpicbg.stitching.ComparePair;
 import mpicbg.stitching.GlobalOptimization;
@@ -27,16 +25,6 @@ import mpicbg.stitching.ImagePlusTimePoint;
 import mpicbg.stitching.PairWiseStitchingImgLib;
 import mpicbg.stitching.PairWiseStitchingResult;
 import mpicbg.stitching.StitchingParameters;
-import net.imglib2.Cursor;
-import net.imglib2.Point;
-import net.imglib2.RandomAccess;
-import net.imglib2.img.Img;
-import net.imglib2.img.ImgFactory;
-import net.imglib2.img.display.imagej.ImageJFunctions;
-import net.imglib2.img.imageplus.ImagePlusImgFactory;
-import net.imglib2.type.numeric.integer.UnsignedShortType;
-import net.imglib2.view.IntervalView;
-import net.imglib2.view.Views;
 import scala.Tuple2;
 import stitching.utils.Log;
 
@@ -287,87 +275,10 @@ public class StitchingSpark implements Runnable, Serializable {
 						subregion.setFile( fusedFolder + "/tile" + subregion.getIndex() + ".tif" );
 						System.out.println( "Starting to fuse tiles within subregion " + subregion.getIndex() );
 						
-						// TODO: support different kinds of RealType
-						
-						final Boundaries subregionBoundaries = subregion.getBoundaries();
-						final ArrayList< IntervalView< UnsignedShortType > > intervals = new ArrayList<>();
-						final ArrayList< InvertibleBoundable > models = new ArrayList<>();
-						
-						for ( final TileInfo tile : tilesWithinSubregion ) {
-							System.out.println( "[Subregion " + subregion.getIndex() + "] Loading image " + (intervals.size()+1) + " of " + tilesWithinSubregion.size() );
-							
-							final ImagePlus imp = IJ.openImage( Utils.getAbsoluteImagePath( job, tile ) );
-							
-							final Boundaries tileBoundariesWithinSubregion = tile.getBoundaries();
-							final long[] tileImageOffset = new long[ tile.getDimensionality() ];
-							for ( int d = 0; d < tileImageOffset.length; d++ )
-								tileImageOffset[ d ] = Math.max( 0, subregionBoundaries.getMin(d) - tileBoundariesWithinSubregion.getMin(d) ) / 10;
-							
-							for ( int d = 0; d < subregion.getDimensionality(); d++ ) {
-								tileBoundariesWithinSubregion.setMin( d, Math.max( tileBoundariesWithinSubregion.getMin(d), subregionBoundaries.getMin(d) ) );
-								tileBoundariesWithinSubregion.setMax( d, Math.min( tileBoundariesWithinSubregion.getMax(d), subregionBoundaries.getMax(d) ) );
-								
-								// Set relative coordinates
-								tileBoundariesWithinSubregion.setMin( d, tileBoundariesWithinSubregion.getMin(d) - subregionBoundaries.getMin(d) );
-								tileBoundariesWithinSubregion.setMax( d, tileBoundariesWithinSubregion.getMax(d) - subregionBoundaries.getMin(d) );
-							}
-							
-							final long[] tileImageDimensions = tileBoundariesWithinSubregion.getDimensions();
-							final IntervalView< UnsignedShortType > interval = Views.offsetInterval( 
-									ImageJFunctions.wrapShort( imp ), tileImageOffset, tileImageDimensions );
-							intervals.add( interval );
-
-							final double[] tileSubregionOffset = new double[ tile.getDimensionality() ];
-							for ( int d = 0; d < tileSubregionOffset.length; d++ )
-								tileSubregionOffset[ d ] = Math.max( 0, tile.getPosition(d) - subregionBoundaries.getMin(d) );
-							models.add( (InvertibleBoundable) TileModelFactory.createOffsetModel( tileSubregionOffset ) );
-						}
-						
-						// Create output image
-						final ImgFactory< UnsignedShortType > f = new ImagePlusImgFactory<>();
-						System.out.println( "subregion: " + Arrays.toString( subregionBoundaries.getDimensions() ) );
-						final Img< UnsignedShortType > out = f.create( subregionBoundaries.getDimensions(), new UnsignedShortType() );
-						System.out.println( "out interval size = " + out.size() );
-						
-						// Draw all intervals onto it one by one
-						final RandomAccess< UnsignedShortType > randomAccess = out.randomAccess();
-						for ( int i = 0; i < intervals.size(); i++ ) {
-							final IntervalView< UnsignedShortType > interval = intervals.get( i );
-							
-							// Prepare offset to map the input image to the output image
-							final double[] pos = new double[ interval.numDimensions() ];
-				  			models.get( i ).applyInPlace( pos );
-				  			final Point origin = new Point( pos.length );
-				  			for ( int d = 0; d < pos.length; d++ )
-				  				origin.setPosition( (long)Math.floor( pos[d] ), d );
-				  			
-							System.out.println( "  Processing tile " + (i+1) + " of " + intervals.size() + ".." );
-							String debug = "";
-							for ( int d = 0; d < interval.numDimensions(); d++ )
-								debug += "("+(interval.min(d)+origin.getLongPosition(d))+","+(interval.max(d)+origin.getLongPosition(d))+"),";
-							System.out.println( "  interval: size=" + interval.size()+";   " + debug );
-				  			
-				  			// Copy input to output
-							final Cursor< UnsignedShortType > cursorInput = interval.localizingCursor();
-							while ( cursorInput.hasNext()) {
-								cursorInput.fwd();
-								
-								final Point p = new Point( origin );
-								p.move( cursorInput );
-								randomAccess.setPosition( p );
-								
-								randomAccess.get().set( cursorInput.get() );
-						    }
-						}
-						
-						System.out.println( "Saving the resulting file  for subregion " + subregion.getIndex() );
-						
-						final ImagePlus outImp = ImageJFunctions.wrap( out, "" );
-						IJ.saveAsTiff( outImp, subregion.getFile() );
+						final FusionPerformer fusion = new FusionPerformer( job, tilesWithinSubregion );
+						fusion.fuseTilesWithinSubregion( subregion );
 						
 						System.out.println( "Completed for subregion " + subregion.getIndex() );
-						
-						outImp.close();
 						
 						return subregion;
 					}
