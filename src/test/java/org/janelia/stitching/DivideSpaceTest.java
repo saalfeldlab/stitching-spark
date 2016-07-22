@@ -17,7 +17,7 @@ public class DivideSpaceTest {
 	public void test1d() {
 		final Boundaries space = new Boundaries( 1 );
 		space.setMin( 0, 10 );	space.setMax( 0, 40 );
-		final ArrayList< TileInfo > res = Utils.divideSpace( space, 14 );
+		final ArrayList< TileInfo > res = TileHelper.divideSpace( space, 14 );
 		Assert.assertEquals( 3, res.size() );
 		
 		for ( int i = 0; i < res.size(); i++ )
@@ -48,6 +48,6 @@ public class DivideSpaceTest {
 		System.out.println( "Subregion size = " + subregionSize );
 		System.out.println( "Expected subregions count = " + expectedCount );
 		
-		Assert.assertEquals( expectedCount, Utils.divideSpace( space, subregionSize).size() );
+		Assert.assertEquals( expectedCount, TileHelper.divideSpace( space, subregionSize).size() );
 	}
 }

@@ -83,7 +83,6 @@ public class FusionPerformer {
 			}
 			
 			final long[] tileImageDimensions = tileBoundariesWithinSubregion.getDimensions();
-			// TODO: check why is it take so much time? Loading the whole image into memory?
 			final Img< T > inImg = ImageJFunctions.wrap( images.get( tile.getIndex() ) );
 			final IntervalView< T > interval = Views.offsetInterval( inImg, tileImageOffset, tileImageDimensions );
 			intervals.add( interval );

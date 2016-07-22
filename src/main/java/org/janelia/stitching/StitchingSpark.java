@@ -90,7 +90,7 @@ public class StitchingSpark implements Runnable, Serializable {
 		
 		// Compute shifts
 		if ( job.getMode() != StitchingJob.Mode.FuseOnly ) {
-			final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = Utils.findOverlappingTiles( job.getTiles() );
+			final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = TileHelper.findOverlappingTiles( job.getTiles() );
 			System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
 			
 			computeShifts( sparkContext, overlappingTiles );
@@ -99,8 +99,8 @@ public class StitchingSpark implements Runnable, Serializable {
 		// Fuse
 		if ( job.getMode() != StitchingJob.Mode.NoFuse ) {
 			
-			final Boundaries boundaries = Utils.findBoundaries( job.getTiles() );
-			final ArrayList< TileInfo > subregions = Utils.divideSpace( boundaries, job.getSubregionSize() );
+			final Boundaries boundaries = TileHelper.findBoundaries( job.getTiles() );
+			final ArrayList< TileInfo > subregions = TileHelper.divideSpace( boundaries, job.getSubregionSize() );
 			
 			final String fusedFolder = job.getBaseFolder() + "/fused";
 			new File( fusedFolder ).mkdirs();
@@ -266,7 +266,7 @@ public class StitchingSpark implements Runnable, Serializable {
 						// TODO: optimize with KD interval tree or smth similar
 						final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 						for ( final TileInfo tile : job.getTiles() )
-							if ( Utils.overlap( tile, subregion ) )
+							if ( TileHelper.overlap( tile, subregion ) )
 								tilesWithinSubregion.add( tile );
 						
 						if ( tilesWithinSubregion.isEmpty() )
