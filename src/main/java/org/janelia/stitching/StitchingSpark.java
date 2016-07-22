@@ -131,7 +131,7 @@ public class StitchingSpark implements Runnable, Serializable {
 						long[] size = Conversions.toLongArray( el.getDimensions() );
 						if ( size.length == 2 && imp.getNFrames() > 1 )
 							size = new long[] { size[ 0 ], size[ 1 ], imp.getNFrames() };
-											
+						
 						tile.setType( ImageType.valueOf( imp.getType() ) );
 						tile.setSize( size );
 						
@@ -281,8 +281,8 @@ public class StitchingSpark implements Runnable, Serializable {
 						subregion.setFile( fusedFolder + "/tile" + subregion.getIndex() + ".tif" );
 						System.out.println( "Starting to fuse tiles within subregion " + subregion.getIndex() );
 						
-						final FusionPerformer fusion = new FusionPerformer( job, tilesWithinSubregion );
-						fusion.fuseTilesWithinSubregion( subregion );
+						final FusionPerformer fusion = new FusionPerformer( job );
+						fusion.fuseTilesWithinSubregion( tilesWithinSubregion, subregion );
 						
 						System.out.println( "Completed for subregion " + subregion.getIndex() );
 						
