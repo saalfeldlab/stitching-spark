@@ -37,7 +37,7 @@ public class FusionPerformer {
 		int imageType = -1;
 		for ( final TileInfo tile : tiles ) {
 			System.out.println( "[Subregion " + subregion.getIndex() + "] Loading image " + (images.size()+1) + " of " + tiles.size() );
-			final ImagePlus img = IJ.openImage( Utils.getAbsoluteImagePath( job, tile ) );
+			final ImagePlus img = Utils.createElement( job, tile ).open( job.getParams().virtual );
 			images.put( tile.getIndex(), img );
 			
 			if ( imageType == -1 )
@@ -83,6 +83,7 @@ public class FusionPerformer {
 			}
 			
 			final long[] tileImageDimensions = tileBoundariesWithinSubregion.getDimensions();
+			// TODO: check why is it take so much time? Loading the whole image into memory?
 			final Img< T > inImg = ImageJFunctions.wrap( images.get( tile.getIndex() ) );
 			final IntervalView< T > interval = Views.offsetInterval( inImg, tileImageOffset, tileImageDimensions );
 			intervals.add( interval );
