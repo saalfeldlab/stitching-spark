@@ -41,19 +41,19 @@ public class BoundariesTest {
 		tiles[ 1 ].setPosition( new double[] { 1.2 } ); 	tiles[ 1 ].setSize( new long[] { 10 } );
 		tiles[ 2 ].setPosition( new double[] { 6. } ); 		tiles[ 2 ].setSize( new long[] { 3 } );
 		expected = create( new long[] { -20 }, new long[] { 12 } );
-		Assert.assertTrue( same( expected, TileHelper.findBoundaries( tiles ) ) );
+		Assert.assertTrue( same( expected, TileHelper.getCollectionBoundaries( tiles ) ) );
 		
 		tiles[ 0 ].setPosition( new double[] { 6. } ); 		tiles[ 0 ].setSize( new long[] { 3 } );
 		tiles[ 1 ].setPosition( new double[] { 1.2 } ); 	tiles[ 1 ].setSize( new long[] { 10 } );
 		tiles[ 2 ].setPosition( new double[] { -19.7 } ); 	tiles[ 2 ].setSize( new long[] { 5 } );
 		expected = create( new long[] { -20 }, new long[] { 12 } );
-		Assert.assertTrue( same( expected, TileHelper.findBoundaries( tiles ) ) );
+		Assert.assertTrue( same( expected, TileHelper.getCollectionBoundaries( tiles ) ) );
 		
 		tiles[ 0 ].setPosition( new double[] { 3.3 } ); 	tiles[ 0 ].setSize( new long[] { 1 } );
 		tiles[ 1 ].setPosition( new double[] { 2.2 } ); 	tiles[ 1 ].setSize( new long[] { 3 } );
 		tiles[ 2 ].setPosition( new double[] { 1.1 } ); 	tiles[ 2 ].setSize( new long[] { 5 } );
 		expected = create( new long[] { 1 }, new long[] { 7 } );
-		Assert.assertTrue( same( expected, TileHelper.findBoundaries( tiles ) ) );
+		Assert.assertTrue( same( expected, TileHelper.getCollectionBoundaries( tiles ) ) );
 	}
 	
 	@Test
@@ -65,7 +65,7 @@ public class BoundariesTest {
 		tiles[ 0 ].setPosition( new double[] { -5.7, 4.1 } );	tiles[ 0 ].setSize( new long[] { 8, 6 } );
 		tiles[ 1 ].setPosition( new double[] { 1.2, 1.8 } ); 	tiles[ 1 ].setSize( new long[] { 9, 4 } );
 		expected = create( new long[] { -6, 1 }, new long[] { 11, 11 } );
-		Assert.assertTrue( same( expected, TileHelper.findBoundaries( tiles ) ) );
+		Assert.assertTrue( same( expected, TileHelper.getCollectionBoundaries( tiles ) ) );
 	}
 	
 	@Test
@@ -73,6 +73,6 @@ public class BoundariesTest {
 		final TileInfo t = new TileInfo( 3 );
 		t.setPosition( new double[] { -5.7, 4.1, -8.2 } );	t.setSize( new long[] { 3, 4, 5 } );
 		expected = create( new long[] { -6, 4, -9 }, new long[] { -2, 9, -3 } );
-		Assert.assertTrue( same( expected, TileHelper.findBoundaries( new TileInfo[] { t } ) ) );
+		Assert.assertTrue( same( expected, TileHelper.getCollectionBoundaries( new TileInfo[] { t } ) ) );
 	}
 }

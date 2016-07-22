@@ -1,5 +1,6 @@
 package org.janelia.stitching;
 
+import java.awt.Rectangle;
 import java.util.ArrayList;
 
 import scala.Tuple2;
@@ -31,8 +32,42 @@ public class TileHelper {
 		return true;
 	}
 	
+	public static Rectangle getROI( final TileInfo t1, final TileInfo t2 )
+	{
+		final long start[] = new long[ 2 ], end[] = new long[ 2 ];
+		for ( int d = 0; d < 2; d++ )
+		{		
+			final double p1 = t1.getPosition( d ), p2 = t2.getPosition( d );
+			final long s1 = t1.getSize( d ), s2 = t2.getSize( d );
+			
+			// begin of 2 lies inside 1
+			if ( p2 >= p1 && p2 <= p1 + s1 )
+			{
+				start[ d ] = Math.round( p2 - p1 );
+				
+				// end of 2 lies inside 1
+				if ( p2 + s2 <= p1 + s1 )
+					end[ d ] = Math.round( p2 + s2 - p1 );
+				else
+					end[ d ] = Math.round( s1 );
+			}
+			else if ( p2 + s2 <= p1 + s1 ) // end of 2 lies inside 1
+			{
+				start[ d ] = 0;
+				end[ d ] = Math.round( p2 + s2 - p1 );
+			}
+			else // if both outside then the whole image 
+			{
+				start[ d ] = -1;
+				end[ d ] = -1;
+			}
+		}
+		
+		return new Rectangle( (int)start[0], (int)start[1], (int)( end[0] - start[0] ), (int)( end[1] - start[1] ) );
+	}
 	
-	public static Boundaries findBoundaries( final TileInfo[] tiles ) {
+	
+	public static Boundaries getCollectionBoundaries( final TileInfo[] tiles ) {
 		
 		if ( tiles.length == 0 )
 			return null;

@@ -37,7 +37,7 @@ public class FusionPerformer {
 		int imageType = -1;
 		for ( final TileInfo tile : tiles ) {
 			System.out.println( "[Subregion " + subregion.getIndex() + "] Loading image " + (images.size()+1) + " of " + tiles.size() );
-			final ImagePlus img = Utils.createElement( job, tile ).open( job.getParams().virtual );
+			final ImagePlus img = IJ.openImage( Utils.getAbsoluteImagePath( job, tile ) );
 			images.put( tile.getIndex(), img );
 			
 			if ( imageType == -1 )
@@ -95,7 +95,7 @@ public class FusionPerformer {
 		
 		// Create output image
 		System.out.println( "subregion: " + Arrays.toString( subregionBoundaries.getDimensions() ) );
-		final Img< T > out = new ImagePlusImgFactory< T >().create( subregionBoundaries.getDimensions(), type.copy() );
+		final Img< T > out = new ImagePlusImgFactory< T >().create( subregionBoundaries.getDimensions(), type.createVariable() );
 		System.out.println( "out interval size = " + out.size() );
 		
 		// Draw all intervals onto it one by one

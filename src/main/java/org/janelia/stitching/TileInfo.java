@@ -11,6 +11,7 @@ public class TileInfo implements Serializable {
 	
 	private static final long serialVersionUID = -3986869827110711078L;
 	
+	private ImageType type;
 	private Integer index;
 	private String file;
 	private double[] position;
@@ -66,6 +67,14 @@ public class TileInfo implements Serializable {
 			assert s >= 0;
 	}
 	
+	public ImageType getType() {
+		return type;
+	}
+	
+	public void setType( final ImageType type ) {
+		this.type = type;
+	}
+	
 	public Integer getIndex() {
 		return index;
 	}
@@ -90,7 +99,8 @@ public class TileInfo implements Serializable {
 	@Override
 	public TileInfo clone() {
 		final TileInfo newTile = new TileInfo();
-		newTile.setIndex( index == null ? null : (int)index);
+		newTile.setType( type );
+		newTile.setIndex( index == null ? null : new Integer( index.intValue() ) );
 		newTile.setFile( file );
 		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );

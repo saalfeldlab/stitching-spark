@@ -15,6 +15,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 
+import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
 import mpicbg.models.Tile;
@@ -64,16 +65,16 @@ public class StitchingSpark implements Runnable, Serializable {
 			System.exit( 2 );
 		}
 		
-		final ArrayList< TileInfo > unknownSizeTiles = new ArrayList<>();
+		final ArrayList< TileInfo > tilesWithoutMetadata = new ArrayList<>();
 		for ( final TileInfo tile : job.getTiles() )
-			if ( tile.getSize() == null )
-				unknownSizeTiles.add( tile );
+			if ( tile.getSize() == null || tile.getType() == null )
+				tilesWithoutMetadata.add( tile );
 		
 		final SparkConf conf = new SparkConf().setAppName( "Stitching" );
 		final JavaSparkContext sparkContext = new JavaSparkContext( conf );
 		
-		if ( !unknownSizeTiles.isEmpty() )
-			queryTileSize( sparkContext, unknownSizeTiles );
+		if ( !tilesWithoutMetadata.isEmpty() )
+			queryMetadata( sparkContext, tilesWithoutMetadata );
 		
 		job.validateTiles();
 		
@@ -99,7 +100,7 @@ public class StitchingSpark implements Runnable, Serializable {
 		// Fuse
 		if ( job.getMode() != StitchingJob.Mode.NoFuse ) {
 			
-			final Boundaries boundaries = TileHelper.findBoundaries( job.getTiles() );
+			final Boundaries boundaries = TileHelper.getCollectionBoundaries( job.getTiles() );
 			final ArrayList< TileInfo > subregions = TileHelper.divideSpace( boundaries, job.getSubregionSize() );
 			
 			final String fusedFolder = job.getBaseFolder() + "/fused";
@@ -113,10 +114,10 @@ public class StitchingSpark implements Runnable, Serializable {
 	}
 	
 	
-	private void queryTileSize( final JavaSparkContext sparkContext, final ArrayList< TileInfo > unknownSizeTiles ) {
+	private void queryMetadata( final JavaSparkContext sparkContext, final ArrayList< TileInfo > tilesWithoutMetadata ) {
 		
-		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( unknownSizeTiles );
-		final JavaRDD< TileInfo > tileSize = rdd.map(
+		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( tilesWithoutMetadata );
+		final JavaRDD< TileInfo > task = rdd.map(
 				new Function< TileInfo, TileInfo >() {
 					
 					private static final long serialVersionUID = -4991255417353136684L;
@@ -130,27 +131,32 @@ public class StitchingSpark implements Runnable, Serializable {
 						long[] size = Conversions.toLongArray( el.getDimensions() );
 						if ( size.length == 2 && imp.getNFrames() > 1 )
 							size = new long[] { size[ 0 ], size[ 1 ], imp.getNFrames() };
-												
+											
+						tile.setType( ImageType.valueOf( imp.getType() ) );
 						tile.setSize( size );
+						
 						el.close();
 						return tile;
 					}
 				});
 		
-		final List< TileInfo > knownSizeTiles = tileSize.collect();
+		final List< TileInfo > tilesMetadata = task.collect();
 		
-		System.out.println( "Obtained image size for all tiles" );
+		System.out.println( "Obtained metadata for all tiles" );
 		
 		final TileInfo[] tiles = job.getTiles();
 		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
 		for ( final TileInfo tile : tiles )
 			tilesMap.put( tile.getIndex(), tile );
 		
-		for ( final TileInfo knownSizeTile : knownSizeTiles )
-			tilesMap.get( knownSizeTile.getIndex() ).setSize( knownSizeTile.getSize() );
+		for ( final TileInfo tileMetadata : tilesMetadata ) {
+			final TileInfo tile = tilesMap.get( tileMetadata.getIndex() ); 
+			tile.setType( tileMetadata.getType() );
+			tile.setSize( tileMetadata.getSize() );
+		}
 		
 		try {
-			job.saveTiles( Utils.addFilenameSuffix( args.getInput(), "_sized" ) );
+			job.saveTiles( Utils.addFilenameSuffix( args.getInput(), "_full" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
@@ -174,20 +180,20 @@ public class StitchingSpark implements Runnable, Serializable {
 						final ImageCollectionElement el2 = Utils.createElement( job, pairOfTiles._2 );
 						
 						final ComparePair pair = new ComparePair(
-								new ImagePlusTimePoint( el1.open( job.getParams().virtual ), el1.getIndex(), 1, el1.getModel(), el1 ),
-								new ImagePlusTimePoint( el2.open( job.getParams().virtual ), el2.getIndex(), 1, el2.getModel(), el2 ) );
+								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._1 ) ), el1.getIndex(), 1, el1.getModel(), el1 ),
+								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._2 ) ), el2.getIndex(), 1, el2.getModel(), el2 ) );
 						
-            			final Roi roi1 = Utils.getROI( pair.getTile1().getElement(), pair.getTile2().getElement() );
-            			final Roi roi2 = Utils.getROI( pair.getTile2().getElement(), pair.getTile1().getElement() ); 
+            			final Roi roi1 = new Roi( TileHelper.getROI( pairOfTiles._1, pairOfTiles._2 ) );
+            			final Roi roi2 = new Roi( TileHelper.getROI( pairOfTiles._2, pairOfTiles._1 ) );
 						
         				final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
-        						pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint1(), job.getParams() );
+        						pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint2(), job.getParams() );
         				
         				System.out.println( "Stitched tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + System.lineSeparator() +
         								"   CrossCorr=" + result.getCrossCorrelation() + ", PhaseCorr=" + result.getPhaseCorrelation() + ", RelShift=" + Arrays.toString( result.getOffset() ) );
         				
-        		    	el1.close();
-        		    	el2.close();
+        				pair.getImagePlus1().close();
+        				pair.getImagePlus2().close();
         				
         				return new SerializablePairWiseStitchingResult( pairOfTiles, result );
 					}

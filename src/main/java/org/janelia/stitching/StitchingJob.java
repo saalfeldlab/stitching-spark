@@ -119,6 +119,7 @@ public class StitchingJob implements Serializable {
 	}
 	
 	public void saveTiles( final String output ) throws IOException {
+		System.out.println( "Saving updated tiles configuration to " + output );
 		final FileWriter writer = new FileWriter( output );
 		writer.write( new Gson().toJson( tiles ) );
 		writer.close();
