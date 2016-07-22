@@ -1,10 +1,8 @@
 package org.janelia.stitching;
 
-import java.awt.Rectangle;
 import java.io.File;
 import java.nio.file.Paths;
 
-import ij.gui.Roi;
 import mpicbg.stitching.ImageCollectionElement;
 
 /**

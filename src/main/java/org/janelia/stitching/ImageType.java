@@ -2,6 +2,11 @@ package org.janelia.stitching;
 
 import java.util.TreeMap;
 
+/**
+ * @author pisarevi
+ *
+ */
+
 //Convenient enum class over the ImagePlus type values
 public enum ImageType {
 	

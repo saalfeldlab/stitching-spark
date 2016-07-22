@@ -4,6 +4,11 @@ import mpicbg.models.Model;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
 
+/**
+ * @author pisarevi
+ *
+ */
+
 public class TileModelFactory {
 
 	public static Model< ? > createDefaultModel( final int dim ) throws Exception {

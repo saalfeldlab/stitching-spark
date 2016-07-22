@@ -21,6 +21,11 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
+/**
+ * @author pisarevi
+ *
+ */
+
 public class FusionPerformer {
 	
 	private StitchingJob job;

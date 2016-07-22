@@ -5,6 +5,11 @@ import java.util.ArrayList;
 
 import scala.Tuple2;
 
+/**
+ * @author pisarevi
+ *
+ */
+
 public class TileHelper {
 
 	public static ArrayList< Tuple2< TileInfo, TileInfo > > findOverlappingTiles( final TileInfo[] tiles ) {
