@@ -8,6 +8,9 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import org.apache.commons.io.IOUtils;
 
@@ -123,6 +126,19 @@ public class StitchingJob implements Serializable {
 		final FileWriter writer = new FileWriter( output );
 		writer.write( new Gson().toJson( tiles ) );
 		writer.close();
+	}
+	
+	public void savePairwiseShifts( final List< SerializablePairWiseStitchingResult > shifts, final String output ) throws IOException {
+		System.out.println( "Saving pairwise shifts to " + output );
+		final FileWriter writer = new FileWriter( output );
+		writer.write( new Gson().toJson( shifts) );
+		writer.close();
+	}
+	
+	public List< SerializablePairWiseStitchingResult > loadPairwiseShifts( final String input ) throws FileNotFoundException {
+		final JsonReader reader = new JsonReader( new FileReader( input ) );
+		final SerializablePairWiseStitchingResult[] shifts = new Gson().fromJson( reader, SerializablePairWiseStitchingResult[].class );
+		return new ArrayList< SerializablePairWiseStitchingResult >( Arrays.asList( shifts ) );
 	}
 	
 	private void setUpTiles() throws Exception {

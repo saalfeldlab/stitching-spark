@@ -1,13 +1,16 @@
 package org.janelia.stitching;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.Vector;
 
 import org.apache.spark.SparkConf;
@@ -165,6 +168,39 @@ public class StitchingSpark implements Runnable, Serializable {
 	
 	private void computeShifts( final JavaSparkContext sparkContext, final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles ) {
 		
+		// Try to load precalculated shifts for some pairs of tiles
+		final String pairwiseResultsFile = Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_pairwise" );
+		final List< SerializablePairWiseStitchingResult > stitchedPairs = new ArrayList<>(); 
+		try {
+			System.out.println( "try to load pairwise results from disk" );
+			stitchedPairs.addAll( job.loadPairwiseShifts( pairwiseResultsFile ) );
+		} catch ( final FileNotFoundException e ) {
+			System.out.println( "Pairwise results file not found" );
+		}
+		
+		// Create a cache to efficiently lookup the existing pairs of tiles loaded from disk
+		final TreeMap< Integer, TreeSet< Integer > > cache = new TreeMap<>();
+		for ( final SerializablePairWiseStitchingResult result : stitchedPairs ) {
+			final int firstIndex  =  Math.min( result.getPairOfTiles()._1.getIndex(), result.getPairOfTiles()._2.getIndex() ),
+					  secondIndex =  Math.max( result.getPairOfTiles()._1.getIndex(), result.getPairOfTiles()._2.getIndex() );
+			if ( !cache.containsKey( firstIndex ) )
+				cache.put( firstIndex, new TreeSet< Integer >() );
+			cache.get( firstIndex ).add( secondIndex );
+		}
+		
+		// Remove pending pairs of tiles which were already processed
+		for ( final Iterator< Tuple2< TileInfo, TileInfo > > it = overlappingTiles.iterator(); it.hasNext(); ) 
+		{
+			final Tuple2< TileInfo, TileInfo > pair = it.next();
+			final int firstIndex  =  Math.min( pair._1.getIndex(), pair._2.getIndex() ),
+					  secondIndex =  Math.max( pair._1.getIndex(), pair._2.getIndex() );
+			if ( cache.containsKey( firstIndex ) && cache.get( firstIndex ).contains( secondIndex ) )
+				it.remove();
+		}
+
+		if ( overlappingTiles.isEmpty() )
+			System.out.println( "Successfully loaded all pairwise results from disk!" );
+		
 		final JavaRDD< Tuple2< TileInfo, TileInfo > > rdd = sparkContext.parallelize( overlappingTiles );
 		final JavaRDD< SerializablePairWiseStitchingResult > pairwiseStitching = rdd.map(
 				new Function< Tuple2< TileInfo, TileInfo >, SerializablePairWiseStitchingResult >() {
@@ -199,9 +235,16 @@ public class StitchingSpark implements Runnable, Serializable {
 					}
 				});
 		
-		final List< SerializablePairWiseStitchingResult > stitchedPairs = pairwiseStitching.collect();
+		stitchedPairs.addAll( pairwiseStitching.collect() );
 		
-		System.out.println( "Stitched all tiles pairwise, perform global optimization on them..." );
+		System.out.println( "Stitched all tiles pairwise, perform global optimization on them" );
+		
+		try {
+			System.out.println( "but first store this information on disk.." );
+			job.savePairwiseShifts( stitchedPairs, pairwiseResultsFile );
+		} catch ( final IOException e ) {
+			e.printStackTrace();
+		}
 		
 		// Create fake tile objects so that they don't hold any image data
 		// required by the GlobalOptimization
