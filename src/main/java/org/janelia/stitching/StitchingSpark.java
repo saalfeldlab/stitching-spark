@@ -52,6 +52,7 @@ public class StitchingSpark implements Runnable, Serializable {
 	
 	private StitchingArguments args;
 	private StitchingJob job;
+	private transient JavaSparkContext sparkContext;
 	
 	public StitchingSpark( final StitchingArguments args ) {
 		this.args = args;
@@ -74,10 +75,10 @@ public class StitchingSpark implements Runnable, Serializable {
 				tilesWithoutMetadata.add( tile );
 		
 		final SparkConf conf = new SparkConf().setAppName( "Stitching" );
-		final JavaSparkContext sparkContext = new JavaSparkContext( conf );
+		sparkContext = new JavaSparkContext( conf );
 		
 		if ( !tilesWithoutMetadata.isEmpty() )
-			queryMetadata( sparkContext, tilesWithoutMetadata );
+			queryMetadata( tilesWithoutMetadata );
 		
 		job.validateTiles();
 		
@@ -95,9 +96,7 @@ public class StitchingSpark implements Runnable, Serializable {
 		// Compute shifts
 		if ( job.getMode() != StitchingJob.Mode.FuseOnly ) {
 			final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = TileHelper.findOverlappingTiles( job.getTiles() );
-			System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
-			
-			computeShifts( sparkContext, overlappingTiles );
+			computeShifts( overlappingTiles );
 		}
 
 		// Fuse
@@ -105,11 +104,7 @@ public class StitchingSpark implements Runnable, Serializable {
 			
 			final Boundaries boundaries = TileHelper.getCollectionBoundaries( job.getTiles() );
 			final ArrayList< TileInfo > subregions = TileHelper.divideSpace( boundaries, job.getSubregionSize() );
-			
-			final String fusedFolder = job.getBaseFolder() + "/fused";
-			new File( fusedFolder ).mkdirs();
-			
-			fuse( sparkContext, subregions, fusedFolder );
+			fuse( subregions );
 		}
 		
 		sparkContext.close();
@@ -117,7 +112,7 @@ public class StitchingSpark implements Runnable, Serializable {
 	}
 	
 	
-	private void queryMetadata( final JavaSparkContext sparkContext, final ArrayList< TileInfo > tilesWithoutMetadata ) {
+	private void queryMetadata( final ArrayList< TileInfo > tilesWithoutMetadata ) {
 		
 		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( tilesWithoutMetadata );
 		final JavaRDD< TileInfo > task = rdd.map(
@@ -166,7 +161,9 @@ public class StitchingSpark implements Runnable, Serializable {
 	}
 
 	
-	private void computeShifts( final JavaSparkContext sparkContext, final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles ) {
+	private void computeShifts( final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles )
+	{
+		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
 		
 		// Try to load precalculated shifts for some pairs of tiles
 		final String pairwiseResultsFile = Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_pairwise" );
@@ -176,6 +173,8 @@ public class StitchingSpark implements Runnable, Serializable {
 			stitchedPairs.addAll( job.loadPairwiseShifts( pairwiseResultsFile ) );
 		} catch ( final FileNotFoundException e ) {
 			System.out.println( "Pairwise results file not found" );
+		} catch ( final NullPointerException e ) {
+			System.out.println( "Pairwise results file is malformed" );
 		}
 		
 		// Create a cache to efficiently lookup the existing pairs of tiles loaded from disk
@@ -198,52 +197,23 @@ public class StitchingSpark implements Runnable, Serializable {
 				it.remove();
 		}
 
-		if ( overlappingTiles.isEmpty() )
+		if ( overlappingTiles.isEmpty() && !stitchedPairs.isEmpty() )
+		{
+			// If we're able to load precalculated pairwise results, save a lot of time by skipping this step and jump to the global optimization
 			System.out.println( "Successfully loaded all pairwise results from disk!" );
-		
-		final JavaRDD< Tuple2< TileInfo, TileInfo > > rdd = sparkContext.parallelize( overlappingTiles );
-		final JavaRDD< SerializablePairWiseStitchingResult > pairwiseStitching = rdd.map(
-				new Function< Tuple2< TileInfo, TileInfo >, SerializablePairWiseStitchingResult >() {
-					
-					private static final long serialVersionUID = -2907426581991906327L;
-
-					@Override
-					public SerializablePairWiseStitchingResult call( final Tuple2< TileInfo, TileInfo > pairOfTiles ) throws Exception {
-						
-						System.out.println( "Stitching tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + "..." );
-						
-						final ImageCollectionElement el1 = Utils.createElement( job, pairOfTiles._1 );
-						final ImageCollectionElement el2 = Utils.createElement( job, pairOfTiles._2 );
-						
-						final ComparePair pair = new ComparePair(
-								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._1 ) ), el1.getIndex(), 1, el1.getModel(), el1 ),
-								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._2 ) ), el2.getIndex(), 1, el2.getModel(), el2 ) );
-						
-            			final Roi roi1 = new Roi( TileHelper.getROI( pairOfTiles._1, pairOfTiles._2 ) );
-            			final Roi roi2 = new Roi( TileHelper.getROI( pairOfTiles._2, pairOfTiles._1 ) );
-						
-        				final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
-        						pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint2(), job.getParams() );
-        				
-        				System.out.println( "Stitched tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + System.lineSeparator() +
-        								"   CrossCorr=" + result.getCrossCorrelation() + ", PhaseCorr=" + result.getPhaseCorrelation() + ", RelShift=" + Arrays.toString( result.getOffset() ) );
-        				
-        				pair.getImagePlus1().close();
-        				pair.getImagePlus2().close();
-        				
-        				return new SerializablePairWiseStitchingResult( pairOfTiles, result );
-					}
-				});
-		
-		stitchedPairs.addAll( pairwiseStitching.collect() );
-		
-		System.out.println( "Stitched all tiles pairwise, perform global optimization on them" );
-		
-		try {
-			System.out.println( "but first store this information on disk.." );
-			job.savePairwiseShifts( stitchedPairs, pairwiseResultsFile );
-		} catch ( final IOException e ) {
-			e.printStackTrace();
+		}
+		else
+		{
+			stitchedPairs.addAll( computePairwiseShifts( overlappingTiles ) );
+			
+			System.out.println( "Stitched all tiles pairwise, perform global optimization on them" );
+			
+			try {
+				System.out.println( "but first store this information on disk.." );
+				job.savePairwiseShifts( stitchedPairs, pairwiseResultsFile );
+			} catch ( final IOException e ) {
+				e.printStackTrace();
+			}
 		}
 		
 		// Create fake tile objects so that they don't hold any image data
@@ -295,15 +265,56 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 		
 		try {
-			job.saveTiles( Utils.addFilenameSuffix( args.getInput(), "_shifted" ) );
+			job.saveTiles( Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_shifted" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
 	}
 	
-	
-	private void fuse( final JavaSparkContext sparkContext, final ArrayList< TileInfo > subregions, final String fusedFolder ) {
+	private List< SerializablePairWiseStitchingResult > computePairwiseShifts( final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles )
+	{
+		final JavaRDD< Tuple2< TileInfo, TileInfo > > rdd = sparkContext.parallelize( overlappingTiles );
+		final JavaRDD< SerializablePairWiseStitchingResult > pairwiseStitching = rdd.map(
+				new Function< Tuple2< TileInfo, TileInfo >, SerializablePairWiseStitchingResult >() 
+				{	
+					private static final long serialVersionUID = -2907426581991906327L;
 
+					@Override
+					public SerializablePairWiseStitchingResult call( final Tuple2< TileInfo, TileInfo > pairOfTiles ) throws Exception 
+					{	
+						System.out.println( "Stitching tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + "..." );
+						
+						final ImageCollectionElement el1 = Utils.createElement( job, pairOfTiles._1 );
+						final ImageCollectionElement el2 = Utils.createElement( job, pairOfTiles._2 );
+						
+						final ComparePair pair = new ComparePair(
+								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._1 ) ), el1.getIndex(), 1, el1.getModel(), el1 ),
+								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._2 ) ), el2.getIndex(), 1, el2.getModel(), el2 ) );
+						
+            			final Roi roi1 = new Roi( TileHelper.getROI( pairOfTiles._1, pairOfTiles._2 ) );
+            			final Roi roi2 = new Roi( TileHelper.getROI( pairOfTiles._2, pairOfTiles._1 ) );
+						
+        				final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
+        						pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint2(), job.getParams() );
+        				
+        				System.out.println( "Stitched tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + System.lineSeparator() +
+        								"   CrossCorr=" + result.getCrossCorrelation() + ", PhaseCorr=" + result.getPhaseCorrelation() + ", RelShift=" + Arrays.toString( result.getOffset() ) );
+        				
+        				pair.getImagePlus1().close();
+        				pair.getImagePlus2().close();
+        				
+        				return new SerializablePairWiseStitchingResult( pairOfTiles, result );
+					}
+				});
+		return pairwiseStitching.collect();
+	}
+	
+	
+	private void fuse( final ArrayList< TileInfo > subregions )
+	{
+		final String fusedFolder = job.getBaseFolder() + "/fused";
+		new File( fusedFolder ).mkdirs();
+		
 		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( subregions );
 		final JavaRDD< TileInfo > fused = rdd.map(
 				new Function< TileInfo, TileInfo >() {
@@ -340,7 +351,7 @@ public class StitchingSpark implements Runnable, Serializable {
 		job.setTiles( output.toArray( new TileInfo[ 0 ] ) );
 		
 		try {
-			job.saveTiles( Utils.addFilenameSuffix( args.getInput(), "_fused" ) );
+			job.saveTiles( Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_fused" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
