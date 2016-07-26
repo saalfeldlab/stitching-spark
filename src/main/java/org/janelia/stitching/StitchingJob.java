@@ -30,6 +30,7 @@ public class StitchingJob implements Serializable {
 	
 	public enum Mode {
 		Default,
+		Metadata,
 		NoFuse,
 		FuseOnly
 	}
@@ -47,17 +48,20 @@ public class StitchingJob implements Serializable {
 	public StitchingJob( final StitchingArguments args ) {
 		this.args = args;
 		
-		if ( args.getNoFuse() && args.getFuseOnly() )
+		final int modes = ( args.getMeta() ? 1 : 0 ) + ( args.getNoFuse() ? 1 : 0 ) + ( args.getFuseOnly() ? 1 : 0 );
+		if ( modes > 1 )
 			throw new IllegalArgumentException( "Incompatible arguments" );
 		
-		if ( args.getNoFuse() )
+		if ( args.getMeta() )
+			mode = Mode.Metadata;
+		else if ( args.getNoFuse() )
 			mode = Mode.NoFuse;
 		else if ( args.getFuseOnly() )
 			mode = Mode.FuseOnly;
 		else
 			mode = Mode.Default;
 		
-		if ( mode != Mode.NoFuse ) {
+		if ( mode != Mode.Metadata && mode != Mode.NoFuse ) {
 			subregionSize = args.getSubregionSize();
 			if ( subregionSize <= 0 ) {
 				subregionSize = DefaultFusionSubregionSize;

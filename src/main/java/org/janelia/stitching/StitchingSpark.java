@@ -72,42 +72,46 @@ public class StitchingSpark implements Runnable, Serializable {
 			System.exit( 2 );
 		}
 		
+		final SparkConf conf = new SparkConf().setAppName( "Stitching" );
+		sparkContext = new JavaSparkContext( conf );
+		
+		// Query metadata
 		final ArrayList< TileInfo > tilesWithoutMetadata = new ArrayList<>();
 		for ( final TileInfo tile : job.getTiles() )
 			if ( tile.getSize() == null || tile.getType() == null )
 				tilesWithoutMetadata.add( tile );
 		
-		final SparkConf conf = new SparkConf().setAppName( "Stitching" );
-		sparkContext = new JavaSparkContext( conf );
-		
 		if ( !tilesWithoutMetadata.isEmpty() )
 			queryMetadata( tilesWithoutMetadata );
 		
-		job.validateTiles();
-		
-		final StitchingParameters params = new StitchingParameters();
-		params.dimensionality = job.getDimensionality();
-		params.channel1 = 0;
-		params.channel2 = 0;
-		params.timeSelect = 0;
-		params.checkPeaks = 5;
-		params.computeOverlap = true;
-		params.subpixelAccuracy = false;
-		params.virtual = true;
-		job.setParams( params );
-		
-		// Compute shifts
-		if ( job.getMode() != StitchingJob.Mode.FuseOnly ) {
-			final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = TileHelper.findOverlappingTiles( job.getTiles() );
-			computeShifts( overlappingTiles );
-		}
-
-		// Fuse
-		if ( job.getMode() != StitchingJob.Mode.NoFuse ) {
+		if ( job.getMode() != StitchingJob.Mode.Metadata )
+		{
+			job.validateTiles();
 			
-			final Boundaries boundaries = TileHelper.getCollectionBoundaries( job.getTiles() );
-			final ArrayList< TileInfo > subregions = TileHelper.divideSpace( boundaries, job.getSubregionSize() );
-			fuse( subregions );
+			final StitchingParameters params = new StitchingParameters();
+			params.dimensionality = job.getDimensionality();
+			params.channel1 = 0;
+			params.channel2 = 0;
+			params.timeSelect = 0;
+			params.checkPeaks = 5;
+			params.computeOverlap = true;
+			params.subpixelAccuracy = false;
+			params.virtual = true;
+			job.setParams( params );
+			
+			// Compute shifts
+			if ( job.getMode() != StitchingJob.Mode.FuseOnly ) {
+				final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = TileHelper.findOverlappingTiles( job.getTiles() );
+				computeShifts( overlappingTiles );
+			}
+
+			// Fuse
+			if ( job.getMode() != StitchingJob.Mode.NoFuse ) {
+				
+				final Boundaries boundaries = TileHelper.getCollectionBoundaries( job.getTiles() );
+				final ArrayList< TileInfo > subregions = TileHelper.divideSpace( boundaries, job.getSubregionSize() );
+				fuse( subregions );
+			}
 		}
 		
 		sparkContext.close();

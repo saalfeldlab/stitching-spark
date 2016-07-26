@@ -19,6 +19,14 @@ public class StitchingArguments implements Serializable {
 			usage = "Path to a tile registration JSON file.")
 	private String input;
 	
+	@Option(name = "-s", aliases = { "--subsize" }, required = false,
+			usage = "Size of an individual tile when fusing")
+	private int subregionSize;
+	
+	@Option(name = "--meta", required = false,
+			usage = "Only query the metadata of the tile images and save it to separate file")
+	private boolean meta;
+	
 	@Option(name = "--nofuse", required = false,
 			usage = "Don't fuse images and only output the resulting tile configuration")
 	private boolean noFuse;
@@ -26,10 +34,6 @@ public class StitchingArguments implements Serializable {
 	@Option(name = "--fuseonly", required = false,
 			usage = "Only fuse images assuming that input tile configuration is already correct")
 	private boolean fuseOnly;
-	
-	@Option(name = "-s", aliases = { "--size" }, required = false,
-			usage = "Size of an individual tile when fusing")
-	private int subregionSize;
 	
 	private boolean parsedSuccessfully = false;
 	
@@ -54,15 +58,19 @@ public class StitchingArguments implements Serializable {
 		return input;
 	}
 	
+	public int getSubregionSize() {
+		return subregionSize;
+	}
+	
+	public boolean getMeta() {
+		return meta;
+	}
+	
 	public boolean getNoFuse() {
 		return noFuse;
 	}
 	
 	public boolean getFuseOnly() {
 		return fuseOnly;
-	}
-	
-	public int getSubregionSize() {
-		return subregionSize;
 	}
 }
