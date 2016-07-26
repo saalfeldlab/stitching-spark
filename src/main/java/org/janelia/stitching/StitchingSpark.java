@@ -51,11 +51,9 @@ public class StitchingSpark implements Runnable, Serializable {
 	
 	private static final long serialVersionUID = 6006962943789087537L;
 	
-	private static AtomicInteger counter;
-	private transient JavaSparkContext sparkContext;
-	
 	private StitchingArguments args;
 	private StitchingJob job;
+	private transient JavaSparkContext sparkContext;
 	
 	public StitchingSpark( final StitchingArguments args ) {
 		this.args = args;
@@ -120,8 +118,7 @@ public class StitchingSpark implements Runnable, Serializable {
 	
 	
 	private void queryMetadata( final ArrayList< TileInfo > tilesWithoutMetadata ) 
-	{	
-		counter = new AtomicInteger();
+	{
 		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( tilesWithoutMetadata );
 		final JavaRDD< TileInfo > task = rdd.map(
 				new Function< TileInfo, TileInfo >() 
@@ -131,8 +128,6 @@ public class StitchingSpark implements Runnable, Serializable {
 					@Override
 					public TileInfo call( final TileInfo tile ) throws Exception 
 					{
-						System.out.println( "Querying metadata for item " + counter.incrementAndGet() + " of " + tilesWithoutMetadata.size() );
-						
 						final ImageCollectionElement el = Utils.createElement( job, tile );
 						final ImagePlus imp = el.open( true );
 						
@@ -284,7 +279,6 @@ public class StitchingSpark implements Runnable, Serializable {
 	
 	private List< SerializablePairWiseStitchingResult > computePairwiseShifts( final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles )
 	{
-		counter = new AtomicInteger();
 		final JavaRDD< Tuple2< TileInfo, TileInfo > > rdd = sparkContext.parallelize( overlappingTiles );
 		final JavaRDD< SerializablePairWiseStitchingResult > pairwiseStitching = rdd.map(
 				new Function< Tuple2< TileInfo, TileInfo >, SerializablePairWiseStitchingResult >() 
@@ -293,10 +287,7 @@ public class StitchingSpark implements Runnable, Serializable {
 
 					@Override
 					public SerializablePairWiseStitchingResult call( final Tuple2< TileInfo, TileInfo > pairOfTiles ) throws Exception 
-					{	
-						System.out.println( "Stitching tiles " + pairOfTiles._1.getIndex() + " and " + pairOfTiles._2.getIndex() + "..."
-								+ " (pair " + counter.incrementAndGet() + " of " + overlappingTiles.size() + ")" );
-						
+					{
 						final ImageCollectionElement el1 = Utils.createElement( job, pairOfTiles._1 );
 						final ImageCollectionElement el2 = Utils.createElement( job, pairOfTiles._2 );
 						
@@ -328,7 +319,6 @@ public class StitchingSpark implements Runnable, Serializable {
 		final String fusedFolder = job.getBaseFolder() + "/fused";
 		new File( fusedFolder ).mkdirs();
 		
-		counter = new AtomicInteger();
 		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( subregions );
 		final JavaRDD< TileInfo > fused = rdd.map(
 				new Function< TileInfo, TileInfo >() 
@@ -338,8 +328,6 @@ public class StitchingSpark implements Runnable, Serializable {
 					@Override
 					public TileInfo call( final TileInfo subregion ) throws Exception 
 					{
-						System.out.println( "Processing subregion " + counter.incrementAndGet() + " of " + subregions.size() );
-						
 						// TODO: optimize with KD interval tree or smth similar
 						final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 						for ( final TileInfo tile : job.getTiles() )
