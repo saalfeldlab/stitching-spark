@@ -3,8 +3,7 @@ package org.janelia.stitching;
 import java.util.TreeMap;
 
 import ij.ImagePlus;
-import net.imglib2.type.numeric.ARGBType;
-import net.imglib2.type.numeric.NumericType;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -24,18 +23,12 @@ public enum ImageType
 	GRAY16( ImagePlus.GRAY16, new UnsignedShortType() ),
 
 	/** 32-bit floating-point grayscale */
-	GRAY32( ImagePlus.GRAY32, new FloatType() ),
-
-	/** 8-bit indexed color */
-	COLOR_256( ImagePlus.COLOR_256, new UnsignedByteType() ),
-
-	/** 32-bit RGB color */
-	COLOR_RGB( ImagePlus.COLOR_RGB, new ARGBType() );
+	GRAY32( ImagePlus.GRAY32, new FloatType() );
 
 	private final int val;
-	private final NumericType< ? > type;
+	private final RealType< ? > type;
 
-	private ImageType( final int val, final NumericType< ? > type )
+	private ImageType( final int val, final RealType< ? > type )
 	{
 		this.val = val;
 		this.type = type;
@@ -46,7 +39,7 @@ public enum ImageType
 		return val;
 	}
 
-	public NumericType< ? > getType()
+	public RealType< ? > getType()
 	{
 		return type;
 	}

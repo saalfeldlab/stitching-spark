@@ -69,8 +69,7 @@ public class StitchingSpark implements Runnable, Serializable {
 			System.exit( 2 );
 		}
 		
-		final SparkConf conf = new SparkConf().setAppName( "Stitching" );
-		sparkContext = new JavaSparkContext( conf );
+		sparkContext = new JavaSparkContext( new SparkConf().setAppName( "Stitching" ) );
 		
 		// Query metadata
 		final ArrayList< TileInfo > tilesWithoutMetadata = new ArrayList<>();
@@ -230,8 +229,8 @@ public class StitchingSpark implements Runnable, Serializable {
 					try {
 						final ImageCollectionElement el = Utils.createElement( job, tileInfo );
 						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
-						final Tile< ? > tile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
-						fakeTileImagesMap.put( tileInfo.getIndex(), tile );
+						final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
+						fakeTileImagesMap.put( tileInfo.getIndex(), fakeTile );
 					} catch ( final Exception e ) {
 						e.printStackTrace();
 					}
