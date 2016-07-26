@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.Vector;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -230,7 +229,8 @@ public class StitchingSpark implements Runnable, Serializable {
 				if ( !fakeTileImagesMap.containsKey( tileInfo.getIndex() ) ) {
 					try {
 						final ImageCollectionElement el = Utils.createElement( job, tileInfo );
-						final Tile< ? > tile = new ImagePlusTimePoint( null, el.getIndex(), 1, el.getModel(), el );
+						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
+						final Tile< ? > tile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
 						fakeTileImagesMap.put( tileInfo.getIndex(), tile );
 					} catch ( final Exception e ) {
 						e.printStackTrace();
