@@ -19,9 +19,13 @@ public class StitchingArguments implements Serializable {
 			usage = "Path to a tile registration JSON file.")
 	private String input;
 	
+	@Option(name = "-t", aliases = { "--threshold" }, required = false,
+			usage = "A threshold value of cross correlation for accepting a shift")
+	private double crossCorrelationThreshold = Double.MIN_VALUE;
+	
 	@Option(name = "-s", aliases = { "--subsize" }, required = false,
 			usage = "Size of an individual tile when fusing")
-	private int subregionSize;
+	private int subregionSize = Integer.MIN_VALUE;
 	
 	@Option(name = "--meta", required = false,
 			usage = "Only query the metadata of the tile images and save it to separate file")
@@ -37,12 +41,12 @@ public class StitchingArguments implements Serializable {
 	
 	private boolean parsedSuccessfully = false;
 	
-	public StitchingArguments( String[] args ) {
-		CmdLineParser parser = new CmdLineParser( this );
+	public StitchingArguments( final String[] args ) {
+		final CmdLineParser parser = new CmdLineParser( this );
 		try {
 			parser.parseArgument( args );
 			parsedSuccessfully = true;
-		} catch ( CmdLineException e ) {
+		} catch ( final CmdLineException e ) {
 			System.err.println( e.getMessage() );
 			parser.printUsage( System.err );
 		}
@@ -56,6 +60,10 @@ public class StitchingArguments implements Serializable {
 
 	public String getInput() {
 		return input;
+	}
+	
+	public double getCrossCorrelationThreshold() {
+		return crossCorrelationThreshold;
 	}
 	
 	public int getSubregionSize() {

@@ -26,6 +26,7 @@ import mpicbg.stitching.StitchingParameters;
 
 public class StitchingJob implements Serializable {
 	
+	private static final double DefaultCrossCorrelationThreshold = 0.3;
 	private static final int DefaultFusionSubregionSize = 512;
 	
 	public enum Mode {
@@ -43,6 +44,7 @@ public class StitchingJob implements Serializable {
 	private String baseFolder; 
 	private TileInfo[] tiles;
 	private int dimensionality;
+	private double crossCorrelationThreshold;
 	private int subregionSize;
 	
 	public StitchingJob( final StitchingArguments args ) {
@@ -61,11 +63,19 @@ public class StitchingJob implements Serializable {
 		else
 			mode = Mode.Default;
 		
+		if ( mode != Mode.Metadata && mode != Mode.FuseOnly ) {
+			crossCorrelationThreshold = args.getCrossCorrelationThreshold();
+			if ( crossCorrelationThreshold < 0 ) {
+				crossCorrelationThreshold = DefaultCrossCorrelationThreshold;
+				System.out.println( "No threshold value of cross correlation is present, using the default one: " + crossCorrelationThreshold );
+			}
+		}
+		
 		if ( mode != Mode.Metadata && mode != Mode.NoFuse ) {
 			subregionSize = args.getSubregionSize();
 			if ( subregionSize <= 0 ) {
 				subregionSize = DefaultFusionSubregionSize;
-				System.out.println( "No subregion size for fusion is present, using default one (" + subregionSize + ")" );
+				System.out.println( "No subregion size for fusion is present, using the default one: " + subregionSize );
 			}
 		}
 		
@@ -100,6 +110,10 @@ public class StitchingJob implements Serializable {
 	
 	public int getDimensionality() {
 		return dimensionality;
+	}
+	
+	public double getCrossCorrelationThreshold() {
+		return crossCorrelationThreshold;
 	}
 	
 	public int getSubregionSize() {

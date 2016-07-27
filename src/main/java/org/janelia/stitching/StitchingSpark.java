@@ -220,6 +220,25 @@ public class StitchingSpark implements Runnable, Serializable {
 			}
 		}
 		
+		// Remove pairs which cross correlation is below the threshold
+		System.out.println( "Pairs before thresholding: " + stitchedPairs.size() );
+		for ( final Iterator< SerializablePairWiseStitchingResult > it = stitchedPairs.iterator(); it.hasNext(); ) 
+		{
+			final SerializablePairWiseStitchingResult pair = it.next();
+			if ( pair.getCrossCorrelation() < job.getCrossCorrelationThreshold() )
+				it.remove();
+		}
+		System.out.println( "Pairs after thresholding: " + stitchedPairs.size() );
+		try
+		{
+			Thread.sleep( 2000 );
+		}
+		catch ( InterruptedException e1 )
+		{
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		
 		// Create fake tile objects so that they don't hold any image data
 		// required by the GlobalOptimization
 		final TreeMap< Integer, Tile< ? > > fakeTileImagesMap = new TreeMap<>();
@@ -249,7 +268,10 @@ public class StitchingSpark implements Runnable, Serializable {
 			
 			comparePairs.addElement( comparePair );
 		}
-		final ArrayList< ImagePlusTimePoint > optimized = GlobalOptimization.optimize( comparePairs, comparePairs.get( 0 ).getTile1(), job.getParams() );
+		
+		final ArrayList< ImagePlusTimePoint > optimized = new ArrayList<>();
+		if ( !comparePairs.isEmpty() )
+			optimized.addAll( GlobalOptimization.optimize( comparePairs, comparePairs.get( 0 ).getTile1(), job.getParams() ) );
 		
 		System.out.println( "Global optimization done" );
 		for ( final ImagePlusTimePoint imt : optimized )
@@ -257,8 +279,6 @@ public class StitchingSpark implements Runnable, Serializable {
 		
 		// Process the result updating the tiles position within the job object
 		final TileInfo[] tiles = job.getTiles();
-		assert tiles.length == optimized.size();
-		
 		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
 		for ( final TileInfo tile : tiles )
 			tilesMap.put( tile.getIndex(), tile );
@@ -349,7 +369,7 @@ public class StitchingSpark implements Runnable, Serializable {
 					}
 				});
 		
-		final List< TileInfo > output = fused.collect();
+		final ArrayList< TileInfo > output = new ArrayList<>( fused.collect() );
 		output.removeAll( Collections.singleton( null ) );
 		System.out.println( "Obtained " + output.size() + " tiles" );
 		
