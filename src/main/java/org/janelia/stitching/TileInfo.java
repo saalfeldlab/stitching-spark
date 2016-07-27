@@ -90,8 +90,8 @@ public class TileInfo implements Serializable {
 	public Boundaries getBoundaries() {
 		final Boundaries b = new Boundaries( getDimensionality() );
 		for ( int d = 0; d < getDimensionality(); d++ ) {
-			b.setMin( d, (long)Math.floor( getPosition(d) ) );
-			b.setMax( d, (long)Math.ceil( getPosition(d) ) + getSize(d) );
+			b.setMin( d, Math.round( getPosition(d) ) );
+			b.setMax( d, Math.round( getPosition(d) ) + getSize(d) );
 		}
 		return b;
 	}
