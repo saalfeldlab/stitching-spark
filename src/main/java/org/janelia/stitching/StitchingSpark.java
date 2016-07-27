@@ -315,6 +315,7 @@ public class StitchingSpark implements Runnable, Serializable {
 	
 	private void fuse( final ArrayList< TileInfo > subregions )
 	{
+		System.out.println( "There are " + subregions.size() + " subregions in total" );
 		final String fusedFolder = job.getBaseFolder() + "/fused";
 		new File( fusedFolder ).mkdirs();
 		

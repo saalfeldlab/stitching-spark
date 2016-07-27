@@ -25,10 +25,10 @@ public class TileHelper {
 	public static boolean overlap( final TileInfo t1, final TileInfo t2 ) {
 		assert t1.getDimensionality() == t2.getDimensionality();
 		
-		for ( int d = 0; d < t1.getDimensionality(); d++ ) {
-			
-			final double p1 = t1.getPosition()[ d ], p2 = t2.getPosition()[ d ];
-			final long s1 = t1.getSize()[ d ], s2 = t2.getSize()[ d ];
+		for ( int d = 0; d < t1.getDimensionality(); d++ )
+		{
+			final double p1 = t1.getPosition( d ), p2 = t2.getPosition( d );
+			final long s1 = t1.getSize( d ), s2 = t2.getSize( d );
 			
 			if ( !( ( p2 >= p1 && p2 <= p1 + s1 ) || 
 					( p1 >= p2 && p1 <= p2 + s2 ) ) )
