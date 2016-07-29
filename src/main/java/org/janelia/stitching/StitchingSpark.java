@@ -70,13 +70,6 @@ public class StitchingSpark implements Runnable, Serializable {
 			System.exit( 2 );
 		}
 
-		if ( job.getMode() == Mode.Hdf5)
-		{
-			createHdf5();
-			System.out.println( "done" );
-			return;
-		}
-
 		sparkContext = new JavaSparkContext( new SparkConf().setAppName( "Stitching" ) );
 
 		// Query metadata
@@ -87,6 +80,14 @@ public class StitchingSpark implements Runnable, Serializable {
 
 		if ( !tilesWithoutMetadata.isEmpty() )
 			queryMetadata( tilesWithoutMetadata );
+
+		if ( job.getMode() == Mode.Hdf5)
+		{
+			// Just create hdf5 file and exit
+			createHdf5();
+			System.out.println( "done" );
+			return;
+		}
 
 		if ( job.getMode() != Mode.Metadata )
 		{
@@ -103,7 +104,7 @@ public class StitchingSpark implements Runnable, Serializable {
 			params.virtual = true;
 			params.absoluteThreshold = 5;
 			params.relativeThreshold = 3.5;
-			params.regThreshold = 0.4;
+			params.regThreshold = job.getCrossCorrelationThreshold();
 			job.setParams( params );
 
 			// Compute shifts
@@ -118,6 +119,7 @@ public class StitchingSpark implements Runnable, Serializable {
 				final Boundaries boundaries = TileHelper.getCollectionBoundaries( job.getTiles() );
 				final ArrayList< TileInfo > subregions = TileHelper.divideSpace( boundaries, job.getSubregionSize() );
 				fuse( subregions );
+				createHdf5();
 			}
 		}
 
@@ -240,15 +242,6 @@ public class StitchingSpark implements Runnable, Serializable {
 				it.remove();
 		}
 		System.out.println( "Pairs after thresholding: " + stitchedPairs.size() );
-		try
-		{
-			Thread.sleep( 2000 );
-		}
-		catch ( final InterruptedException e1 )
-		{
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
 
 		// Create fake tile objects so that they don't hold any image data
 		// required by the GlobalOptimization
@@ -396,8 +389,6 @@ public class StitchingSpark implements Runnable, Serializable {
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
-
-		createHdf5();
 	}
 
 	private void createHdf5()

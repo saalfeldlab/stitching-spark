@@ -108,6 +108,7 @@ public class FusionPerformer
 		}
 
 		final ImagePlus outImg = ImageJFunctions.wrap( out, "" );
+		subregion.setType( ImageType.valueOf( outImg.getType() ) );
 		System.out.println( "Saving the resulting file for subregion " + subregion.getIndex() );
 		IJ.saveAsTiff( outImg, subregion.getFile() );
 		outImg.close();
