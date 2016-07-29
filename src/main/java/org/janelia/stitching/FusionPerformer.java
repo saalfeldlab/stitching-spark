@@ -63,24 +63,24 @@ public class FusionPerformer
 			final ImagePlus img = IJ.openImage( Utils.getAbsoluteImagePath( job, tile ) );
 
 			final Boundaries tileBoundariesWithinSubregion = tile.getBoundaries();
-			final long[] tileImageOffset = new long[ tile.getDimensionality() ];
+			final long[] tileImageOffset = new long[ tile.numDimensions() ];
 			for ( int d = 0; d < tileImageOffset.length; d++ )
-				tileImageOffset[ d ] = Math.max( 0, subregionBoundaries.getMin( d ) - tileBoundariesWithinSubregion.getMin( d ) ) / 10;
+				tileImageOffset[ d ] = Math.max( 0, subregionBoundaries.min( d ) - tileBoundariesWithinSubregion.min( d ) ) / 10;
 
-			for ( int d = 0; d < subregion.getDimensionality(); d++ )
+			for ( int d = 0; d < subregion.numDimensions(); d++ )
 			{
-				tileBoundariesWithinSubregion.setMin( d, Math.max( tileBoundariesWithinSubregion.getMin( d ), subregionBoundaries.getMin( d ) ) );
-				tileBoundariesWithinSubregion.setMax( d, Math.min( tileBoundariesWithinSubregion.getMax( d ), subregionBoundaries.getMax( d ) ) );
+				tileBoundariesWithinSubregion.setMin( d, Math.max( tileBoundariesWithinSubregion.min( d ), subregionBoundaries.min( d ) ) );
+				tileBoundariesWithinSubregion.setMax( d, Math.min( tileBoundariesWithinSubregion.max( d ), subregionBoundaries.max( d ) ) );
 
 				// Set relative coordinates
-				tileBoundariesWithinSubregion.setMin( d, tileBoundariesWithinSubregion.getMin( d ) - subregionBoundaries.getMin( d ) );
-				tileBoundariesWithinSubregion.setMax( d, tileBoundariesWithinSubregion.getMax( d ) - subregionBoundaries.getMin( d ) );
+				tileBoundariesWithinSubregion.setMin( d, tileBoundariesWithinSubregion.min( d ) - subregionBoundaries.min( d ) );
+				tileBoundariesWithinSubregion.setMax( d, tileBoundariesWithinSubregion.max( d ) - subregionBoundaries.min( d ) );
 			}
 
 			// Prepare offset to map the input image to the output image
-			final long[] tileSubregionOffset = new long[ tile.getDimensionality() ];
+			final long[] tileSubregionOffset = new long[ tile.numDimensions() ];
 			for ( int d = 0; d < tileSubregionOffset.length; d++ )
-				tileSubregionOffset[ d ] = Math.max( 0, ( long ) Math.floor( tile.getPosition( d ) ) - subregionBoundaries.getMin( d ) );
+				tileSubregionOffset[ d ] = Math.max( 0, ( long ) Math.floor( tile.getPosition( d ) ) - subregionBoundaries.min( d ) );
 
 			final long[] tileImageDimensions = tileBoundariesWithinSubregion.getDimensions();
 			final Img< T > in = ImageJFunctions.wrap( img );
@@ -103,7 +103,7 @@ public class FusionPerformer
 
 				randomAccess.get().set( cursorInput.get() );
 			}
-			
+
 			img.close();
 		}
 

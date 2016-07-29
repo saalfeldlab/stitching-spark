@@ -1,62 +1,49 @@
 package org.janelia.stitching;
 
+import net.imglib2.AbstractInterval;
+
 /**
  * @author pisarevi
  *
  */
-
-public class Boundaries {
-	
-	private long[] min, max;
-	
-	public Boundaries( final int dim ) {
-		min = new long[ dim ];
-		max = new long[ dim ];
+public class Boundaries extends AbstractInterval
+{
+	public Boundaries( final int dim )
+	{
+		super( dim );
 	}
-	
-	public long[] getMin() {
+
+	public long[] getMin()
+	{
 		return min.clone();
 	}
-	
-	public long[] getMax() {
+
+	public long[] getMax()
+	{
 		return max.clone();
 	}
-	
-	public long getMin( final int d ) {
-		return min[ d ];
-	}
-	
-	public long getMax( final int d ) {
-		return max[ d ];
-	}
-	
-	public void setMin( final int d, final long val ) {
+
+	public void setMin( final int d, final long val )
+	{
 		min[ d ] = val;
 	}
 
-	public void setMax( final int d, final long val ) {
+	public void setMax( final int d, final long val )
+	{
 		max[ d ] = val;
 	}
-	
-	public int getDimensionality() {
-		assert min.length == max.length;
-		return min.length;
+
+	public long[] getDimensions()
+	{
+		final long[] ret = new long[ numDimensions() ];
+		dimensions( ret );
+		return ret;
 	}
-	
-	public long getDimensions( final int d ) {
-		return getMax( d ) - getMin( d );
-	}
-	
-	public long[] getDimensions() {
-		final long[] dimensions = new long [ getDimensionality() ];
-		for ( int d = 0; d < dimensions.length; d++ )
-			dimensions[ d ] = getDimensions( d );
-		return dimensions;
-	}
-	
-	public boolean validate() {
-		for ( int d = 0; d < getDimensionality(); d++ )
-			if ( getMax( d ) < getMin( d ) )
+
+	public boolean validate()
+	{
+		for ( int d = 0; d < numDimensions(); d++ )
+			if ( max( d ) <= min( d ) )
 				return false;
 		return true;
 	}
