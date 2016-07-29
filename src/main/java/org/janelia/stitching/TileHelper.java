@@ -33,7 +33,7 @@ public class TileHelper
 				return null;
 
 			r.setMin( d, Math.max( 0, p2 - p1 ) );
-			r.setMax( d, Math.min( p1 + s1 - 1, p2 + s2 - 1 ) );
+			r.setMax( d, Math.min( s1 - 1, p2 + s2 - p1 - 1 ) );
 		}
 		assert r.validate();
 		return r;
@@ -59,8 +59,8 @@ public class TileHelper
 
 			for ( int d = 0; d < dim; d++ )
 			{
-				boundaries.setMin( d, Math.min( boundaries.min( d ), ( int ) Math.round( tile.getPosition( d ) ) ) );
-				boundaries.setMax( d, Math.max( boundaries.max( d ), ( int ) Math.round( tile.getPosition( d ) ) + tile.getSize( d ) - 1 ) );
+				boundaries.setMin( d, Math.min( boundaries.min( d ), Math.round( tile.getPosition( d ) ) ) );
+				boundaries.setMax( d, Math.max( boundaries.max( d ), Math.round( tile.getPosition( d ) ) + tile.getSize( d ) - 1 ) );
 			}
 		}
 

@@ -17,16 +17,16 @@ public class TilesPairwiseOverlapTest {
 		// overlap
 		t1.setPosition( new double[] { 5. } ); 	t1.setSize( new long[] { 10 } );
 		t2.setPosition( new double[] { -5. } ); t2.setSize( new long[] { 12 } );
-		Assert.assertNotNull( TileHelper.getOverlappingRegion( t1, t2 ) );
-		Assert.assertNotNull( TileHelper.getOverlappingRegion( t2, t1 ) );
+		Assert.assertNotNull( TileHelper.getOverlappingRegion( t1, t2 ) );	Assert.assertTrue( TileHelper.getOverlappingRegion( t1, t2 ).validate() );
+		Assert.assertNotNull( TileHelper.getOverlappingRegion( t2, t1 ) );	Assert.assertTrue( TileHelper.getOverlappingRegion( t2, t1 ).validate() );
 
 		// one inside another
 		t1.setPosition( new double[] { 0. } ); t1.setSize( new long[] { 5 } );
 		t2.setPosition( new double[] { 1. } ); t2.setSize( new long[] { 2 } );
-		Assert.assertNotNull( TileHelper.getOverlappingRegion( t1, t2 ) );
-		Assert.assertNotNull( TileHelper.getOverlappingRegion( t2, t1 ) );
+		Assert.assertNotNull( TileHelper.getOverlappingRegion( t1, t2 ) );	Assert.assertTrue( TileHelper.getOverlappingRegion( t1, t2 ).validate() );
+		Assert.assertNotNull( TileHelper.getOverlappingRegion( t2, t1 ) );	Assert.assertTrue( TileHelper.getOverlappingRegion( t2, t1 ).validate() );
 
-		// intersection (don't count it)
+		// intersection (don't treat it as an overlap)
 		t1.setPosition( new double[] { 2. } ); t1.setSize( new long[] { 3 } );
 		t2.setPosition( new double[] { 5. } ); t2.setSize( new long[] { 2 } );
 		Assert.assertNull( TileHelper.getOverlappingRegion( t1, t2 ) );
@@ -46,14 +46,14 @@ public class TilesPairwiseOverlapTest {
 		// overlap
 		t1.setPosition( new double[] { 5., 2.5 } );  t1.setSize( new long[] { 10, 10 } );
 		t2.setPosition( new double[] { -5., 10. } ); t2.setSize( new long[] { 20, 20 } );
-		Assert.assertNotNull( TileHelper.getOverlappingRegion( t1, t2 ) );
-		Assert.assertNotNull( TileHelper.getOverlappingRegion( t2, t1 ) );
+		Assert.assertNotNull( TileHelper.getOverlappingRegion( t1, t2 ) );	Assert.assertTrue( TileHelper.getOverlappingRegion( t1, t2 ).validate() );
+		Assert.assertNotNull( TileHelper.getOverlappingRegion( t2, t1 ) );	Assert.assertTrue( TileHelper.getOverlappingRegion( t2, t1 ).validate() );
 
 		// one inside another
 		t1.setPosition( new double[] { 2., 3. } ); t1.setSize( new long[] { 50, 30 } );
 		t2.setPosition( new double[] { 8., 6. } ); t2.setSize( new long[] { 2, 5 } );
-		Assert.assertNotNull( TileHelper.getOverlappingRegion( t1, t2 ) );
-		Assert.assertNotNull( TileHelper.getOverlappingRegion( t2, t1 ) );
+		Assert.assertNotNull( TileHelper.getOverlappingRegion( t1, t2 ) );	Assert.assertTrue( TileHelper.getOverlappingRegion( t1, t2 ).validate() );
+		Assert.assertNotNull( TileHelper.getOverlappingRegion( t2, t1 ) );	Assert.assertTrue( TileHelper.getOverlappingRegion( t2, t1 ).validate() );
 
 		// intersection (segment)
 		t1.setPosition( new double[] { 0., 0. } ); t1.setSize( new long[] { 3, 4 } );
@@ -81,8 +81,8 @@ public class TilesPairwiseOverlapTest {
 		// overlap
 		t1.setPosition( new double[] { 0., 0., 0. } ); t1.setSize( new long[] { 3, 4, 5 } );
 		t2.setPosition( new double[] { 2., 3., 4. } ); t2.setSize( new long[] { 20, 20, 20 } );
-		Assert.assertNotNull( TileHelper.getOverlappingRegion( t1, t2 ) );
-		Assert.assertNotNull( TileHelper.getOverlappingRegion( t2, t1 ) );
+		Assert.assertNotNull( TileHelper.getOverlappingRegion( t1, t2 ) );	Assert.assertTrue( TileHelper.getOverlappingRegion( t1, t2 ).validate() );
+		Assert.assertNotNull( TileHelper.getOverlappingRegion( t2, t1 ) );	Assert.assertTrue( TileHelper.getOverlappingRegion( t2, t1 ).validate() );
 
 		// intersection
 		t1.setPosition( new double[] { 0., 0., 0. } ); t1.setSize( new long[] { 3, 4, 5 } );

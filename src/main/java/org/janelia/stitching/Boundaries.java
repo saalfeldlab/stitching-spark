@@ -43,7 +43,7 @@ public class Boundaries extends AbstractInterval
 	public boolean validate()
 	{
 		for ( int d = 0; d < numDimensions(); d++ )
-			if ( max( d ) <= min( d ) )
+			if ( dimension( d ) <= 0 )
 				return false;
 		return true;
 	}

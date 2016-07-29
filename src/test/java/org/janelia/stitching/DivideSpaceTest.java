@@ -33,8 +33,8 @@ public class DivideSpaceTest {
 		final Random rnd = new Random();
 		final Boundaries space = new Boundaries( rnd.nextInt(5) + 1 );
 		for ( int d = 0; d < space.numDimensions(); d++ ) {
-			space.setMin( d, rnd.nextInt( 2000 ) - 1000 );
-			space.setMax( d, rnd.nextInt( 2000 ) + space.min( d ) - 1 );
+			space.setMin( d, rnd.nextInt( 1000 ) - 500 );
+			space.setMax( d, rnd.nextInt( 1000 ) + space.min( d ) - 1 );
 		}
 		Assert.assertTrue( space.validate() );
 

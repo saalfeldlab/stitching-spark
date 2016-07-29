@@ -100,7 +100,7 @@ public class StitchingSpark implements Runnable, Serializable {
 			params.timeSelect = 0;
 			params.checkPeaks = 5;
 			params.computeOverlap = true;
-			params.subpixelAccuracy = false;
+			params.subpixelAccuracy = true;
 			params.virtual = true;
 			params.absoluteThreshold = 5;
 			params.relativeThreshold = 3.5;
@@ -233,16 +233,6 @@ public class StitchingSpark implements Runnable, Serializable {
 			}
 		}
 
-		// Remove pairs which cross correlation is below the threshold
-		System.out.println( "Pairs before thresholding: " + stitchedPairs.size() );
-		for ( final Iterator< SerializablePairWiseStitchingResult > it = stitchedPairs.iterator(); it.hasNext(); )
-		{
-			final SerializablePairWiseStitchingResult pair = it.next();
-			if ( pair.getCrossCorrelation() < job.getParams().regThreshold )
-				it.remove();
-		}
-		System.out.println( "Pairs after thresholding: " + stitchedPairs.size() );
-
 		// Create fake tile objects so that they don't hold any image data
 		// required by the GlobalOptimization
 		final TreeMap< Integer, Tile< ? > > fakeTileImagesMap = new TreeMap<>();
@@ -314,9 +304,10 @@ public class StitchingSpark implements Runnable, Serializable {
 						final ImageCollectionElement el1 = Utils.createElement( job, pairOfTiles._1 );
 						final ImageCollectionElement el2 = Utils.createElement( job, pairOfTiles._2 );
 
+						final int timepoint = 1;
 						final ComparePair pair = new ComparePair(
-								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._1 ) ), el1.getIndex(), 1, el1.getModel(), el1 ),
-								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._2 ) ), el2.getIndex(), 1, el2.getModel(), el2 ) );
+								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._1 ) ), el1.getIndex(), timepoint, el1.getModel(), el1 ),
+								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._2 ) ), el2.getIndex(), timepoint, el2.getModel(), el2 ) );
 
 						final Boundaries overlap1 = TileHelper.getOverlappingRegion( pairOfTiles._1, pairOfTiles._2 );
 						final Boundaries overlap2 = TileHelper.getOverlappingRegion( pairOfTiles._2, pairOfTiles._1 );

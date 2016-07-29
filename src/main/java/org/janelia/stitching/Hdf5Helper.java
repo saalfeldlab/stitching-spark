@@ -25,44 +25,25 @@ public class Hdf5Helper
 {
 	final static private int[] cellSize = new int[]{ 64, 64, 64 };
 
-	/**
-	 * Save a {@link RandomAccessibleInterval} of {@link UnsignedShortType}
-	 * into an HDF5 uint16 dataset.
-	 *
-	 * @param source
-	 * @param file
-	 * @param dataset
-	 * @param cellDimensions
-	 */
-	static public void createUnsignedShortDataset(
+	static public void createSignedShortDataset(
 			final Dimensions dimensions,
 			final IHDF5Writer writer,
 			final String dataset,
 			final int[] cellDimensions )
 	{
 		final long[] size = Intervals.dimensionsAsLongArray( dimensions );
-		final IHDF5ShortWriter uint16Writer = writer.uint16();
+		final IHDF5ShortWriter int16Writer = writer.int16();
 		if ( !writer.exists( dataset ) )
-			uint16Writer.createMDArray(
+			int16Writer.createMDArray(
 					dataset,
 					reorder( size ),
 					reorder( cellDimensions ),
 					HDF5IntStorageFeatures.INT_AUTO_SCALING_DEFLATE );
 	}
 
-	/**
-	 * Save a {@link RandomAccessibleInterval} of {@link UnsignedShortType}
-	 * which is a block of data into an existing HDF5 uint16 dataset.
-	 *
-	 * @param sourceBlock
-	 * @param file
-	 * @param dataset
-	 * @param spaceOffset
-	 * @param cellDimensions
-	 */
 	static public void saveUnsignedShort(
 			final RandomAccessibleInterval< UnsignedShortType > sourceBlock,
-			final IHDF5ShortWriter uint16Writer,
+			final IHDF5ShortWriter int16Writer,
 			final String dataset,
 			final int[] cellDimensions )
 	{
@@ -79,23 +60,12 @@ public class Hdf5Helper
 			H5Utils.cropCellDimensions( sourceBlock, offset, cellDimensions, sourceCellDimensions );
 			final RandomAccessibleInterval< UnsignedShortType > sourceBlockBlock = Views.offsetInterval( sourceBlock, translatedOffset, sourceCellDimensions );
 			final MDShortArray targetCell = new MDShortArray( reorder( sourceCellDimensions ) );
-			int i = 0;
 
-			try {
-				for ( final UnsignedShortType t : Views.flatIterable( sourceBlockBlock ) )
-					targetCell.set( UnsignedShortType.getCodedSignedShort( t.get() ), i++ );
-			} catch ( final Exception e ) {
-				e.printStackTrace();
-				System.out.println( "-----------------------------" );
-				System.out.println( "offset: " + Arrays.toString( offset ) );
-				System.out.println( "translatedOffset: " + Arrays.toString( translatedOffset ) );
-				System.out.println( "sourceCellDimensions: " + Arrays.toString( sourceCellDimensions ) );
-				final long[] sourceBlockDimensions = new long[ n ];
-				sourceBlock.dimensions( sourceBlockDimensions );
-				System.out.println( "sourceBlockDimensions: " + Arrays.toString( sourceBlockDimensions ) );
-			}
-			System.out.println( "translatedOffset: " + Arrays.toString( translatedOffset ) );
-			uint16Writer.writeMDArrayBlockWithOffset( dataset, targetCell, reorder( translatedOffset ) );
+			int i = 0;
+			for ( final UnsignedShortType t : Views.flatIterable( sourceBlockBlock ) )
+				targetCell.set( UnsignedShortType.getCodedSignedShort( t.get() ), i++ );
+
+			int16Writer.writeMDArrayBlockWithOffset( dataset, targetCell, reorder( translatedOffset ) );
 
 			for ( d = 0; d < n; ++d )
 			{
@@ -105,8 +75,6 @@ public class Hdf5Helper
 				else
 					offset[ d ] = 0;
 			}
-
-			//			System.out.println( Util.printCoordinates( offset ) );
 		}
 	}
 
@@ -117,11 +85,10 @@ public class Hdf5Helper
 		final IHDF5Writer writer = HDF5Factory.open( outFile );
 
 		final Boundaries space = TileHelper.getCollectionBoundaries( tiles );
-		createUnsignedShortDataset( space, writer, datasetName, cellSize  );
+		createSignedShortDataset( space, writer, datasetName, cellSize  );
 		System.out.println( "space min=" + Arrays.toString( space.getMin() ) + " dimensions=" + Arrays.toString( space.getDimensions() ) );
 
-		final IHDF5ShortWriter uint16Writer = writer.uint16();
-
+		final IHDF5ShortWriter int16Writer = writer.int16();
 
 		for ( final TileInfo tile : tiles )
 		{
@@ -137,10 +104,9 @@ public class Hdf5Helper
 					Math.round( tile.getPosition( 1 ) - space.min( 1 ) ),
 					Math.round( tile.getPosition( 2 ) - space.min( 2 ) ) );
 
-
 			System.out.println( "Save tile " + tile.getIndex() );
 
-			saveUnsignedShort( view, uint16Writer, datasetName, cellSize);
+			saveUnsignedShort( view, int16Writer, datasetName, cellSize);
 		}
 
 		writer.close();
