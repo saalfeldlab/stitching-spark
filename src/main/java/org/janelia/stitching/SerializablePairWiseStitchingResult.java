@@ -13,7 +13,7 @@ import scala.Tuple2;
 public class SerializablePairWiseStitchingResult implements Serializable {
 
 	private static final long serialVersionUID = -8084090265269616284L;
-	
+
 	private Tuple2< TileInfo, TileInfo > pairOfTiles;
 	private float[] offset;
 	private float crossCorrelation, phaseCorrelation;
@@ -25,20 +25,20 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 		this.crossCorrelation = crossCorrelation;
 		this.phaseCorrelation = phaseCorrelation;
 	}
-	
-	public SerializablePairWiseStitchingResult( final Tuple2< TileInfo, TileInfo > pairOfTiles, PairWiseStitchingResult other ) {
+
+	public SerializablePairWiseStitchingResult( final Tuple2< TileInfo, TileInfo > pairOfTiles, final PairWiseStitchingResult other ) {
 		this( pairOfTiles, other.getOffset(), other.getCrossCorrelation(), other.getPhaseCorrelation() );
 	}
-	
+
 	protected SerializablePairWiseStitchingResult() { }
-	
+
 	public Tuple2< TileInfo, TileInfo > getPairOfTiles() { return pairOfTiles; }
 	public int getNumDimensions() { return offset.length; }
 	public float[] getOffset() { return offset; }
 	public float getOffset( final int dim ) { return offset[ dim ]; }
 	public float getCrossCorrelation() { return crossCorrelation; }
 	public float getPhaseCorrelation() { return phaseCorrelation; }
-	
+
 	public boolean getIsValidOverlap() { return isValidOverlap; }
 	public void setIsValidOverlap( final boolean isValidOverlap ) { this.isValidOverlap = isValidOverlap; }
 }

@@ -1,21 +1,14 @@
 package org.janelia.stitching;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 import org.apache.commons.io.IOUtils;
 
 import com.google.gson.Gson;
-import com.google.gson.stream.JsonReader;
 
 import mpicbg.stitching.StitchingParameters;
 
@@ -31,7 +24,8 @@ public class StitchingJob implements Serializable {
 		Metadata,
 		NoFuse,
 		FuseOnly,
-		Hdf5
+		Hdf5,
+		Blur
 	}
 
 	private static final long serialVersionUID = 2619120742300093982L;
@@ -61,6 +55,8 @@ public class StitchingJob implements Serializable {
 			mode = Mode.FuseOnly;
 		else if ( args.getHdf5() )
 			mode = Mode.Hdf5;
+		else if ( args.getBlur() )
+			mode = Mode.Blur;
 		else
 			mode = Mode.Default;
 
@@ -101,8 +97,9 @@ public class StitchingJob implements Serializable {
 		return tiles;
 	}
 
-	public void setTiles( final TileInfo[] tiles ) {
+	public void setTiles( final TileInfo[] tiles ) throws Exception {
 		this.tiles = tiles;
+		checkTilesConfiguration();
 	}
 
 	public String getBaseFolder() {
@@ -125,56 +122,6 @@ public class StitchingJob implements Serializable {
 		return subregionSize;
 	}
 
-	public void prepareTiles() throws Exception {
-		loadTiles();
-		setUpTiles();
-	}
-
-	private void loadTiles() throws FileNotFoundException {
-		final JsonReader reader = new JsonReader( new FileReader( args.getInput() ) );
-		tiles = new Gson().fromJson( reader, TileInfo[].class );
-
-		boolean malformed = ( tiles == null );
-		if ( !malformed )
-			for ( final TileInfo tile : tiles )
-				if ( tile == null )
-					malformed = true;
-
-		if ( malformed )
-			throw new NullPointerException( "Malformed input JSON file" );
-	}
-
-	public void saveTiles( final String output ) throws IOException {
-		System.out.println( "Saving updated tiles configuration to " + output );
-		final FileWriter writer = new FileWriter( output );
-		writer.write( new Gson().toJson( tiles ) );
-		writer.close();
-	}
-
-	public void savePairwiseShifts( final List< SerializablePairWiseStitchingResult > shifts, final String output ) throws IOException {
-		System.out.println( "Saving pairwise shifts to " + output );
-		final FileWriter writer = new FileWriter( output );
-		writer.write( new Gson().toJson( shifts) );
-		writer.close();
-	}
-
-	public List< SerializablePairWiseStitchingResult > loadPairwiseShifts( final String input ) throws FileNotFoundException {
-		final JsonReader reader = new JsonReader( new FileReader( input ) );
-		final SerializablePairWiseStitchingResult[] shifts = new Gson().fromJson( reader, SerializablePairWiseStitchingResult[].class );
-		return new ArrayList< SerializablePairWiseStitchingResult >( Arrays.asList( shifts ) );
-	}
-
-	private void setUpTiles() throws Exception {
-
-		for ( int i = 0; i < tiles.length; i++ ) {
-			if ( tiles[ i ].getFile() == null || tiles[ i ].getPosition() == null )
-				throw new NullPointerException( "Some of required parameters are missing (file or position)" );
-
-			if ( tiles[ i ].getIndex() == null )
-				tiles[ i ].setIndex( i );
-		}
-	}
-
 	public void validateTiles() throws IllegalArgumentException {
 		if ( tiles.length < 2 )
 			throw new IllegalArgumentException( "There must be at least 2 tiles in the dataset" );
@@ -189,6 +136,26 @@ public class StitchingJob implements Serializable {
 
 		// Everything is correct
 		this.dimensionality = tiles[ 0 ].numDimensions();
+	}
+
+	private void checkTilesConfiguration() throws Exception
+	{
+		boolean malformed = ( tiles == null );
+		if ( !malformed )
+			for ( final TileInfo tile : tiles )
+				if ( tile == null )
+					malformed = true;
+
+		if ( malformed )
+			throw new NullPointerException( "Malformed input" );
+
+		for ( int i = 0; i < tiles.length; i++ ) {
+			if ( tiles[ i ].getFile() == null || tiles[ i ].getPosition() == null )
+				throw new NullPointerException( "Some of required parameters are missing (file or position)" );
+
+			if ( tiles[ i ].getIndex() == null )
+				tiles[ i ].setIndex( i );
+		}
 	}
 
 

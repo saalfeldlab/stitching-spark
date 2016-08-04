@@ -21,7 +21,7 @@ import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
-public class Hdf5Helper
+public class Hdf5Creator
 {
 	final static private int[] cellSize = new int[]{ 64, 64, 64 };
 
@@ -32,7 +32,7 @@ public class Hdf5Helper
 			final int[] cellDimensions )
 	{
 		final long[] size = Intervals.dimensionsAsLongArray( dimensions );
-		final IHDF5ShortWriter int16Writer = writer.int16();
+		final IHDF5ShortWriter int16Writer = writer.uint16();
 		if ( !writer.exists( dataset ) )
 			int16Writer.createMDArray(
 					dataset,
@@ -84,7 +84,7 @@ public class Hdf5Helper
 		final File outFile = new File( out );
 		final IHDF5Writer writer = HDF5Factory.open( outFile );
 
-		final Boundaries space = TileHelper.getCollectionBoundaries( tiles );
+		final Boundaries space = TileOperations.getCollectionBoundaries( tiles );
 		createSignedShortDataset( space, writer, datasetName, cellSize  );
 		System.out.println( "space min=" + Arrays.toString( space.getMin() ) + " dimensions=" + Arrays.toString( space.getDimensions() ) );
 

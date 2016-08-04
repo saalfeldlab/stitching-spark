@@ -25,7 +25,7 @@ public class StitchingArguments implements Serializable {
 
 	@Option(name = "-s", aliases = { "--subsize" }, required = false,
 			usage = "Size of an individual tile when fusing")
-	private int subregionSize = 512;
+	private int subregionSize = 64;
 
 	@Option(name = "--meta", required = false,
 			usage = "Only query the metadata of the tile images and save it to separate file")
@@ -42,6 +42,14 @@ public class StitchingArguments implements Serializable {
 	@Option(name = "--hdf5", required = false,
 			usage = "Combine a set of tiles into a single HDF5 file")
 	private boolean hdf5;
+
+	@Option(name = "--blur", required = false,
+			usage = "Apply Gaussian blur to all tiles and store the result in separate files")
+	private boolean blur;
+
+	@Option(name = "--noroi", required = false,
+			usage = "Compute phase correlation between full tile images instead of their ROIs")
+	private boolean noRoi;
 
 	private boolean parsedSuccessfully = false;
 
@@ -88,5 +96,13 @@ public class StitchingArguments implements Serializable {
 
 	public boolean getHdf5() {
 		return hdf5;
+	}
+
+	public boolean getBlur() {
+		return blur;
+	}
+
+	public boolean getNoRoi() {
+		return noRoi;
 	}
 }

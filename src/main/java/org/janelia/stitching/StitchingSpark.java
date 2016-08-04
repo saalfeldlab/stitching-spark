@@ -22,6 +22,7 @@ import org.janelia.stitching.StitchingJob.Mode;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
+import ij.plugin.filter.GaussianBlur;
 import mpicbg.models.Tile;
 import mpicbg.stitching.ComparePair;
 import mpicbg.stitching.GlobalOptimization;
@@ -63,7 +64,7 @@ public class StitchingSpark implements Runnable, Serializable {
 	public void run() {
 		job = new StitchingJob( args );
 		try {
-			job.prepareTiles();
+			job.setTiles( TileInfoJSONProvider.loadTilesConfiguration( args.getInput() ) );
 		} catch ( final Exception e ) {
 			System.out.println( "Aborted: " + e.getMessage() );
 			e.printStackTrace();
@@ -81,10 +82,24 @@ public class StitchingSpark implements Runnable, Serializable {
 		if ( !tilesWithoutMetadata.isEmpty() )
 			queryMetadata( tilesWithoutMetadata );
 
+		TileOperations.translateTilesToOrigin( job.getTiles() );
+
+		if ( job.getMode() == Mode.Blur)
+		{
+			// Just perform smoothing and exit
+			applyGaussianBlur();
+
+			sparkContext.close();
+			System.out.println( "done" );
+			return;
+		}
+
 		if ( job.getMode() == Mode.Hdf5)
 		{
 			// Just create hdf5 file and exit
 			createHdf5();
+
+			sparkContext.close();
 			System.out.println( "done" );
 			return;
 		}
@@ -102,31 +117,29 @@ public class StitchingSpark implements Runnable, Serializable {
 			params.computeOverlap = true;
 			params.subpixelAccuracy = true;
 			params.virtual = true;
-			params.absoluteThreshold = 5;
-			params.relativeThreshold = 3.5;
+			params.absoluteThreshold = 7; // was 5
+			params.relativeThreshold = 5; // was 3.5
 			params.regThreshold = job.getCrossCorrelationThreshold();
 			job.setParams( params );
 
 			// Compute shifts
 			if ( job.getMode() != Mode.FuseOnly ) {
-				final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = TileHelper.findOverlappingTiles( job.getTiles() );
+				final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles() );
 				computeShifts( overlappingTiles );
 			}
 
 			// Fuse
 			if ( job.getMode() != Mode.NoFuse ) {
 
-				final Boundaries boundaries = TileHelper.getCollectionBoundaries( job.getTiles() );
-				final ArrayList< TileInfo > subregions = TileHelper.divideSpace( boundaries, job.getSubregionSize() );
+				final Boundaries boundaries = TileOperations.getCollectionBoundaries( job.getTiles() );
+				final ArrayList< TileInfo > subregions = TileOperations.divideSpace( boundaries, job.getSubregionSize() );
 				fuse( subregions );
-				createHdf5();
 			}
 		}
 
 		sparkContext.close();
 		System.out.println( "done" );
 	}
-
 
 	private void queryMetadata( final ArrayList< TileInfo > tilesWithoutMetadata )
 	{
@@ -171,7 +184,7 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 
 		try {
-			job.saveTiles( Utils.addFilenameSuffix( args.getInput(), "_full" ) );
+			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( args.getInput(), "_full" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
@@ -187,11 +200,13 @@ public class StitchingSpark implements Runnable, Serializable {
 		final List< SerializablePairWiseStitchingResult > stitchedPairs = new ArrayList<>();
 		try {
 			System.out.println( "try to load pairwise results from disk" );
-			stitchedPairs.addAll( job.loadPairwiseShifts( pairwiseResultsFile ) );
+			stitchedPairs.addAll( TileInfoJSONProvider.loadPairwiseShifts( pairwiseResultsFile ) );
 		} catch ( final FileNotFoundException e ) {
 			System.out.println( "Pairwise results file not found" );
 		} catch ( final NullPointerException e ) {
 			System.out.println( "Pairwise results file is malformed" );
+		}  catch ( final IOException e ) {
+			e.printStackTrace();
 		}
 
 		// Create a cache to efficiently lookup the existing pairs of tiles loaded from disk
@@ -216,18 +231,16 @@ public class StitchingSpark implements Runnable, Serializable {
 
 		if ( overlappingTiles.isEmpty() && !stitchedPairs.isEmpty() )
 		{
-			// If we're able to load precalculated pairwise results, save a lot of time by skipping this step and jump to the global optimization
+			// If we're able to load precalculated pairwise results, save some time skipping this step and jump to the global optimization
 			System.out.println( "Successfully loaded all pairwise results from disk!" );
 		}
 		else
 		{
 			stitchedPairs.addAll( computePairwiseShifts( overlappingTiles ) );
 
-			System.out.println( "Stitched all tiles pairwise, perform global optimization on them" );
-
 			try {
-				System.out.println( "but first store this information on disk.." );
-				job.savePairwiseShifts( stitchedPairs, pairwiseResultsFile );
+				System.out.println( "Stitched all tiles pairwise, store this information on disk.." );
+				TileInfoJSONProvider.savePairwiseShifts( stitchedPairs, pairwiseResultsFile );
 			} catch ( final IOException e ) {
 				e.printStackTrace();
 			}
@@ -263,6 +276,7 @@ public class StitchingSpark implements Runnable, Serializable {
 			comparePairs.addElement( comparePair );
 		}
 
+		System.out.println( "Perform global optimization" );
 		final ArrayList< ImagePlusTimePoint > optimized = new ArrayList<>();
 		if ( !comparePairs.isEmpty() )
 			optimized.addAll( GlobalOptimization.optimize( comparePairs, comparePairs.get( 0 ).getTile1(), job.getParams() ) );
@@ -284,7 +298,7 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 
 		try {
-			job.saveTiles( Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_shifted" ) );
+			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_shifted" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
@@ -292,6 +306,11 @@ public class StitchingSpark implements Runnable, Serializable {
 
 	private List< SerializablePairWiseStitchingResult > computePairwiseShifts( final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles )
 	{
+		if ( !args.getNoRoi() )
+			System.out.println( "*** Use ROIs as usual ***" );
+		else
+			System.out.println( "*** Compute phase correlation between full tile images instead of their ROIs ***" );
+
 		final JavaRDD< Tuple2< TileInfo, TileInfo > > rdd = sparkContext.parallelize( overlappingTiles );
 		final JavaRDD< SerializablePairWiseStitchingResult > pairwiseStitching = rdd.map(
 				new Function< Tuple2< TileInfo, TileInfo >, SerializablePairWiseStitchingResult >()
@@ -309,12 +328,16 @@ public class StitchingSpark implements Runnable, Serializable {
 								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._1 ) ), el1.getIndex(), timepoint, el1.getModel(), el1 ),
 								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles._2 ) ), el2.getIndex(), timepoint, el2.getModel(), el2 ) );
 
-						final Boundaries overlap1 = TileHelper.getOverlappingRegion( pairOfTiles._1, pairOfTiles._2 );
-						final Boundaries overlap2 = TileHelper.getOverlappingRegion( pairOfTiles._2, pairOfTiles._1 );
+						Roi roi1 = null, roi2 = null;
+						if ( !args.getNoRoi() )
+						{
+							final Boundaries overlap1 = TileOperations.getOverlappingRegion( pairOfTiles._1, pairOfTiles._2 );
+							final Boundaries overlap2 = TileOperations.getOverlappingRegion( pairOfTiles._2, pairOfTiles._1 );
 
-						// mpicbg accepts only 2d rectangular ROIs
-						final Roi roi1 = new Roi( overlap1.min( 0 ), overlap1.min( 1 ), overlap1.dimension( 0 ), overlap1.dimension( 1 ) );
-						final Roi roi2 = new Roi( overlap2.min( 0 ), overlap2.min( 1 ), overlap2.dimension( 0 ), overlap2.dimension( 1 ) );
+							// mpicbg accepts only 2d rectangular ROIs
+							roi1 = new Roi( overlap1.min( 0 ), overlap1.min( 1 ), overlap1.dimension( 0 ), overlap1.dimension( 1 ) );
+							roi2 = new Roi( overlap2.min( 0 ), overlap2.min( 1 ), overlap2.dimension( 0 ), overlap2.dimension( 1 ) );
+						}
 
 						final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
 								pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint2(), job.getParams() );
@@ -348,12 +371,7 @@ public class StitchingSpark implements Runnable, Serializable {
 					@Override
 					public TileInfo call( final TileInfo subregion ) throws Exception
 					{
-						// TODO: optimize with KD interval tree or smth similar
-						final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
-						for ( final TileInfo tile : job.getTiles() )
-							if ( TileHelper.getOverlappingRegion( tile, subregion ) != null )
-								tilesWithinSubregion.add( tile );
-
+						final ArrayList< TileInfo > tilesWithinSubregion = TileOperations.findTilesWithinSubregion( job.getTiles(), subregion );
 						if ( tilesWithinSubregion.isEmpty() )
 							return null;
 
@@ -373,10 +391,65 @@ public class StitchingSpark implements Runnable, Serializable {
 		output.removeAll( Collections.singleton( null ) );
 		System.out.println( "Obtained " + output.size() + " tiles" );
 
-		job.setTiles( output.toArray( new TileInfo[ 0 ] ) );
+		try
+		{
+			final TileInfo[] newTiles = output.toArray( new TileInfo[ 0 ] );
+			job.setTiles( newTiles );
+			TileInfoJSONProvider.saveTilesConfiguration( newTiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_fused" ) );
+		}
+		catch ( final Exception e )
+		{
+			e.printStackTrace();
+		}
+	}
+
+	private void applyGaussianBlur()
+	{
+		final String blurredFolder = job.getBaseFolder() + "/blurred";
+		new File( blurredFolder ).mkdirs();
+
+		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( Arrays.asList( job.getTiles() ) );
+		final JavaRDD< TileInfo > task = rdd.map(
+				new Function< TileInfo, TileInfo >()
+				{
+					private static final long serialVersionUID = 772321548054114279L;
+
+					@Override
+					public TileInfo call( final TileInfo tile ) throws Exception
+					{
+						System.out.println( "Blurring tile " + tile.getIndex() );
+						final ImagePlus imp = IJ.openImage( tile.getFile() );
+						final GaussianBlur blur = new GaussianBlur();
+						blur.setup( "", imp );
+						for ( int slice = 1; slice <= imp.getNSlices(); slice++ ) {
+							imp.setSlice( slice );
+							blur.run( imp.getProcessor() );
+						}
+
+						System.out.println( "Saving blurred tile " + tile.getIndex() );
+						final TileInfo blurredTile = tile.clone();
+						blurredTile.setFile( blurredFolder + "/" + Utils.addFilenameSuffix( new File( tile.getFile() ).getName(), "_blurred" ) );
+						IJ.saveAsTiff( imp, blurredTile.getFile() );
+						return blurredTile;
+					}
+				});
+
+		final List< TileInfo > blurredTiles= task.collect();
+
+		System.out.println( "Obtained blurred tiles" );
+
+		final TileInfo[] tiles = job.getTiles();
+		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
+		for ( final TileInfo tile : tiles )
+			tilesMap.put( tile.getIndex(), tile );
+
+		for ( final TileInfo blurredTile : blurredTiles ) {
+			final TileInfo tile = tilesMap.get( blurredTile.getIndex() );
+			tile.setFile( blurredTile.getFile() );
+		}
 
 		try {
-			job.saveTiles( Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_fused" ) );
+			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_blurred" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
@@ -385,7 +458,8 @@ public class StitchingSpark implements Runnable, Serializable {
 	private void createHdf5()
 	{
 		final String fusedFolder = job.getBaseFolder() + "/fused";
+		new File( fusedFolder ).mkdirs();
 		final String hdf5 = fusedFolder + "/" + job.getDatasetName() + ".hdf5";
-		Hdf5Helper.createHdf5( job.getTiles(), hdf5 );
+		Hdf5Creator.createHdf5( job.getTiles(), hdf5 );
 	}
 }

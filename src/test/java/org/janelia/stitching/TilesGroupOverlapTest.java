@@ -23,6 +23,6 @@ public class TilesGroupOverlapTest {
 		tiles[ 3 ].setPosition( new double[] { 644.9707923831013, -1160.9781698781098, -79.17565799404196 } ); 	tiles[ 3 ].setSize( new long[] { 991, 992, 953 } );
 		tiles[ 4 ].setPosition( new double[] { 1419.1341448553956, -1337.414351167819, -76.84995500091385 } ); 	tiles[ 4 ].setSize( new long[] { 991, 992, 953 } );
 
-		Assert.assertEquals( 7, TileHelper.findOverlappingTiles( tiles ).size() );
+		Assert.assertEquals( 7, TileOperations.findOverlappingTiles( tiles ).size() );
 	}
 }

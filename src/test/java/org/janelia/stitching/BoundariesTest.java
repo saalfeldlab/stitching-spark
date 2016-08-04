@@ -41,19 +41,19 @@ public class BoundariesTest {
 		tiles[ 1 ].setPosition( new double[] { 1.2 } ); 	tiles[ 1 ].setSize( new long[] { 10 } );
 		tiles[ 2 ].setPosition( new double[] { 6. } ); 		tiles[ 2 ].setSize( new long[] { 3 } );
 		expected = create( new long[] { -20 }, new long[] { 10 } );
-		Assert.assertTrue( same( expected, TileHelper.getCollectionBoundaries( tiles ) ) );
+		Assert.assertTrue( same( expected, TileOperations.getCollectionBoundaries( tiles ) ) );
 
 		tiles[ 0 ].setPosition( new double[] { 6. } ); 		tiles[ 0 ].setSize( new long[] { 3 } );
 		tiles[ 1 ].setPosition( new double[] { 1.2 } ); 	tiles[ 1 ].setSize( new long[] { 10 } );
 		tiles[ 2 ].setPosition( new double[] { -19.7 } ); 	tiles[ 2 ].setSize( new long[] { 5 } );
 		expected = create( new long[] { -20 }, new long[] { 10 } );
-		Assert.assertTrue( same( expected, TileHelper.getCollectionBoundaries( tiles ) ) );
+		Assert.assertTrue( same( expected, TileOperations.getCollectionBoundaries( tiles ) ) );
 
 		tiles[ 0 ].setPosition( new double[] { 3.3 } ); 	tiles[ 0 ].setSize( new long[] { 1 } );
 		tiles[ 1 ].setPosition( new double[] { 2.2 } ); 	tiles[ 1 ].setSize( new long[] { 3 } );
 		tiles[ 2 ].setPosition( new double[] { 1.1 } ); 	tiles[ 2 ].setSize( new long[] { 5 } );
 		expected = create( new long[] { 1 }, new long[] { 5 } );
-		Assert.assertTrue( same( expected, TileHelper.getCollectionBoundaries( tiles ) ) );
+		Assert.assertTrue( same( expected, TileOperations.getCollectionBoundaries( tiles ) ) );
 	}
 
 	@Test
@@ -69,7 +69,7 @@ public class BoundariesTest {
 		tiles[ 1 ].setSize( new long[] { 9, 4 } );
 
 		expected = create( new long[] { -6, 2 }, new long[] { 9, 9 } );
-		Assert.assertTrue( same( expected, TileHelper.getCollectionBoundaries( tiles ) ) );
+		Assert.assertTrue( same( expected, TileOperations.getCollectionBoundaries( tiles ) ) );
 	}
 
 	@Test
@@ -79,6 +79,6 @@ public class BoundariesTest {
 		t.setSize( new long[] { 3, 4, 5 } );
 
 		expected = create( new long[] { -6, 4, -8 }, new long[] { -4, 7, -4 } );
-		Assert.assertTrue( same( expected, TileHelper.getCollectionBoundaries( new TileInfo[] { t } ) ) );
+		Assert.assertTrue( same( expected, TileOperations.getCollectionBoundaries( new TileInfo[] { t } ) ) );
 	}
 }

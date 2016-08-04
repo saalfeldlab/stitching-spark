@@ -9,7 +9,7 @@ import scala.Tuple2;
  *
  */
 
-public class TileHelper
+public class TileOperations
 {
 	public static ArrayList< Tuple2< TileInfo, TileInfo > > findOverlappingTiles( final TileInfo[] tiles )
 	{
@@ -17,7 +17,7 @@ public class TileHelper
 		for ( int i = 0; i < tiles.length; i++ )
 			for ( int j = i + 1; j < tiles.length; j++ )
 				if ( getOverlappingRegion( tiles[ i ], tiles[ j ] ) != null )
-					overlappingTiles.add( new Tuple2< TileInfo, TileInfo >( tiles[ i ], tiles[ j ] ) );
+					overlappingTiles.add( new Tuple2< >( tiles[ i ], tiles[ j ] ) );
 		return overlappingTiles;
 	}
 
@@ -39,6 +39,41 @@ public class TileHelper
 		return r;
 	}
 
+	public static Boundaries getOverlappingRegionGlobal( final TileInfo t1, final TileInfo t2 )
+	{
+		final Boundaries r = getOverlappingRegion( t1, t2 );
+		final Boundaries offset = t1.getBoundaries();
+		if (r != null )
+		{
+			for ( int d = 0; d < r.numDimensions(); d++ )
+			{
+				r.setMin( d, r.min( d ) + offset.min( d ) );
+				r.setMax( d, r.max( d ) + offset.min( d ) );
+			}
+		}
+		return r;
+	}
+
+	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final long[] min, final int[] dimensions )
+	{
+		assert min.length == dimensions.length;
+		final TileInfo subregion = new TileInfo( min.length );
+		for ( int d = 0; d < min.length; d++ ) {
+			subregion.setPosition( d, min[ d ] );
+			subregion.setSize( d, dimensions[ d ] );
+		}
+		return findTilesWithinSubregion( tiles, subregion );
+	}
+
+	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final TileInfo subregion )
+	{
+		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+			if ( TileOperations.getOverlappingRegion( tile, subregion ) != null )
+				tilesWithinSubregion.add( tile );
+		return tilesWithinSubregion;
+	}
+
 	public static Boundaries getCollectionBoundaries( final TileInfo[] tiles )
 	{
 		if ( tiles.length == 0 )
@@ -55,16 +90,23 @@ public class TileHelper
 
 		for ( final TileInfo tile : tiles )
 		{
-			assert dim == tile.numDimensions();
-
+			final Boundaries tileBoundaries = tile.getBoundaries();
 			for ( int d = 0; d < dim; d++ )
 			{
-				boundaries.setMin( d, Math.min( boundaries.min( d ), Math.round( tile.getPosition( d ) ) ) );
-				boundaries.setMax( d, Math.max( boundaries.max( d ), Math.round( tile.getPosition( d ) ) + tile.getSize( d ) - 1 ) );
+				boundaries.setMin( d, Math.min( boundaries.min( d ), tileBoundaries.min( d ) ) );
+				boundaries.setMax( d, Math.max( boundaries.max( d ), tileBoundaries.max( d ) ) );
 			}
 		}
 
 		return boundaries;
+	}
+
+	public static void translateTilesToOrigin( final TileInfo[] tiles )
+	{
+		final Boundaries space = TileOperations.getCollectionBoundaries( tiles );
+		for ( final TileInfo tile : tiles )
+			for ( int d = 0; d < tile.numDimensions(); d++ )
+				tile.setPosition( d, Math.round( tile.getPosition( d ) ) - space.min( d ) );
 	}
 
 	public static ArrayList< TileInfo > divideSpace( final Boundaries space, final int subregionSize )

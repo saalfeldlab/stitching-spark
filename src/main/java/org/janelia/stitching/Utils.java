@@ -55,7 +55,8 @@ public class Utils {
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
 		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.numDimensions() );
-		e.setModel( TileModelFactory.createOffsetModel( tile ) );
+		//e.setModel( TileModelFactory.createOffsetModel( tile ) );
+		e.setModel( TileModelFactory.createDefaultModel( tile.numDimensions() ) );
 		return e;
 	}
 }
