@@ -32,7 +32,7 @@ public class DistanceFromOriginal
 		final ArrayList< TileInfo > badTiles = new ArrayList<>();
 		for ( int i = 0; i < n; i++ )
 		{
-			if ( !tilesOrig[ i ].getIndex().equals( tilesMod[ i ].getIndex() ) || !tilesOrig[ i ].getFile().equals( tilesMod[ i ].getFile() ) )
+			if ( !tilesOrig[ i ].getIndex().equals( tilesMod[ i ].getIndex() ) )// || !tilesOrig[ i ].getFile().equals( tilesMod[ i ].getFile() ) )
 				throw new IllegalArgumentException( "Tiles mismatch: orig=" + tilesOrig[ i ].getIndex() + ", mod=" + tilesMod[ i ].getIndex() + "\n"
 						+ "orig=" + tilesOrig[ i ].getFile() + ", mod=" + tilesMod[ i ].getFile() );
 
@@ -43,7 +43,7 @@ public class DistanceFromOriginal
 			for ( int d = 0; d < dim; d++ )
 			{
 				dist[ d ] = tilesOrig[ i ].getPosition( d ) - tilesMod[ i ].getPosition( d );
-				if ( Math.abs( dist[ d ] ) > tilesOrig[ i ].getSize( d ) / 8 )
+				if ( Math.abs( dist[ d ] ) > tilesOrig[ i ].getSize( d ) / 7 )
 					isGoodTile = false;
 			}
 
@@ -53,16 +53,22 @@ public class DistanceFromOriginal
 				goodTiles.add( tilesOrig[ i ] );
 			else
 			{
-				System.out.println( tilesOrig[ i ].getIndex() + ": " + Arrays.toString( dist ) );
 				badTiles.add( tilesOrig[ i ] );
 			}
 		}
 
 		System.out.println( "----------------------" );
 		System.out.println( "Found " + goodTiles.size() + " good tiles out of " + n );
-		//System.out.println( "Removing " + badTilesIndices.size() + " bad ones: " + Arrays.toString( badTilesIndices.toArray() ) );
-		//TileInfoJSONProvider.saveTilesConfiguration( goodTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args[ 0 ], "_full" ), "_good" ) );*/
 
 
+		if ( !badTiles.isEmpty() )
+		{
+			System.out.println( "Bad tiles are: " );
+			for ( final TileInfo tile : badTiles )
+				System.out.println( tile.getIndex() + ", position="+Arrays.toString( tile.getPosition() ));
+
+			//System.out.println( "Removing " + badTilesIndices.size() + " bad ones: " + Arrays.toString( badTilesIndices.toArray() ) );
+			//TileInfoJSONProvider.saveTilesConfiguration( goodTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args[ 0 ], "_full" ), "_good" ) );*/
+		}
 	}
 }

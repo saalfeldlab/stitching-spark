@@ -2,6 +2,9 @@ package org.janelia.stitching.analysis;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -11,14 +14,36 @@ public class FilterTileConfiguration
 {
 	public static void main( final String[] args ) throws IOException
 	{
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
-		final String filenameFilter = "_ch1";
+		filterByTileIndexesExcluded( args[ 0 ], new TreeSet< >( Arrays.asList( 60 ) ) );
+	}
 
+	public static void filterByFilename( final String inputFilename, final String filenameFilter ) throws IOException
+	{
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilename );
 		final ArrayList< TileInfo > filteredTiles = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			if ( tile.getFile().contains( filenameFilter ) )
 				filteredTiles.add( tile );
+		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( inputFilename, "_filtered_" + filenameFilter ) );
+	}
 
-		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( args[0], filenameFilter ) );
+	public static void filterByTileIndexes( final String inputFilename, final Set< Integer > tileIndexes ) throws IOException
+	{
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilename );
+		final ArrayList< TileInfo > filteredTiles = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+			if ( tileIndexes.contains( tile.getIndex() ) )
+				filteredTiles.add( tile );
+		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( inputFilename, "_filtered_" + tileIndexes ) );
+	}
+
+	public static void filterByTileIndexesExcluded( final String inputFilename, final Set< Integer > tileIndexesExcluded ) throws IOException
+	{
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilename );
+		final ArrayList< TileInfo > filteredTiles = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+			if ( !tileIndexesExcluded.contains( tile.getIndex() ) )
+				filteredTiles.add( tile );
+		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( inputFilename, "_excluded_" + tileIndexesExcluded ) );
 	}
 }

@@ -30,19 +30,23 @@ public class StitchingJob implements Serializable {
 
 	private static final long serialVersionUID = 2619120742300093982L;
 
-	private Mode mode;
-	private StitchingArguments args;
+	private final Mode mode;
 	private transient StitchingParameters params;
-	private String baseFolder;
+	private final String baseFolder;
+
+	private final boolean findOptimalThreshold;
+	private final double crossCorrelationThreshold;
+	private final int subregionSize;
+
+	private String saveFolder;
 	private String datasetName;
+
 	private TileInfo[] tiles;
 	private int dimensionality;
-	private double crossCorrelationThreshold;
-	private int subregionSize;
 
-	public StitchingJob( final StitchingArguments args ) {
-		this.args = args;
 
+	public StitchingJob( final StitchingArguments args )
+	{
 		final int modes = ( args.getMeta() ? 1 : 0 ) + ( args.getNoFuse() ? 1 : 0 ) + ( args.getFuseOnly() ? 1 : 0 );
 		if ( modes > 1 )
 			throw new IllegalArgumentException( "Incompatible arguments" );
@@ -62,7 +66,10 @@ public class StitchingJob implements Serializable {
 
 		if ( mode != Mode.Metadata && mode != Mode.FuseOnly ) {
 			crossCorrelationThreshold = args.getCrossCorrelationThreshold();
-			System.out.println( "Cross correlation threshold value: " + crossCorrelationThreshold );
+			findOptimalThreshold = ( crossCorrelationThreshold < 0 );
+		} else {
+			crossCorrelationThreshold = 0;
+			findOptimalThreshold = false;
 		}
 
 		if ( mode != Mode.Metadata && mode != Mode.NoFuse ) {
@@ -70,16 +77,25 @@ public class StitchingJob implements Serializable {
 			if ( subregionSize <= 0 )
 				throw new IllegalArgumentException( "Subregion size can't be negative" );
 			System.out.println( "Fusion subregion size: " + subregionSize );
+		} else {
+			subregionSize = 0;
 		}
 
 		final File inputFile = new File( args.getInput() ).getAbsoluteFile();
-		baseFolder = inputFile.getParent();
+		baseFolder = saveFolder = inputFile.getParent();
 		datasetName = inputFile.getName();
 		if ( datasetName.endsWith( ".json" ) )
 			datasetName = datasetName.substring( 0, datasetName.lastIndexOf( ".json" ) );
 	}
 
-	protected StitchingJob( ) {	}
+	protected StitchingJob( )
+	{
+		mode = Mode.Default;
+		findOptimalThreshold = false;
+		crossCorrelationThreshold = 0;
+		subregionSize = 0;
+		baseFolder = "";
+	}
 
 	public Mode getMode() {
 		return mode;
@@ -106,12 +122,24 @@ public class StitchingJob implements Serializable {
 		return baseFolder;
 	}
 
+	public String getSaveFolder() {
+		return saveFolder;
+	}
+
+	public void setSaveFolder( final String saveFolder ) {
+		this.saveFolder = saveFolder;
+	}
+
 	public String getDatasetName() {
 		return datasetName;
 	}
 
 	public int getDimensionality() {
 		return dimensionality;
+	}
+
+	public boolean getFindOptimalThreshold() {
+		return findOptimalThreshold;
 	}
 
 	public double getCrossCorrelationThreshold() {

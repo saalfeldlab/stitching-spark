@@ -10,7 +10,7 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 
-public class ShiftNonOverlapping
+public class NonOverlappingShifts
 {
 	public static void main( final String[] args ) throws Exception
 	{

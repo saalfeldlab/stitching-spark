@@ -18,6 +18,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.janelia.stitching.StitchingJob.Mode;
+import org.janelia.stitching.analysis.ThresholdEstimation;
 
 import ij.IJ;
 import ij.ImagePlus;
@@ -113,13 +114,12 @@ public class StitchingSpark implements Runnable, Serializable {
 			params.channel1 = 0;
 			params.channel2 = 0;
 			params.timeSelect = 0;
-			params.checkPeaks = 5;
+			params.checkPeaks = 200;
 			params.computeOverlap = true;
 			params.subpixelAccuracy = true;
 			params.virtual = true;
-			params.absoluteThreshold = 7; // was 5
-			params.relativeThreshold = 5; // was 3.5
-			params.regThreshold = job.getCrossCorrelationThreshold();
+			//params.absoluteThreshold = 5; // was 7
+			//params.relativeThreshold = 3.5; // was 5
 			job.setParams( params );
 
 			// Compute shifts
@@ -184,7 +184,7 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 
 		try {
-			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( args.getInput(), "_full" ) );
+			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( job.getDatasetName(), "_full" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
@@ -195,12 +195,22 @@ public class StitchingSpark implements Runnable, Serializable {
 	{
 		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
 
+		final List< SerializablePairWiseStitchingResult > pairwiseShifts = preparePairwiseShifts( overlappingTiles );
+
+		final double threshold = ( job.getFindOptimalThreshold() ? ThresholdEstimation.findOptimalThreshold( pairwiseShifts ) : job.getCrossCorrelationThreshold() );
+		System.out.println( "Cross correlation threshold value: " + threshold + ( job.getFindOptimalThreshold() ? " (determined automatically)" : " (custom value)" ) );
+
+		optimizeShifts( pairwiseShifts, threshold );
+	}
+
+	private List< SerializablePairWiseStitchingResult > preparePairwiseShifts( final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles )
+	{
 		// Try to load precalculated shifts for some pairs of tiles
 		final String pairwiseResultsFile = Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_pairwise" );
-		final List< SerializablePairWiseStitchingResult > stitchedPairs = new ArrayList<>();
+		final List< SerializablePairWiseStitchingResult > pairwiseShifts = new ArrayList<>();
 		try {
 			System.out.println( "try to load pairwise results from disk" );
-			stitchedPairs.addAll( TileInfoJSONProvider.loadPairwiseShifts( pairwiseResultsFile ) );
+			pairwiseShifts.addAll( TileInfoJSONProvider.loadPairwiseShifts( pairwiseResultsFile ) );
 		} catch ( final FileNotFoundException e ) {
 			System.out.println( "Pairwise results file not found" );
 		} catch ( final NullPointerException e ) {
@@ -211,7 +221,7 @@ public class StitchingSpark implements Runnable, Serializable {
 
 		// Create a cache to efficiently lookup the existing pairs of tiles loaded from disk
 		final TreeMap< Integer, TreeSet< Integer > > cache = new TreeMap<>();
-		for ( final SerializablePairWiseStitchingResult result : stitchedPairs ) {
+		for ( final SerializablePairWiseStitchingResult result : pairwiseShifts ) {
 			final int firstIndex  =  Math.min( result.getPairOfTiles()._1.getIndex(), result.getPairOfTiles()._2.getIndex() ),
 					secondIndex =  Math.max( result.getPairOfTiles()._1.getIndex(), result.getPairOfTiles()._2.getIndex() );
 			if ( !cache.containsKey( firstIndex ) )
@@ -229,79 +239,24 @@ public class StitchingSpark implements Runnable, Serializable {
 				it.remove();
 		}
 
-		if ( overlappingTiles.isEmpty() && !stitchedPairs.isEmpty() )
+		if ( overlappingTiles.isEmpty() && !pairwiseShifts.isEmpty() )
 		{
 			// If we're able to load precalculated pairwise results, save some time skipping this step and jump to the global optimization
 			System.out.println( "Successfully loaded all pairwise results from disk!" );
 		}
 		else
 		{
-			stitchedPairs.addAll( computePairwiseShifts( overlappingTiles ) );
+			pairwiseShifts.addAll( computePairwiseShifts( overlappingTiles ) );
 
 			try {
 				System.out.println( "Stitched all tiles pairwise, store this information on disk.." );
-				TileInfoJSONProvider.savePairwiseShifts( stitchedPairs, pairwiseResultsFile );
+				TileInfoJSONProvider.savePairwiseShifts( pairwiseShifts, pairwiseResultsFile );
 			} catch ( final IOException e ) {
 				e.printStackTrace();
 			}
 		}
 
-		// Create fake tile objects so that they don't hold any image data
-		// required by the GlobalOptimization
-		final TreeMap< Integer, Tile< ? > > fakeTileImagesMap = new TreeMap<>();
-		for ( final SerializablePairWiseStitchingResult pair : stitchedPairs ) {
-			for ( final TileInfo tileInfo : new TileInfo[] { pair.getPairOfTiles()._1, pair.getPairOfTiles()._2 } ) {
-				if ( !fakeTileImagesMap.containsKey( tileInfo.getIndex() ) ) {
-					try {
-						final ImageCollectionElement el = Utils.createElement( job, tileInfo );
-						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
-						final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
-						fakeTileImagesMap.put( tileInfo.getIndex(), fakeTile );
-					} catch ( final Exception e ) {
-						e.printStackTrace();
-					}
-				}
-			}
-		}
-
-		final Vector< ComparePair > comparePairs = new Vector<>();
-		for ( final SerializablePairWiseStitchingResult pair : stitchedPairs ) {
-			final ComparePair comparePair = new ComparePair(
-					(ImagePlusTimePoint)fakeTileImagesMap.get( pair.getPairOfTiles()._1.getIndex() ),
-					(ImagePlusTimePoint)fakeTileImagesMap.get( pair.getPairOfTiles()._2.getIndex() ) );
-
-			comparePair.setRelativeShift( pair.getOffset() );
-			comparePair.setCrossCorrelation( pair.getCrossCorrelation() );
-
-			comparePairs.addElement( comparePair );
-		}
-
-		System.out.println( "Perform global optimization" );
-		final ArrayList< ImagePlusTimePoint > optimized = new ArrayList<>();
-		if ( !comparePairs.isEmpty() )
-			optimized.addAll( GlobalOptimization.optimize( comparePairs, comparePairs.get( 0 ).getTile1(), job.getParams() ) );
-
-		System.out.println( "Global optimization done" );
-		for ( final ImagePlusTimePoint imt : optimized )
-			Log.info( imt.getImpId() + ": " + imt.getModel() );
-
-		// Process the result updating the tiles position within the job object
-		final TileInfo[] tiles = job.getTiles();
-		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
-		for ( final TileInfo tile : tiles )
-			tilesMap.put( tile.getIndex(), tile );
-
-		for ( final ImagePlusTimePoint optimizedTile : optimized ) {
-			final double[] pos = new double[ job.getDimensionality() ];
-			optimizedTile.getModel().applyInPlace( pos );
-			tilesMap.get( optimizedTile.getImpId() ).setPosition( pos );
-		}
-
-		try {
-			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_shifted" ) );
-		} catch ( final IOException e ) {
-			e.printStackTrace();
-		}
+		return pairwiseShifts;
 	}
 
 	private List< SerializablePairWiseStitchingResult > computePairwiseShifts( final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles )
@@ -352,6 +307,68 @@ public class StitchingSpark implements Runnable, Serializable {
 					}
 				});
 		return pairwiseStitching.collect();
+	}
+
+	private void optimizeShifts( final List< SerializablePairWiseStitchingResult > pairwiseShifts, final double threshold )
+	{
+		job.getParams().regThreshold = threshold;
+
+		// Create fake tile objects so that they don't hold any image data
+		// required by the GlobalOptimization
+		final TreeMap< Integer, Tile< ? > > fakeTileImagesMap = new TreeMap<>();
+		for ( final SerializablePairWiseStitchingResult pair : pairwiseShifts ) {
+			for ( final TileInfo tileInfo : new TileInfo[] { pair.getPairOfTiles()._1, pair.getPairOfTiles()._2 } ) {
+				if ( !fakeTileImagesMap.containsKey( tileInfo.getIndex() ) ) {
+					try {
+						final ImageCollectionElement el = Utils.createElement( job, tileInfo );
+						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
+						final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
+						fakeTileImagesMap.put( tileInfo.getIndex(), fakeTile );
+					} catch ( final Exception e ) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}
+
+		final Vector< ComparePair > comparePairs = new Vector<>();
+		for ( final SerializablePairWiseStitchingResult pair : pairwiseShifts ) {
+			final ComparePair comparePair = new ComparePair(
+					(ImagePlusTimePoint)fakeTileImagesMap.get( pair.getPairOfTiles()._1.getIndex() ),
+					(ImagePlusTimePoint)fakeTileImagesMap.get( pair.getPairOfTiles()._2.getIndex() ) );
+
+			comparePair.setRelativeShift( pair.getOffset() );
+			comparePair.setCrossCorrelation( pair.getCrossCorrelation() );
+
+			comparePairs.addElement( comparePair );
+		}
+
+		System.out.println( "Perform global optimization" );
+		final ArrayList< ImagePlusTimePoint > optimized = new ArrayList<>();
+		if ( !comparePairs.isEmpty() )
+			optimized.addAll( GlobalOptimization.optimize( comparePairs, comparePairs.get( 0 ).getTile1(), job.getParams() ) );
+
+		System.out.println( "Global optimization done" );
+		for ( final ImagePlusTimePoint imt : optimized )
+			Log.info( imt.getImpId() + ": " + imt.getModel() );
+
+		// Process the result updating the tiles position within the job object
+		final TileInfo[] tiles = job.getTiles();
+		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
+		for ( final TileInfo tile : tiles )
+			tilesMap.put( tile.getIndex(), tile );
+
+		for ( final ImagePlusTimePoint optimizedTile : optimized ) {
+			final double[] pos = new double[ job.getDimensionality() ];
+			optimizedTile.getModel().applyInPlace( pos );
+			tilesMap.get( optimizedTile.getImpId() ).setPosition( pos );
+		}
+
+		try {
+			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_shifted" ) );
+		} catch ( final IOException e ) {
+			e.printStackTrace();
+		}
 	}
 
 

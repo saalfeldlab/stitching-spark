@@ -1,14 +1,18 @@
 package org.janelia.stitching.analysis;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
+import org.janelia.util.ComparablePair;
 
 public class ThresholdEstimation
 {
@@ -22,14 +26,9 @@ public class ThresholdEstimation
 		}
 	}
 
-	public static void main( final String[] args ) throws Exception
+
+	public static double findOptimalThreshold( final List< SerializablePairWiseStitchingResult > shifts )
 	{
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
-
-		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			if ( !shift.getIsValidOverlap() )
-				throw new Exception( "Invalid overlap" );
-
 		shifts.sort( new CrossCorrelationComparatorDesc() );
 
 		final TreeSet< Integer > uncoveredTiles = new TreeSet<>();
@@ -50,9 +49,68 @@ public class ThresholdEstimation
 			}
 		}
 
-		System.out.println( "Optimal threshold value: " + threshold );
+		return threshold;
+	}
+
+
+	public static TreeMap< Integer, Double > getTilesHighestCorrelation( final List< SerializablePairWiseStitchingResult > shifts )
+	{
+		// shifts are already sorted
+		final TreeMap< Integer, Double > ret = new TreeMap<>();
+		for ( final SerializablePairWiseStitchingResult shift : shifts )
+			for ( final TileInfo tile : new TileInfo[] { shift.getPairOfTiles()._1, shift.getPairOfTiles()._2 } )
+				if ( !ret.containsKey( tile.getIndex() ) )
+					ret.put( tile.getIndex(), ( double ) shift.getCrossCorrelation() );
+		return ret;
+	}
+
+	private static void printTilesHighestCorrelation( final List< SerializablePairWiseStitchingResult > shifts )
+	{
+		final TreeMap< Integer, Double > tilesCorr = getTilesHighestCorrelation( shifts );
+
+		final ArrayList< ComparablePair< Double, Integer > > tilesCorrList = new ArrayList<>();
+		for ( final Entry< Integer, Double > entry : tilesCorr.entrySet() )
+			tilesCorrList.add( new ComparablePair<>( entry.getValue(), entry.getKey() ) );
+
+		Collections.sort( tilesCorrList );
+		Collections.reverse( tilesCorrList );
 
 		System.out.println( "-----------" );
+		System.out.println( "Highest correlation value for every tile:" );
+		for ( final ComparablePair< Double, Integer > pair : tilesCorrList )
+			System.out.println( pair.first + ": " + pair.second );
+		System.out.println( "-----------" );
+	}
+
+
+	public static void main( final String[] args ) throws Exception
+	{
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
+
+
+
+		// -----------------------
+		for ( final SerializablePairWiseStitchingResult shift : shifts )
+			if ( !shift.getIsValidOverlap() )
+				throw new Exception( "Invalid overlap" );
+
+		double minCrossCorrelation = Double.MAX_VALUE;
+		for ( final SerializablePairWiseStitchingResult shift : shifts )
+			minCrossCorrelation = Math.min( shift.getCrossCorrelation(), minCrossCorrelation );
+		System.out.println( "Min cross correlation = " + minCrossCorrelation );
+		if ( minCrossCorrelation < 0 )
+			throw new Exception( "Negative cross correlation" );
+		// -----------------------
+
+
+
+
+		final double threshold = findOptimalThreshold( shifts );
+		System.out.println( "Optimal threshold value: " + threshold );
+
+		printTilesHighestCorrelation( shifts );
+
+
 		final ArrayList< SerializablePairWiseStitchingResult> nonOverlappingShifts = new ArrayList<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{

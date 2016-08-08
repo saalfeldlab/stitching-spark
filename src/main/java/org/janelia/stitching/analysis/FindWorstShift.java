@@ -4,8 +4,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
 
+import org.janelia.stitching.Boundaries;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
+import org.janelia.stitching.TileOperations;
 
 public class FindWorstShift
 {
@@ -53,9 +55,14 @@ public class FindWorstShift
 		// 340 - usual run
 		// 29 - blurred run
 		System.out.println( "There are " + bad.size() + " bad pairs out of " + shifts.size() );
+		System.out.println( "-----------------------------------" );
+
 		final SerializablePairWiseStitchingResult worstShift = bad.firstEntry().getValue();
+		final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( worstShift.getPairOfTiles()._1, worstShift.getPairOfTiles()._2 );
 		System.out.println( "Worst score: " + bad.firstKey() + ", tiles " + worstShift.getPairOfTiles()._1.getIndex() + " and " + worstShift.getPairOfTiles()._2.getIndex() );
+		System.out.println( "Initial overlap at " + Arrays.toString( overlap.getMin() ) + " with dimensions " + Arrays.toString( overlap.getDimensions() ) );
 		System.out.println( "Offset: " + Arrays.toString( worstShift.getOffset() ) );
 		System.out.println( "-----------------------------------" );
+
 	}
 }

@@ -21,7 +21,7 @@ public class StitchingArguments implements Serializable {
 
 	@Option(name = "-t", aliases = { "--threshold" }, required = false,
 			usage = "A threshold value of cross correlation for accepting a shift")
-	private double crossCorrelationThreshold = 0.4;
+	private double crossCorrelationThreshold = -1.0;
 
 	@Option(name = "-s", aliases = { "--subsize" }, required = false,
 			usage = "Size of an individual tile when fusing")

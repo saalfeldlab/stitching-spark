@@ -20,8 +20,11 @@ public class TileInfoJSONProvider
 		}
 	}
 
-	public static void saveTilesConfiguration( final TileInfo[] tiles, final String output ) throws IOException
+	public static void saveTilesConfiguration( final TileInfo[] tiles, String output ) throws IOException
 	{
+		if ( !output.endsWith( ".json" ) )
+			output += ".json";
+
 		System.out.println( "Saving updated tiles configuration to " + output );
 		try ( final FileWriter writer = new FileWriter( output ) ) {
 			writer.write( new Gson().toJson( tiles ) );
@@ -36,8 +39,11 @@ public class TileInfoJSONProvider
 		}
 	}
 
-	public static void savePairwiseShifts( final List< SerializablePairWiseStitchingResult > shifts, final String output ) throws IOException
+	public static void savePairwiseShifts( final List< SerializablePairWiseStitchingResult > shifts, String output ) throws IOException
 	{
+		if ( !output.endsWith( ".json" ) )
+			output += ".json";
+
 		System.out.println( "Saving pairwise shifts to " + output );
 		try ( final FileWriter writer = new FileWriter( output ) ) {
 			writer.write( new Gson().toJson( shifts ) );
