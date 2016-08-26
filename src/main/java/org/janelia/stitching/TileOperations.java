@@ -1,8 +1,10 @@
 package org.janelia.stitching;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
-import scala.Tuple2;
+import net.imglib2.Dimensions;
+import net.imglib2.FinalDimensions;
 
 /**
  * @author pisarevi
@@ -11,13 +13,13 @@ import scala.Tuple2;
 
 public class TileOperations
 {
-	public static ArrayList< Tuple2< TileInfo, TileInfo > > findOverlappingTiles( final TileInfo[] tiles )
+	public static ArrayList< TilePair > findOverlappingTiles( final TileInfo[] tiles )
 	{
-		final ArrayList< Tuple2< TileInfo, TileInfo > > overlappingTiles = new ArrayList<>();
+		final ArrayList< TilePair > overlappingTiles = new ArrayList<>();
 		for ( int i = 0; i < tiles.length; i++ )
 			for ( int j = i + 1; j < tiles.length; j++ )
 				if ( getOverlappingRegion( tiles[ i ], tiles[ j ] ) != null )
-					overlappingTiles.add( new Tuple2< >( tiles[ i ], tiles[ j ] ) );
+					overlappingTiles.add( new TilePair( tiles[ i ], tiles[ j ] ) );
 		return overlappingTiles;
 	}
 
@@ -109,21 +111,38 @@ public class TileOperations
 				tile.setPosition( d, Math.round( tile.getPosition( d ) ) - space.min( d ) );
 	}
 
-	public static ArrayList< TileInfo > divideSpace( final Boundaries space, final int subregionSize )
+	public static void translateTiles( final TileInfo[] tiles, final double[] offset )
 	{
-		assert space.validate() && subregionSize > 0;
-		if ( !space.validate() || subregionSize <= 0 )
-			return null;
+		for ( final TileInfo tile : tiles )
+			for ( int d = 0; d < tile.numDimensions(); d++ )
+				tile.setPosition( d, tile.getPosition( d ) + offset[ d ] );
+	}
 
+	public static ArrayList< TileInfo > divideSpaceBySize( final Boundaries space, final int subregionSize )
+	{
+		final long[] subregionDimsArr = new long[ space.numDimensions() ];
+		Arrays.fill( subregionDimsArr, subregionSize );
+		return divideSpace( space, new FinalDimensions( subregionDimsArr ) );
+	}
+
+	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int subregionsCountPerDim )
+	{
+		final long[] subregionDimsArr = new long[ space.numDimensions() ];
+		for ( int d = 0; d < subregionDimsArr.length; d++ )
+			subregionDimsArr[ d ] = ( long ) Math.ceil( ( double ) space.dimension( d ) / subregionsCountPerDim );
+		return divideSpace( space, new FinalDimensions( subregionDimsArr ) );
+	}
+
+	public static ArrayList< TileInfo > divideSpace( final Boundaries space, final Dimensions subregionDims )
+	{
 		final ArrayList< TileInfo > subregions = new ArrayList<>();
-		divideSpaceRecursive( space, subregions, subregionSize, new TileInfo( space.numDimensions() ), 0 );
-
+		divideSpaceRecursive( space, subregionDims, subregions, new TileInfo( space.numDimensions() ), 0 );
 		for ( int i = 0; i < subregions.size(); i++ )
 			subregions.get( i ).setIndex( i );
 		return subregions;
 	}
 
-	private static void divideSpaceRecursive( final Boundaries space, final ArrayList< TileInfo > subregions, final int subregionSize, final TileInfo currSubregion, final int currDim )
+	/*private static void divideSpaceRecursive( final Boundaries space, final ArrayList< TileInfo > subregions, final int subregionSize, final TileInfo currSubregion, final int currDim )
 	{
 		if ( currDim == space.numDimensions() )
 		{
@@ -139,6 +158,25 @@ public class TileOperations
 			newSubregion.setSize( currDim, Math.min( subregionSize, space.max( currDim ) - coord + 1 ) );
 
 			divideSpaceRecursive( space, subregions, subregionSize, newSubregion, currDim + 1 );
+		}
+	}*/
+
+	private static void divideSpaceRecursive( final Boundaries space, final Dimensions subregionDims, final ArrayList< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
+	{
+		if ( currDim == space.numDimensions() )
+		{
+			subregions.add( currSubregion );
+			return;
+		}
+
+		for ( long coord = space.min( currDim ); coord <= space.max( currDim ); coord += subregionDims.dimension( currDim ) )
+		{
+
+			final TileInfo newSubregion = currSubregion.clone();
+			newSubregion.setPosition( currDim, coord );
+			newSubregion.setSize( currDim, Math.min( subregionDims.dimension( currDim ), space.max( currDim ) - coord + 1 ) );
+
+			divideSpaceRecursive( space, subregionDims, subregions, newSubregion, currDim + 1 );
 		}
 	}
 }

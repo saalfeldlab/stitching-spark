@@ -51,12 +51,17 @@ public class Utils {
 
 	public static ImageCollectionElement createElement( final StitchingJob job, final TileInfo tile ) throws Exception
 	{
-		final File file = new File( getAbsoluteImagePath( job, tile) );
+		final File file = new File( job == null ? tile.getFile() : getAbsoluteImagePath( job, tile) );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
 		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.numDimensions() );
 		//e.setModel( TileModelFactory.createOffsetModel( tile ) );
 		e.setModel( TileModelFactory.createDefaultModel( tile.numDimensions() ) );
 		return e;
+	}
+
+	public static ImageCollectionElement createElement( final TileInfo tile ) throws Exception
+	{
+		return createElement( null, tile );
 	}
 }

@@ -13,7 +13,7 @@ public class CompareOverlap
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final int i1 = 47, i2 = 96;
+		final int i1 = 252, i2 = 263;
 
 		System.out.println( "Tiles " + i1 + " and " + i2 + ":" );
 		String filename = args[ 0 ];

@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.Map;
+import java.util.TreeMap;
 
 import org.apache.commons.io.IOUtils;
 
@@ -42,7 +44,7 @@ public class StitchingJob implements Serializable {
 	private String datasetName;
 
 	private TileInfo[] tiles;
-	private int dimensionality;
+	private int dimensionality = 3;
 
 
 	public StitchingJob( final StitchingArguments args )
@@ -107,6 +109,14 @@ public class StitchingJob implements Serializable {
 
 	public void setParams( final StitchingParameters params ) {
 		this.params = params;
+	}
+
+	public Map< Integer, TileInfo > getTilesMap()
+	{
+		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
+		for ( final TileInfo tile : tiles )
+			tilesMap.put( tile.getIndex(), tile );
+		return tilesMap;
 	}
 
 	public TileInfo[] getTiles() {

@@ -33,13 +33,13 @@ public class ThresholdEstimation
 
 		final TreeSet< Integer > uncoveredTiles = new TreeSet<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : new TileInfo[] { shift.getPairOfTiles()._1, shift.getPairOfTiles()._2 } )
+			for ( final TileInfo tile : shift.getTilePair().toArray() )
 				uncoveredTiles.add( tile.getIndex() );
 
 		double threshold = 1.;
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			for ( final TileInfo tile : new TileInfo[] { shift.getPairOfTiles()._1, shift.getPairOfTiles()._2 } )
+			for ( final TileInfo tile : shift.getTilePair().toArray() )
 				uncoveredTiles.remove( tile.getIndex() );
 
 			if ( uncoveredTiles.isEmpty() )
@@ -53,12 +53,41 @@ public class ThresholdEstimation
 	}
 
 
+	public static TreeMap< Integer, SerializablePairWiseStitchingResult > getTilesHighestCorrelationWithPair( final List< SerializablePairWiseStitchingResult > shifts )
+	{
+		// shifts are already sorted
+		final TreeMap< Integer, SerializablePairWiseStitchingResult > ret = new TreeMap<>();
+		for ( final SerializablePairWiseStitchingResult shift : shifts )
+			for ( final TileInfo tile : shift.getTilePair().toArray() )
+				if ( !ret.containsKey( tile.getIndex() ) )
+					ret.put( tile.getIndex(), shift );
+		return ret;
+	}
+
+	private static void printTilesHighestCorrelationWithPair( final List< SerializablePairWiseStitchingResult > shifts )
+	{
+		final TreeMap< Integer, SerializablePairWiseStitchingResult > tilesCorr = getTilesHighestCorrelationWithPair( shifts );
+
+		final TreeMap< Double, Integer > tilesCorrMap = new TreeMap<>();
+		for ( final Entry< Integer, SerializablePairWiseStitchingResult > entry : tilesCorr.entrySet() )
+			tilesCorrMap.put( ( double ) entry.getValue().getCrossCorrelation(), entry.getKey() );
+
+		System.out.println( "-----------" );
+		System.out.println( "Highest correlation value for every tile (with corresponding pair):" );
+		for ( final Entry< Double, Integer > entry : tilesCorrMap.descendingMap().entrySet() )
+			System.out.println( entry.getKey() + ": " + entry.getValue() + " (" + tilesCorr.get( entry.getValue() ).getTilePair().first().getIndex() + "," + tilesCorr.get( entry.getValue() ).getTilePair().second().getIndex() +")" );
+		System.out.println( "-----------" );
+	}
+
+
+
+
 	public static TreeMap< Integer, Double > getTilesHighestCorrelation( final List< SerializablePairWiseStitchingResult > shifts )
 	{
 		// shifts are already sorted
 		final TreeMap< Integer, Double > ret = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : new TileInfo[] { shift.getPairOfTiles()._1, shift.getPairOfTiles()._2 } )
+			for ( final TileInfo tile : shift.getTilePair().toArray() )
 				if ( !ret.containsKey( tile.getIndex() ) )
 					ret.put( tile.getIndex(), ( double ) shift.getCrossCorrelation() );
 		return ret;
@@ -81,6 +110,9 @@ public class ThresholdEstimation
 			System.out.println( pair.first + ": " + pair.second );
 		System.out.println( "-----------" );
 	}
+
+
+
 
 
 	public static void main( final String[] args ) throws Exception
@@ -108,7 +140,7 @@ public class ThresholdEstimation
 		final double threshold = findOptimalThreshold( shifts );
 		System.out.println( "Optimal threshold value: " + threshold );
 
-		printTilesHighestCorrelation( shifts );
+		printTilesHighestCorrelationWithPair( shifts );
 
 
 		final ArrayList< SerializablePairWiseStitchingResult> nonOverlappingShifts = new ArrayList<>();
@@ -117,8 +149,8 @@ public class ThresholdEstimation
 			if ( shift.getCrossCorrelation() < threshold )
 				continue;
 
-			final TileInfo t1 = shift.getPairOfTiles()._1.clone();
-			final TileInfo t2 = shift.getPairOfTiles()._2.clone();
+			final TileInfo t1 = shift.getTilePair().first().clone();
+			final TileInfo t2 = shift.getTilePair().second().clone();
 
 			if ( TileOperations.getOverlappingRegion( t1, t2 ) == null )
 				throw new Exception( "impossible" );

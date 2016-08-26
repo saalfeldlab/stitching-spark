@@ -1,6 +1,6 @@
 package org.janelia.util;
 
-public final class ComparablePair< A extends Comparable< A >, B extends Comparable< B > > implements Comparable< ComparablePair< A, B > >
+public final class ComparablePair< A extends Comparable< ? super A >, B extends Comparable< ? super B > > implements Comparable< ComparablePair< A, B > >
 {
 	public A first;
 	public B second;
@@ -19,5 +19,11 @@ public final class ComparablePair< A extends Comparable< A >, B extends Comparab
 			return compareFirst;
 
 		return second.compareTo( other.second );
+	}
+
+	@Override
+	public String toString()
+	{
+		return "(" + first.toString() + "," + second.toString() + ")";
 	}
 }

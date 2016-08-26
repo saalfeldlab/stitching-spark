@@ -8,6 +8,7 @@ import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
+import org.janelia.stitching.Utils;
 
 public class FindParticularShift
 {
@@ -15,13 +16,13 @@ public class FindParticularShift
 	{
 		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
 
-		final int i1 = 47, i2 = 96;
+		final int i1 = 145, i2 = 154;
 
 		int hits = 0;
 		SerializablePairWiseStitchingResult shift = null;
 		for ( final SerializablePairWiseStitchingResult s : shifts ) {
-			if ( (s.getPairOfTiles()._1.getIndex() == i1 && s.getPairOfTiles()._2.getIndex() == i2) ||
-					(s.getPairOfTiles()._1.getIndex() == i2 && s.getPairOfTiles()._2.getIndex() == i1) )
+			if ( (s.getTilePair().first().getIndex() == i1 && s.getTilePair().second().getIndex() == i2) ||
+					(s.getTilePair().first().getIndex() == i2 && s.getTilePair().second().getIndex() == i1) )
 			{
 				shift = s;
 				hits++;
@@ -34,8 +35,8 @@ public class FindParticularShift
 			throw new Exception( "Impossible: present more than once" );
 
 		System.out.println( "Found:" );
-		System.out.println( shift.getPairOfTiles()._1.getIndex() + ": " + shift.getPairOfTiles()._1.getFile() );
-		System.out.println( shift.getPairOfTiles()._2.getIndex() + ": " + shift.getPairOfTiles()._2.getFile() );
+		System.out.println( shift.getTilePair().first().getIndex() + ": " + shift.getTilePair().first().getFile() );
+		System.out.println( shift.getTilePair().second().getIndex() + ": " + shift.getTilePair().second().getFile() );
 
 		System.out.println( "------------------");
 		System.out.println( "offset=" + Arrays.toString( shift.getOffset() ) );
@@ -43,13 +44,13 @@ public class FindParticularShift
 		System.out.println( "phase correlation=" + shift.getPhaseCorrelation() );
 		System.out.println( "------------------");
 
-		final TileInfo t1 = shift.getPairOfTiles()._1;
-		final TileInfo t2 = shift.getPairOfTiles()._2;
+		final TileInfo t1 = shift.getTilePair().first();
+		final TileInfo t2 = shift.getTilePair().second();
 
 		Boundaries overlap = TileOperations.getOverlappingRegionGlobal( t1, t2 );
 		System.out.println( "Initial overlap at " + Arrays.toString( overlap.getMin() ) + " with dimensions " + Arrays.toString( overlap.getDimensions() ) );
 
-		//TileInfoJSONProvider.saveTilesConfiguration( new TileInfo[] { t1, t2 }, Utils.addFilenameSuffix( args[0], "_ORIGINAL" ) );
+		TileInfoJSONProvider.saveTilesConfiguration( new TileInfo[] { t1, t2 }, Utils.addFilenameSuffix( args[0], "_ORIGINAL" ) );
 
 		for ( int d = 0; d < shift.getNumDimensions(); d++ )
 			t2.setPosition( d, t1.getPosition( d ) + shift.getOffset( d ) );
@@ -60,6 +61,6 @@ public class FindParticularShift
 		else
 			System.out.println( "*** No overlap after applying the offset! ***" );
 
-		//TileInfoJSONProvider.saveTilesConfiguration( new TileInfo[] { t1, t2 }, Utils.addFilenameSuffix( args[0], "_SHIFTED" ) );
+		TileInfoJSONProvider.saveTilesConfiguration( new TileInfo[] { t1, t2 }, Utils.addFilenameSuffix( args[0], "_SHIFTED" ) );
 	}
 }

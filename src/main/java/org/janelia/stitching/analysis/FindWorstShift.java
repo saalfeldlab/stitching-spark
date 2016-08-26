@@ -15,7 +15,6 @@ public class FindWorstShift
 	{
 		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
 
-
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( !shift.getIsValidOverlap() )
 				throw new Exception( "Invalid overlap" );
@@ -27,7 +26,7 @@ public class FindWorstShift
 			final double dist[] = new double[ shift.getNumDimensions() ];
 
 			for ( int d = 0; d < shift.getNumDimensions(); d++ )
-				dist[d] = (shift.getPairOfTiles()._2.getPosition( d ) - shift.getPairOfTiles()._1.getPosition( d )) - shift.getOffset( d );
+				dist[d] = (shift.getTilePair().second().getPosition( d ) - shift.getTilePair().first().getPosition( d )) - shift.getOffset( d );
 
 			double score = 0;
 			for ( int d = 0; d < dist.length; d++ )
@@ -35,13 +34,13 @@ public class FindWorstShift
 
 			double av = 0;
 			for ( int d = 0; d < dist.length; d++ )
-				av -= shift.getPairOfTiles()._1.getSize( d );
+				av -= shift.getTilePair().first().getSize( d );
 			av /= dist.length;
 
 			if ( score < av )
 			{
 				bad.put( score, shift );
-				System.out.println( shift.getPairOfTiles()._1.getIndex() + " and " + shift.getPairOfTiles()._2.getIndex() + ": " + Arrays.toString( dist ) + ", cross=" + shift.getCrossCorrelation());
+				System.out.println( shift.getTilePair().first().getIndex() + " and " + shift.getTilePair().second().getIndex() + ": " + Arrays.toString( dist ) + ", cross=" + shift.getCrossCorrelation());
 			}
 		}
 
@@ -58,10 +57,15 @@ public class FindWorstShift
 		System.out.println( "-----------------------------------" );
 
 		final SerializablePairWiseStitchingResult worstShift = bad.firstEntry().getValue();
-		final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( worstShift.getPairOfTiles()._1, worstShift.getPairOfTiles()._2 );
-		System.out.println( "Worst score: " + bad.firstKey() + ", tiles " + worstShift.getPairOfTiles()._1.getIndex() + " and " + worstShift.getPairOfTiles()._2.getIndex() );
+		final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( worstShift.getTilePair().first(), worstShift.getTilePair().second() );
+		System.out.println( "Worst score: " + bad.firstKey() + ", tiles " + worstShift.getTilePair().first().getIndex() + " and " + worstShift.getTilePair().second().getIndex() );
+		System.out.println( worstShift.getTilePair().first().getIndex() + ": " + worstShift.getTilePair().first().getFile() );
+		System.out.println( worstShift.getTilePair().second().getIndex() + ": " + worstShift.getTilePair().second().getFile() );
 		System.out.println( "Initial overlap at " + Arrays.toString( overlap.getMin() ) + " with dimensions " + Arrays.toString( overlap.getDimensions() ) );
-		System.out.println( "Offset: " + Arrays.toString( worstShift.getOffset() ) );
+		final double dist[] = new double[ worstShift.getNumDimensions() ];
+		for ( int d = 0; d < worstShift.getNumDimensions(); d++ )
+			dist[d] = (worstShift.getTilePair().second().getPosition( d ) - worstShift.getTilePair().first().getPosition( d )) - worstShift.getOffset( d );
+		System.out.println( "Offset from initial positions: " + Arrays.toString( dist ) );
 		System.out.println( "-----------------------------------" );
 
 	}

@@ -16,18 +16,16 @@ public class NonOverlappingShifts
 	{
 		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
 
-
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( !shift.getIsValidOverlap() )
 				throw new Exception( "Invalid overlap" );
-
 
 		double cross = 0;
 		final List< SerializablePairWiseStitchingResult> badShifts = new ArrayList<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			final TileInfo t1 = shift.getPairOfTiles()._1.clone();
-			final TileInfo t2 = shift.getPairOfTiles()._2.clone();
+			final TileInfo t1 = shift.getTilePair().first().clone();
+			final TileInfo t2 = shift.getTilePair().second().clone();
 
 			if ( TileOperations.getOverlappingRegion( t1, t2 ) == null )
 				throw new Exception( "impossible" );
@@ -49,7 +47,7 @@ public class NonOverlappingShifts
 		final TreeMap< Integer, Integer > tilesToMistakes = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult badShift : badShifts )
 		{
-			for ( final TileInfo tile : new TileInfo[] { badShift.getPairOfTiles()._1, badShift.getPairOfTiles()._2 } )
+			for ( final TileInfo tile : badShift.getTilePair().toArray() )
 			{
 				if ( !tilesToMistakes.containsKey( tile.getIndex() ) )
 					tilesToMistakes.put( tile.getIndex(), 0 );

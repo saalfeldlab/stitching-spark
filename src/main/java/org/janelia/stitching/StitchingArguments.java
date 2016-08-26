@@ -51,6 +51,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Compute phase correlation between full tile images instead of their ROIs")
 	private boolean noRoi;
 
+	@Option(name = "--noic", required = false,
+			usage = "No intensity correction")
+	private boolean noIntensityCorrection;
+
 	private boolean parsedSuccessfully = false;
 
 	public StitchingArguments( final String[] args ) {
@@ -104,5 +108,9 @@ public class StitchingArguments implements Serializable {
 
 	public boolean getNoRoi() {
 		return noRoi;
+	}
+
+	public boolean getNoIntensityCorrection() {
+		return noIntensityCorrection;
 	}
 }
