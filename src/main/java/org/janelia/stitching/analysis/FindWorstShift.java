@@ -14,7 +14,9 @@ import org.janelia.stitching.TileOperations;
  * We assume that initial tile positions (obtained from the microscope) are almost correct, so the farthest shift here is considered as the worst.
  *
  * Large offset indicates that the phase correlation has failed to identify good shifts for some of the tiles.
- * In this case you may want to increase the number of phase correlation peaks that should be investigated by the pairwise stitching algorithm.
+ * In this case you may want to:
+ * 1. Increase the number of phase correlation peaks that should be investigated by the pairwise stitching algorithm.
+ * 2. Preapply gaussian blur to tile images
  *
  * @author Igor Pisarev
  */

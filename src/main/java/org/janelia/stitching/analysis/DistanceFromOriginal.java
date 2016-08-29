@@ -15,7 +15,9 @@ import org.janelia.stitching.TileOperations;
  *
  * Large offsets indicate that the phase correlation has failed to identify good shifts for some of the tiles,
  * or that the optimization procedure has failed to find a good solution which fits all of the tiles.
- * In this case you may want to increase the number of phase correlation peaks that should be investigated by the pairwise stitching algorithm.
+ * In this case you may want to:
+ * 1. Increase the number of phase correlation peaks that should be investigated by the pairwise stitching algorithm.
+ * 2. Preapply gaussian blur to tile images
  *
  * @author Igor Pisarev
  */
