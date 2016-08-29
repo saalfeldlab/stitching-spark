@@ -149,12 +149,21 @@ public class StitchingSpark implements Runnable, Serializable {
 			params.relativeThreshold = 5;
 			job.setParams( params );
 
-			// Compute shifts
-			if ( job.getMode() != Mode.FuseOnly ) {
+			// Positions correction
+			if ( job.getMode() != Mode.FuseOnly )
+			{
 				final ArrayList< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles() );
-				computeShifts( overlappingTiles );
+				System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
+
+				final List< SerializablePairWiseStitchingResult > pairwiseShifts = preparePairwiseShifts( overlappingTiles );
+
+				final double threshold = ( job.getFindOptimalThreshold() ? ThresholdEstimation.findOptimalThreshold( pairwiseShifts ) : job.getCrossCorrelationThreshold() );
+				System.out.println( "Cross correlation threshold value: " + threshold + ( job.getFindOptimalThreshold() ? " (determined automatically)" : " (custom value)" ) );
+
+				optimizeShifts( pairwiseShifts, threshold );
 			}
 
+			// Intensity correction
 			if ( !args.getNoIntensityCorrection() )
 			{
 				final List< TilePair > overlappingShiftedTiles = TileOperations.findOverlappingTiles( job.getTiles() );
@@ -171,7 +180,7 @@ public class StitchingSpark implements Runnable, Serializable {
 				}
 			}
 
-			// Fuse
+			// Fusion
 			if ( job.getMode() != Mode.NoFuse ) {
 
 				final Boundaries boundaries = TileOperations.getCollectionBoundaries( job.getTiles() );
@@ -184,6 +193,9 @@ public class StitchingSpark implements Runnable, Serializable {
 		System.out.println( "done" );
 	}
 
+	/**
+	 * Queries metadata (image type and dimensions) for each tile using Spark cluster.
+	 */
 	private void queryMetadata( final ArrayList< TileInfo > tilesWithoutMetadata )
 	{
 		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( tilesWithoutMetadata );
@@ -230,19 +242,9 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 	}
 
-
-	private void computeShifts( final ArrayList< TilePair > overlappingTiles )
-	{
-		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
-
-		final List< SerializablePairWiseStitchingResult > pairwiseShifts = preparePairwiseShifts( overlappingTiles );
-
-		final double threshold = ( job.getFindOptimalThreshold() ? ThresholdEstimation.findOptimalThreshold( pairwiseShifts ) : job.getCrossCorrelationThreshold() );
-		System.out.println( "Cross correlation threshold value: " + threshold + ( job.getFindOptimalThreshold() ? " (determined automatically)" : " (custom value)" ) );
-
-		optimizeShifts( pairwiseShifts, threshold );
-	}
-
+	/**
+	 * Tries to load precalculated pairwise shifts from disk to save computational time.
+	 */
 	private List< SerializablePairWiseStitchingResult > preparePairwiseShifts( final ArrayList< TilePair > overlappingTiles )
 	{
 		// Try to load precalculated shifts for some pairs of tiles
@@ -299,6 +301,10 @@ public class StitchingSpark implements Runnable, Serializable {
 		return pairwiseShifts;
 	}
 
+	/**
+	 * Computes the best possible pairwise shifts between every pair of tiles on a Spark cluster.
+	 * It uses phase correlation for measuring similarity between two images.
+	 */
 	private List< SerializablePairWiseStitchingResult > computePairwiseShifts( final ArrayList< TilePair > overlappingTiles )
 	{
 		if ( !args.getNoRoi() )
@@ -353,6 +359,9 @@ public class StitchingSpark implements Runnable, Serializable {
 		return pairwiseStitching.collect();
 	}
 
+	/**
+	 * Finds final tile positions by globally optimizing pairwise shifts and stores updated tile configuration on the disk
+	 */
 	private void optimizeShifts( final List< SerializablePairWiseStitchingResult > pairwiseShifts, final double threshold )
 	{
 		job.getParams().regThreshold = threshold;
@@ -415,7 +424,9 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 	}
 
-
+	/**
+	 * Fuses tile images within a set of subregions (whole space divided into cells) on a Spark cluster.
+	 */
 	private void fuse( final ArrayList< TileInfo > subregions )
 	{
 		System.out.println( "There are " + subregions.size() + " subregions in total" );
@@ -464,6 +475,9 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 	}
 
+	/**
+	 * Applies gaussian blur to the input tile images and stores them separately on the disk
+	 */
 	private void applyGaussianBlur()
 	{
 		final String blurredFolder = job.getBaseFolder() + "/blurred";
@@ -517,6 +531,9 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 	}
 
+	/**
+	 * Creates HDF5 dataset consisting of tile images. May be useful after fusion for reducing the overall size and number of the output files.
+	 */
 	private void createHdf5()
 	{
 		final String fusedFolder = job.getBaseFolder() + "/fused";
