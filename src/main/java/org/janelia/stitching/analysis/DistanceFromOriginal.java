@@ -9,6 +9,17 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 
+/**
+ * Evaluates the quality of a final solution by estimating the distances of every tile
+ * from its initial position to a final one.
+ *
+ * Large offsets indicate that the phase correlation has failed to identify good shifts for some of the tiles,
+ * or that the optimization procedure has failed to find a good solution which fits all of the tiles.
+ * In this case you may want to increase the number of phase correlation peaks that should be investigated by the pairwise stitching algorithm.
+ *
+ * @author Igor Pisarev
+ */
+
 public class DistanceFromOriginal
 {
 	public static void main( final String[] args ) throws FileNotFoundException, IOException

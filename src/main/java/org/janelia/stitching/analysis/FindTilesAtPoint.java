@@ -9,6 +9,12 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 
+/**
+ * Finds tiles lying at the specified point.
+ *
+ * @author Igor Pisarev
+ */
+
 public class FindTilesAtPoint
 {
 	public static void main( final String[] args ) throws FileNotFoundException, IOException

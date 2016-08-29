@@ -2,8 +2,17 @@ package org.janelia.stitching;
 
 import java.util.Map;
 
+import mpicbg.stitching.fusion.BlendingPixelFusion;
 import mpicbg.stitching.fusion.PixelFusion;
 import net.imglib2.Dimensions;
+
+/**
+ * Implements per-pixel fusion with linear blending strategy.
+ * Provides the same functionality as {@link BlendingPixelFusion}
+ * but doesn't not require actual images, just their dimensions.
+ *
+ * @author Igor Pisarev
+ */
 
 public class CustomBlendingPixel implements PixelFusion
 {
@@ -17,17 +26,18 @@ public class CustomBlendingPixel implements PixelFusion
 	/**
 	 * Instantiates the per-pixel blending
 	 *
-	 * @param images - all input images (the position in the list has to be the same as Id provided by addValue!)
+	 * @param imageDimensions - a map of imageId to its dimensions
 	 */
 	public CustomBlendingPixel( final Map< Integer, Dimensions > imageDimensions )
 	{
 		this( imageDimensions, fractionBlended );
 	}
+
 	/**
 	 * Instantiates the per-pixel blending
 	 *
-	 * @param images - all input images (the position in the list has to be the same as Id provided by addValue!)
-	 * @param percentScaling - which percentage of the image should be blended ( e.g. 0,3 means 15% on the left and 15% on the right)
+	 * @param imageDimensions - a map of imageId to its dimensions
+	 * @param fractionBlended - which percentage of the image should be blended ( e.g. 0,3 means 15% on the left and 15% on the right)
 	 */
 	private CustomBlendingPixel( final Map< Integer, Dimensions > imageDimensions, final double fractionBlended )
 	{
@@ -62,15 +72,6 @@ public class CustomBlendingPixel implements PixelFusion
 	@Override
 	public PixelFusion copy() { return new CustomBlendingPixel( imageDimensions ); }
 
-	/**
-	 * From SPIM Registration
-	 *
-	 *
-	 * @param location
-	 * @param imageDimensions
-	 * @param percentScaling
-	 * @return
-	 */
 	final public static double computeWeight( final double[] location, final Dimensions dimensions, final double percentScaling )
 	{
 		// compute multiplicative distance to the respective borders [0...1]

@@ -10,6 +10,13 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
+/**
+ * Chooses a subset of tiles from initial tile configuration based on specified criteria
+ * and stores it to a separate tile configuration file.
+ *
+ * @author Igor Pisarev
+ */
+
 public class FilterTileConfiguration
 {
 	public static void main( final String[] args ) throws IOException

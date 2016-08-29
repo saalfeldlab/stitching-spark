@@ -15,8 +15,9 @@ import com.google.gson.Gson;
 import mpicbg.stitching.StitchingParameters;
 
 /**
- * @author pisarevi
+ * Represents input parameters and customizations for tweaking the stitching/fusing procedure.
  *
+ * @author Igor Pisarev
  */
 
 public class StitchingJob implements Serializable {
@@ -90,7 +91,7 @@ public class StitchingJob implements Serializable {
 			datasetName = datasetName.substring( 0, datasetName.lastIndexOf( ".json" ) );
 	}
 
-	protected StitchingJob( )
+	protected StitchingJob()
 	{
 		mode = Mode.Default;
 		findOptimalThreshold = false;
@@ -110,6 +111,7 @@ public class StitchingJob implements Serializable {
 	public void setParams( final StitchingParameters params ) {
 		this.params = params;
 	}
+
 
 	public Map< Integer, TileInfo > getTilesMap()
 	{

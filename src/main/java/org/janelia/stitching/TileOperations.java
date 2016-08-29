@@ -7,12 +7,16 @@ import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
 
 /**
- * @author pisarevi
+ * Contains a number of useful operations on a set of tiles.
  *
+ * @author Igor Pisarev
  */
 
 public class TileOperations
 {
+	/**
+	 * @return a list of overlapping pairs
+	 */
 	public static ArrayList< TilePair > findOverlappingTiles( final TileInfo[] tiles )
 	{
 		final ArrayList< TilePair > overlappingTiles = new ArrayList<>();
@@ -23,6 +27,9 @@ public class TileOperations
 		return overlappingTiles;
 	}
 
+	/**
+	 * @return an overlap with relative coordinates of the first tile
+	 */
 	public static Boundaries getOverlappingRegion( final TileInfo t1, final TileInfo t2 )
 	{
 		final Boundaries r = new Boundaries( t1.numDimensions() );
@@ -41,6 +48,9 @@ public class TileOperations
 		return r;
 	}
 
+	/**
+	 * @return an overlap with global coordinates
+	 */
 	public static Boundaries getOverlappingRegionGlobal( final TileInfo t1, final TileInfo t2 )
 	{
 		final Boundaries r = getOverlappingRegion( t1, t2 );
@@ -56,6 +66,9 @@ public class TileOperations
 		return r;
 	}
 
+	/**
+	 * @return a list of tiles lying within specified subregion (overlapping with it)
+	 */
 	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final long[] min, final int[] dimensions )
 	{
 		assert min.length == dimensions.length;
@@ -67,6 +80,9 @@ public class TileOperations
 		return findTilesWithinSubregion( tiles, subregion );
 	}
 
+	/**
+	 * @return a list of tiles lying within specified subregion (overlapping with it)
+	 */
 	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final TileInfo subregion )
 	{
 		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
@@ -76,6 +92,9 @@ public class TileOperations
 		return tilesWithinSubregion;
 	}
 
+	/**
+	 * @return a bounding box of a collection of tiles
+	 */
 	public static Boundaries getCollectionBoundaries( final TileInfo[] tiles )
 	{
 		if ( tiles.length == 0 )
@@ -103,6 +122,9 @@ public class TileOperations
 		return boundaries;
 	}
 
+	/**
+	 * Translates a set of tiles in a way such that the lowest coordinate of every dimension is at the origin.
+	 */
 	public static void translateTilesToOrigin( final TileInfo[] tiles )
 	{
 		final Boundaries space = TileOperations.getCollectionBoundaries( tiles );
@@ -111,6 +133,9 @@ public class TileOperations
 				tile.setPosition( d, Math.round( tile.getPosition( d ) ) - space.min( d ) );
 	}
 
+	/**
+	 * Applies translation to a set of tiles with a specified {@code offset}.
+	 */
 	public static void translateTiles( final TileInfo[] tiles, final double[] offset )
 	{
 		for ( final TileInfo tile : tiles )
@@ -118,6 +143,10 @@ public class TileOperations
 				tile.setPosition( d, tile.getPosition( d ) + offset[ d ] );
 	}
 
+	/**
+	 * Cuts given region into a set of non-overlapping cubes with a side length of {@code subregionSize}.
+	 * @return a list of non-overlapping tiles that form a given region of space.
+	 */
 	public static ArrayList< TileInfo > divideSpaceBySize( final Boundaries space, final int subregionSize )
 	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
@@ -125,6 +154,10 @@ public class TileOperations
 		return divideSpace( space, new FinalDimensions( subregionDimsArr ) );
 	}
 
+	/**
+	 * Cuts given region into a set of non-overlapping tiles with exactly {@code subregionsCountPerDim} tiles for each dimension.
+	 * @return a list of non-overlapping tiles that form a given region of space.
+	 */
 	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int subregionsCountPerDim )
 	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
@@ -133,6 +166,10 @@ public class TileOperations
 		return divideSpace( space, new FinalDimensions( subregionDimsArr ) );
 	}
 
+	/**
+	 * Cuts given region into a set of non-overlapping tiles of a specified size.
+	 * @return a list of non-overlapping tiles that form a given region of space.
+	 */
 	public static ArrayList< TileInfo > divideSpace( final Boundaries space, final Dimensions subregionDims )
 	{
 		final ArrayList< TileInfo > subregions = new ArrayList<>();
@@ -141,25 +178,6 @@ public class TileOperations
 			subregions.get( i ).setIndex( i );
 		return subregions;
 	}
-
-	/*private static void divideSpaceRecursive( final Boundaries space, final ArrayList< TileInfo > subregions, final int subregionSize, final TileInfo currSubregion, final int currDim )
-	{
-		if ( currDim == space.numDimensions() )
-		{
-			subregions.add( currSubregion );
-			return;
-		}
-
-		for ( long coord = space.min( currDim ); coord <= space.max( currDim ); coord += subregionSize )
-		{
-
-			final TileInfo newSubregion = currSubregion.clone();
-			newSubregion.setPosition( currDim, coord );
-			newSubregion.setSize( currDim, Math.min( subregionSize, space.max( currDim ) - coord + 1 ) );
-
-			divideSpaceRecursive( space, subregions, subregionSize, newSubregion, currDim + 1 );
-		}
-	}*/
 
 	private static void divideSpaceRecursive( final Boundaries space, final Dimensions subregionDims, final ArrayList< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
 	{

@@ -9,11 +9,11 @@ import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.numeric.real.FloatType;
 
 /**
- * @author pisarevi
+ * Convenience mapping from ImagePlus integer constant values of possible types to a enum.
  *
+ * @author Igor Pisarev
  */
 
-//Convenient enum class over the ImagePlus type values
 public enum ImageType
 {
 	/** 8-bit grayscale (unsigned) */
@@ -43,16 +43,16 @@ public enum ImageType
 	{
 		return type;
 	}
-	
+
 	// for creating ImageType object from an integer value
 	private static final TreeMap< Integer, ImageType > map = new TreeMap<>();
-    static 
-    {
-        for ( final ImageType type : values() )
-            map.put( type.getValue(), type );
-    }
-    public static ImageType valueOf( final int val ) 
-    {
+	static
+	{
+		for ( final ImageType type : values() )
+			map.put( type.getValue(), type );
+	}
+	public static ImageType valueOf( final int val )
+	{
 		return map.get( val );
-    }
+	}
 }

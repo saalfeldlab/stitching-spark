@@ -10,6 +10,16 @@ import java.util.List;
 
 import com.google.gson.Gson;
 
+/**
+ * Provides convenience methods for loading tiles configuration and storing it on a disk in JSON format.
+ *
+ * Supports two different types of data:
+ * 1. A set of {@link TileInfo} objects which form a tile configuration.
+ * 2. A set of {@link SerializablePairWiseStitchingResult} objects that represent pairwise similarity and best possible shift between two tiles.
+ *
+ * @author Igor Pisarev
+ */
+
 public class TileInfoJSONProvider
 {
 	public static TileInfo[] loadTilesConfiguration( final String input ) throws IOException

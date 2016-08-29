@@ -3,8 +3,9 @@ package org.janelia.stitching;
 import java.io.Serializable;
 
 /**
- * @author pisarevi
+ * Tile image metadata.
  *
+ * @author Igor Pisarev
  */
 
 public class TileInfo implements Serializable {

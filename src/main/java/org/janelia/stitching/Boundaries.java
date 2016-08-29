@@ -3,9 +3,12 @@ package org.janelia.stitching;
 import net.imglib2.AbstractInterval;
 
 /**
- * @author pisarevi
+ * Represents a box in n-dimensional space.
+ * Primarily used as a bounding box of a set of tiles.
  *
+ * @author Igor Pisarev
  */
+
 public class Boundaries extends AbstractInterval
 {
 	public Boundaries( final int dim )

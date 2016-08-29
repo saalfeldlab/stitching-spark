@@ -10,6 +10,15 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 
+/**
+ * Evaluates the quality of pairwise matching by finding incorrect shifts.
+ *
+ * If some of the pairs end up being non-overlapped, it indicates that the phase correlation has failed to identify good shifts for some of the tiles.
+ * In this case you may want to increase the number of phase correlation peaks that should be investigated by the pairwise stitching algorithm.
+ *
+ * @author Igor Pisarev
+ */
+
 public class NonOverlappingShifts
 {
 	public static void main( final String[] args ) throws Exception
@@ -64,17 +73,5 @@ public class NonOverlappingShifts
 			mistakesToCount.put( mistakesForTile, mistakesToCount.get( mistakesForTile ) + 1 );
 		}
 		System.out.println( "mistakesToCount = " + mistakesToCount.descendingMap() );
-		System.out.println( "---------------" );
-
-
-
-		// Remove tiles that lead to these mistakes
-		/*final String initialConfig = Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args[0], "_pairwise" ), "_full" );
-		final TileInfo[] initialTiles = TileInfoJSONProvider.loadTilesConfiguration( initialConfig );
-		final ArrayList< TileInfo > newTiles = new ArrayList<>();
-		for ( final TileInfo tile : initialTiles )
-			if ( !tilesToMistakes.containsKey( tile.getIndex() ) )
-				newTiles.add( tile );
-		TileInfoJSONProvider.saveTilesConfiguration( newTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args[0], "_pairwise" ), "_reduced" ) );*/
 	}
 }

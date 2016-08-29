@@ -5,20 +5,31 @@ import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
 
 /**
- * @author pisarevi
+ * Convenience class for creating default {@link Model} which is required by stitching procedure.
+ * This class uses {@link TranslationModel2D} or {@link TranslationModel3D}.
  *
+ * @author Igor Pisarev
  */
 
 public class TileModelFactory {
 
+	/**
+	 * @return default translational model initialized to origin
+	 */
 	public static Model< ? > createDefaultModel( final int dim ) throws Exception {
 		return createModel( dim, null );
 	}
 
+	/**
+	 * @return offset translational model set to position of the tile
+	 */
 	public static Model< ? > createOffsetModel( final TileInfo tile ) throws Exception {
 		return createModel( tile.numDimensions(), tile );
 	}
 
+	/**
+	 * @return offset translational model
+	 */
 	public static Model< ? > createOffsetModel( final double[] offset ) throws Exception {
 		final int dim = offset.length;
 		final TileInfo tile = new TileInfo( dim );

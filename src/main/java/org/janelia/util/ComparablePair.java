@@ -1,5 +1,12 @@
 package org.janelia.util;
 
+/**
+ * Holds an ordered pair of objects of arbitrary type that can be compared with each other.
+ * Defines the ascending sorting order by the first element, and by the second if the first elements are equal.
+ *
+ * @author Igor Pisarev
+ */
+
 public final class ComparablePair< A extends Comparable< ? super A >, B extends Comparable< ? super B > > implements Comparable< ComparablePair< A, B > >
 {
 	public A first;

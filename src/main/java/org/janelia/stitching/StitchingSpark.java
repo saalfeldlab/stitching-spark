@@ -36,8 +36,9 @@ import mpicbg.stitching.StitchingParameters;
 import stitching.utils.Log;
 
 /**
- * @author pisarevi
+ * Driver class for running stitching jobs on a Spark cluster.
  *
+ * @author Igor Pisarev
  */
 
 public class StitchingSpark implements Runnable, Serializable {

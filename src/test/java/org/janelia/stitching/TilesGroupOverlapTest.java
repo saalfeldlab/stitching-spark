@@ -4,8 +4,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 /**
- * @author pisarevi
- *
+ * @author Igor Pisarev
  */
 
 public class TilesGroupOverlapTest {

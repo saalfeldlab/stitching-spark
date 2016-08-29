@@ -5,8 +5,9 @@ import java.io.Serializable;
 import mpicbg.stitching.PairWiseStitchingResult;
 
 /**
- * @author pisarevi
+ * Serializable version of {@link PairWiseStitchingResult}.
  *
+ * @author Igor Pisarev
  */
 
 public class SerializablePairWiseStitchingResult implements Serializable {

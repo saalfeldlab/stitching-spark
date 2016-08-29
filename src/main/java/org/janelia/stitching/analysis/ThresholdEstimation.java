@@ -14,6 +14,21 @@ import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 import org.janelia.util.ComparablePair;
 
+/**
+ * Evaluates the quality of pairwise matching by two different approaches:
+ *
+ * 1. Finds the highest cross correlation threshold value such that every tile is included in the resulting set.
+ * The intuition would be that if we raise this threshold value a bit higher, at least one tile ends up uncovered by the resulting set
+ * so it will not be passed to optimization procedure and will stay at its initial position.
+ *
+ * 2. Sorts the tiles by the highest cross correlation value of the pairwise shifts where they appear.
+ *
+ * For both approaches, low values indicate that the phase correlation has failed to identify good shifts for some of the tiles.
+ * In this case you may want to increase the number of phase correlation peaks that should be investigated by the pairwise stitching algorithm.
+ *
+ * @author Igor Pisarev
+ */
+
 public class ThresholdEstimation
 {
 
@@ -163,74 +178,4 @@ public class ThresholdEstimation
 		}
 		System.out.println( "There are " + nonOverlappingShifts.size() + " non-overlapping shifts after thresholding" );
 	}
-
-
-
-
-	/*public static void mainTest( final String[] args ) throws Exception
-	{
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
-
-		final double threshold = 0.1;
-
-
-		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			if ( !shift.getIsValidOverlap() )
-				throw new Exception( "Invalid overlap" );
-
-
-		final TreeMap< Integer, TileInfo > allTiles = new TreeMap<>(), goodTiles = new TreeMap<>();
-		int badShifts = 0;
-		for ( final SerializablePairWiseStitchingResult shift : shifts )
-		{
-			final boolean isBadShift = ( shift.getCrossCorrelation() < threshold );
-			if (isBadShift )
-				badShifts++;
-
-			for ( final TileInfo tile : new TileInfo[] { shift.getPairOfTiles()._1, shift.getPairOfTiles()._2 } )
-			{
-				allTiles.put( tile.getIndex(), tile );
-				if ( !isBadShift)
-					goodTiles.put( tile.getIndex(), tile );
-			}
-		}
-
-		System.out.println( "Covered " + goodTiles.size() + " tiles out of " + allTiles.size() );
-
-		System.out.println( "There are " + badShifts + " bad pairs out of " + shifts.size() );
-
-		final ArrayList< Integer > badTiles = new ArrayList<>();
-		for ( final Integer tileIndex : allTiles.keySet() )
-			if ( !goodTiles.containsKey( tileIndex ) )
-				badTiles.add( tileIndex );
-		System.out.println( "There are " + badTiles.size() + " bad tiles: " + badTiles );
-
-		//		for ( final Integer tileIndex : badTiles )
-		//			System.out.println( tileIndex + ": " + allTiles.get( tileIndex ).getFile() );
-
-
-
-
-
-		System.out.println( "-----------" );
-		final ArrayList< SerializablePairWiseStitchingResult> nonOverlappingShifts = new ArrayList<>();
-		for ( final SerializablePairWiseStitchingResult shift : shifts )
-		{
-			if ( shift.getCrossCorrelation() < threshold )
-				continue;
-
-			final TileInfo t1 = shift.getPairOfTiles()._1.clone();
-			final TileInfo t2 = shift.getPairOfTiles()._2.clone();
-
-			if ( TileOperations.getOverlappingRegion( t1, t2 ) == null )
-				throw new Exception( "impossible" );
-
-			for ( int d = 0; d < shift.getNumDimensions(); d++ )
-				t2.setPosition( d, t1.getPosition( d ) + shift.getOffset( d ) );
-
-			if ( TileOperations.getOverlappingRegion( t1, t2 ) == null)
-				nonOverlappingShifts.add( shift );
-		}
-		System.out.println( "There are " + nonOverlappingShifts.size() + " non-overlapping shifts after thresholding" );
-	}*/
 }

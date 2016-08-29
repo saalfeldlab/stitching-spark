@@ -10,6 +10,12 @@ import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 import org.janelia.stitching.Utils;
 
+/**
+ * Finds particular pairwise shift between specified tile indices.
+ *
+ * @author Igor Pisarev
+ */
+
 public class FindParticularShift
 {
 	public static void main( final String[] args ) throws Exception

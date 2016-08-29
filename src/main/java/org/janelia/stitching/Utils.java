@@ -6,8 +6,9 @@ import java.nio.file.Paths;
 import mpicbg.stitching.ImageCollectionElement;
 
 /**
- * @author pisarevi
+ * Provides some useful methods for working with file paths
  *
+ * @author Igor Pisarev
  */
 
 public class Utils {

@@ -21,6 +21,12 @@ import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
+/**
+ * Saves a collection of {@link TileInfo} objects as a HDF5 dataset.
+ *
+ * @author Igor Pisarev
+ */
+
 public class Hdf5Creator
 {
 	final static private int[] cellSize = new int[]{ 64, 64, 64 };

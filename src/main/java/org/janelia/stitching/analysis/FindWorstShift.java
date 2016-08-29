@@ -9,6 +9,16 @@ import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 
+/**
+ * Evaluates the quality of pairwise matching by finding the farthest shift between any pair of tiles.
+ * We assume that initial tile positions (obtained from the microscope) are almost correct, so the farthest shift here is considered as the worst.
+ *
+ * Large offset indicates that the phase correlation has failed to identify good shifts for some of the tiles.
+ * In this case you may want to increase the number of phase correlation peaks that should be investigated by the pairwise stitching algorithm.
+ *
+ * @author Igor Pisarev
+ */
+
 public class FindWorstShift
 {
 	public static void main( final String[] args ) throws Exception
@@ -51,8 +61,6 @@ public class FindWorstShift
 		System.out.println( "no correlation pairs: " + noCorrPairs );
 
 
-		// 340 - usual run
-		// 29 - blurred run
 		System.out.println( "There are " + bad.size() + " bad pairs out of " + shifts.size() );
 		System.out.println( "-----------------------------------" );
 

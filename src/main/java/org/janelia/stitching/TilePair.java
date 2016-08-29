@@ -2,6 +2,12 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 
+/**
+ * Holds an ordered pair of {@link TileInfo} objects.
+ *
+ * @author Igor Pisarev
+ */
+
 public class TilePair implements Serializable
 {
 	private static final long serialVersionUID = -3199669876217383109L;

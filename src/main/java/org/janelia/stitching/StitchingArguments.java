@@ -7,8 +7,9 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 /**
- * @author pisarevi
+ * Command line arguments parser for a stitching job.
  *
+ * @author Igor Pisarev
  */
 
 public class StitchingArguments implements Serializable {
