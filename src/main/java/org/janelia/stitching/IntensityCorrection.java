@@ -46,6 +46,12 @@ import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 import scala.Tuple2;
 
+/**
+ * Performs intensity correction of tiles images on a Spark cluster.
+ *
+ * @author Igor Pisarev
+ */
+
 public class IntensityCorrection implements Serializable
 {
 	private static final long serialVersionUID = -6091166903910352212L;
@@ -69,7 +75,9 @@ public class IntensityCorrection implements Serializable
 		return numCoefficients;
 	}
 
-
+	/**
+	 * @param tilePairs A list of pairs of overlapping tiles
+	 */
 	public < M extends Model< M > & Affine1D< M > > void matchIntensities( final List< TilePair > tilePairs ) throws Exception
 	{
 		// construct a map of tiles
@@ -195,6 +203,11 @@ public class IntensityCorrection implements Serializable
 		}
 	}
 
+	/**
+	 * Generates pixel-pixel matches between two particular tiles
+	 * @param tilePair a pair of tiles
+	 * @return a list of matches in "unrolled" form (double-dimensional array for pairwise matches between coefficients)
+	 */
 	private < M extends Model< M > & Affine1D< M >, T extends RealType< T > & NativeType< T > >
 	ArrayList< PointMatch >[][] generatePairwiseMatches( final TilePair tilePair ) throws Exception
 	{
@@ -289,6 +302,10 @@ public class IntensityCorrection implements Serializable
 		return coeffMatchesPairwise;
 	}
 
+	/**
+	 * Generates identity connections within specified tile
+	 * @param coeffTilesList a list of coefficients in unrolled form
+	 */
 	private void connectCoeffsWithinTile( final ArrayList< ? extends Tile< ? > > coeffTilesList )
 	{
 		counter = 0;
@@ -324,12 +341,24 @@ public class IntensityCorrection implements Serializable
 	{
 		counter++;
 		final ArrayList< PointMatch > matches = new ArrayList< >();
-		matches.add( new PointMatch( new Point( new double[] { minsMaxs.get( p2 ).first } ), new Point( new double[] { minsMaxs.get( p1 ).first } ) ) );
-		matches.add( new PointMatch( new Point( new double[] { minsMaxs.get( p2 ).second } ), new Point( new double[] { minsMaxs.get( p1 ).second } ) ) );
+
+		final double min1 = ( minsMaxs.containsKey( p1 ) ? minsMaxs.get( p1 ).first  : 0 );
+		final double max1 = ( minsMaxs.containsKey( p1 ) ? minsMaxs.get( p1 ).second : 1 );
+
+		final double min2 = ( minsMaxs.containsKey( p2 ) ? minsMaxs.get( p2 ).first  : 0 );
+		final double max2 = ( minsMaxs.containsKey( p2 ) ? minsMaxs.get( p2 ).second : 1 );
+
+		matches.add( new PointMatch( new Point( new double[] { min2 } ), new Point( new double[] { min1 } ) ) );
+		matches.add( new PointMatch( new Point( new double[] { max2 } ), new Point( new double[] { max1 } ) ) );
+
 		t1.connect( t2, matches );
 	}
 
-
+	/**
+	 * Generates identity connections within specified tile
+	 * @param templateModel a basic model of intensity transformation
+	 * @return a list of coefficients in unrolled form
+	 */
 	private < M extends Model< M > & Affine1D< M > > ArrayList< Tile< ? extends M > > createCoefficientsTiles( final M templateModel )
 	{
 		final ArrayList< Tile< ? extends M > > coeffTiles = new ArrayList<>();
@@ -359,6 +388,9 @@ public class IntensityCorrection implements Serializable
 
 
 
+	/**
+	 * Experimental code for intensity correction of a single tile
+	 */
 	transient ImagePlus singleTile = null;
 	transient Map< Integer, ComparablePair< Double, Double > > minsMaxs = new HashMap<>();
 	public < M extends Model< M > & Affine1D< M > > void matchIntensities( final TileInfo tile ) throws Exception
