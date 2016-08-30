@@ -14,6 +14,11 @@ public final class PipelineStepExecutorFactory
 	{
 		executors = new HashMap<>();
 		executors.put( PipelineStep.Metadata, new PipelineMetadataStepExecutor( job, sparkContext ) );
+		executors.put( PipelineStep.Blur, new PipelineBlurStepExecutor( job, sparkContext ) );
+		executors.put( PipelineStep.Shift, new PipelineShiftStepExecutor( job, sparkContext ) );
+		executors.put( PipelineStep.IntensityCorrection, new PipelineIntensityCorrectionStepExecutor( job, sparkContext ) );
+		executors.put( PipelineStep.Fusion, new PipelineFusionStepExecutor( job, sparkContext ) );
+		executors.put( PipelineStep.Export, new PipelineExportStepExecutor( job, sparkContext ) );
 	}
 
 	public PipelineStepExecutor getPipelineStepExecutor( final PipelineStep step )
