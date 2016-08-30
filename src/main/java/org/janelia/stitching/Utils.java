@@ -44,7 +44,7 @@ public class Utils {
 
 	public static String getAbsoluteImagePath( final StitchingJob job, final TileInfo tile )
 	{
-		String filePath = tile.getFile();
+		String filePath = tile.getFilePath();
 		if ( !Paths.get( filePath ).isAbsolute() )
 			filePath = Paths.get( job.getBaseFolder(), filePath ).toString();
 		return filePath;
@@ -52,7 +52,7 @@ public class Utils {
 
 	public static ImageCollectionElement createElement( final StitchingJob job, final TileInfo tile ) throws Exception
 	{
-		final File file = new File( job == null ? tile.getFile() : getAbsoluteImagePath( job, tile) );
+		final File file = new File( job == null ? tile.getFilePath() : getAbsoluteImagePath( job, tile) );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
 		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.numDimensions() );

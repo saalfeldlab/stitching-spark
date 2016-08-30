@@ -41,8 +41,8 @@ public class FindParticularShift
 			throw new Exception( "Impossible: present more than once" );
 
 		System.out.println( "Found:" );
-		System.out.println( shift.getTilePair().first().getIndex() + ": " + shift.getTilePair().first().getFile() );
-		System.out.println( shift.getTilePair().second().getIndex() + ": " + shift.getTilePair().second().getFile() );
+		System.out.println( shift.getTilePair().first().getIndex() + ": " + shift.getTilePair().first().getFilePath() );
+		System.out.println( shift.getTilePair().second().getIndex() + ": " + shift.getTilePair().second().getFilePath() );
 
 		System.out.println( "------------------");
 		System.out.println( "offset=" + Arrays.toString( shift.getOffset() ) );

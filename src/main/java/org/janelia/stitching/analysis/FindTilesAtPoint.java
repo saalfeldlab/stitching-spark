@@ -31,6 +31,6 @@ public class FindTilesAtPoint
 
 		System.out.println( "There are " + tilesAtPoint.size() + " tiles at the point " + Arrays.toString( point ) + ":" );
 		for ( final TileInfo tile : tilesAtPoint )
-			System.out.println( tile.getIndex() + ": " + tile.getFile() );
+			System.out.println( tile.getIndex() + ": " + tile.getFilePath() );
 	}
 }

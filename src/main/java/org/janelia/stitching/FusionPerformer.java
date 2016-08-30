@@ -45,7 +45,7 @@ public class FusionPerformer
 	}
 
 	@SuppressWarnings( "unchecked" )
-	public < T extends RealType< T > & NativeType< T > > void fuseTilesWithinSubregion( final ArrayList< TileInfo > tiles, final TileInfo subregion ) throws Exception
+	public < T extends RealType< T > & NativeType< T > > void fuseTilesWithinCell( final ArrayList< TileInfo > tiles, final TileInfo cell ) throws Exception
 	{
 		ImageType imageType = null;
 		for ( final TileInfo tile : tiles )
@@ -60,31 +60,31 @@ public class FusionPerformer
 		for ( final TileInfo tile : tiles )
 			imageDimensions.put( tile.getIndex(), tile.getBoundaries() );
 
-		fuseSubregion( tiles, subregion, ( T ) imageType.getType(), new CustomBlendingPixel( imageDimensions ) );
+		fuse( tiles, cell, ( T ) imageType.getType(), new CustomBlendingPixel( imageDimensions ) );
 	}
 
 	@SuppressWarnings( "unchecked" )
-	private < T extends RealType< T > & NativeType< T > > void fuseSubregion( final ArrayList< TileInfo > tiles, final TileInfo subregion, final T type, final PixelFusion pixelStrategy ) throws Exception
+	private < T extends RealType< T > & NativeType< T > > void fuse( final ArrayList< TileInfo > tiles, final TileInfo cell, final T type, final PixelFusion pixelStrategy ) throws Exception
 	{
-		final Boundaries subregionBoundaries = subregion.getBoundaries();
+		final Boundaries cellBoundaries = cell.getBoundaries();
 
 		// Create pixels array
-		System.out.println( "subregion: " + Arrays.toString( subregionBoundaries.getDimensions() ) );
+		System.out.println( "cell: " + Arrays.toString( cellBoundaries.getDimensions() ) );
 		final ArrayList< PixelFusion > pixels = new ArrayList<>();
 		int pixelsCount = 1;
-		for ( int d = 0; d < subregion.numDimensions(); d++ )
-			pixelsCount *= subregionBoundaries.dimension( d );
+		for ( int d = 0; d < cell.numDimensions(); d++ )
+			pixelsCount *= cellBoundaries.dimension( d );
 		for ( int i = 0; i < pixelsCount; i++ )
 			pixels.add( pixelStrategy.copy() );
-		final ListImg< PixelFusion > pixelsArr = new ListImg<>( pixels, subregionBoundaries.getDimensions() );
-		final RandomAccessibleInterval< PixelFusion > pixelsArrInterval = Views.translate( pixelsArr, subregionBoundaries.getMin() );
+		final ListImg< PixelFusion > pixelsArr = new ListImg<>( pixels, cellBoundaries.getDimensions() );
+		final RandomAccessibleInterval< PixelFusion > pixelsArrInterval = Views.translate( pixelsArr, cellBoundaries.getMin() );
 
 		// Draw all intervals onto it one by one
 		for ( int i = 0; i < tiles.size(); i++ )
 		{
 			// Open the image
 			final TileInfo tile = tiles.get( i );
-			System.out.println( "[Subregion " + subregion.getIndex() + "] Loading image " + ( i + 1 ) + " of " + tiles.size() );
+			System.out.println( "[Cell " + cell.getIndex() + "] Loading image " + ( i + 1 ) + " of " + tiles.size() );
 			final ImagePlus imp = IJ.openImage( Utils.getAbsoluteImagePath( job, tile ) );
 
 			final Boundaries tileBoundaries = tile.getBoundaries();
@@ -116,22 +116,22 @@ public class FusionPerformer
 		}
 
 		// Create output image
-		final Img< T > out = new ImagePlusImgFactory< T >().create( subregionBoundaries.getDimensions(), type.createVariable() );
-		final RandomAccessibleInterval< T > cell = Views.translate( out, subregionBoundaries.getMin() );
+		final Img< T > out = new ImagePlusImgFactory< T >().create( cellBoundaries.getDimensions(), type.createVariable() );
+		final RandomAccessibleInterval< T > cellImg = Views.translate( out, cellBoundaries.getMin() );
 
 		final IterableInterval< PixelFusion > pixelSource = Views.flatIterable( pixelsArrInterval );
-		final IterableInterval< T > cellBox = Views.flatIterable( cell );
+		final IterableInterval< T > cellImgIterable = Views.flatIterable( cellImg );
 
 		final Cursor< PixelFusion > source = pixelSource.cursor();
-		final Cursor< T > target = cellBox.cursor();
+		final Cursor< T > target = cellImgIterable.cursor();
 
 		while ( source.hasNext() )
 			target.next().setReal( source.next().getValue() );
 
 		final ImagePlus outImg = ImageJFunctions.wrap( out, "" );
-		subregion.setType( ImageType.valueOf( outImg.getType() ) );
-		System.out.println( "Saving the resulting file for subregion " + subregion.getIndex() );
-		IJ.saveAsTiff( outImg, subregion.getFile() );
+		cell.setType( ImageType.valueOf( outImg.getType() ) );
+		System.out.println( "Saving the resulting file for cell " + cell.getIndex() );
+		IJ.saveAsTiff( outImg, cell.getFilePath() );
 		outImg.close();
 	}
 }

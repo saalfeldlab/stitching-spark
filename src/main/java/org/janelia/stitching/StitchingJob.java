@@ -5,7 +5,11 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.commons.io.IOUtils;
@@ -22,69 +26,33 @@ import mpicbg.stitching.StitchingParameters;
 
 public class StitchingJob implements Serializable {
 
-	public enum Mode {
-		Default,
-		Metadata,
-		NoFuse,
-		FuseOnly,
-		Hdf5,
-		Blur
+	public enum PipelineStage
+	{
+		Blur,
+		Shift,
+		IntensityCorrection,
+		Fusion,
+		Export
 	}
 
 	private static final long serialVersionUID = 2619120742300093982L;
 
-	private final Mode mode;
+	private final Set< PipelineStage > pipeline;
 	private transient StitchingParameters params;
 	private final String baseFolder;
-
-	private final boolean findOptimalThreshold;
-	private final double crossCorrelationThreshold;
-	private final int subregionSize;
 
 	private String saveFolder;
 	private String datasetName;
 
 	private TileInfo[] tiles;
-	private int dimensionality = 3;
+	private int dimensionality;
 
 
 	public StitchingJob( final StitchingArguments args )
 	{
-		final int modes = ( args.getMeta() ? 1 : 0 ) + ( args.getNoFuse() ? 1 : 0 ) + ( args.getFuseOnly() ? 1 : 0 );
-		if ( modes > 1 )
-			throw new IllegalArgumentException( "Incompatible arguments" );
+		pipeline = createPipeline( args );
 
-		if ( args.getMeta() )
-			mode = Mode.Metadata;
-		else if ( args.getNoFuse() )
-			mode = Mode.NoFuse;
-		else if ( args.getFuseOnly() )
-			mode = Mode.FuseOnly;
-		else if ( args.getHdf5() )
-			mode = Mode.Hdf5;
-		else if ( args.getBlur() )
-			mode = Mode.Blur;
-		else
-			mode = Mode.Default;
-
-		if ( mode != Mode.Metadata && mode != Mode.FuseOnly ) {
-			crossCorrelationThreshold = args.getCrossCorrelationThreshold();
-			findOptimalThreshold = ( crossCorrelationThreshold < 0 );
-		} else {
-			crossCorrelationThreshold = 0;
-			findOptimalThreshold = false;
-		}
-
-		if ( mode != Mode.Metadata && mode != Mode.NoFuse ) {
-			subregionSize = args.getSubregionSize();
-			if ( subregionSize <= 0 )
-				throw new IllegalArgumentException( "Subregion size can't be negative" );
-			System.out.println( "Fusion subregion size: " + subregionSize );
-		} else {
-			subregionSize = 0;
-		}
-
-		final File inputFile = new File( args.getInput() ).getAbsoluteFile();
+		final File inputFile = new File( args.inputFilePath() ).getAbsoluteFile();
 		baseFolder = saveFolder = inputFile.getParent();
 		datasetName = inputFile.getName();
 		if ( datasetName.endsWith( ".json" ) )
@@ -93,25 +61,41 @@ public class StitchingJob implements Serializable {
 
 	protected StitchingJob()
 	{
-		mode = Mode.Default;
-		findOptimalThreshold = false;
-		crossCorrelationThreshold = 0;
-		subregionSize = 0;
+		pipeline = null;
 		baseFolder = "";
 	}
 
-	public Mode getMode() {
-		return mode;
+	private Set< PipelineStage > createPipeline( final StitchingArguments args )
+	{
+		final List< PipelineStage > pipelineOnlyStagesList = new ArrayList<>();
+		if ( args.onlyBlur() ) 					pipelineOnlyStagesList.add( PipelineStage.Blur );
+		if ( args.onlyShift() ) 				pipelineOnlyStagesList.add( PipelineStage.Shift );
+		if ( args.onlyIntensityCorrection() ) 	pipelineOnlyStagesList.add( PipelineStage.IntensityCorrection );
+		if ( args.onlyFuse() ) 					pipelineOnlyStagesList.add( PipelineStage.Fusion );
+		if ( args.onlyExport() ) 				pipelineOnlyStagesList.add( PipelineStage.Export );
+
+		final List< PipelineStage > pipelineNoStagesList = new ArrayList<>();
+		if ( args.noBlur() ) 					pipelineNoStagesList.add( PipelineStage.Blur );
+		if ( args.noShift() ) 					pipelineNoStagesList.add( PipelineStage.Shift );
+		if ( args.noIntensityCorrection() ) 	pipelineNoStagesList.add( PipelineStage.IntensityCorrection );
+		if ( args.noFuse() ) 					pipelineNoStagesList.add( PipelineStage.Fusion );
+		if ( args.noExport() ) 					pipelineNoStagesList.add( PipelineStage.Export );
+
+		if ( !pipelineOnlyStagesList.isEmpty() && !pipelineNoStagesList.isEmpty() )
+			throw new IllegalArgumentException( "Contradicting pipeline stages" );
+
+		if ( !pipelineOnlyStagesList.isEmpty() )
+			return EnumSet.copyOf( pipelineOnlyStagesList );
+		else if ( !pipelineNoStagesList.isEmpty() )
+			return EnumSet.complementOf( EnumSet.copyOf( pipelineNoStagesList ) );
+		else
+			return null;
 	}
 
-	public StitchingParameters getParams() {
-		return params;
-	}
+	public Set< PipelineStage > getPipeline() { return pipeline; }
 
-	public void setParams( final StitchingParameters params ) {
-		this.params = params;
-	}
-
+	public StitchingParameters getParams() { return params; }
+	public void setParams( final StitchingParameters params ) { this.params = params; }
 
 	public Map< Integer, TileInfo > getTilesMap()
 	{
@@ -130,39 +114,17 @@ public class StitchingJob implements Serializable {
 		checkTilesConfiguration();
 	}
 
-	public String getBaseFolder() {
-		return baseFolder;
-	}
+	public String getBaseFolder() { return baseFolder; }
 
-	public String getSaveFolder() {
-		return saveFolder;
-	}
+	public String getSaveFolder() { return saveFolder; }
+	public void setSaveFolder( final String saveFolder ) { this.saveFolder = saveFolder; }
 
-	public void setSaveFolder( final String saveFolder ) {
-		this.saveFolder = saveFolder;
-	}
+	public String getDatasetName() { return datasetName; }
 
-	public String getDatasetName() {
-		return datasetName;
-	}
+	public int getDimensionality() { return dimensionality; }
 
-	public int getDimensionality() {
-		return dimensionality;
-	}
-
-	public boolean getFindOptimalThreshold() {
-		return findOptimalThreshold;
-	}
-
-	public double getCrossCorrelationThreshold() {
-		return crossCorrelationThreshold;
-	}
-
-	public int getSubregionSize() {
-		return subregionSize;
-	}
-
-	public void validateTiles() throws IllegalArgumentException {
+	public void validateTiles() throws IllegalArgumentException
+	{
 		if ( tiles.length < 2 )
 			throw new IllegalArgumentException( "There must be at least 2 tiles in the dataset" );
 
@@ -190,7 +152,7 @@ public class StitchingJob implements Serializable {
 			throw new NullPointerException( "Malformed input" );
 
 		for ( int i = 0; i < tiles.length; i++ ) {
-			if ( tiles[ i ].getFile() == null || tiles[ i ].getPosition() == null )
+			if ( tiles[ i ].getFilePath() == null || tiles[ i ].getPosition() == null )
 				throw new NullPointerException( "Some of required parameters are missing (file or position)" );
 
 			if ( tiles[ i ].getIndex() == null )

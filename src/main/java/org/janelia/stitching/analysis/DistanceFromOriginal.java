@@ -47,7 +47,7 @@ public class DistanceFromOriginal
 		{
 			if ( !tilesOrig[ i ].getIndex().equals( tilesMod[ i ].getIndex() ) )// || !tilesOrig[ i ].getFile().equals( tilesMod[ i ].getFile() ) )
 				throw new IllegalArgumentException( "Tiles mismatch: orig=" + tilesOrig[ i ].getIndex() + ", mod=" + tilesMod[ i ].getIndex() + "\n"
-						+ "orig=" + tilesOrig[ i ].getFile() + ", mod=" + tilesMod[ i ].getFile() );
+						+ "orig=" + tilesOrig[ i ].getFilePath() + ", mod=" + tilesMod[ i ].getFilePath() );
 
 			final int dim = tilesOrig[ i ].numDimensions();
 			final double[] dist = new double[ dim ];

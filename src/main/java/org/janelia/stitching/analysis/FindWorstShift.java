@@ -69,8 +69,8 @@ public class FindWorstShift
 		final SerializablePairWiseStitchingResult worstShift = bad.firstEntry().getValue();
 		final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( worstShift.getTilePair().first(), worstShift.getTilePair().second() );
 		System.out.println( "Worst score: " + bad.firstKey() + ", tiles " + worstShift.getTilePair().first().getIndex() + " and " + worstShift.getTilePair().second().getIndex() );
-		System.out.println( worstShift.getTilePair().first().getIndex() + ": " + worstShift.getTilePair().first().getFile() );
-		System.out.println( worstShift.getTilePair().second().getIndex() + ": " + worstShift.getTilePair().second().getFile() );
+		System.out.println( worstShift.getTilePair().first().getIndex() + ": " + worstShift.getTilePair().first().getFilePath() );
+		System.out.println( worstShift.getTilePair().second().getIndex() + ": " + worstShift.getTilePair().second().getFilePath() );
 		System.out.println( "Initial overlap at " + Arrays.toString( overlap.getMin() ) + " with dimensions " + Arrays.toString( overlap.getDimensions() ) );
 		final double dist[] = new double[ worstShift.getNumDimensions() ];
 		for ( int d = 0; d < worstShift.getNumDimensions(); d++ )

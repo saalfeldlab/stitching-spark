@@ -3,7 +3,7 @@ package org.janelia.stitching;
 import java.io.Serializable;
 
 /**
- * Tile image metadata.
+ * Represents tile image metadata.
  *
  * @author Igor Pisarev
  */
@@ -14,7 +14,7 @@ public class TileInfo implements Serializable {
 
 	private ImageType type;
 	private Integer index;
-	private String file;
+	private String filePath;
 	private double[] position;
 	private long[] size;
 
@@ -25,12 +25,12 @@ public class TileInfo implements Serializable {
 
 	protected TileInfo() { }
 
-	public String getFile() {
-		return file;
+	public String getFilePath() {
+		return filePath;
 	}
 
-	public void setFile( final String file) {
-		this.file = file;
+	public void setFilePath( final String filePath ) {
+		this.filePath = filePath;
 	}
 
 	public double getPosition( final int d ) {
@@ -102,7 +102,7 @@ public class TileInfo implements Serializable {
 		final TileInfo newTile = new TileInfo();
 		newTile.setType( type );
 		newTile.setIndex( index == null ? null : new Integer( index.intValue() ) );
-		newTile.setFile( file );
+		newTile.setFilePath( filePath );
 		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );
 		return newTile;

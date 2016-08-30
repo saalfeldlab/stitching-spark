@@ -29,7 +29,7 @@ public class FilterTileConfiguration
 		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilename );
 		final ArrayList< TileInfo > filteredTiles = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
-			if ( tile.getFile().contains( filenameFilter ) )
+			if ( tile.getFilePath().contains( filenameFilter ) )
 				filteredTiles.add( tile );
 		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( inputFilename, "_filtered_" + filenameFilter ) );
 	}

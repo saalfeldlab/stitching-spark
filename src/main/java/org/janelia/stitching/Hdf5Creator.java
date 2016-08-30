@@ -101,7 +101,7 @@ public class Hdf5Creator
 			System.out.println( "Open tile " + tile.getIndex() );
 			System.out.println( "position=" + Arrays.toString( tile.getPosition() ) );
 
-			final ImagePlus img = IJ.openImage( tile.getFile() );
+			final ImagePlus img = IJ.openImage( tile.getFilePath() );
 			final Img< UnsignedShortType > in = ImageJFunctions.wrapShort( img );
 
 			final RandomAccessibleInterval< UnsignedShortType > view = Views.translate(

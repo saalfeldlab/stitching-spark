@@ -18,7 +18,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
-import org.janelia.stitching.StitchingJob.Mode;
+import org.janelia.stitching.StitchingJob.PipelineStage;
 import org.janelia.stitching.analysis.ThresholdEstimation;
 
 import ij.IJ;
@@ -67,127 +67,83 @@ public class StitchingSpark implements Runnable, Serializable {
 	{
 		job = new StitchingJob( args );
 		try {
-			job.setTiles( TileInfoJSONProvider.loadTilesConfiguration( args.getInput() ) );
+			job.setTiles( TileInfoJSONProvider.loadTilesConfiguration( args.inputFilePath() ) );
 		} catch ( final Exception e ) {
 			System.out.println( "Aborted: " + e.getMessage() );
 			e.printStackTrace();
 			System.exit( 2 );
 		}
 
+		final StitchingParameters params = new StitchingParameters();
+		params.dimensionality = job.getDimensionality();
+		params.channel1 = 0;
+		params.channel2 = 0;
+		params.timeSelect = 0;
+		params.checkPeaks = 250;
+		params.computeOverlap = true;
+		params.subpixelAccuracy = false;
+		params.virtual = true;
+		params.absoluteThreshold = 7;
+		params.relativeThreshold = 5;
+		job.setParams( params );
+
 		sparkContext = new JavaSparkContext( new SparkConf().setAppName( "Stitching" ) );
-
-
-
-
-		// --------------------------------------------------------------
-		/*if ( job.getTiles().length == 1 )
-		{
-			final IntensityCorrection ic = new IntensityCorrection( job, sparkContext );
-			try
-			{
-				ic.matchIntensities( job.getTiles()[ 0 ] );
-			}
-			catch ( final Exception e )
-			{
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-
-			sparkContext.close();
-			System.out.println( "done" );
-			return;
-		}*/
-		// --------------------------------------------------------------
-
-
 
 		// Query metadata
 		final ArrayList< TileInfo > tilesWithoutMetadata = new ArrayList<>();
 		for ( final TileInfo tile : job.getTiles() )
 			if ( tile.getSize() == null || tile.getType() == null )
 				tilesWithoutMetadata.add( tile );
-
 		if ( !tilesWithoutMetadata.isEmpty() )
 			queryMetadata( tilesWithoutMetadata );
 
+		job.validateTiles();
 		TileOperations.translateTilesToOrigin( job.getTiles() );
 
-		if ( job.getMode() == Mode.Blur)
-		{
-			// Just perform smoothing and exit
+		// Blur
+		if ( job.getPipeline().contains( PipelineStage.Blur ) )
 			applyGaussianBlur();
 
-			sparkContext.close();
-			System.out.println( "done" );
-			return;
+		// Shift
+		if ( job.getPipeline().contains( PipelineStage.Shift ) )
+		{
+			final ArrayList< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles() );
+			System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
+
+			final List< SerializablePairWiseStitchingResult > pairwiseShifts = preparePairwiseShifts( overlappingTiles );
+
+			final double threshold = ( args.crossCorrelationThreshold() < 0 ? ThresholdEstimation.findOptimalThreshold( pairwiseShifts ) : args.crossCorrelationThreshold() );
+			System.out.println( "Cross correlation threshold value: " + threshold + ( args.crossCorrelationThreshold() < 0 ? " (determined automatically)" : " (custom value)" ) );
+
+			optimizeShifts( pairwiseShifts, threshold );
 		}
 
-		if ( job.getMode() == Mode.Hdf5)
+		// Intensity correction
+		if ( job.getPipeline().contains( PipelineStage.IntensityCorrection ) )
 		{
-			// Just create hdf5 file and exit
+			final List< TilePair > overlappingShiftedTiles = TileOperations.findOverlappingTiles( job.getTiles() );
+			final IntensityCorrection ic = new IntensityCorrection( job, sparkContext );
+			try
+			{
+				ic.matchIntensities( overlappingShiftedTiles );
+			}
+			catch ( final Exception e )
+			{
+				System.out.println( "Something went wrong during intensity correction:" );
+				e.printStackTrace();
+			}
+		}
+
+		// Fusion
+		if ( job.getPipeline().contains( PipelineStage.Fusion ) )
+		{
+			final Boundaries boundaries = TileOperations.getCollectionBoundaries( job.getTiles() );
+			final ArrayList< TileInfo > cells = TileOperations.divideSpaceBySize( boundaries, args.fusionCellSize() );
+			fuse( cells );
+		}
+
+		if ( job.getPipeline().contains( PipelineStage.Export ) )
 			createHdf5();
-
-			sparkContext.close();
-			System.out.println( "done" );
-			return;
-		}
-
-		if ( job.getMode() != Mode.Metadata )
-		{
-			job.validateTiles();
-
-			final StitchingParameters params = new StitchingParameters();
-			params.dimensionality = job.getDimensionality();
-			params.channel1 = 0;
-			params.channel2 = 0;
-			params.timeSelect = 0;
-			params.checkPeaks = 250;
-			params.computeOverlap = true;
-			params.subpixelAccuracy = false;
-			params.virtual = true;
-			params.absoluteThreshold = 7;
-			params.relativeThreshold = 5;
-			job.setParams( params );
-
-			// Positions correction
-			if ( job.getMode() != Mode.FuseOnly )
-			{
-				final ArrayList< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles() );
-				System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
-
-				final List< SerializablePairWiseStitchingResult > pairwiseShifts = preparePairwiseShifts( overlappingTiles );
-
-				final double threshold = ( job.getFindOptimalThreshold() ? ThresholdEstimation.findOptimalThreshold( pairwiseShifts ) : job.getCrossCorrelationThreshold() );
-				System.out.println( "Cross correlation threshold value: " + threshold + ( job.getFindOptimalThreshold() ? " (determined automatically)" : " (custom value)" ) );
-
-				optimizeShifts( pairwiseShifts, threshold );
-			}
-
-			// Intensity correction
-			if ( !args.getNoIntensityCorrection() )
-			{
-				final List< TilePair > overlappingShiftedTiles = TileOperations.findOverlappingTiles( job.getTiles() );
-				final IntensityCorrection ic = new IntensityCorrection( job, sparkContext );
-				try
-				{
-					ic.matchIntensities( overlappingShiftedTiles );
-				}
-				catch ( final Exception e )
-				{
-					System.out.println( "Something went wrong during intensity correction:" );
-					e.printStackTrace();
-					return;
-				}
-			}
-
-			// Fusion
-			if ( job.getMode() != Mode.NoFuse ) {
-
-				final Boundaries boundaries = TileOperations.getCollectionBoundaries( job.getTiles() );
-				final ArrayList< TileInfo > subregions = TileOperations.divideSpaceBySize( boundaries, job.getSubregionSize() );
-				fuse( subregions );
-			}
-		}
 
 		sparkContext.close();
 		System.out.println( "done" );
@@ -248,7 +204,7 @@ public class StitchingSpark implements Runnable, Serializable {
 	private List< SerializablePairWiseStitchingResult > preparePairwiseShifts( final ArrayList< TilePair > overlappingTiles )
 	{
 		// Try to load precalculated shifts for some pairs of tiles
-		final String pairwiseResultsFile = Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_pairwise" );
+		final String pairwiseResultsFile = Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.inputFilePath(), "_full" ), "_pairwise" );
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = new ArrayList<>();
 		try {
 			System.out.println( "try to load pairwise results from disk" );
@@ -307,7 +263,7 @@ public class StitchingSpark implements Runnable, Serializable {
 	 */
 	private List< SerializablePairWiseStitchingResult > computePairwiseShifts( final ArrayList< TilePair > overlappingTiles )
 	{
-		if ( !args.getNoRoi() )
+		if ( !args.noRoi() )
 			System.out.println( "*** Use ROIs as usual ***" );
 		else
 			System.out.println( "*** Compute phase correlation between full tile images instead of their ROIs ***" );
@@ -330,7 +286,7 @@ public class StitchingSpark implements Runnable, Serializable {
 								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles.second() ) ), el2.getIndex(), timepoint, el2.getModel(), el2 ) );
 
 						Roi roi1 = null, roi2 = null;
-						if ( !args.getNoRoi() )
+						if ( !args.noRoi() )
 						{
 							final Boundaries overlap1 = TileOperations.getOverlappingRegion( pairOfTiles.first(), pairOfTiles.second() );
 							final Boundaries overlap2 = TileOperations.getOverlappingRegion( pairOfTiles.second(), pairOfTiles.first() );
@@ -418,56 +374,56 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 
 		try {
-			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_shifted" ) );
+			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.inputFilePath(), "_full" ), "_shifted" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
 	}
 
 	/**
-	 * Fuses tile images within a set of subregions (whole space divided into cells) on a Spark cluster.
+	 * Fuses tile images within a set of cells on a Spark cluster.
 	 */
-	private void fuse( final ArrayList< TileInfo > subregions )
+	private void fuse( final ArrayList< TileInfo > cells )
 	{
-		System.out.println( "There are " + subregions.size() + " subregions in total" );
+		System.out.println( "There are " + cells.size() + " output cells in total" );
 
 		final String fusedFolder = job.getBaseFolder() + "/fused";
 		new File( fusedFolder ).mkdirs();
 
-		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( subregions );
+		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( cells );
 		final JavaRDD< TileInfo > fused = rdd.map(
 				new Function< TileInfo, TileInfo >()
 				{
 					private static final long serialVersionUID = 8324712817942470416L;
 
 					@Override
-					public TileInfo call( final TileInfo subregion ) throws Exception
+					public TileInfo call( final TileInfo cell ) throws Exception
 					{
-						final ArrayList< TileInfo > tilesWithinSubregion = TileOperations.findTilesWithinSubregion( job.getTiles(), subregion );
-						if ( tilesWithinSubregion.isEmpty() )
+						final ArrayList< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( job.getTiles(), cell );
+						if ( tilesWithinCell.isEmpty() )
 							return null;
 
-						subregion.setFile( fusedFolder + "/" + job.getDatasetName() + "_tile" + subregion.getIndex() + ".tif" );
-						System.out.println( "Starting to fuse tiles within subregion " + subregion.getIndex() );
+						cell.setFilePath( fusedFolder + "/" + job.getDatasetName() + "_tile" + cell.getIndex() + ".tif" );
+						System.out.println( "Starting to fuse tiles within cell " + cell.getIndex() );
 
 						final FusionPerformer fusion = new FusionPerformer( job );
-						fusion.fuseTilesWithinSubregion( tilesWithinSubregion, subregion );
+						fusion.fuseTilesWithinCell( tilesWithinCell, cell );
 
-						System.out.println( "Completed for subregion " + subregion.getIndex() );
+						System.out.println( "Completed for cell " + cell.getIndex() );
 
-						return subregion;
+						return cell;
 					}
 				});
 
 		final ArrayList< TileInfo > output = new ArrayList<>( fused.collect() );
 		output.removeAll( Collections.singleton( null ) );
-		System.out.println( "Obtained " + output.size() + " tiles" );
+		System.out.println( "Obtained " + output.size() + " output non-empty cells" );
 
 		try
 		{
 			final TileInfo[] newTiles = output.toArray( new TileInfo[ 0 ] );
 			job.setTiles( newTiles );
-			TileInfoJSONProvider.saveTilesConfiguration( newTiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_fused" ) );
+			TileInfoJSONProvider.saveTilesConfiguration( newTiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.inputFilePath(), "_full" ), "_fused" ) );
 		}
 		catch ( final Exception e )
 		{
@@ -493,7 +449,7 @@ public class StitchingSpark implements Runnable, Serializable {
 					public TileInfo call( final TileInfo tile ) throws Exception
 					{
 						System.out.println( "Blurring tile " + tile.getIndex() );
-						final ImagePlus imp = IJ.openImage( tile.getFile() );
+						final ImagePlus imp = IJ.openImage( tile.getFilePath() );
 						final GaussianBlur blur = new GaussianBlur();
 						blur.setup( "", imp );
 						for ( int slice = 1; slice <= imp.getNSlices(); slice++ ) {
@@ -504,8 +460,8 @@ public class StitchingSpark implements Runnable, Serializable {
 
 						System.out.println( "Saving blurred tile " + tile.getIndex() );
 						final TileInfo blurredTile = tile.clone();
-						blurredTile.setFile( blurredFolder + "/" + Utils.addFilenameSuffix( new File( tile.getFile() ).getName(), "_blurred" ) );
-						IJ.saveAsTiff( imp, blurredTile.getFile() );
+						blurredTile.setFilePath( blurredFolder + "/" + Utils.addFilenameSuffix( new File( tile.getFilePath() ).getName(), "_blurred" ) );
+						IJ.saveAsTiff( imp, blurredTile.getFilePath() );
 						return blurredTile;
 					}
 				});
@@ -521,11 +477,11 @@ public class StitchingSpark implements Runnable, Serializable {
 
 		for ( final TileInfo blurredTile : blurredTiles ) {
 			final TileInfo tile = tilesMap.get( blurredTile.getIndex() );
-			tile.setFile( blurredTile.getFile() );
+			tile.setFilePath( blurredTile.getFilePath() );
 		}
 
 		try {
-			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.getInput(), "_full" ), "_blurred" ) );
+			TileInfoJSONProvider.saveTilesConfiguration( tiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args.inputFilePath(), "_full" ), "_blurred" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}

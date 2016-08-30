@@ -179,13 +179,13 @@ public class IntensityCorrection implements Serializable
 								coeffsPlain[ j + i * coeffs.size() ] = coeffs.get( j )[ i ];
 						final LinearIntensityMap< DoubleType > transform = new LinearIntensityMap< >( ArrayImgs.doubles( coeffsPlain, numCoefficients, numCoefficients, numCoefficients, 2 ) );
 
-						final ImagePlus imp = IJ.openImage( tile.getFile() );
+						final ImagePlus imp = IJ.openImage( tile.getFilePath() );
 						final RandomAccessibleInterval r = ImagePlusImgs.from( imp );
 						transform.run( r );
 
-						tile.setFile( destFolder + "/" + Utils.addFilenameSuffix( new File( tile.getFile() ).getName(), "_transformed" ) );
+						tile.setFilePath( destFolder + "/" + Utils.addFilenameSuffix( new File( tile.getFilePath() ).getName(), "_transformed" ) );
 						final ImagePlus transformed = ImageJFunctions.wrap( r, "" );
-						IJ.saveAsTiff( transformed, tile.getFile() );
+						IJ.saveAsTiff( transformed, tile.getFilePath() );
 
 						return tile;
 					}
@@ -194,7 +194,7 @@ public class IntensityCorrection implements Serializable
 		final TileInfo[] allTiles = job.getTiles();
 		final Map< Integer, TileInfo > allTilesMap = job.getTilesMap();
 		for ( final TileInfo transformedTile : resultingTiles )
-			allTilesMap.get( transformedTile.getIndex() ).setFile( transformedTile.getFile() );
+			allTilesMap.get( transformedTile.getIndex() ).setFilePath( transformedTile.getFilePath() );
 
 		try {
 			TileInfoJSONProvider.saveTilesConfiguration( allTiles, job.getBaseFolder() + "/" + Utils.addFilenameSuffix( job.getDatasetName() + ".json", "_transformed" ) );
@@ -399,7 +399,7 @@ public class IntensityCorrection implements Serializable
 		final ArrayList< Tile< ? extends M > > coeffTiles = ( ArrayList ) createCoefficientsTiles(
 				new AffineModel1D() );
 
-		singleTile = IJ.openImage( tile.getFile() );
+		singleTile = IJ.openImage( tile.getFilePath() );
 		final RandomAccessibleInterval rai = ImagePlusImgs.from( singleTile );
 		TileOperations.translateTilesToOrigin( new TileInfo[] { tile } );
 		final ArrayList< TileInfo > coeffSubregions = TileOperations.divideSpaceByCount( tile.getBoundaries(), numCoefficients );
@@ -495,13 +495,13 @@ public class IntensityCorrection implements Serializable
 								coeffsPlain[ j + i * coeffs.size() ] = coeffs.get( j )[ i ];
 						final LinearIntensityMap< DoubleType > transform = new LinearIntensityMap< >( ArrayImgs.doubles( coeffsPlain, numCoefficients, numCoefficients, numCoefficients, 2 ) );
 
-						final ImagePlus imp = IJ.openImage( tile.getFile() );
+						final ImagePlus imp = IJ.openImage( tile.getFilePath() );
 						final RandomAccessibleInterval r = ImagePlusImgs.from( imp );
 						transform.run( r );
 
-						tile.setFile( destFolder + "/" + Utils.addFilenameSuffix( new File( tile.getFile() ).getName(), "_transformed" ) );
+						tile.setFilePath( destFolder + "/" + Utils.addFilenameSuffix( new File( tile.getFilePath() ).getName(), "_transformed" ) );
 						final ImagePlus transformed = ImageJFunctions.wrap( r, "" );
-						IJ.saveAsTiff( transformed, tile.getFile() );
+						IJ.saveAsTiff( transformed, tile.getFilePath() );
 
 						return tile;
 					}
@@ -510,7 +510,7 @@ public class IntensityCorrection implements Serializable
 		final TileInfo[] allTiles = job.getTiles();
 		final Map< Integer, TileInfo > allTilesMap = job.getTilesMap();
 		for ( final TileInfo transformedTile : resultingTiles )
-			allTilesMap.get( transformedTile.getIndex() ).setFile( transformedTile.getFile() );
+			allTilesMap.get( transformedTile.getIndex() ).setFilePath( transformedTile.getFilePath() );
 
 		try {
 			TileInfoJSONProvider.saveTilesConfiguration( allTiles, job.getBaseFolder() + "/" + Utils.addFilenameSuffix( job.getDatasetName() + ".json", "_transformed" ) );
