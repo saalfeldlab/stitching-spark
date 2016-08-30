@@ -1,7 +1,6 @@
 package org.janelia.stitching;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Random;
 
 import org.junit.Assert;
@@ -81,12 +80,6 @@ public class DivideSpaceTest {
 		System.out.println( "Subregion count per dimension = " + subregionCountPerDim );
 		System.out.println( "Expected subregions count = " + expectedCount );
 		System.out.println( "Actual subregions count = " + actualCount );
-
-		if ( expectedCount != actualCount )
-		{
-			System.out.println( "ACHTUNG" );
-			System.out.println( "Space: min=" + Arrays.toString( space.getMin() ) + ", max=" + Arrays.toString( space.getMax() ) );
-		}
 
 		Assert.assertEquals( expectedCount, actualCount );
 	}

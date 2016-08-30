@@ -3,6 +3,8 @@ package org.janelia.stitching;
 import java.io.File;
 import java.nio.file.Paths;
 
+import org.janelia.util.Conversions;
+
 import mpicbg.stitching.ImageCollectionElement;
 
 /**

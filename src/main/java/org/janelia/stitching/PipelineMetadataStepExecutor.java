@@ -8,6 +8,7 @@ import java.util.Map;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
+import org.janelia.util.Conversions;
 
 import ij.ImagePlus;
 import mpicbg.stitching.ImageCollectionElement;

@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.util;
 
 /**
  * Utility class to convert data types for use across libraries.
