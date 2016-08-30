@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.commons.io.IOUtils;
@@ -26,8 +25,9 @@ import mpicbg.stitching.StitchingParameters;
 
 public class StitchingJob implements Serializable {
 
-	public enum PipelineStage
+	public enum PipelineStep
 	{
+		Metadata, // mandatory step
 		Blur,
 		Shift,
 		IntensityCorrection,
@@ -37,7 +37,8 @@ public class StitchingJob implements Serializable {
 
 	private static final long serialVersionUID = 2619120742300093982L;
 
-	private final Set< PipelineStage > pipeline;
+	private final EnumSet< PipelineStep > pipeline;
+	private StitchingArguments args;
 	private transient StitchingParameters params;
 	private final String baseFolder;
 
@@ -50,6 +51,7 @@ public class StitchingJob implements Serializable {
 
 	public StitchingJob( final StitchingArguments args )
 	{
+		this.args = args;
 		pipeline = createPipeline( args );
 
 		final File inputFile = new File( args.inputFilePath() ).getAbsoluteFile();
@@ -65,34 +67,36 @@ public class StitchingJob implements Serializable {
 		baseFolder = "";
 	}
 
-	private Set< PipelineStage > createPipeline( final StitchingArguments args )
+	private EnumSet< PipelineStep > createPipeline( final StitchingArguments args )
 	{
-		final List< PipelineStage > pipelineOnlyStagesList = new ArrayList<>();
-		if ( args.onlyBlur() ) 					pipelineOnlyStagesList.add( PipelineStage.Blur );
-		if ( args.onlyShift() ) 				pipelineOnlyStagesList.add( PipelineStage.Shift );
-		if ( args.onlyIntensityCorrection() ) 	pipelineOnlyStagesList.add( PipelineStage.IntensityCorrection );
-		if ( args.onlyFuse() ) 					pipelineOnlyStagesList.add( PipelineStage.Fusion );
-		if ( args.onlyExport() ) 				pipelineOnlyStagesList.add( PipelineStage.Export );
+		final List< PipelineStep > pipelineOnlyStepsList = new ArrayList<>();
+		if ( args.onlyBlur() ) 					pipelineOnlyStepsList.add( PipelineStep.Blur );
+		if ( args.onlyShift() ) 				pipelineOnlyStepsList.add( PipelineStep.Shift );
+		if ( args.onlyIntensityCorrection() ) 	pipelineOnlyStepsList.add( PipelineStep.IntensityCorrection );
+		if ( args.onlyFuse() ) 					pipelineOnlyStepsList.add( PipelineStep.Fusion );
+		if ( args.onlyExport() ) 				pipelineOnlyStepsList.add( PipelineStep.Export );
 
-		final List< PipelineStage > pipelineNoStagesList = new ArrayList<>();
-		if ( args.noBlur() ) 					pipelineNoStagesList.add( PipelineStage.Blur );
-		if ( args.noShift() ) 					pipelineNoStagesList.add( PipelineStage.Shift );
-		if ( args.noIntensityCorrection() ) 	pipelineNoStagesList.add( PipelineStage.IntensityCorrection );
-		if ( args.noFuse() ) 					pipelineNoStagesList.add( PipelineStage.Fusion );
-		if ( args.noExport() ) 					pipelineNoStagesList.add( PipelineStage.Export );
+		final List< PipelineStep > pipelineNoStepsList = new ArrayList<>();
+		if ( args.noBlur() ) 					pipelineNoStepsList.add( PipelineStep.Blur );
+		if ( args.noShift() ) 					pipelineNoStepsList.add( PipelineStep.Shift );
+		if ( args.noIntensityCorrection() ) 	pipelineNoStepsList.add( PipelineStep.IntensityCorrection );
+		if ( args.noFuse() ) 					pipelineNoStepsList.add( PipelineStep.Fusion );
+		if ( args.noExport() ) 					pipelineNoStepsList.add( PipelineStep.Export );
 
-		if ( !pipelineOnlyStagesList.isEmpty() && !pipelineNoStagesList.isEmpty() )
-			throw new IllegalArgumentException( "Contradicting pipeline stages" );
+		if ( !pipelineOnlyStepsList.isEmpty() && !pipelineNoStepsList.isEmpty() )
+			throw new IllegalArgumentException( "Contradicting pipeline steps" );
 
-		if ( !pipelineOnlyStagesList.isEmpty() )
-			return EnumSet.copyOf( pipelineOnlyStagesList );
-		else if ( !pipelineNoStagesList.isEmpty() )
-			return EnumSet.complementOf( EnumSet.copyOf( pipelineNoStagesList ) );
+		if ( !pipelineOnlyStepsList.isEmpty() )
+			return EnumSet.of( PipelineStep.Metadata, pipelineOnlyStepsList.toArray( new PipelineStep[ 0 ] ) );
+		else if ( !pipelineNoStepsList.isEmpty() )
+			return EnumSet.complementOf( EnumSet.copyOf( pipelineNoStepsList ) );
 		else
 			return null;
 	}
 
-	public Set< PipelineStage > getPipeline() { return pipeline; }
+	public EnumSet< PipelineStep > getPipeline() { return pipeline; }
+
+	public StitchingArguments getArgs() { return args; }
 
 	public StitchingParameters getParams() { return params; }
 	public void setParams( final StitchingParameters params ) { this.params = params; }

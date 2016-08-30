@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -46,36 +45,39 @@ import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 import scala.Tuple2;
 
-/**
- * Performs intensity correction of tiles images on a Spark cluster.
- *
- * @author Igor Pisarev
- */
-
-public class IntensityCorrection implements Serializable
+public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecutor
 {
-	private static final long serialVersionUID = -6091166903910352212L;
+	private static final long serialVersionUID = -8516030608688893713L;
 
-	private final StitchingJob job;
-	private transient final JavaSparkContext sparkContext;
-	private final int numCoefficients = 10;
-	private final int iterations = 100;
-	private final int subsampleStep = 1;
+	private static final int numCoefficients = 10;
+	private static final int iterations = 100;
+	private static final int subsampleStep = 1;
 
 	private transient int counter;
 
-	public IntensityCorrection( final StitchingJob job, final JavaSparkContext sparkContext )
+	public PipelineIntensityCorrectionStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
-		this.job = job;
-		this.sparkContext = sparkContext;
+		super( job, sparkContext );
 	}
 
-	public int getNumCoefficients()
+	@Override
+	public void run()
 	{
-		return numCoefficients;
+		final List< TilePair > overlappingShiftedTiles = TileOperations.findOverlappingTiles( job.getTiles() );
+		try
+		{
+			matchIntensities( overlappingShiftedTiles );
+		}
+		catch ( final Exception e )
+		{
+			System.out.println( "Something went wrong during intensity correction:" );
+			e.printStackTrace();
+		}
 	}
 
 	/**
+	 * Performs intensity correction of tiles images on a Spark cluster.
+	 *
 	 * @param tilePairs A list of pairs of overlapping tiles
 	 */
 	public < M extends Model< M > & Affine1D< M > > void matchIntensities( final List< TilePair > tilePairs ) throws Exception
@@ -191,13 +193,13 @@ public class IntensityCorrection implements Serializable
 					}
 				});
 		final List< TileInfo > resultingTiles = taskTiles.collect();
-		final TileInfo[] allTiles = job.getTiles();
+
 		final Map< Integer, TileInfo > allTilesMap = job.getTilesMap();
 		for ( final TileInfo transformedTile : resultingTiles )
 			allTilesMap.get( transformedTile.getIndex() ).setFilePath( transformedTile.getFilePath() );
 
 		try {
-			TileInfoJSONProvider.saveTilesConfiguration( allTiles, job.getBaseFolder() + "/" + Utils.addFilenameSuffix( job.getDatasetName() + ".json", "_transformed" ) );
+			TileInfoJSONProvider.saveTilesConfiguration( job.getTiles(), job.getBaseFolder() + "/" + Utils.addFilenameSuffix( job.getDatasetName() + ".json", "_transformed" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
@@ -389,7 +391,11 @@ public class IntensityCorrection implements Serializable
 
 
 	/**
+	 * * * * * *
+	 *
 	 * Experimental code for intensity correction of a single tile
+	 *
+	 * * * * * *
 	 */
 	transient ImagePlus singleTile = null;
 	transient Map< Integer, ComparablePair< Double, Double > > minsMaxs = new HashMap<>();

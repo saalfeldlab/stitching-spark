@@ -5,6 +5,8 @@ import static bdv.img.hdf5.Util.reorder;
 import java.io.File;
 import java.util.Arrays;
 
+import org.apache.spark.api.java.JavaSparkContext;
+
 import bdv.img.h5.H5Utils;
 import ch.systemsx.cisd.base.mdarray.MDShortArray;
 import ch.systemsx.cisd.hdf5.HDF5Factory;
@@ -22,14 +24,28 @@ import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
 /**
- * Saves a collection of {@link TileInfo} objects as a HDF5 dataset.
- *
- * @author Igor Pisarev
+ * Creates HDF5 dataset consisting of tile images. May be useful for reducing the overall size and number of the output files after fusion.
  */
 
-public class Hdf5Creator
+public class PipelineExportStepExecutor extends PipelineStepExecutor
 {
+	private static final long serialVersionUID = -4522846752274871429L;
+
 	final static private int[] cellSize = new int[]{ 64, 64, 64 };
+
+	public PipelineExportStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
+	{
+		super( job, sparkContext );
+	}
+
+	@Override
+	public void run()
+	{
+		final String fusedFolder = job.getBaseFolder() + "/fused";
+		new File( fusedFolder ).mkdirs();
+		final String hdf5 = fusedFolder + "/" + job.getDatasetName() + ".hdf5";
+		createHdf5( job.getTiles(), hdf5 );
+	}
 
 	static public void createSignedShortDataset(
 			final Dimensions dimensions,

@@ -1,9 +1,15 @@
 package org.janelia.stitching;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
 
 import ij.IJ;
 import ij.ImagePlus;
@@ -28,22 +34,77 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
-/**
- * Performs the fusion of a collection of {@link TileInfo} objects within specified subregion.
- * It uses linear blending strategy on the borders.
- *
- * @author Igor Pisarev
- */
-
-public class FusionPerformer
+public class PipelineFusionStepExecutor extends PipelineStepExecutor
 {
-	private final StitchingJob job;
+	private static final long serialVersionUID = -8151178964876747760L;
 
-	public FusionPerformer( final StitchingJob job )
+	public PipelineFusionStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
-		this.job = job;
+		super( job, sparkContext );
 	}
 
+	@Override
+	public void run()
+	{
+		final Boundaries boundaries = TileOperations.getCollectionBoundaries( job.getTiles() );
+		final ArrayList< TileInfo > cells = TileOperations.divideSpaceBySize( boundaries, job.getArgs().fusionCellSize() );
+		fuse( cells );
+	}
+
+	/**
+	 * Fuses tile images within a set of cells on a Spark cluster.
+	 */
+	private void fuse( final ArrayList< TileInfo > cells )
+	{
+		System.out.println( "There are " + cells.size() + " output cells in total" );
+
+		final String fusedFolder = job.getBaseFolder() + "/fused";
+		new File( fusedFolder ).mkdirs();
+
+		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( cells );
+		final JavaRDD< TileInfo > fused = rdd.map(
+				new Function< TileInfo, TileInfo >()
+				{
+					private static final long serialVersionUID = 8324712817942470416L;
+
+					@Override
+					public TileInfo call( final TileInfo cell ) throws Exception
+					{
+						final ArrayList< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( job.getTiles(), cell );
+						if ( tilesWithinCell.isEmpty() )
+							return null;
+
+						cell.setFilePath( fusedFolder + "/" + job.getDatasetName() + "_tile" + cell.getIndex() + ".tif" );
+						System.out.println( "Starting to fuse tiles within cell " + cell.getIndex() );
+
+						fuseTilesWithinCell( tilesWithinCell, cell );
+
+						System.out.println( "Completed for cell " + cell.getIndex() );
+
+						return cell;
+					}
+				});
+
+		final ArrayList< TileInfo > output = new ArrayList<>( fused.collect() );
+		output.removeAll( Collections.singleton( null ) );
+		System.out.println( "Obtained " + output.size() + " output non-empty cells" );
+
+		try
+		{
+			final TileInfo[] newTiles = output.toArray( new TileInfo[ 0 ] );
+			job.setTiles( newTiles );
+			TileInfoJSONProvider.saveTilesConfiguration( newTiles, Utils.addFilenameSuffix( Utils.removeFilenameSuffix( job.getArgs().inputFilePath(), "_full" ), "_fused" ) );
+		}
+		catch ( final Exception e )
+		{
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Performs the fusion of a collection of {@link TileInfo} objects within specified cell.
+	 * It uses linear blending strategy on the borders.
+	 */
 	@SuppressWarnings( "unchecked" )
 	public < T extends RealType< T > & NativeType< T > > void fuseTilesWithinCell( final ArrayList< TileInfo > tiles, final TileInfo cell ) throws Exception
 	{
