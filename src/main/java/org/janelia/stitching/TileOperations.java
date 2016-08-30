@@ -161,9 +161,13 @@ public class TileOperations
 	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int subregionsCountPerDim )
 	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
+		final int[] sizePlusOneCount = new int[ space.numDimensions() ];
 		for ( int d = 0; d < subregionDimsArr.length; d++ )
-			subregionDimsArr[ d ] = ( long ) Math.ceil( ( double ) space.dimension( d ) / subregionsCountPerDim );
-		return divideSpace( space, new FinalDimensions( subregionDimsArr ) );
+		{
+			subregionDimsArr[ d ] = space.dimension( d ) / subregionsCountPerDim;
+			sizePlusOneCount[ d ] = ( int ) ( space.dimension( d ) - subregionsCountPerDim * subregionDimsArr[ d ] );
+		}
+		return divideSpace( space, new FinalDimensions( subregionDimsArr ), sizePlusOneCount );
 	}
 
 	/**
@@ -172,14 +176,18 @@ public class TileOperations
 	 */
 	public static ArrayList< TileInfo > divideSpace( final Boundaries space, final Dimensions subregionDims )
 	{
+		return divideSpace( space, subregionDims, new int[ space.numDimensions() ] );
+	}
+
+	private static ArrayList< TileInfo > divideSpace( final Boundaries space, final Dimensions subregionDims, final int[] sizePlusOneCount )
+	{
 		final ArrayList< TileInfo > subregions = new ArrayList<>();
-		divideSpaceRecursive( space, subregionDims, subregions, new TileInfo( space.numDimensions() ), 0 );
+		divideSpaceRecursive( space, subregionDims, sizePlusOneCount, subregions, new TileInfo( space.numDimensions() ), 0 );
 		for ( int i = 0; i < subregions.size(); i++ )
 			subregions.get( i ).setIndex( i );
 		return subregions;
 	}
-
-	private static void divideSpaceRecursive( final Boundaries space, final Dimensions subregionDims, final ArrayList< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
+	private static void divideSpaceRecursive( final Boundaries space, final Dimensions subregionDims, final int[] sizePlusOneCount, final ArrayList< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
 	{
 		if ( currDim == space.numDimensions() )
 		{
@@ -187,14 +195,20 @@ public class TileOperations
 			return;
 		}
 
-		for ( long coord = space.min( currDim ); coord <= space.max( currDim ); coord += subregionDims.dimension( currDim ) )
+		int i = 0;
+		for ( long coord = space.min( currDim ); coord <= space.max( currDim ); coord += subregionDims.dimension( currDim ), i++ )
 		{
-
 			final TileInfo newSubregion = currSubregion.clone();
 			newSubregion.setPosition( currDim, coord );
 			newSubregion.setSize( currDim, Math.min( subregionDims.dimension( currDim ), space.max( currDim ) - coord + 1 ) );
 
-			divideSpaceRecursive( space, subregionDims, subregions, newSubregion, currDim + 1 );
+			if ( i < sizePlusOneCount[ currDim ] )
+			{
+				coord++;
+				newSubregion.setSize( currDim, newSubregion.getSize( currDim ) + 1 );
+			}
+
+			divideSpaceRecursive( space, subregionDims, sizePlusOneCount, subregions, newSubregion, currDim + 1 );
 		}
 	}
 }
