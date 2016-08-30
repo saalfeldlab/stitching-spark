@@ -6,6 +6,12 @@ import java.util.Map;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.stitching.StitchingJob.PipelineStep;
 
+/**
+ * Simplifies obtaining a concrete pipeline step executor.
+ *
+ * @author Igor Pisarev
+ */
+
 public final class PipelineStepExecutorFactory
 {
 	final Map< PipelineStep, PipelineStepExecutor > executors;

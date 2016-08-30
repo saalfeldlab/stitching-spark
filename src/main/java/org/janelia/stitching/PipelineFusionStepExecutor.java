@@ -34,6 +34,13 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
+/**
+ * Fuses a set of tiles within a set of small square cells using linear blending.
+ * Saves fused tile configuration on the disk.
+ *
+ * @author Igor Pisarev
+ */
+
 public class PipelineFusionStepExecutor extends PipelineStepExecutor
 {
 	private static final long serialVersionUID = -8151178964876747760L;

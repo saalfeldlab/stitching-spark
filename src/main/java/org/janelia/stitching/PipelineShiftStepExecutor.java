@@ -28,6 +28,13 @@ import mpicbg.stitching.PairWiseStitchingImgLib;
 import mpicbg.stitching.PairWiseStitchingResult;
 import stitching.utils.Log;
 
+/**
+ * Computes updated tile positions using phase correlation for pairwise matches and then global optimization for fitting all of them together.
+ * Saves updated tile configuration on the disk.
+ *
+ * @author Igor Pisarev
+ */
+
 public class PipelineShiftStepExecutor extends PipelineStepExecutor
 {
 	private static final long serialVersionUID = -7152174064553332061L;

@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -44,6 +45,13 @@ import net.imglib2.view.IntervalView;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 import scala.Tuple2;
+
+/**
+ * Performs intensity correction of a set of tiles.
+ * Saves updated tile configuration on the disk.
+ *
+ * @author Igor Pisarev
+ */
 
 public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecutor
 {
@@ -524,4 +532,24 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 			e.printStackTrace();
 		}
 	}
+}
+
+
+class PairwiseMatches implements Serializable
+{
+	private static final long serialVersionUID = -5545968755784993282L;
+
+	private TilePair tilePair;
+	private ArrayList< PointMatch >[][] matches;
+
+	public PairwiseMatches( final TilePair tilePair, final ArrayList< PointMatch >[][] matches )
+	{
+		this.tilePair = tilePair;
+		this.matches = matches;
+	}
+
+	protected PairwiseMatches() { }
+
+	public TilePair getTilePair() { return tilePair; }
+	public ArrayList< PointMatch >[][] getMatches() { return matches; }
 }

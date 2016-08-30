@@ -16,6 +16,8 @@ import mpicbg.stitching.ImageCollectionElement;
 /**
  * Queries metadata (image type and dimensions) for each tile using Spark cluster.
  * Saves updated tile configuration on the disk.
+ *
+ * @author Igor Pisarev
  */
 
 public class PipelineMetadataStepExecutor extends PipelineStepExecutor

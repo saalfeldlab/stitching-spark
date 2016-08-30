@@ -15,7 +15,10 @@ import ij.ImagePlus;
 import ij.plugin.filter.GaussianBlur;
 
 /**
- * Applies gaussian blur to the input tile images and stores them separately on the disk
+ * Applies gaussian blur to the input tile images.
+ * Stores them separately on the disk along with new tile configuration.
+ *
+ * @author Igor Pisarev
  */
 
 public class PipelineBlurStepExecutor extends PipelineStepExecutor

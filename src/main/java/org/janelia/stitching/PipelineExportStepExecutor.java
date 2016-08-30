@@ -24,7 +24,10 @@ import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
 /**
- * Creates HDF5 dataset consisting of tile images. May be useful for reducing the overall size and number of the output files after fusion.
+ * Creates HDF5 dataset consisting of tile images.
+ * May be useful for reducing the overall size and number of the output files after fusion.
+ *
+ * @author Igor Pisarev
  */
 
 public class PipelineExportStepExecutor extends PipelineStepExecutor

@@ -4,6 +4,12 @@ import java.io.Serializable;
 
 import org.apache.spark.api.java.JavaSparkContext;
 
+/**
+ * Base class for all tasks implementations that should be executed as a part of the pipeline.
+ *
+ * @author Igor Pisarev
+ */
+
 public abstract class PipelineStepExecutor implements Runnable, Serializable
 {
 	private static final long serialVersionUID = 3546355803511705943L;
@@ -16,10 +22,4 @@ public abstract class PipelineStepExecutor implements Runnable, Serializable
 		this.job = job;
 		this.sparkContext = sparkContext;
 	}
-
-	/*protected PipelineStep()
-	{
-		this.job = null;
-		this.sparkContext = null;
-	}*/
 }
