@@ -14,7 +14,7 @@ public class TileInfo implements Serializable {
 
 	private ImageType type;
 	private Integer index;
-	private String filePath;
+	private String file;
 	private double[] position;
 	private long[] size;
 
@@ -26,11 +26,11 @@ public class TileInfo implements Serializable {
 	protected TileInfo() { }
 
 	public String getFilePath() {
-		return filePath;
+		return file;
 	}
 
 	public void setFilePath( final String filePath ) {
-		this.filePath = filePath;
+		this.file = filePath;
 	}
 
 	public double getPosition( final int d ) {
@@ -102,7 +102,7 @@ public class TileInfo implements Serializable {
 		final TileInfo newTile = new TileInfo();
 		newTile.setType( type );
 		newTile.setIndex( index == null ? null : new Integer( index.intValue() ) );
-		newTile.setFilePath( filePath );
+		newTile.setFilePath( file );
 		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );
 		return newTile;
