@@ -43,9 +43,12 @@ public class DistanceFromOriginal
 
 		final ArrayList< TileInfo > goodTiles = new ArrayList<>();
 		final ArrayList< TileInfo > badTiles = new ArrayList<>();
+
+		int identical = 0;
 		for ( int i = 0; i < n; i++ )
 		{
-			if ( !tilesOrig[ i ].getIndex().equals( tilesMod[ i ].getIndex() ) )// || !tilesOrig[ i ].getFile().equals( tilesMod[ i ].getFile() ) )
+
+			if ( false )//!tilesOrig[ i ].getIndex().equals( tilesMod[ i ].getIndex() ) || !tilesOrig[ i ].getFilePath().equals( tilesMod[ i ].getFilePath() ) )
 				throw new IllegalArgumentException( "Tiles mismatch: orig=" + tilesOrig[ i ].getIndex() + ", mod=" + tilesMod[ i ].getIndex() + "\n"
 						+ "orig=" + tilesOrig[ i ].getFilePath() + ", mod=" + tilesMod[ i ].getFilePath() );
 
@@ -53,12 +56,16 @@ public class DistanceFromOriginal
 			final double[] dist = new double[ dim ];
 
 			boolean isGoodTile = true;
+			int diffSum = 0;
 			for ( int d = 0; d < dim; d++ )
 			{
 				dist[ d ] = tilesOrig[ i ].getPosition( d ) - tilesMod[ i ].getPosition( d );
+				diffSum += dist[ d ];
 				if ( Math.abs( dist[ d ] ) > tilesOrig[ i ].getSize( d ) / 7 )
 					isGoodTile = false;
 			}
+			if ( diffSum == 0 )
+				identical++;
 
 			System.out.println( tilesOrig[ i ].getIndex() + ": " + Arrays.toString( dist ) );
 
@@ -69,6 +76,8 @@ public class DistanceFromOriginal
 				badTiles.add( tilesOrig[ i ] );
 			}
 		}
+		if ( identical == n )
+			System.out.println( "The configurations are identical!" );
 
 		System.out.println( "----------------------" );
 		System.out.println( "Found " + goodTiles.size() + " good tiles out of " + n );
