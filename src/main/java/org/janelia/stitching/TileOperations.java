@@ -49,6 +49,22 @@ public class TileOperations
 	}
 
 	/**
+	 * @return an true if two tiles overlap
+	 */
+	public static boolean overlap( final TileInfo t1, final TileInfo t2 )
+	{
+		for ( int d = 0; d < t1.numDimensions(); d++ )
+		{
+			final long p1 = Math.round( t1.getPosition( d ) ), p2 = Math.round( t2.getPosition( d ) );
+			final long s1 = t1.getSize( d ), s2 = t2.getSize( d );
+
+			if ( !( ( p2 >= p1 && p2 < p1 + s1 ) || ( p1 >= p2 && p1 < p2 + s2 ) ) )
+				return false;
+		}
+		return true;
+	}
+
+	/**
 	 * @return an overlap with global coordinates
 	 */
 	public static Boundaries getOverlappingRegionGlobal( final TileInfo t1, final TileInfo t2 )
@@ -87,7 +103,7 @@ public class TileOperations
 	{
 		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
-			if ( TileOperations.getOverlappingRegion( tile, subregion ) != null )
+			if ( TileOperations.overlap( tile, subregion ) )
 				tilesWithinSubregion.add( tile );
 		return tilesWithinSubregion;
 	}

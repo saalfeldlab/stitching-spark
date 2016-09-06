@@ -38,13 +38,13 @@ public class NonOverlappingShifts
 			final TileInfo t1 = shift.getTilePair().first().clone();
 			final TileInfo t2 = shift.getTilePair().second().clone();
 
-			if ( TileOperations.getOverlappingRegion( t1, t2 ) == null )
+			if ( !TileOperations.overlap( t1, t2 ) )
 				throw new Exception( "impossible" );
 
 			for ( int d = 0; d < shift.getNumDimensions(); d++ )
 				t2.setPosition( d, t1.getPosition( d ) + shift.getOffset( d ) );
 
-			if ( TileOperations.getOverlappingRegion( t1, t2 ) == null)
+			if ( !TileOperations.overlap( t1, t2 ) )
 			{
 				badShifts.add( shift );
 				cross += shift.getCrossCorrelation();

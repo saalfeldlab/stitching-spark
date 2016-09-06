@@ -11,7 +11,6 @@ import java.util.TreeSet;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
-import org.janelia.stitching.TileOperations;
 import org.janelia.util.ComparablePair;
 
 /**
@@ -136,8 +135,6 @@ public class ThresholdEstimation
 	{
 		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
 
-
-
 		// -----------------------
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( !shift.getIsValidOverlap() )
@@ -151,33 +148,9 @@ public class ThresholdEstimation
 			throw new Exception( "Negative cross correlation" );
 		// -----------------------
 
-
-
-
 		final double threshold = findOptimalThreshold( shifts );
 		System.out.println( "Optimal threshold value: " + threshold );
 
 		printTilesHighestCorrelationWithPair( shifts );
-
-
-		final ArrayList< SerializablePairWiseStitchingResult> nonOverlappingShifts = new ArrayList<>();
-		for ( final SerializablePairWiseStitchingResult shift : shifts )
-		{
-			if ( shift.getCrossCorrelation() < threshold )
-				continue;
-
-			final TileInfo t1 = shift.getTilePair().first().clone();
-			final TileInfo t2 = shift.getTilePair().second().clone();
-
-			if ( TileOperations.getOverlappingRegion( t1, t2 ) == null )
-				throw new Exception( "impossible" );
-
-			for ( int d = 0; d < shift.getNumDimensions(); d++ )
-				t2.setPosition( d, t1.getPosition( d ) + shift.getOffset( d ) );
-
-			if ( TileOperations.getOverlappingRegion( t1, t2 ) == null)
-				nonOverlappingShifts.add( shift );
-		}
-		System.out.println( "There are " + nonOverlappingShifts.size() + " non-overlapping shifts after thresholding" );
 	}
 }
