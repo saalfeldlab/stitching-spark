@@ -21,8 +21,8 @@ public class StitchingSpark implements Runnable, Serializable {
 		if ( !stitchingArgs.parsedSuccessfully() )
 			System.exit( 1 );
 
-		final StitchingSpark st = new StitchingSpark( stitchingArgs );
-		st.run();
+		final StitchingSpark driver = new StitchingSpark( stitchingArgs );
+		driver.run();
 	}
 
 	private static final long serialVersionUID = 6006962943789087537L;
@@ -48,11 +48,10 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 
 		final StitchingParameters params = new StitchingParameters();
-		params.dimensionality = job.getDimensionality();
 		params.channel1 = 0;
 		params.channel2 = 0;
 		params.timeSelect = 0;
-		params.checkPeaks = 250;
+		params.checkPeaks = 100;
 		params.computeOverlap = true;
 		params.subpixelAccuracy = false;
 		params.virtual = true;

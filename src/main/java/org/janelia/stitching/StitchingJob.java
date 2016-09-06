@@ -142,6 +142,8 @@ public class StitchingJob implements Serializable {
 
 		// Everything is correct
 		this.dimensionality = tiles[ 0 ].numDimensions();
+		if ( params != null )
+			params.dimensionality = dimensionality;
 	}
 
 	private void checkTilesConfiguration() throws Exception
