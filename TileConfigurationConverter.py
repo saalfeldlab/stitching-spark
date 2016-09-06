@@ -17,6 +17,7 @@ if __name__ == '__main__':
 		out_file = open( out_path, 'w' )
 	
 	data = []
+	index = 0
 	with open(args.path) as in_file:
 		for line in in_file.readlines():
 			tokens = [t.strip() for t in line.strip().split()]
@@ -26,7 +27,9 @@ if __name__ == '__main__':
 			if tokens[0].endswith(wrong_suffix):
 				tokens[0] = tokens[0][ : len(tokens[0]) - len(wrong_suffix) ] + '.tif'
 
-			data.append({ 'file': abs_path_prefix + tokens[0], 'position': [float(tokens[2]), float(tokens[1]), float(tokens[3])] })
+			data.append({ 'index': index, 'file': abs_path_prefix + tokens[0], 'position': [float(tokens[2]), float(tokens[1]), float(tokens[3])] })
+
+			index += 1
 	
 	out_file.write(json.dumps(data))
 	out_file.close()
