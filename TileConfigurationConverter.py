@@ -7,13 +7,12 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 	
 	out_path = args.path + '.json'
-	abs_path_prefix = ''
+	sep_ind = out_path.rindex('/') + 1
+	abs_path_prefix = out_path[ : sep_ind ]
 	try:
 		out_file = open( out_path, 'w' )
 	except IOError:
 		# non-writable path, store in the current directory as a fallback
-		sep_ind = out_path.rindex('/') + 1
-		abs_path_prefix = out_path[ : sep_ind ]
 		out_path = out_path[sep_ind : ]
 		out_file = open( out_path, 'w' )
 	
