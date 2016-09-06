@@ -57,11 +57,9 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 {
 	private static final long serialVersionUID = -8516030608688893713L;
 
-	private static final int numCoefficients = 10;
-	private static final int iterations = 100;
-	private static final int subsampleStep = 1;
-
-	private transient int counter;
+	private static final int numCoefficients = 2;
+	private static final int iterations = 10;
+	private static final int subsampleStep = 100;
 
 	public PipelineIntensityCorrectionStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
@@ -181,7 +179,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 						final TileInfo tile = tileCoeffs._1;
 						final ArrayList< double[] > coeffs = tileCoeffs._2;
 
-						System.out.println( "Applying transfomration for tile " + tile.getIndex() );
+						System.out.println( "Applying transformation for tile " + tile.getIndex() );
 
 						final double[] coeffsPlain = new double[ coeffs.size() * 2 ];
 						for ( int i = 0; i < 2; i++)
@@ -190,11 +188,14 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 						final LinearIntensityMap< DoubleType > transform = new LinearIntensityMap< >( ArrayImgs.doubles( coeffsPlain, numCoefficients, numCoefficients, numCoefficients, 2 ) );
 
 						final ImagePlus imp = IJ.openImage( tile.getFilePath() );
+						Utils.workaroundImagePlusNSlices( imp );
 						final RandomAccessibleInterval r = ImagePlusImgs.from( imp );
 						transform.run( r );
 
 						tile.setFilePath( destFolder + "/" + Utils.addFilenameSuffix( new File( tile.getFilePath() ).getName(), "_transformed" ) );
 						final ImagePlus transformed = ImageJFunctions.wrap( r, "" );
+						Utils.workaroundImagePlusNSlices( transformed );
+
 						IJ.saveAsTiff( transformed, tile.getFilePath() );
 
 						return tile;
@@ -237,7 +238,9 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		final double[] minValues = new double[ 2 ], maxValues = new double[ 2 ], valuesRange = new double[ 2 ];
 		for ( int i = 0; i < 2; i++ )
 		{
-			final ImagePlus imp = IJ.openImage( Utils.getAbsoluteImagePath( job, tilePairArr[ i ] ) );
+			final ImagePlus imp = Utils.createElement( job, tilePairArr[ i ] ).open( false );
+			Utils.workaroundImagePlusNSlices( imp );
+
 			final Boundaries overlap = TileOperations.getOverlappingRegion( tilePairArr[ i ], tilePairArr[ (i + 1) % 2 ] );
 			localIntersectionOrigin[ i ] = overlap.getMin();
 			tileSize[ i ] = tilePairArr[ i ].getSize();
@@ -278,10 +281,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 				coeffTilesPlainInd[ i ] = IntervalIndexer.positionToIndex( coeffTileInd, coeffsDimPerTile() );
 			}
 
-			if ( pointMatch[ 0 ].getL()[ 0 ] < 0.5 && pointMatch[ 1 ].getL()[ 0 ] < 0.5 )
-				continue;
-
-			final PointMatch match = new PointMatch( pointMatch[ 0 ], pointMatch[ 1 ], pointMatch[ 0 ].getL()[ 0 ] * pointMatch[ 1 ].getL()[ 0 ] );
+			final double weight = pointMatch[ 0 ].getL()[ 0 ] * pointMatch[ 1 ].getL()[ 0 ];
+			final PointMatch match = new PointMatch( pointMatch[ 0 ], pointMatch[ 1 ], weight );
 			coeffMatchesPairwise[ coeffTilesPlainInd[ 0 ] ][ coeffTilesPlainInd[ 1 ] ].add( match );
 		}
 		if ( cursors[ 0 ].hasNext() != cursors[ 1 ].hasNext() )
@@ -318,14 +319,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	 */
 	private void connectCoeffsWithinTile( final ArrayList< ? extends Tile< ? > > coeffTilesList )
 	{
-		counter = 0;
 		final Set< Integer > visited = new HashSet<>();
 		connectCoeffsWithinTileRecursive( coeffTilesList, null, -1, visited, new int[ job.getDimensionality() ], coeffsDimPerTile() );
-
-		if ( counter == Math.pow( numCoefficients - 1, job.getDimensionality() ) )
-			System.out.println( "counter OK" );
-		else
-			System.out.println( "counter failed: expected " + Math.pow( numCoefficients - 1, job.getDimensionality() ) + ", actual " + counter );
 	}
 	private void connectCoeffsWithinTileRecursive( final ArrayList< ? extends Tile< ? > > coeffTilesList, final Tile< ? > prevTile, final int prevPlainIndex, final Set< Integer > visited, final int[] pos, final int[] dim )
 	{
@@ -349,8 +344,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 
 	private void identityConnect( final Tile< ? > t1, final int p1, final Tile< ? > t2, final int p2 )
 	{
-		counter++;
 		final ArrayList< PointMatch > matches = new ArrayList< >();
+		final double weight = 1;
 
 		final double min1 = ( minsMaxs.containsKey( p1 ) ? minsMaxs.get( p1 ).first  : 0 );
 		final double max1 = ( minsMaxs.containsKey( p1 ) ? minsMaxs.get( p1 ).second : 1 );
@@ -358,8 +353,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		final double min2 = ( minsMaxs.containsKey( p2 ) ? minsMaxs.get( p2 ).first  : 0 );
 		final double max2 = ( minsMaxs.containsKey( p2 ) ? minsMaxs.get( p2 ).second : 1 );
 
-		matches.add( new PointMatch( new Point( new double[] { min2 } ), new Point( new double[] { min1 } ) ) );
-		matches.add( new PointMatch( new Point( new double[] { max2 } ), new Point( new double[] { max1 } ) ) );
+		matches.add( new PointMatch( new Point( new double[] { min2 } ), new Point( new double[] { min1 } ), weight ) );
+		matches.add( new PointMatch( new Point( new double[] { max2 } ), new Point( new double[] { max1 } ), weight ) );
 
 		t1.connect( t2, matches );
 	}
@@ -414,6 +409,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 				new AffineModel1D() );
 
 		singleTile = IJ.openImage( tile.getFilePath() );
+		Utils.workaroundImagePlusNSlices( singleTile );
+
 		final RandomAccessibleInterval rai = ImagePlusImgs.from( singleTile );
 		TileOperations.translateTilesToOrigin( new TileInfo[] { tile } );
 		final ArrayList< TileInfo > coeffSubregions = TileOperations.divideSpaceByCount( tile.getBoundaries(), numCoefficients );
@@ -421,8 +418,10 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		{
 			final IntervalView coeffTileInterval = Views.interval( rai, coeffSubregion.getBoundaries() );
 			final ImagePlus coeffTileIntervalWrapped = ImageJFunctions.wrap( coeffTileInterval, "" );
+			Utils.workaroundImagePlusNSlices( coeffTileIntervalWrapped );
+
 			final int[] dimensions = coeffTileIntervalWrapped.getDimensions();
-			final int numSlices = dimensions[2 ] * dimensions[3] * dimensions[4];
+			final int numSlices = dimensions[2] * dimensions[3] * dimensions[4];
 
 			double minValue = Double.MAX_VALUE, maxValue = -Double.MAX_VALUE;
 			for ( int slice = 1; slice <= numSlices; slice++ )
@@ -501,7 +500,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 						final TileInfo tile = tileCoeffs._1;
 						final ArrayList< double[] > coeffs = tileCoeffs._2;
 
-						System.out.println( "Applying transfomration for tile " + tile.getIndex() );
+						System.out.println( "Applying transformation for tile " + tile.getIndex() + "..." );
 
 						final double[] coeffsPlain = new double[ coeffs.size() * 2 ];
 						for ( int i = 0; i < 2; i++)
@@ -510,6 +509,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 						final LinearIntensityMap< DoubleType > transform = new LinearIntensityMap< >( ArrayImgs.doubles( coeffsPlain, numCoefficients, numCoefficients, numCoefficients, 2 ) );
 
 						final ImagePlus imp = IJ.openImage( tile.getFilePath() );
+						Utils.workaroundImagePlusNSlices( imp );
+
 						final RandomAccessibleInterval r = ImagePlusImgs.from( imp );
 						transform.run( r );
 

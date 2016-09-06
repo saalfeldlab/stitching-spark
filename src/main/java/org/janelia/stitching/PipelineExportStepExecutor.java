@@ -121,6 +121,7 @@ public class PipelineExportStepExecutor extends PipelineStepExecutor
 			System.out.println( "position=" + Arrays.toString( tile.getPosition() ) );
 
 			final ImagePlus img = IJ.openImage( tile.getFilePath() );
+			Utils.workaroundImagePlusNSlices( img );
 			final Img< UnsignedShortType > in = ImageJFunctions.wrapShort( img );
 
 			final RandomAccessibleInterval< UnsignedShortType > view = Views.translate(

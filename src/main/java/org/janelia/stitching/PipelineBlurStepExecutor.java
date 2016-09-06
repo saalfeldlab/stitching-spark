@@ -47,6 +47,7 @@ public class PipelineBlurStepExecutor extends PipelineStepExecutor
 					{
 						System.out.println( "Blurring tile " + tile.getIndex() );
 						final ImagePlus imp = IJ.openImage( tile.getFilePath() );
+						Utils.workaroundImagePlusNSlices( imp );
 						final GaussianBlur blur = new GaussianBlur();
 						blur.setup( "", imp );
 						for ( int slice = 1; slice <= imp.getNSlices(); slice++ )

@@ -142,10 +142,16 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 						final ImageCollectionElement el1 = Utils.createElement( job, pairOfTiles.first() );
 						final ImageCollectionElement el2 = Utils.createElement( job, pairOfTiles.second() );
 
+						final ImagePlus imp1 = IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles.first() ) );
+						final ImagePlus imp2 = IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles.second() ) );
+
+						Utils.workaroundImagePlusNSlices( imp1 );
+						Utils.workaroundImagePlusNSlices( imp2 );
+
 						final int timepoint = 1;
 						final ComparePair pair = new ComparePair(
-								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles.first() ) ), el1.getIndex(), timepoint, el1.getModel(), el1 ),
-								new ImagePlusTimePoint( IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles.second() ) ), el2.getIndex(), timepoint, el2.getModel(), el2 ) );
+								new ImagePlusTimePoint( imp1, el1.getIndex(), timepoint, el1.getModel(), el1 ),
+								new ImagePlusTimePoint( imp2, el2.getIndex(), timepoint, el2.getModel(), el2 ) );
 
 						Roi roi1 = null, roi2 = null;
 						if ( !job.getArgs().noRoi() )
@@ -163,7 +169,7 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 							initialOffset[ d ] = pairOfTiles.second().getPosition( d ) - pairOfTiles.first().getPosition( d );
 
 						final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
-								pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint2(), job.getParams(), initialOffset, pairOfTiles.first().getSize() );
+								pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint2(), job.getParams()/*, initialOffset, pairOfTiles.first().getSize()*/ );
 
 						System.out.println( "Stitched tiles " + pairOfTiles.first().getIndex() + " and " + pairOfTiles.second().getIndex() + System.lineSeparator() +
 								"   CrossCorr=" + result.getCrossCorrelation() + ", PhaseCorr=" + result.getPhaseCorrelation() + ", RelShift=" + Arrays.toString( result.getOffset() ) );
@@ -214,6 +220,7 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 			comparePairs.addElement( comparePair );
 		}
 
+		final long lastTime = System.nanoTime();
 		System.out.println( "Perform global optimization" );
 		final ArrayList< ImagePlusTimePoint > optimized = new ArrayList<>();
 		if ( !comparePairs.isEmpty() )
@@ -222,6 +229,9 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 		System.out.println( "Global optimization done" );
 		for ( final ImagePlusTimePoint imt : optimized )
 			Log.info( imt.getImpId() + ": " + imt.getModel() );
+
+		System.out.println( "****" );
+		System.out.println( "Global optimization took " + ((System.nanoTime() - lastTime)/Math.pow( 10, 9 )) +"s" );
 
 		// Update tile positions
 		final Map< Integer, TileInfo > tilesMap = job.getTilesMap();

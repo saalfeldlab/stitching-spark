@@ -2,9 +2,11 @@ package org.janelia.stitching;
 
 import java.io.File;
 import java.nio.file.Paths;
+import java.util.Arrays;
 
 import org.janelia.util.Conversions;
 
+import ij.ImagePlus;
 import mpicbg.stitching.ImageCollectionElement;
 
 /**
@@ -66,5 +68,13 @@ public class Utils {
 	public static ImageCollectionElement createElement( final TileInfo tile ) throws Exception
 	{
 		return createElement( null, tile );
+	}
+
+	public static void workaroundImagePlusNSlices( final ImagePlus imp )
+	{
+		final int[] possible3rdDim = new int[] { imp.getNChannels(), imp.getNSlices(), imp.getNFrames() };
+		Arrays.sort( possible3rdDim );
+		if ( possible3rdDim[ 0 ] * possible3rdDim[ 1 ] == 1 )
+			imp.setDimensions( 1, possible3rdDim[ 2 ], 1 );
 	}
 }

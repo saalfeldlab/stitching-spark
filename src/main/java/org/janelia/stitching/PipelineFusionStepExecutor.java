@@ -154,6 +154,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 			final TileInfo tile = tiles.get( i );
 			System.out.println( "[Cell " + cell.getIndex() + "] Loading image " + ( i + 1 ) + " of " + tiles.size() );
 			final ImagePlus imp = IJ.openImage( Utils.getAbsoluteImagePath( job, tile ) );
+			Utils.workaroundImagePlusNSlices( imp );
 
 			final Boundaries tileBoundaries = tile.getBoundaries();
 			final FinalInterval intersection = Intervals.intersect( new FinalInterval( tileBoundaries.getMin(), tileBoundaries.getMax() ), pixelsArrInterval );

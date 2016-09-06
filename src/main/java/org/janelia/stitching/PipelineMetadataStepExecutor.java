@@ -8,7 +8,6 @@ import java.util.Map;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
-import org.janelia.util.Conversions;
 
 import ij.ImagePlus;
 import mpicbg.stitching.ImageCollectionElement;
@@ -19,8 +18,8 @@ import mpicbg.stitching.ImageCollectionElement;
  *
  * @author Igor Pisarev
  */
-
 public class PipelineMetadataStepExecutor extends PipelineStepExecutor
+
 {
 	private static final long serialVersionUID = -4817219922945295127L;
 
@@ -58,10 +57,14 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 						final ImageCollectionElement el = Utils.createElement( job, tile );
 						final ImagePlus imp = el.open( true );
 
-						// FIXME: workaround for misinterpreting slices as timepoints when no metadata is present
-						long[] size = Conversions.toLongArray( el.getDimensions() );
-						if ( size.length == 2 && imp.getNFrames() > 1 )
-							size = new long[] { size[ 0 ], size[ 1 ], imp.getNFrames() };
+						final int[] fullDimensions = imp.getDimensions();
+						final long[] size = new long[ imp.getNDimensions() ];
+						size[ 0 ] = fullDimensions[ 0 ];
+						size[ 1 ] = fullDimensions[ 1 ];
+						int actualDimIndex = 2;
+						for ( int d = 2; d < fullDimensions.length; d++ )
+							if ( fullDimensions[ d ] > 1)
+								size[ actualDimIndex++ ] = fullDimensions[ d ];
 
 						tile.setType( ImageType.valueOf( imp.getType() ) );
 						tile.setSize( size );
