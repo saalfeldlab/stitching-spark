@@ -19,10 +19,9 @@ public class CompareOverlap
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final int i1 = 252, i2 = 263;
-
-		System.out.println( "Tiles " + i1 + " and " + i2 + ":" );
 		String filename = args[ 0 ];
+		final int i1 = Integer.parseInt( args[ 1 ] ), i2 = Integer.parseInt( args[ 2 ] );
+		System.out.println( "Tiles " + i1 + " and " + i2 + ":" );
 		TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( filename );
 		ArrayList< TileInfo > twoTiles = new ArrayList<>();
 		for ( final TileInfo tile : tiles )

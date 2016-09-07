@@ -8,6 +8,7 @@ import java.util.Arrays;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
+import org.janelia.util.Conversions;
 
 /**
  * Finds tiles lying at the specified point.
@@ -22,7 +23,7 @@ public class FindTilesAtPoint
 		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
 		TileOperations.translateTilesToOrigin( tiles );
 
-		final double[] point = new double[] { 325, 800, 20 };
+		final double[] point = Conversions.parseDoubleArray( args[ 1 ].split( "," ) );
 
 		final TileInfo subregion = new TileInfo( point.length );
 		subregion.setPosition( point );

@@ -2,13 +2,13 @@ package org.janelia.stitching.analysis;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Set;
 import java.util.TreeSet;
 
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
+import org.janelia.util.Conversions;
 
 /**
  * Chooses a subset of tiles from initial tile configuration based on specified criteria
@@ -19,9 +19,28 @@ import org.janelia.stitching.Utils;
 
 public class FilterTileConfiguration
 {
-	public static void main( final String[] args ) throws IOException
+	public static void main( final String[] args ) throws Exception
 	{
-		filterByTileIndexes( args[ 0 ], new TreeSet< >( Arrays.asList( 145, 154 ) ) );
+		final String filename = args[ 0 ];
+		final String filterType = args[ 1 ];
+		final String filter = args[ 2 ];
+
+		switch ( filterType )
+		{
+		case "str":
+			filterByFilename( filename, filter );
+			break;
+		case "in":
+			filterByTileIndexes( filename, new TreeSet< >( Conversions.arrToList( Conversions.parseIntArray( filter.split( "," ) ) ) ) );
+			break;
+		case "out":
+			filterByTileIndexesExcluded( filename, new TreeSet< >( Conversions.arrToList( Conversions.parseIntArray( filter.split( "," ) ) ) ) );
+			break;
+
+		default:
+			throw new Exception( "Unknown filter type provided. Accepted values are: str,in,out" );
+		}
+
 	}
 
 	public static void filterByFilename( final String inputFilename, final String filenameFilter ) throws IOException

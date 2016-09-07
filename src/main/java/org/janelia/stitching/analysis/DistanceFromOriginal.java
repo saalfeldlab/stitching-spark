@@ -37,8 +37,6 @@ public class DistanceFromOriginal
 
 		final int n = tilesOrig.length;
 		System.out.println( "There are " + n + " tiles" );
-
-		System.out.println( "dimensions : " + Arrays.toString( tilesOrig[ 0 ].getSize() ) );
 		System.out.println( "----------------------" );
 
 		final ArrayList< TileInfo > goodTiles = new ArrayList<>();
@@ -66,18 +64,34 @@ public class DistanceFromOriginal
 			}
 			if ( diffSum == 0 )
 				identical++;
-
-			System.out.println( tilesOrig[ i ].getIndex() + ": " + Arrays.toString( dist ) );
+			//else
+			//	System.out.println( tilesOrig[ i ].getIndex() + ": " + Arrays.toString( dist ) );
 
 			if ( isGoodTile )
+			{
 				goodTiles.add( tilesOrig[ i ] );
+			}
 			else
 			{
+				System.out.println( Arrays.toString( dist ) );
 				badTiles.add( tilesOrig[ i ] );
 			}
+
+
+
+			diffSum = 0;
+			for ( int d = 0; d < dim; d++ )
+			{
+				dist[ d ] = tilesOrig[ i ].getSize( d ) - tilesMod[ i ].getSize( d );
+				diffSum += dist[ d ];
+			}
+			//if ( diffSum != 0 )
+			//	System.out.println( tilesOrig[ i ].getIndex() + ": " + Arrays.toString( dist ) );
 		}
 		if ( identical == n )
 			System.out.println( "The configurations are identical!" );
+		else
+			System.out.println( "Identical positions: " + identical );
 
 		System.out.println( "----------------------" );
 		System.out.println( "Found " + goodTiles.size() + " good tiles out of " + n );

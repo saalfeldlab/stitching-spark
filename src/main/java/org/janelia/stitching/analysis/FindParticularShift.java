@@ -22,7 +22,8 @@ public class FindParticularShift
 	{
 		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
 
-		final int i1 = 145, i2 = 154;
+		final int i1 = Integer.parseInt( args[ 1 ] ), i2 = Integer.parseInt( args[ 2 ] );
+		System.out.println( "Tiles " + i1 + " and " + i2 + ":" );
 
 		int hits = 0;
 		SerializablePairWiseStitchingResult shift = null;
