@@ -132,15 +132,18 @@ public class PixelSumSpark implements Runnable, Serializable
 		final Cursor< T > cursorIn2 = iterIn2.cursor();
 
 		// Create output image
-		final Img< T > out = new ImagePlusImgFactory< T >().create( tilePair.first().getSize(), ( T ) tilePair.first().getType().getType() );
+		final long[] outSize = new long[ tilePair.first().numDimensions() ];
+		for ( int d = 0; d < outSize.length; d++ )
+			outSize[ d ] = Math.min( tilePair.first().getSize( d ), tilePair.second().getSize( d ) );
+		final Img< T > out = new ImagePlusImgFactory< T >().create( outSize, ( T ) tilePair.first().getType().getType() );
 		final IterableInterval< T > iterOut = Views.flatIterable( out );
 		final Cursor< T > cursorOut = iterOut.cursor();
 
 		while ( cursorIn1.hasNext() && cursorIn2.hasNext() && cursorOut.hasNext() )
 			cursorOut.next().setReal( cursorIn1.next().getRealDouble() + cursorIn2.next().getRealDouble() );
 
-		if ( cursorIn1.hasNext() || cursorIn2.hasNext() || cursorOut.hasNext() )
-			throw new Exception( "Different intervals" );
+		//if ( cursorIn1.hasNext() || cursorIn2.hasNext() || cursorOut.hasNext() )
+		//	throw new Exception( "Different intervals for tiles " + tilePair.first().getIndex() + " and " + tilePair.second().getIndex() );
 
 		final ImagePlus outImg = ImageJFunctions.wrap( out, "" );
 		Utils.workaroundImagePlusNSlices( outImg );
