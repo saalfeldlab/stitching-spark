@@ -86,7 +86,7 @@ public class StitchingJob implements Serializable {
 		if ( !pipelineOnlyStepsList.isEmpty() && !pipelineNoStepsList.isEmpty() )
 			throw new IllegalArgumentException( "Contradicting pipeline steps" );
 
-		if ( !pipelineOnlyStepsList.isEmpty() )
+		if ( !pipelineOnlyStepsList.isEmpty() || args.onlyMeta() )
 			return EnumSet.of( PipelineStep.Metadata, pipelineOnlyStepsList.toArray( new PipelineStep[ 0 ] ) );
 		else if ( !pipelineNoStepsList.isEmpty() )
 			return EnumSet.complementOf( EnumSet.copyOf( pipelineNoStepsList ) );

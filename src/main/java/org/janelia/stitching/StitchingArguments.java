@@ -39,6 +39,9 @@ public class StitchingArguments implements Serializable {
 	/**
 	 * Toggle pipeline stages. By default all stages are executed.
 	 */
+	@Option(name = "--onlymeta", required = false, usage = "Query metadata for input tile images. Always included by default.")
+	private boolean onlyMeta;
+
 	@Option(name = "--onlyblur", required = false, usage = "Preapply Gaussian blur to all tiles and store the result in separate files")
 	private boolean onlyBlur;
 	@Option(name = "--noblur", required = false, usage = "Don't preapply Gaussian blur to all tiles and store the result in separate files")
@@ -87,6 +90,8 @@ public class StitchingArguments implements Serializable {
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurStrength() { return blurStrength; }
 	public boolean noRoi() { return noRoi; }
+
+	public boolean onlyMeta() { return onlyMeta; }
 
 	public boolean onlyBlur() { return onlyBlur; }
 	public boolean noBlur() { return noBlur; }
