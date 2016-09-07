@@ -49,7 +49,7 @@ public class TileOperations
 	}
 
 	/**
-	 * @return an true if two tiles overlap
+	 * @return true if two tiles overlap, false otherwise
 	 */
 	public static boolean overlap( final TileInfo t1, final TileInfo t2 )
 	{
