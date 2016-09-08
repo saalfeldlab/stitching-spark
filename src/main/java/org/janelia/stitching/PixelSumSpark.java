@@ -102,11 +102,11 @@ public class PixelSumSpark implements Runnable, Serializable
 					}
 				});
 
-		final List< TileInfo > tilesMetadata = task.collect();
+		final List< TileInfo > tilesCombined = task.collect();
 
 		System.out.println( "Obtained resulting tiles" );
 
-		final TileInfo[] tilesArr = tilesMetadata.toArray( new TileInfo[ 0 ] );
+		final TileInfo[] tilesArr = tilesCombined.toArray( new TileInfo[ 0 ] );
 		try {
 			TileInfoJSONProvider.saveTilesConfiguration( tilesArr, Utils.addFilenameSuffix( input1, "_sum" ) );
 		} catch ( final IOException e ) {
