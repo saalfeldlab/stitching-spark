@@ -168,6 +168,7 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 						for ( int d = 0; d < initialOffset.length; d++ )
 							initialOffset[ d ] = pairOfTiles.second().getPosition( d ) - pairOfTiles.first().getPosition( d );
 
+						PairWiseStitchingImgLib.setThreads( 1 );
 						final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
 								pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint2(), job.getParams()/*, initialOffset, pairOfTiles.first().getSize()*/ );
 

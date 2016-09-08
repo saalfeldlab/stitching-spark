@@ -29,7 +29,12 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>Stitching_</artifactId>
-			<version>3.1.1-SNAPSHOT</version>
+			<version>3.1.1-SNAPSHOT-PATCHED</version>
+		</dependency>
+		<dependency>
+			<groupId>sc.fiji</groupId>
+			<artifactId>legacy-imglib1</artifactId>
+			<version>1.1.4-DEPRECATED-PATCHED</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.spark</groupId>
