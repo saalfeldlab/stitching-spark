@@ -41,4 +41,11 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 
 	public boolean getIsValidOverlap() { return isValidOverlap; }
 	public void setIsValidOverlap( final boolean isValidOverlap ) { this.isValidOverlap = isValidOverlap; }
+
+	public void swap()
+	{
+		tilePair.swap();
+		for ( int d = 0; d < offset.length; d++ )
+			offset[ d ] *= -1;
+	}
 }

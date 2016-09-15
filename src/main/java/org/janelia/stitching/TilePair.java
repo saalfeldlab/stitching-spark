@@ -24,4 +24,11 @@ public class TilePair implements Serializable
 	public TileInfo[] toArray() { return tilePair.clone(); }
 	public TileInfo first() { return tilePair[ 0 ]; }
 	public TileInfo second() { return tilePair[ 1 ]; }
+
+	public void swap()
+	{
+		final TileInfo tmp = tilePair[ 0 ];
+		tilePair[ 0 ] = tilePair[ 1 ];
+		tilePair[ 1 ] = tmp;
+	}
 }

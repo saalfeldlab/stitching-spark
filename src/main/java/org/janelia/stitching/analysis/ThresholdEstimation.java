@@ -1,5 +1,8 @@
 package org.janelia.stitching.analysis;
 
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -49,12 +52,16 @@ public class ThresholdEstimation
 
 		final TreeSet< Integer > uncoveredTiles = new TreeSet<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : shift.getTilePair().toArray() )
-				uncoveredTiles.add( tile.getIndex() );
+			if ( shift.getIsValidOverlap() )
+				for ( final TileInfo tile : shift.getTilePair().toArray() )
+					uncoveredTiles.add( tile.getIndex() );
 
 		double threshold = 1.;
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
+			if ( !shift.getIsValidOverlap() )
+				continue;
+
 			for ( final TileInfo tile : shift.getTilePair().toArray() )
 				uncoveredTiles.remove( tile.getIndex() );
 
@@ -66,6 +73,49 @@ public class ThresholdEstimation
 		}
 
 		return threshold;
+	}
+
+
+	public static ComparablePair< Double, Integer > findOptimalThresholdWithIndex( final List< SerializablePairWiseStitchingResult > shifts )
+	{
+		shifts.sort( new CrossCorrelationComparatorDesc() );
+
+		final TreeSet< Integer > uncoveredTiles = new TreeSet<>();
+		for ( final SerializablePairWiseStitchingResult shift : shifts )
+			for ( final TileInfo tile : shift.getTilePair().toArray() )
+				uncoveredTiles.add( tile.getIndex() );
+
+		double threshold = 1.;
+		int index = shifts.size();
+		for ( int i = 0; i < shifts.size(); i++ )
+		{
+			for ( final TileInfo tile : shifts.get( i ).getTilePair().toArray() )
+				uncoveredTiles.remove( tile.getIndex() );
+
+			if ( uncoveredTiles.isEmpty() )
+			{
+				threshold = shifts.get( i ).getCrossCorrelation();
+				index = i;
+				break;
+			}
+		}
+
+		try
+		{
+			final PrintWriter writer = new PrintWriter("pairwise_correlations(threshold=" + threshold + ".txt", "UTF-8");
+			for ( final SerializablePairWiseStitchingResult shift : shifts )
+				writer.println( shift.getCrossCorrelation() );
+			writer.close();
+		}
+		catch ( FileNotFoundException | UnsupportedEncodingException e )
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+
+
+		return new ComparablePair< >( threshold, index );
 	}
 
 
@@ -83,16 +133,53 @@ public class ThresholdEstimation
 	private static void printTilesHighestCorrelationWithPair( final List< SerializablePairWiseStitchingResult > shifts )
 	{
 		final TreeMap< Integer, SerializablePairWiseStitchingResult > tilesCorr = getTilesHighestCorrelationWithPair( shifts );
-
-		final TreeMap< Double, Integer > tilesCorrMap = new TreeMap<>();
+		final List< ComparablePair< Double, Integer > > tilesCorrSorted = new ArrayList<>();
 		for ( final Entry< Integer, SerializablePairWiseStitchingResult > entry : tilesCorr.entrySet() )
-			tilesCorrMap.put( ( double ) entry.getValue().getCrossCorrelation(), entry.getKey() );
+			tilesCorrSorted.add( new ComparablePair<>( ( double ) entry.getValue().getCrossCorrelation(), entry.getKey() ) );
+
+		Collections.sort( tilesCorrSorted );
+		Collections.reverse( tilesCorrSorted );
 
 		System.out.println( "-----------" );
 		System.out.println( "Highest correlation value for every tile (with corresponding pair):" );
-		for ( final Entry< Double, Integer > entry : tilesCorrMap.descendingMap().entrySet() )
-			System.out.println( entry.getKey() + ": " + entry.getValue() + " (" + tilesCorr.get( entry.getValue() ).getTilePair().first().getIndex() + "," + tilesCorr.get( entry.getValue() ).getTilePair().second().getIndex() +")" );
+		for ( final ComparablePair< Double, Integer > entry : tilesCorrSorted )
+			System.out.println( entry.first + ": " + entry.second + " (" + tilesCorr.get( entry.second ).getTilePair().first().getIndex() + "," + tilesCorr.get( entry.second ).getTilePair().second().getIndex() +")" );
 		System.out.println( "-----------" );
+
+
+
+		try
+		{
+			final PrintWriter writer = new PrintWriter("highest_tile_correlation.txt", "UTF-8");
+			for ( final Entry< Integer, SerializablePairWiseStitchingResult > entry : tilesCorr.entrySet() )
+				writer.println( entry.getKey() + " " + entry.getValue().getCrossCorrelation() );
+			writer.close();
+		}
+		catch ( FileNotFoundException | UnsupportedEncodingException e )
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+
+
+		/*final Map< Integer, TileInfo > tilesMap = new HashMap<>();
+		for ( final SerializablePairWiseStitchingResult shift : shifts )
+			for ( final TileInfo tile : shift.getTilePair().toArray() )
+				tilesMap.put( tile.getIndex(), tile );
+		int badShifts = 0;
+		for ( final Entry< Integer, SerializablePairWiseStitchingResult > entry : tilesCorr.entrySet() )
+		{
+			if ( entry.getValue().getCrossCorrelation() < 0.85 )
+			{
+				badShifts++;
+				final String before = tilesMap.containsKey( entry.getKey()-1 ) ? "before="+Paths.get( tilesMap.get( entry.getKey()-1 ).getFilePath() ).getFileName() : "";
+				final String after = tilesMap.containsKey( entry.getKey()+1 ) ? "after="+Paths.get( tilesMap.get( entry.getKey()+1 ).getFilePath() ).getFileName() : "";
+				final String curr = "CURR="+Paths.get( tilesMap.get( entry.getKey() ).getFilePath() ).getFileName();
+				System.out.println( entry.getKey() + ":   " + before + "    " + curr + "    "+ after );
+			}
+		}
+		System.out.println( "BAD SHIFTS = " + badShifts );*/
 	}
 
 
@@ -135,10 +222,15 @@ public class ThresholdEstimation
 	{
 		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
 
-		// -----------------------
+		final List< SerializablePairWiseStitchingResult > validShifts = new ArrayList<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			if ( !shift.getIsValidOverlap() )
-				throw new Exception( "Invalid overlap" );
+			if ( shift.getIsValidOverlap() )
+				validShifts.add( shift );
+		System.out.println( "There are " + validShifts.size() + " valid shifts" );
+
+		// use only valid ones
+		shifts.clear();
+		shifts.addAll( validShifts );
 
 		double minCrossCorrelation = Double.MAX_VALUE;
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
@@ -146,10 +238,10 @@ public class ThresholdEstimation
 		System.out.println( "Min cross correlation = " + minCrossCorrelation );
 		if ( minCrossCorrelation < 0 )
 			throw new Exception( "Negative cross correlation" );
-		// -----------------------
 
-		final double threshold = findOptimalThreshold( shifts );
-		System.out.println( "Optimal threshold value: " + threshold );
+		final ComparablePair< Double, Integer > thresholdWithIndex = findOptimalThresholdWithIndex( shifts );
+		System.out.println( "Optimal threshold value: " + thresholdWithIndex.first );
+		System.out.println( "Covers " + thresholdWithIndex.second + " pairs out of " + shifts.size() );
 
 		printTilesHighestCorrelationWithPair( shifts );
 	}

@@ -42,7 +42,9 @@ public class DistanceFromOriginal
 		final ArrayList< TileInfo > goodTiles = new ArrayList<>();
 		final ArrayList< TileInfo > badTiles = new ArrayList<>();
 
-		int identical = 0;
+		int haveSamePosition = 0, haveSameSize = 0;
+		final int[][] range = new int[ tilesOrig[ 0 ].numDimensions() ][ 2 ];
+
 		for ( int i = 0; i < n; i++ )
 		{
 
@@ -52,20 +54,34 @@ public class DistanceFromOriginal
 
 			final int dim = tilesOrig[ i ].numDimensions();
 			final double[] dist = new double[ dim ];
+			final long[] sizeDiff = new long[ dim ];
 
-			boolean isGoodTile = true;
-			int diffSum = 0;
+			boolean isGoodTile = true, samePosition = true, sameSize = true;
 			for ( int d = 0; d < dim; d++ )
 			{
 				dist[ d ] = tilesOrig[ i ].getPosition( d ) - tilesMod[ i ].getPosition( d );
-				diffSum += dist[ d ];
-				if ( Math.abs( dist[ d ] ) > tilesOrig[ i ].getSize( d ) / 7 )
+				sizeDiff[ d ] = tilesOrig[ i ].getSize( d ) - tilesMod[ i ].getSize( d );
+
+				if ( dist[ d ] != 0 )
+					samePosition = false;
+
+				if ( sizeDiff[ d ] != 0 )
+					sameSize = false;
+
+				if ( Math.abs( dist[ d ] ) > tilesOrig[ i ].getSize( d ) / 3 )
 					isGoodTile = false;
 			}
-			if ( diffSum == 0 )
-				identical++;
-			//else
-			//	System.out.println( tilesOrig[ i ].getIndex() + ": " + Arrays.toString( dist ) );
+			if ( samePosition )
+				haveSamePosition++;
+			else
+				System.out.println( "Position diff: " + tilesOrig[ i ].getIndex() + ": " + Arrays.toString( dist ) );
+
+			if ( sameSize )
+				haveSameSize++;
+			else
+				System.out.println( "Size diff: " + tilesOrig[ i ].getIndex() + ": " + Arrays.toString( sizeDiff ) );
+
+			//System.out.println( tilesOrig[ i ].getIndex() + ": " + Arrays.toString( dist ) );
 
 			if ( isGoodTile )
 			{
@@ -73,35 +89,38 @@ public class DistanceFromOriginal
 			}
 			else
 			{
-				System.out.println( Arrays.toString( dist ) );
+				//System.out.println( Arrays.toString( dist ) );
 				badTiles.add( tilesOrig[ i ] );
 			}
 
 
-
-			diffSum = 0;
-			for ( int d = 0; d < dim; d++ )
+			for ( int d = 0; d < range.length; d++ )
 			{
-				dist[ d ] = tilesOrig[ i ].getSize( d ) - tilesMod[ i ].getSize( d );
-				diffSum += dist[ d ];
+				range[ d ][ 0 ] = ( int ) Math.min( dist[ d ], range[ d ][ 0 ] );
+				range[ d ][ 1 ] = ( int ) Math.max( dist[ d ], range[ d ][ 1 ] );
 			}
-			//if ( diffSum != 0 )
-			//	System.out.println( tilesOrig[ i ].getIndex() + ": " + Arrays.toString( dist ) );
 		}
-		if ( identical == n )
-			System.out.println( "The configurations are identical!" );
+		if ( haveSamePosition == n )
+			System.out.println( "The configurations have identical positions!" );
 		else
-			System.out.println( "Identical positions: " + identical );
+			System.out.println( "Identical positions: " + haveSamePosition );
+
+		if ( haveSameSize == n )
+			System.out.println( "The configurations have identical size!" );
+		else
+			System.out.println( "Identical size: " + haveSameSize );
 
 		System.out.println( "----------------------" );
 		System.out.println( "Found " + goodTiles.size() + " good tiles out of " + n );
 
+		System.out.println( "Range is " + Arrays.deepToString( range ) );
+
 
 		if ( !badTiles.isEmpty() )
 		{
-			System.out.println( "Bad tiles are: " );
-			for ( final TileInfo tile : badTiles )
-				System.out.println( tile.getIndex() + ", position="+Arrays.toString( tile.getPosition() ));
+			//System.out.println( "Bad tiles are: " );
+			//for ( final TileInfo tile : badTiles )
+			//	System.out.println( tile.getIndex() + ", position="+Arrays.toString( tile.getPosition() ));
 
 			//System.out.println( "Removing " + badTilesIndices.size() + " bad ones: " + Arrays.toString( badTilesIndices.toArray() ) );
 			//TileInfoJSONProvider.saveTilesConfiguration( goodTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( Utils.removeFilenameSuffix( args[ 0 ], "_full" ), "_good" ) );*/
