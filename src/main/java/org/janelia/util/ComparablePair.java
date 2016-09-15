@@ -7,7 +7,7 @@ package org.janelia.util;
  * @author Igor Pisarev
  */
 
-public final class ComparablePair< A extends Comparable< ? super A >, B extends Comparable< ? super B > > implements Comparable< ComparablePair< A, B > >
+public final class ComparablePair< A extends Comparable< ? super A >, B extends Comparable< ? super B > > implements Comparable< ComparablePair< ? extends A, ? extends B > >
 {
 	public A first;
 	public B second;
@@ -19,7 +19,7 @@ public final class ComparablePair< A extends Comparable< ? super A >, B extends 
 	}
 
 	@Override
-	public int compareTo( final ComparablePair< A, B > other )
+	public int compareTo( final ComparablePair< ? extends A, ? extends B > other )
 	{
 		final int compareFirst = first.compareTo( other.first );
 		if ( compareFirst != 0)
