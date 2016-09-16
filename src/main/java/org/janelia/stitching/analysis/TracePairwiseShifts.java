@@ -45,11 +45,10 @@ public class TracePairwiseShifts
 		final PrintWriter writer = new PrintWriter(outFilepath, "UTF-8");
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			if ( !shift.getIsValidOverlap() )
-				continue;
-
-			valid++;
 			final TileInfo[] tilePair = shift.getTilePair().toArray();
+
+			if ( tilePair[ 0 ].getIndex() > tilePair[ 1 ].getIndex() )
+				System.out.println( "Indices are unsorted" );
 
 			final double dist[] = new double[ shift.getNumDimensions() ];
 			for ( int d = 0; d < shift.getNumDimensions(); d++ )
@@ -58,7 +57,7 @@ public class TracePairwiseShifts
 			final long[] diffTime = new long[ channelsMap.length ];
 			for ( int i = 0; i < channelsMap.length; i++ )
 			{
-				final long[] times = new long[ 2 ];
+				final long[] timestamps = new long[ 2 ];
 				for ( int j = 0; j < 2; j++ )
 				{
 					final String filename = Paths.get( channelsMap[ i ].get( tilePair[ j ].getIndex() + i*tilesPerChannel ).getFilePath() ).getFileName().toString();
@@ -66,10 +65,13 @@ public class TracePairwiseShifts
 					if ( !matcher.find() )
 						throw new Exception( "Can't parse timestamp" );
 
-					times[ j ] = Long.parseLong( matcher.group( 1 ) );
+					timestamps[ j ] = Long.parseLong( matcher.group( 1 ) );
 				}
 
-				diffTime[ i ] = Math.abs( times[ 1 ] - times[ 0 ] );
+				if ( timestamps[ 0 ] > timestamps[ 1 ] )
+					System.out.println( "Timestamps are unsorted" );
+
+				diffTime[ i ] = Math.abs( timestamps[ 1 ] - timestamps[ 0 ] );
 			}
 
 
@@ -77,12 +79,15 @@ public class TracePairwiseShifts
 				if ( diffTime[ i ] != diffTime[ i - 1 ] )
 					throw new Exception( "Different time inverval between channels" );
 
-
 			String diffTimeStr = "";
 			if ( diffTime.length > 0 )
 				diffTimeStr = " " + diffTime[ 0 ];
 
-			writer.println( dist[0] + " " + dist[1] + " " + dist[2] + " " + shift.getCrossCorrelation() + diffTimeStr );
+			if ( shift.getIsValidOverlap() )
+			{
+				valid++;
+				writer.println( dist[0] + " " + dist[1] + " " + dist[2] + " " + shift.getCrossCorrelation() + diffTimeStr );
+			}
 		}
 		writer.close();
 
