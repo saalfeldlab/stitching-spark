@@ -3,6 +3,9 @@ package org.janelia.stitching;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import org.janelia.util.Conversions;
 
@@ -76,5 +79,21 @@ public class Utils {
 		Arrays.sort( possible3rdDim );
 		if ( possible3rdDim[ 0 ] * possible3rdDim[ 1 ] == 1 )
 			imp.setDimensions( 1, possible3rdDim[ 2 ], 1 );
+	}
+
+	public static Map< Integer, TileInfo > createTilesMap( final TileInfo[] tiles )
+	{
+		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
+		for ( final TileInfo tile : tiles )
+			tilesMap.put( tile.getIndex(), tile );
+		return tilesMap;
+	}
+	public static Map< Integer, TileInfo > createTilesMap( final List< SerializablePairWiseStitchingResult > shifts )
+	{
+		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
+		for ( final SerializablePairWiseStitchingResult shift : shifts )
+			for ( final TileInfo tile : shift.getTilePair().toArray() )
+				tilesMap.put( tile.getIndex(), tile );
+		return tilesMap;
 	}
 }
