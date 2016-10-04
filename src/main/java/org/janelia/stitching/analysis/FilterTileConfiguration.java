@@ -46,10 +46,14 @@ public class FilterTileConfiguration
 	public static void filterByFilename( final String inputFilename, final String filenameFilter ) throws IOException
 	{
 		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilename );
+		System.out.println( "Total number of tiles = " + tiles.length );
+
 		final ArrayList< TileInfo > filteredTiles = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			if ( tile.getFilePath().contains( filenameFilter ) )
 				filteredTiles.add( tile );
+
+		System.out.println( "Number of tiles after filtering = " + filteredTiles.size() );
 		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( inputFilename, "_filtered_" + filenameFilter ) );
 	}
 
@@ -66,10 +70,15 @@ public class FilterTileConfiguration
 	public static void filterByTileIndexesExcluded( final String inputFilename, final Set< Integer > tileIndexesExcluded ) throws IOException
 	{
 		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilename );
+		System.out.println( "Before: " + tiles.length + " tiles" );
+		System.out.println( "Excluding " + tileIndexesExcluded.size() + " tiles.." );
+
 		final ArrayList< TileInfo > filteredTiles = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			if ( !tileIndexesExcluded.contains( tile.getIndex() ) )
 				filteredTiles.add( tile );
-		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( inputFilename, "_excluded_" + tileIndexesExcluded.toString().replaceAll( " ", "" ) ) );
+
+		System.out.println( "After: " + filteredTiles.size() + " tiles" );
+		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( inputFilename, "_excluded_" + tileIndexesExcluded.size() + "_tiles" ) );
 	}
 }

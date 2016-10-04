@@ -33,7 +33,7 @@ public class Conversions {
 	{
 		final int[] arr = new int[ arrStr.length ];
 		for ( int i = 0; i < arr.length; i++ )
-			arr[ i ] = Integer.parseInt( arrStr[ i ] );
+			arr[ i ] = Integer.parseInt( arrStr[ i ].trim() );
 		return arr;
 	}
 
@@ -41,7 +41,7 @@ public class Conversions {
 	{
 		final double[] arr = new double[ arrStr.length ];
 		for ( int i = 0; i < arr.length; i++ )
-			arr[ i ] = Double.parseDouble( arrStr[ i ] );
+			arr[ i ] = Double.parseDouble( arrStr[ i ].trim() );
 		return arr;
 	}
 

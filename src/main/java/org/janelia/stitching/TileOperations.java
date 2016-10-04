@@ -22,7 +22,7 @@ public class TileOperations
 		final ArrayList< TilePair > overlappingTiles = new ArrayList<>();
 		for ( int i = 0; i < tiles.length; i++ )
 			for ( int j = i + 1; j < tiles.length; j++ )
-				if ( getOverlappingRegion( tiles[ i ], tiles[ j ] ) != null )
+				if ( overlap( tiles[ i ], tiles[ j ] ) )
 					overlappingTiles.add( new TilePair( tiles[ i ], tiles[ j ] ) );
 		return overlappingTiles;
 	}

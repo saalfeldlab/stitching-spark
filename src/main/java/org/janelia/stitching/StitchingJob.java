@@ -8,7 +8,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.commons.io.IOUtils;
@@ -101,7 +100,7 @@ public class StitchingJob implements Serializable {
 	public StitchingParameters getParams() { return params; }
 	public void setParams( final StitchingParameters params ) { this.params = params; }
 
-	public Map< Integer, TileInfo > getTilesMap()
+	public TreeMap< Integer, TileInfo > getTilesMap()
 	{
 		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
 		for ( final TileInfo tile : tiles )

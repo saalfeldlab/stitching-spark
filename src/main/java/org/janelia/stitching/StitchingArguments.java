@@ -30,7 +30,7 @@ public class StitchingArguments implements Serializable {
 
 	@Option(name = "-b", aliases = { "--blurstrength" }, required = false,
 			usage = "Blur strength")
-	private double blurStrength = 2.0;
+	private double blurStrength = 3.0;
 
 	@Option(name = "--noroi", required = false,
 			usage = "Compute phase correlation between full tile images instead of their ROIs")

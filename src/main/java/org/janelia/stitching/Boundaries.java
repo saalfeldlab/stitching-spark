@@ -1,6 +1,8 @@
 package org.janelia.stitching;
 
 import net.imglib2.AbstractInterval;
+import net.imglib2.Dimensions;
+import net.imglib2.Interval;
 
 /**
  * Represents a box in n-dimensional space.
@@ -15,6 +17,23 @@ public class Boundaries extends AbstractInterval
 	{
 		super( dim );
 	}
+	public Boundaries( final Interval interval )
+	{
+		super( interval);
+	}
+	public Boundaries( final Dimensions dimensions )
+	{
+		super( dimensions );
+	}
+	public Boundaries( final long[] min, final long[] max )
+	{
+		super( min, max );
+	}
+	public Boundaries( final long[] dimensions )
+	{
+		super( dimensions );
+	}
+
 
 	public long[] getMin()
 	{

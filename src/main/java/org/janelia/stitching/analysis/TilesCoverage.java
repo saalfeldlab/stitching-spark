@@ -18,27 +18,16 @@ import ij.ImagePlus;
 import ij.plugin.ZProjector;
 import net.imglib2.multithreading.SimpleMultiThreading;
 
-public class TilesPairwiseCoverage
+public class TilesCoverage
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] ) );
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 1 ] );
+		final Map< Integer, TileInfo > initialTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] ) );
+		final Map< Integer, TileInfo > resultingTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] ) );
 
-		int validShifts = 0;
-		//final Map< Integer, TileInfo > uncoveredTiles = Utils.createTilesMap( shifts );
-		final Map< Integer, TileInfo > uncoveredTiles = new TreeMap<>( tilesMap );
-		for ( final SerializablePairWiseStitchingResult shift : shifts )
-		{
-			if ( !shift.getIsValidOverlap() )
-				continue;
+		final TreeMap< Integer, TileInfo > uncoveredTiles = new TreeMap<>( initialTilesMap );
+		uncoveredTiles.keySet().removeAll( resultingTilesMap.keySet() );
 
-			validShifts++;
-			for ( final TileInfo tile : shift.getTilePair().toArray() )
-				uncoveredTiles.remove( tile.getIndex() );
-		}
-
-		System.out.println( "There are " + validShifts + " valid shifts of " + shifts.size() );
 		System.out.println( uncoveredTiles.size() + " tiles uncovered: " + uncoveredTiles.keySet() );
 
 		if ( !uncoveredTiles.isEmpty() && args.length > 2 && args[2].equals( "--showuncovered" ))
@@ -68,7 +57,7 @@ public class TilesPairwiseCoverage
 							p.setMethod(ZProjector.MAX_METHOD);
 							p.doProjection();
 
-							final String outFilename = Paths.get( tilesMap.get( tile.getIndex() ).getFilePath() ).getFileName()+".maxi.tif";
+							final String outFilename = Paths.get( initialTilesMap.get( tile.getIndex() ).getFilePath() ).getFileName()+".maxi.tif";
 							System.out.println( "Saving tile " + tile.getIndex() + " to " + outFilename );
 							IJ.saveAsTiff(p.getProjection(), folder + "/" + outFilename);
 						}

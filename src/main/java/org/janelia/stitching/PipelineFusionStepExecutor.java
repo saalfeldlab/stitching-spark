@@ -1,38 +1,17 @@
 package org.janelia.stitching;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 
-import ij.IJ;
-import ij.ImagePlus;
-import mpicbg.stitching.fusion.PixelFusion;
-import net.imglib2.Cursor;
-import net.imglib2.Dimensions;
-import net.imglib2.FinalInterval;
-import net.imglib2.IterableInterval;
-import net.imglib2.RandomAccessible;
-import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.Img;
-import net.imglib2.img.display.imagej.ImageJFunctions;
-import net.imglib2.img.imageplus.ImagePlusImgFactory;
-import net.imglib2.img.imageplus.ImagePlusImgs;
-import net.imglib2.img.list.ListImg;
-import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.realtransform.RealViews;
-import net.imglib2.realtransform.Translation3D;
-import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.RealType;
-import net.imglib2.util.Intervals;
-import net.imglib2.view.Views;
+import net.imglib2.type.numeric.NumericType;
 
 /**
  * Fuses a set of tiles within a set of small square cells using linear blending.
@@ -50,7 +29,148 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 		super( job, sparkContext );
 	}
 
+
 	@Override
+	public void run()
+	{
+		TileOperations.translateTilesToOrigin( job.getTiles() );
+
+		final String baseOutputFolder = job.getBaseFolder() + "/fused";
+
+		int level = 0;
+		TileInfo[] lastLevelCells = job.getTiles();
+
+		do
+		{
+			System.out.println( "Processing level " + level + "...");
+
+			final Boundaries lastLevelSpace = TileOperations.getCollectionBoundaries( lastLevelCells );
+			final ArrayList< TileInfo > newLevelCells = TileOperations.divideSpaceBySize( lastLevelSpace, job.getArgs().fusionCellSize() * (level > 0 ? 2 : 1) );
+
+			System.out.println( "There are " + newLevelCells.size() + " cells on the current scale level");
+
+			final int currLevel = level;
+			final String levelFolder = baseOutputFolder + "/" + level;
+
+			final String levelConfigurationOutputPath = Utils.addFilenameSuffix( job.getArgs().inputFilePath(), "-scale" + level );
+			try
+			{
+				final TileInfo[] exportedLevelCells = TileInfoJSONProvider.loadTilesConfiguration( levelConfigurationOutputPath );
+				System.out.println( "Loaded configuration file for level " + level );
+
+				lastLevelCells = exportedLevelCells;
+				level++;
+				continue;
+
+			} catch (final Exception e) {
+				System.out.println( "Output configuration file doesn't exist for level " + level + ", generating..." );
+			}
+
+			final TileInfo[] smallerCells = lastLevelCells;
+			final JavaRDD< TileInfo > rdd = sparkContext.parallelize( newLevelCells );
+			final JavaRDD< TileInfo > fused = rdd.map(
+					new Function< TileInfo, TileInfo >()
+					{
+						private static final long serialVersionUID = -8401196579319920787L;
+
+						@Override
+						public TileInfo call( final TileInfo cell ) throws Exception
+						{
+							final ArrayList< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( smallerCells, cell );
+							if ( tilesWithinCell.isEmpty() )
+								return null;
+
+							// Check in advance for non-null size after downsampling
+							if ( currLevel != 0 )
+								for ( int d = 0; d < cell.numDimensions(); d++ )
+									if ( cell.getSize( d ) < 2 )
+										return null;
+
+							final Boundaries cellBox = cell.getBoundaries();
+							final long[] downscaledCellPos = cellBox.getMin();
+							if ( currLevel != 0 )
+								for ( int d = 0; d < downscaledCellPos.length; d++ )
+									downscaledCellPos[ d ] /= 2;
+
+							final int[] cellIndices = new int[ downscaledCellPos.length ];
+							for ( int d = 0; d < downscaledCellPos.length; d++ )
+								cellIndices[ d ] = ( int ) ( downscaledCellPos[ d ] / job.getArgs().fusionCellSize() );
+							final String innerFolder = cellIndices[ 2 ] + "/" + cellIndices[ 1 ];
+							final String outFilename = cellIndices[ 0 ] + ".tif";
+
+							new File( levelFolder + "/" + innerFolder ).mkdirs();
+							cell.setFilePath( levelFolder + "/" + innerFolder + "/" + outFilename );
+
+							System.out.println( "There are " + tilesWithinCell.size() + " tiles within the cell #"+cell.getIndex() );
+
+							Img< ? extends NumericType > outImg = null;
+							if ( currLevel == 0 )
+							{
+								outImg = FusionPerformer.fuseTilesWithinCellWithBlending( tilesWithinCell, cell );
+							}
+							else
+							{
+								try
+								{
+									outImg = FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, 2 );
+								}
+								catch(final Exception e) {
+									throw new Exception( "Something wrong with cell " +cell.getIndex() );
+								}
+
+								for ( int d = 0; d < cell.numDimensions(); d++ )
+								{
+									cell.setPosition( d, downscaledCellPos[ d ] );
+									cell.setSize( d, cellBox.dimension( d ) / 2 );
+								}
+							}
+
+							Utils.saveTileImageToFile( cell, outImg );
+
+							return cell;
+						}
+					});
+
+			final ArrayList< TileInfo > output = new ArrayList<>( fused.collect() );
+			output.removeAll( Collections.singleton( null ) );
+			System.out.println( "Obtained " + output.size() + " output non-empty cells" );
+
+			lastLevelCells = output.toArray( new TileInfo[ 0 ] );
+
+			try
+			{
+				TileInfoJSONProvider.saveTilesConfiguration( lastLevelCells, levelConfigurationOutputPath );
+			}
+			catch ( final IOException e )
+			{
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+			level++;
+		}
+		while ( lastLevelCells.length > 1 ); // until the whole image fits into a single cell
+
+		final int[] cellDimensions = new int[ job.getDimensionality() ];
+		Arrays.fill( cellDimensions, job.getArgs().fusionCellSize() );
+		final MultiscaledExportMetadata export = new MultiscaledExportMetadata(
+				baseOutputFolder,
+				level,
+				TileOperations.getCollectionBoundaries( job.getTiles() ).getDimensions(),
+				cellDimensions);
+		try
+		{
+			TileInfoJSONProvider.saveMultiscaledExportMetadata( export, Utils.addFilenameSuffix( job.getArgs().inputFilePath(), "-export" ) );
+		}
+		catch ( final IOException e )
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+
+	/*@Override
 	public void run()
 	{
 		final Boundaries boundaries = TileOperations.getCollectionBoundaries( job.getTiles() );
@@ -58,9 +178,6 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 		fuse( cells );
 	}
 
-	/**
-	 * Fuses tile images within a set of cells on a Spark cluster.
-	 */
 	private void fuse( final ArrayList< TileInfo > cells )
 	{
 		System.out.println( "There are " + cells.size() + " output cells in total" );
@@ -108,10 +225,6 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 		}
 	}
 
-	/**
-	 * Performs the fusion of a collection of {@link TileInfo} objects within specified cell.
-	 * It uses linear blending strategy on the borders.
-	 */
 	@SuppressWarnings( "unchecked" )
 	public < T extends RealType< T > & NativeType< T > > void fuseTilesWithinCell( final ArrayList< TileInfo > tiles, final TileInfo cell ) throws Exception
 	{
@@ -202,5 +315,5 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 		System.out.println( "Saving the resulting file for cell " + cell.getIndex() );
 		IJ.saveAsTiff( outImg, cell.getFilePath() );
 		outImg.close();
-	}
+	}*/
 }

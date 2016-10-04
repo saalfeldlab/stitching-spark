@@ -20,11 +20,11 @@ import org.janelia.stitching.Utils;
  * @author Igor Pisarev
  */
 
-public class FilterAdjacentShifts
+public class FilterAdjacentShiftsMulti
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
+		final List< SerializablePairWiseStitchingResult[] > shifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( args[ 0 ] );
 		final String dimStr = args.length > 1 ? args[ 1 ] : "";
 		if ( !dimStr.isEmpty() && !dimStr.equals( "x" ) && !dimStr.equals("y") && !dimStr.equals( "z" ) )
 			throw new Exception( "Unknown value" );
@@ -34,9 +34,9 @@ public class FilterAdjacentShifts
 		final String filename = null;
 		final Matcher matcher = null;
 
-		final List< SerializablePairWiseStitchingResult > shiftsCopy = new ArrayList<>( shifts );
+		final List< SerializablePairWiseStitchingResult[] > shiftsCopy = new ArrayList<>( shifts );
 
-		final List< SerializablePairWiseStitchingResult > adjacentShifts = new ArrayList<>();
+		final List< SerializablePairWiseStitchingResult[] > adjacentShifts = new ArrayList<>();
 
 		int validShifts = 0;
 		/*for ( final SerializablePairWiseStitchingResult shift : shifts )
@@ -95,20 +95,22 @@ public class FilterAdjacentShifts
 
 		final Map< Integer, Set< Integer> > validation = new HashMap<>();
 		int validationCount = 0, swappedCount = 0;
-		for ( final SerializablePairWiseStitchingResult shift : shiftsCopy )
+		A:		for ( final SerializablePairWiseStitchingResult[] shift : shiftsCopy )
 		{
-			if ( !shift.getIsValidOverlap() )
-				continue;
+			for (int peak=0; peak<shift.length; peak++ )
+				if ( !shift[peak].getIsValidOverlap() )
+					continue A;
 
 			validShifts++;
-			shift.setIsValidOverlap( false );
+			for (int peak=0; peak<shift.length; peak++ )
+				shift[peak].setIsValidOverlap( false );
 
-			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( shift.getTilePair().first(), shift.getTilePair().second() );
+			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( shift[0].getTilePair().first(), shift[0].getTilePair().second() );
 
 			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
 			{
-				final int maxPossibleOverlap = ( int ) Math.min( shift.getTilePair().first().getSize( d ), shift.getTilePair().second().getSize( d ) );
+				final int maxPossibleOverlap = ( int ) Math.min( shift[0].getTilePair().first().getSize( d ), shift[0].getTilePair().second().getSize( d ) );
 				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
 					shortEdges[d] = true;
 			}
@@ -122,8 +124,8 @@ public class FilterAdjacentShifts
 					)
 				continue;
 
-			final int ind1 = Math.min( shift.getTilePair().first().getIndex(), shift.getTilePair().second().getIndex() );
-			final int ind2 = Math.max( shift.getTilePair().first().getIndex(), shift.getTilePair().second().getIndex() );
+			final int ind1 = Math.min( shift[0].getTilePair().first().getIndex(), shift[0].getTilePair().second().getIndex() );
+			final int ind2 = Math.max( shift[0].getTilePair().first().getIndex(), shift[0].getTilePair().second().getIndex() );
 			if ( !validation.containsKey( ind1 ) )
 				validation.put( ind1, new HashSet<>() );
 			validation.get( ind1 ).add( ind2 );
@@ -134,17 +136,19 @@ public class FilterAdjacentShifts
 			{
 				if ( shortEdges[ d ] )
 				{
-					if ( shift.getTilePair().first().getPosition( d ) > shift.getTilePair().second().getPosition( d ) )
+					if ( shift[0].getTilePair().first().getPosition( d ) > shift[0].getTilePair().second().getPosition( d ) )
 					{
 						swappedCount++;
-						shift.swap();
+						for (int peak=0; peak<shift.length; peak++ )
+							shift[peak].swap();
 					}
 					break;
 				}
 			}
 
 			// just for Sample9
-			shift.setIsValidOverlap( true );
+			for (int peak=0; peak<shift.length; peak++ )
+				shift[peak].setIsValidOverlap( true );
 			adjacentShifts.add( shift );
 		}
 
@@ -163,7 +167,7 @@ public class FilterAdjacentShifts
 
 
 		System.out.println( "There are " + adjacentShifts.size() + " adjacent shifts of " + validShifts );
-		TileInfoJSONProvider.savePairwiseShifts( shifts, Utils.addFilenameSuffix( args[ 0 ], "_adj" + (!dimStr.isEmpty()?"-"+dimStr:"" ) ) );
+		TileInfoJSONProvider.savePairwiseShiftsMulti( shifts, Utils.addFilenameSuffix( args[ 0 ], "_adj" + (!dimStr.isEmpty()?"-"+dimStr:"" ) ) );
 
 		System.out.println( "Done" );
 	}

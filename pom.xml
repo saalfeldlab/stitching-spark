@@ -29,7 +29,7 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>Stitching_</artifactId>
-			<version>3.1.1-SNAPSHOT-PATCHED</version>
+			<version>3.1.1-SNAPSHOT_PATCHED</version>
 		</dependency>
 		<dependency>
 			<groupId>sc.fiji</groupId>
@@ -74,6 +74,15 @@
 			<groupId>sc.fiji</groupId>
 			<artifactId>TrakEM2_</artifactId>
 			<version>1.0h</version>
+		</dependency>
+		<dependency>
+			<groupId>net.imglib2</groupId>
+			<artifactId>imglib2-algorithm</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>mpicbg</groupId>
+			<artifactId>mpicbg</artifactId>
+			<version>1.1.2-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 	

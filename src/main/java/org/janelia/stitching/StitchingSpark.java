@@ -48,15 +48,15 @@ public class StitchingSpark implements Runnable, Serializable {
 		}
 
 		final StitchingParameters params = new StitchingParameters();
-		params.channel1 = 0;
-		params.channel2 = 0;
+		params.channel1 = 1;
+		params.channel2 = 1;
 		params.timeSelect = 0;
 		params.checkPeaks = 100;
 		params.computeOverlap = true;
-		params.subpixelAccuracy = false;
+		params.subpixelAccuracy = true;
 		params.virtual = true;
-		params.absoluteThreshold = 7;
-		params.relativeThreshold = 5;
+		params.absoluteThreshold = 5;//7;
+		params.relativeThreshold = 3;//5;
 		job.setParams( params );
 
 		sparkContext = new JavaSparkContext( new SparkConf().setAppName( "Stitching" ) );
