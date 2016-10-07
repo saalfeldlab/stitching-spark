@@ -13,9 +13,11 @@ import mpicbg.stitching.fusion.PixelFusion;
 import net.imglib2.Cursor;
 import net.imglib2.Dimensions;
 import net.imglib2.FinalInterval;
+import net.imglib2.FinalRealInterval;
 import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.Img;
 import net.imglib2.img.imageplus.ImagePlusImgFactory;
@@ -45,13 +47,31 @@ public class FusionPerformer
 	 * Performs the fusion of a collection of {@link TileInfo} objects within specified cell.
 	 * It uses linear blending strategy on the borders.
 	 */
-	public static < T extends RealType< T > & NativeType< T > > Img< T > fuseTilesWithinCellWithBlending( final List< TileInfo > tiles, final TileInfo cell ) throws Exception
+	public static < T extends RealType< T > & NativeType< T > > Img< T > fuseTilesWithinCellUsingBlending( final List< TileInfo > tiles, final TileInfo cell ) throws Exception
 	{
 		final Map< Integer, Dimensions > imageDimensions = new HashMap<>();
 		for ( final TileInfo tile : tiles )
 			imageDimensions.put( tile.getIndex(), tile.getBoundaries() );
 
 		return fuseTilesWithinCell( tiles, cell, new CustomBlendingPixel( imageDimensions ) );
+	}
+
+	/**
+	 * Performs the fusion of a collection of {@link TileInfo} objects within specified cell.
+	 * It uses min-distance strategy within overlapped regions and takes an average when there are more than one value.
+	 */
+	public static < T extends RealType< T > & NativeType< T > > Img< T > fuseTilesWithinCellUsingMinDistanceAverage( final List< TileInfo > tiles, final TileInfo cell ) throws Exception
+	{
+		final Map< Integer, RealInterval > imagesLocation = new HashMap<>();
+		for ( final TileInfo tile : tiles )
+		{
+			final double[] max = new double[ tile.numDimensions() ];
+			for ( int d = 0; d < max.length; d++ )
+				max[ d ] = tile.getPosition( d ) + tile.getSize( d ) - 1;
+			imagesLocation.put( tile.getIndex(), new FinalRealInterval( tile.getPosition(), max ) );
+		}
+
+		return fuseTilesWithinCell( tiles, cell, new MinDistanceAveragePixel( imagesLocation ) );
 	}
 
 	/**
@@ -93,7 +113,7 @@ public class FusionPerformer
 		if ( pixelStrategy == null )
 			return fuseSimple( tiles, cell, type );
 		else
-			return fuseWithStrategy( tiles, cell, type, pixelStrategy );
+			return fuseWithPixelStrategy( tiles, cell, type, pixelStrategy );
 	}
 
 	@SuppressWarnings( "unchecked" )
@@ -119,7 +139,6 @@ public class FusionPerformer
 			final Boundaries tileBoundaries = tile.getBoundaries();
 			final FinalInterval intersection = Intervals.intersect( new FinalInterval( tileBoundaries.getMin(), tileBoundaries.getMax() ), cellImg );
 
-			@SuppressWarnings( "unchecked" )
 			final RealRandomAccessible< T > interpolatedTile = Views.interpolate( Views.extendBorder( ( RandomAccessibleInterval< T > ) ImagePlusImgs.from( imp ) ), new NLinearInterpolatorFactory<>() );
 
 			final Translation3D translation = new Translation3D( tile.getPosition() );
@@ -140,7 +159,7 @@ public class FusionPerformer
 
 
 	@SuppressWarnings( "unchecked" )
-	private static < T extends RealType< T > & NativeType< T > > Img< T > fuseWithStrategy( final List< TileInfo > tiles, final TileInfo cell, final T type, final PixelFusion pixelStrategy ) throws Exception
+	private static < T extends RealType< T > & NativeType< T > > Img< T > fuseWithPixelStrategy( final List< TileInfo > tiles, final TileInfo cell, final T type, final PixelFusion pixelStrategy ) throws Exception
 	{
 		final Boundaries cellBoundaries = cell.getBoundaries();
 
