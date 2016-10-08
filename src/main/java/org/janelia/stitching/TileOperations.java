@@ -2,9 +2,13 @@ package org.janelia.stitching;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
+import net.imglib2.FinalRealInterval;
+import net.imglib2.Interval;
+import net.imglib2.RealInterval;
 
 /**
  * Contains a number of useful operations on a set of tiles.
@@ -63,6 +67,19 @@ public class TileOperations
 		}
 		return true;
 	}
+	
+	public static boolean overlap( final RealInterval t1, final RealInterval t2 )
+	{
+		for ( int d = 0; d < t1.numDimensions(); d++ )
+		{
+			final double p1 = Math.round( t1.realMin( d ) ), p2 = Math.round( t2.realMin( d ) );
+			final double q1 = t1.realMax( d ), q2 = t2.realMax( d );
+
+			if ( !( ( p2 >= p1 && p2 < q1 ) || ( p1 >= p2 && p1 < q2 ) ) )
+				return false;
+		}
+		return true;
+	}
 
 	/**
 	 * @return an overlap with global coordinates
@@ -104,6 +121,15 @@ public class TileOperations
 		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			if ( TileOperations.overlap( tile, subregion ) )
+				tilesWithinSubregion.add( tile );
+		return tilesWithinSubregion;
+	}
+	
+	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final RealInterval subregion )
+	{
+		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+			if ( TileOperations.overlap( new FinalRealInterval( tile.getPosition(), tile.getMax() ), subregion ) )
 				tilesWithinSubregion.add( tile );
 		return tilesWithinSubregion;
 	}

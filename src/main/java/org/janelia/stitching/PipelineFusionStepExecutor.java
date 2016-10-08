@@ -10,7 +10,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 
+import net.imglib2.FinalRealInterval;
 import net.imglib2.img.Img;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.type.numeric.NumericType;
 
 /**
@@ -95,7 +97,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 							final int[] cellIndices = new int[ downscaledCellPos.length ];
 							for ( int d = 0; d < downscaledCellPos.length; d++ )
 								cellIndices[ d ] = ( int ) ( downscaledCellPos[ d ] / job.getArgs().fusionCellSize() );
-							final String innerFolder = cellIndices[ 2 ] + "/" + cellIndices[ 1 ];
+							final String innerFolder = ( cell.numDimensions() > 2 ? cellIndices[ 2 ] + "/" : "" ) + cellIndices[ 1 ];
 							final String outFilename = cellIndices[ 0 ] + ".tif";
 
 							new File( levelFolder + "/" + innerFolder ).mkdirs();
@@ -106,7 +108,10 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 							Img< ? extends NumericType > outImg = null;
 							if ( currLevel == 0 )
 							{
-								outImg = FusionPerformer.fuseTilesWithinCellUsingMinDistanceAverage( tilesWithinCell, cell );
+								outImg = FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance( 
+										tilesWithinCell, 
+										cellBox,
+										new NLinearInterpolatorFactory() );
 							}
 							else
 							{
