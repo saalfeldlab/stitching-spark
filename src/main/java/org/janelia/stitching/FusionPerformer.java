@@ -104,7 +104,7 @@ public class FusionPerformer
 			final Interval targetInterval,
 			final InterpolatorFactory< T, RandomAccessible< T > > interpolatorFactory ) throws Exception
 	{
-		final ImageType imageType = getImageType( tiles );
+		final ImageType imageType = Utils.getImageType( tiles );
 		if ( imageType == null )
 			throw new Exception( "Can't fuse images of different or unknown types" );
 		
@@ -200,7 +200,7 @@ public class FusionPerformer
 	 */
 	public static < T extends RealType< T > & NativeType< T > > Img< T > fuseTilesWithinCellSimpleWithDownsampling( final List< TileInfo > tiles, final TileInfo cell, final int downsampleFactor ) throws Exception
 	{
-		final ImageType imageType = getImageType( tiles );
+		final ImageType imageType = Utils.getImageType( tiles );
 		if ( imageType == null )
 			throw new Exception( "Can't fuse images of different or unknown types" );
 
@@ -224,7 +224,7 @@ public class FusionPerformer
 	@SuppressWarnings( "unchecked" )
 	public static < T extends RealType< T > & NativeType< T > > Img< T > fuseTilesWithinCell( final List< TileInfo > tiles, final TileInfo cell, final PixelFusion pixelStrategy ) throws Exception
 	{
-		final ImageType imageType = getImageType( tiles );
+		final ImageType imageType = Utils.getImageType( tiles );
 		if ( imageType == null )
 			throw new Exception( "Can't fuse images of different or unknown types" );
 
@@ -345,19 +345,5 @@ public class FusionPerformer
 			target.next().setReal( source.next().getValue() );
 
 		return out;
-	}
-
-
-	private static ImageType getImageType( final List< TileInfo > tiles )
-	{
-		ImageType imageType = null;
-		for ( final TileInfo tile : tiles )
-		{
-			if ( imageType == null )
-				imageType = tile.getType();
-			else if ( imageType != tile.getType() )
-				return null;
-		}
-		return imageType;
 	}
 }

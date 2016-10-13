@@ -82,6 +82,19 @@ public class Utils {
 		if ( possible3rdDim[ 0 ] * possible3rdDim[ 1 ] == 1 )
 			imp.setDimensions( 1, possible3rdDim[ 2 ], 1 );
 	}
+	
+	public static ImageType getImageType( final List< TileInfo > tiles )
+	{
+		ImageType imageType = null;
+		for ( final TileInfo tile : tiles )
+		{
+			if ( imageType == null )
+				imageType = tile.getType();
+			else if ( imageType != tile.getType() )
+				return null;
+		}
+		return imageType;
+	}
 
 	public static < T extends NumericType< T > > void saveTileImageToFile( final TileInfo tile, final Img< T > img )
 	{
