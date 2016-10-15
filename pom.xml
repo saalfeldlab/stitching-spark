@@ -84,6 +84,11 @@
 			<artifactId>mpicbg</artifactId>
 			<version>1.1.2-SNAPSHOT</version>
 		</dependency>
+		<dependency>
+			<groupId>com.esotericsoftware.kryo</groupId>
+			<artifactId>kryo</artifactId>
+			<version>2.24.0</version>
+		</dependency>
 	</dependencies>
 	
 	<build>

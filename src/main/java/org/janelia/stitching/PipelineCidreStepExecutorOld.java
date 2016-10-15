@@ -30,7 +30,7 @@ import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
-public class PipelineCidreStepExecutor extends PipelineStepExecutor 
+public class PipelineCidreStepExecutorOld extends PipelineStepExecutor 
 {
 	private static final long serialVersionUID = 1920621620902670130L;
 	
@@ -65,7 +65,7 @@ public class PipelineCidreStepExecutor extends PipelineStepExecutor
 	private static final double optTol = 1e-5;		// optimality tolerance
 	private static final int Corr = 100;			// number of corrections to store in memory
 
-	public PipelineCidreStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext ) 
+	public PipelineCidreStepExecutorOld( final StitchingJob job, final JavaSparkContext sparkContext ) 
 	{
 		super(job, sparkContext);
 	}
@@ -660,28 +660,30 @@ public class PipelineCidreStepExecutor extends PipelineStepExecutor
 		}
 		E_fit *= data_size_factor;		// fit term energy
 		
+		
 		//--------------------------------------------------------------------------
-// TODO: 3D
-/*
 		// spatial regularization of v
 		// We compute the energy of the regularization term given v,b,zx,zy. We also
 		// compute its gradient wrt the random variables.
 
 		// determine the widths we will use for the LoG filter
 
-		int max_exp = (int)Math.max(1.0, Math.log(Math.floor(Math.max(S_C,  S_R) / 50.0))/Math.log(2.0));
+/*		long maxDimension = 0;
+		for ( int d = 0; d < size.length; d++ )
+			maxDimension = Math.max( size[ d ], maxDimension );
+		int max_exp = (int)Math.max(1.0, Math.log(Math.floor(maxDimension / 50.0))/Math.log(2.0));
 
 		double[] sigmas = new double[max_exp + 2];
 		for (int i = -1; i <= max_exp; i++)
 			sigmas[i + 1] = Math.pow(2, i);
 		
 		double[] energy_vreg = new double[sigmas.length];	// accumulates the vreg energy
-		double[] deriv_v_vreg = new double[S_C * S_R];			// derivative of vreg term wrt v
-		double[] deriv_b_vreg = new double[S_C * S_R];			// derivative of vreg term wrt b
-
+		double[] deriv_v_vreg = new double[numPixels];			// derivative of vreg term wrt v
+		double[] deriv_b_vreg = new double[numPixels];			// derivative of vreg term wrt b
+*/
 		// apply the scale-invariant LoG filter to v for all scales in SIGMAS
-		double[][][] h = new double[sigmas.length][][];
-		for (int i = 0; i < sigmas.length; i++)
+//		double[ /* sigma */ ][ /* flattened kernel */ ] h = new double[sigmas.length][][];
+/*		for (int i = 0; i < sigmas.length; i++)
 		{
 		    // define the kernel size, make certain dimension is odd
 		    int hsize = 6 * (int)Math.ceil(sigmas[i]); 
@@ -738,19 +740,12 @@ public class PipelineCidreStepExecutor extends PipelineStepExecutor
 		double[] G_V_vreg = deriv_v_vreg;			// vreg term gradient wrt v
 		double[] G_B_vreg = deriv_b_vreg;			// vreg term gradient wrt b
 		//--------------------------------------------------------------------------
-*/
-		// TODO remove this lines
-		double E_vreg = 0;
+		*/
+		double E_vreg = 0;							// vreg term energy
 		double[] deriv_v_vreg = new double[numPixels];			// derivative of vreg term wrt v
 		double[] deriv_b_vreg = new double[numPixels];			// derivative of vreg term wrt b
 		double[] G_V_vreg = deriv_v_vreg;			// vreg term gradient wrt v
 		double[] G_B_vreg = deriv_b_vreg;			// vreg term gradient wrt b
-		
-		
-		
-		
-		
-		
 		
 		
 		
