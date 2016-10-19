@@ -9,19 +9,27 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.broadcast.Broadcast;
 
 import bdv.export.Downsample;
 import ij.IJ;
@@ -34,19 +42,33 @@ import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgFactory;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.interpolation.InterpolatorFactory;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.realtransform.InverseRealTransform;
+import net.imglib2.realtransform.RealTransformRandomAccessible;
+import net.imglib2.realtransform.RealViews;
+import net.imglib2.realtransform.Scale;
+import net.imglib2.realtransform.Scale3D;
+import net.imglib2.realtransform.ScaleAndTranslation;
 import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
+import net.imglib2.view.ExtendedRandomAccessibleInterval;
+import net.imglib2.view.IntervalView;
+import net.imglib2.view.RandomAccessibleOnRealRandomAccessible;
 import net.imglib2.view.Views;
 
 public class IlluminationCorrectionSpark implements Runnable, Serializable
@@ -68,7 +90,7 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 	private transient Mestimator MESTIMATOR;	// specifies "CAUCHY" or "LS" (least squares) 
 	private transient int TERMSFLAG;			// flag specifing which terms to include in the energy function 
 	private transient double LAMBDA_VREG;		// coefficient for the v regularization 
-	private transient double LAMBDA_ZERO;		// coefficient for the zero-light term
+	private transient double LAMBDA_ZERO = Math.pow(10, 0.5);		// coefficient for the zero-light term
 	private transient double ZMIN;			// minimum possible value for Z
 	private transient double ZMAX;			// maximum possible value for Z
 	private transient double STACKMIN;
@@ -84,16 +106,24 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 	
 	private static int downsampleFactor = 4;
 	private static int histSize = 256;
-	private static double histMin = 95.0, histMax = 3270.0;
+	private static double histMin = 100.0, histMax = 313.0;
 	
 	
 	
-	private final transient String inputFilepath;
+	private static String inputFilepath;
 	private transient JavaSparkContext sparkContext;
 	private transient TileInfo[] tiles;
+	private transient TileInfo[] correctedTiles;
+	
+	private static long[] originalSize;
+	private transient long[] downsampledSize;
 	
 	private transient CompressedStack histograms;
 	private transient double[] binsMean;
+	
+	// Solution
+	private transient double[] vFinal;
+	private transient double[] zFinal;
 	
 	
 	public static void main( final String[] args )
@@ -111,6 +141,13 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 	@Override
 	public void run()
 	{
+		sparkContext = new JavaSparkContext( new SparkConf()
+				.setAppName( "IlluminationCorrection" )
+				.set( "spark.driver.maxResultSize", "8g" )
+				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
+				.set( "spark.kryoserializer.buffer.max", "2000m" ));
+		
+		
 		try {
 			tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilepath );
 			N = tiles.length;
@@ -131,17 +168,9 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		
 		if ( !readHistogramsFromDisk() )
 		{
-			sparkContext = new JavaSparkContext( new SparkConf()
-					.setAppName( "IlluminationCorrection" )
-					.set( "spark.driver.maxResultSize", "8g" )
-					.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
-					.set( "spark.kryoserializer.buffer.max", "2000m" ));
-			
 			long elapsed = System.nanoTime();
 			histograms = getHistograms();
 			elapsed = System.nanoTime() - elapsed;
-			
-			sparkContext.close();
 			
 			System.out.println( "Size of the resulting array: " + histograms.hist.length + " x " + histograms.hist[ 0 ].length );
 			System.out.println( "min=" + histograms.min + ", max=" + histograms.max );
@@ -151,7 +180,8 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 			numPixels = histograms.hist[0].length;
 			
 			if ( dumpHistogramsToDisk() )
-				return;
+				System.out.println("Saved");
+				//return;
 		}
 		else
 		{
@@ -172,13 +202,48 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		System.out.println("Min freq=" + min + ", max freq=" + max);
 		
 		
+		originalSize = getMinSize(tiles);
+		downsampledSize = new long[ originalSize.length ];
+		for ( int d = 0; d < originalSize.length; d++ )
+			downsampledSize[ d ] = originalSize[ d ] / downsampleFactor;
+
+		
+		/*System.out.println("Average histogram");
+		for ( int bin = 0; bin < histSize; bin++ )
+		{
+			double avBin = 0;
+			for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
+				avBin += (double)histograms.hist[bin][pixelIndex] / N;
+			avBin /= numPixels;
+			System.out.println(avBin);
+		}*/
+		System.out.println("--------------");
+		
+		
+		
+		/*A: for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
+		{
+			double[] x =  new double[histSize];
+			boolean nonzero = false;
+			for ( int bin = histSize - 1; bin >= 0; bin-- )
+			{
+				if ( !nonzero && histograms.hist[bin][pixelIndex] != 0 )
+				{
+					if ( bin < 200 )
+						continue A;
+					nonzero = true;
+				}
+				x[bin] = (double)histograms.hist[bin][pixelIndex] / N;
+			}
+			System.out.println("pixel="+pixelIndex+", h="+Arrays.toString(x));
+		}*/
+		
 		// precalc middle values of every bin
 		binsMean = new double[ histSize ];
 		final double histBinSize = (histMax-histMin) / histSize;
 		for ( int binIndex = 0; binIndex < histSize; binIndex++ )
 			binsMean[ binIndex ] = histMin + binIndex*histBinSize + histBinSize/2;
-		
-		System.out.println("binsMean="+Arrays.toString(binsMean));
+		//System.out.println("binsMean="+Arrays.toString(binsMean));
 		
 		estimateQ();
 		
@@ -240,7 +305,9 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		minFuncOptions.Corr         = 100;							// number of corrections to store in memory (default: 100)*/
 		
 		// First call to roughly estimate our variables
+		ITER = 1;
 		MESTIMATOR = Mestimator.LS;
+		TERMSFLAG = 0;
 		MinFuncResult minFuncResult = minFunc( x0, minFuncOptions );
 		
 		double[] x  = minFuncResult.x;
@@ -255,10 +322,15 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		
 		
 		
+		
+		System.out.println("-------------");
+		System.out.println("-------------");
 		// 2nd optimization using REGULARIZED ROBUST fitting
 		// use the mean standard error of the LS fitting to set the width of the
 		// CAUCHY function
 		CAUCHY_W = computeStandardError(v1, b1);
+		
+		System.out.println("CAUCHY_W="+CAUCHY_W);
 
 		// assign the remaining global variables needed in cdr_objective
 		ITER = 1;
@@ -291,16 +363,20 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		// Unpivot b: move pivot point back to the original location
 		for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
 			b[pixelIndex] += PivotShiftY[pixelIndex] - PivotShiftX * v[pixelIndex];
-*/
-		
+*/		
 		// shift the b surface to the zero-light surface
 		double[] z = new double[numPixels];
 		for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
 			z[pixelIndex] = b[pixelIndex] + zx * v[pixelIndex];
-		
 
 		
-		System.out.println("Something's ready");
+		vFinal = rescaleHelper( v, "V" );
+		zFinal = rescaleHelper( z, "Z" );
+		
+		correctImages();
+		
+		sparkContext.close();
+		System.out.println("Done");
 	}
 	
 	
@@ -324,6 +400,7 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 					{
 						System.out.println( "Loading tile " + tile.getIndex() );
 						final ImagePlus imp = IJ.openImage( tile.getFilePath() );
+						Utils.workaroundImagePlusNSlices( imp );
 						final Img< T > img = ImagePlusImgs.from( imp );
 						final T type = ( T ) ImageType.valueOf( imp.getType() ).getType();
 						
@@ -339,7 +416,7 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 						final Img< T > downsampledImg = new ImagePlusImgFactory< T >().create( outDimensions, type.createVariable() );
 						Downsample.downsample( img, downsampledImg, dimFactors );
 						imp.close();
- 
+						
 						// Fill the histogram
 						final CompressedStack result;
 						if ( intermediateHist == null )
@@ -421,20 +498,126 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 	
 	
 	
+	private < T extends RealType< T > & NativeType< T > > void rescale( final Img< T > srcImg, final Img< T > dstImg )
+	{
+		// Define scaling transform
+		final double[] scalingCoeffs = new double[ srcImg.numDimensions() ];
+		for ( int d = 0; d < scalingCoeffs.length; d++ )
+			scalingCoeffs[ d ] = (double) dstImg.dimension( d ) / srcImg.dimension( d );
+		final Scale scalingTransform = new Scale( scalingCoeffs );
+		
+		// Prepare source image
+		final ExtendedRandomAccessibleInterval< T, Img< T > > srcImgExtended = Views.extendBorder( srcImg );
+		final RealRandomAccessible< T > srcImgInterpolated = Views.interpolate( srcImgExtended, new NLinearInterpolatorFactory<>() );
+		final RealTransformRandomAccessible< T, InverseRealTransform > srcImgTransformed = RealViews.transform( srcImgInterpolated, scalingTransform );
+		final RandomAccessibleOnRealRandomAccessible< T > srcImgTransformedRastered = Views.raster( srcImgTransformed );
+		final IntervalView< T > srcImgScaledView = Views.interval( srcImgTransformedRastered, dstImg );
+		final IterableInterval< T > srcImgScaledIterable = Views.flatIterable( srcImgScaledView );
+		final Cursor< T > srcImgScaledCursor = srcImgScaledIterable.cursor();
+		
+		// Prepare destination image
+		final IterableInterval< T > dstImgIterable = Views.flatIterable( dstImg );
+		final Cursor< T > dstImgCursor = dstImgIterable.cursor();
+		
+		// Write data
+		while ( dstImgCursor.hasNext() && srcImgScaledCursor.hasNext() )
+			dstImgCursor.next().set( srcImgScaledCursor.next() );
+	}
+	
+	private final double[] rescaleHelper( final double[] srcArr, final String title )
+	{
+		final ArrayImg< DoubleType, DoubleArray > srcImg = ArrayImgs.doubles( srcArr, downsampledSize );
+		final ArrayImg< DoubleType, DoubleArray > dstImg = ArrayImgs.doubles( originalSize );
+		rescale( srcImg, dstImg );
+		
+		final ImagePlus imp = ImageJFunctions.wrap( dstImg, title );
+		Utils.workaroundImagePlusNSlices( imp );
+		IJ.saveAsTiff( imp, inputFilepath + "_" + title + ".tif" );
+		
+		return dstImg.update( null ).getCurrentStorageArray();
+	}
+	
+	private void correctImages()
+	{
+		// Prepare broadcast variables for V and Z
+		final double[] vFinalData = vFinal, zFinalData = zFinal;
+		final Broadcast< double[] > vFinalBroadcasted = sparkContext.broadcast( vFinalData ), zFinalBroadcasted = sparkContext.broadcast( zFinalData );
+		
+		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( Arrays.asList( tiles ) );
+		final JavaRDD< TileInfo > task = rdd.map(
+				new Function< TileInfo, TileInfo >()
+				{
+					private static final long serialVersionUID = 4991255417353136684L;
+
+					@Override
+					public TileInfo call( final TileInfo tile ) throws Exception
+					{
+						final ImagePlus imp = IJ.openImage( tile.getFilePath() );
+						Utils.workaroundImagePlusNSlices( imp );
+						final ImagePlusImg< ? extends RealType, ? > img = ImagePlusImgs.from( imp );
+						final Cursor< ? extends RealType > imgCursor = Views.flatIterable( img ).cursor();
+
+						final ArrayImg< DoubleType, DoubleArray > vFinalImg = ArrayImgs.doubles( vFinalBroadcasted.value(), originalSize );
+						final ArrayImg< DoubleType, DoubleArray > zFinalImg = ArrayImgs.doubles( zFinalBroadcasted.value(), originalSize );
+						final Cursor< DoubleType > vCursor = Views.flatIterable( vFinalImg ).cursor();
+						final Cursor< DoubleType > zCursor = Views.flatIterable( zFinalImg ).cursor();
+						
+						RealType val;
+						double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
+						while ( imgCursor.hasNext() )
+						{
+							val = imgCursor.next();
+							val.setReal( (val.getRealDouble() - zCursor.next().get()) / vCursor.next().get() );
+							
+							final double bla = vCursor.get().get();
+							if (min > bla)
+								min = bla;
+							if (max < bla)
+								max = bla;
+						}
+						
+						System.out.println(" ################# "  + "min="+min+", max="+max    + " ################# ");
+						
+						tile.setFilePath( Paths.get( inputFilepath ).getParent().toString() + "/" + Utils.addFilenameSuffix( Paths.get( tile.getFilePath() ).getFileName().toString(), "_corrected" ) );
+						IJ.saveAsTiff( imp, tile.getFilePath() );
+						
+						imp.close();
+						return tile;
+					}
+				});
+
+		correctedTiles = task.collect().toArray( new TileInfo[0] );
+		try {
+			TileInfoJSONProvider.saveTilesConfiguration( correctedTiles, Utils.addFilenameSuffix( inputFilepath, "_corrected" ) );
+		} catch ( final IOException e ) {
+			e.printStackTrace();
+		}
+	}
+	
+	
+	
 	private void estimateQ()
 	{
-		final double[] pixelsHistSum = new double[ numPixels ];
+		final double[] pixelsHistMean = new double[ numPixels ];
 		final int[] pixelIndexes = new int[ numPixels ];
 		
 		for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
 		{
 			for ( int binIndex = 0; binIndex < histSize; binIndex++ )
-				pixelsHistSum[ pixelIndex ] += binsMean[ binIndex ] * histograms.hist[ binIndex ][ pixelIndex ];
-			
+				pixelsHistMean[ pixelIndex ] += binsMean[ binIndex ] * histograms.hist[ binIndex ][ pixelIndex ];
+			pixelsHistMean[ pixelIndex ] /= N;
 			pixelIndexes[ pixelIndex ] = pixelIndex;
 		}
 		
-		quicksort( pixelsHistSum, pixelIndexes );
+		quicksort( pixelsHistMean, pixelIndexes );
+		
+		try ( final PrintWriter writer = new PrintWriter(Utils.addFilenameSuffix(inputFilepath, "_sortedMeans" ) +".txt", "UTF-8") ) {
+			for ( int p = 0; p < numPixels; p++ )
+				writer.println(pixelsHistMean[p]);
+		} catch (FileNotFoundException | UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		
 		int numWindowPoints = (int) Math.round( numPixels * WINDOW_POINTS_PERCENT );
 		final int mStart = (int)( Math.round( numPixels / 2.0 ) - Math.round( numWindowPoints / 2.0 ) ) - 1;
@@ -445,22 +628,34 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		/*Q = new double[ histSize ];
 		for (int binIndex = 0; binIndex < histSize; binIndex++) 
 		{
-			double sumPixels = 0;
+			double sumFreq = 0;
 			for ( int mIndex = mStart; mIndex < mEnd; mIndex++ )
-				sumPixels += histograms.hist[ binIndex ][ pixelIndexes[mIndex] ];
-			Q[ binIndex ] = sumPixels / numWindowPoints;
+				sumFreq += (double)histograms.hist[ binIndex ][ pixelIndexes[mIndex] ] / N;
+			Q[ binIndex ] = sumFreq / numWindowPoints;
 		}*/
+		
+		int QfirstIndex = 0, QlastIndex = N;
+		/*for ( int mIndex = mStart; mIndex < mEnd; mIndex++ )
+		{
+			QfirstIndex = Math.max( histograms.hist[0][ pixelIndexes[mIndex] ], QfirstIndex );
+			QlastIndex =  Math.min( N - histograms.hist[histSize-1][ pixelIndexes[mIndex] ], QlastIndex );
+			
+			if ( histograms.hist[histSize-1][ pixelIndexes[mIndex] ] != 0 )
+				System.out.println("mIndex="+mIndex+", cnt="+histograms.hist[histSize-1][ pixelIndexes[mIndex] ]);
+		}*/
+		System.out.println("QfirstIndex="+QfirstIndex+", QlastIndex="+QlastIndex+", N="+N);
 		
 		Q = new double[ N ];
 		final double[] q = new double[ N ];
 		for ( int mIndex = mStart; mIndex < mEnd; mIndex++ )
 		{
 			fillSortedVectorFromHistogram( pixelIndexes[ mIndex ], q );
-			for ( int i = 0; i < N; i++ )
+			for ( int i = QfirstIndex; i < QlastIndex; i++ )
 				Q[ i ] += q[ i ];
 		}
 		for ( int i = 0; i < N; i++ )
 			Q[ i ] /= numWindowPoints;
+		System.out.println("Q="+Arrays.toString(Q));
 	}
 	
 	
@@ -497,9 +692,9 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		int counter = 0;
 		for (int bin = 0; bin < histSize; bin++)
 		{
-			final double histBinStep = histBinSize / histograms.hist[ bin ][ pixelIndex ];
+			final double histBinStep = histBinSize / ( histograms.hist[ bin ][ pixelIndex ] + 1 );
 			for ( int j = 0; j < histograms.hist[ bin ][ pixelIndex ]; j++ )
-				vector[ counter++ ] = histMin + bin*histBinSize + j*histBinStep;
+				vector[ counter++ ] = histMin + bin*histBinSize + (j+1)*histBinStep;
 		}
 		
 		if ( counter != N )
@@ -560,7 +755,7 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 					);	
 			
 			downsampleFactor = is.readInt();
-			numPixels = 1702400; //is.readInt();
+			numPixels = is.readInt();
 			histSize = is.readInt();
 			
 			histMin = is.readDouble();
@@ -861,6 +1056,7 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
         double[] d_est_db = new double[N];
         
         final double[] q = new double[N];
+        int weirdCount = 0;
 		for (int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++) 
 		{
 	        // get the quantile fit for this location and vectorize it
@@ -868,15 +1064,24 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 	        
 	        v = v_vec[pixelIndex];
 	        b = b_vec[pixelIndex];
+	        
+	        //System.out.println("v="+v+", b="+b+".  Qlast="+Q[N-1]+", qlast="+q[N-1]);
 
 	        switch (MESTIMATOR) {
 	            case LS:
+	            	boolean weird = false;
 	            	for (int i = 0; i < N; i++) {
 	            		double val = Q[i] * v + b - q[i];
 	            		mestimator_response[i] = val * val;
 	            		d_est_dv[i] = Q[i] * val;
 	            		d_est_db[i] = val;
+	            		
+	            		if ( Math.abs(val) > 50 )
+	            			weird = true;
 	            	}
+	            	if ( weird )
+	            		weirdCount++;
+	            	
 	                break;
 	            case CAUCHY:
 	            	for (int i = 0; i < N; i++) {
@@ -886,7 +1091,7 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 	            		d_est_db[i] = val / (1.0 + (val*val) / (w*w));
 	            	}
 	                break;
-	        }
+	        }	
 	        
 	        for (int i = 0; i < N; i++) {
 	        	energy_fit [pixelIndex] += mestimator_response[i];
@@ -894,6 +1099,8 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 	        	deriv_b_fit[pixelIndex] += d_est_db[i];
 	        }
 		}
+		
+		System.out.println("Weird pixels count = " + weirdCount + ",   numPixels="+numPixels);
 /*
 		// normalize the contribution from fitting energy term by the number of data 
 		// points in S (so our balancing of the energy terms is invariant)
