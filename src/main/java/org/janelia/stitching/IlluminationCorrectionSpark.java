@@ -20,6 +20,12 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.log4j.Level;
@@ -34,6 +40,7 @@ import org.apache.spark.broadcast.Broadcast;
 import bdv.export.Downsample;
 import ij.IJ;
 import ij.ImagePlus;
+import ij.plugin.ZProjector;
 import mpicbg.stitching.ImageCollectionElement;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
@@ -54,6 +61,7 @@ import net.imglib2.img.imageplus.ImagePlusImgFactory;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.interpolation.InterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.InverseRealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
 import net.imglib2.realtransform.RealViews;
@@ -73,8 +81,8 @@ import net.imglib2.view.Views;
 
 public class IlluminationCorrectionSpark implements Runnable, Serializable
 {
-	private static final long serialVersionUID = 1920621620902670130L;
-	
+	private static final long serialVersionUID = -8987192045944606043L;
+
 	private static final double WINDOW_POINTS_PERCENT = 0.125;
 	
 	private transient int numPixels;
@@ -106,7 +114,7 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 	
 	private static int downsampleFactor = 4;
 	private static int histSize = 256;
-	private static double histMin = 100.0, histMax = 313.0;
+	private static double histMin = 97.0, histMax = 779.0;
 	
 	
 	
@@ -120,6 +128,11 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 	
 	private transient CompressedStack histograms;
 	private transient double[] binsMean;
+	
+	private transient final int numThreads = Runtime.getRuntime().availableProcessors();
+	private transient ExecutorService threadPool;
+	private transient Future< ? >[] futures;
+	private transient AtomicInteger ai;
 	
 	// Solution
 	private transient double[] vFinal;
@@ -206,6 +219,13 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		downsampledSize = new long[ originalSize.length ];
 		for ( int d = 0; d < originalSize.length; d++ )
 			downsampledSize[ d ] = originalSize[ d ] / downsampleFactor;
+		
+		
+		
+		threadPool = Executors.newFixedThreadPool(numThreads);
+		futures = new Future[ numThreads ];
+		ai = new AtomicInteger();
+		
 
 		
 		/*System.out.println("Average histogram");
@@ -817,7 +837,10 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		int numDiffType = 0;
 
 		// Evaluate Initial Point
+		
+		long time = System.nanoTime();
 		CdrObjectiveResult cdrObjectiveResult = cdr_objective(x);
+		System.out.println("First cdr_objective took " + ((System.nanoTime()-time)/Math.pow(10, 9))+"s");
 		f = cdrObjectiveResult.E;
 		double[] g = cdrObjectiveResult.G;
 		double[] g_old = new double[g.length];
@@ -876,7 +899,9 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 				for (int j = 0; j < d.length; j++)
 					tPd[j] = t * d[j];
 
+				time = System.nanoTime();
 				LbfgsAddResult lbfgsAddResult = lbfgsAdd(gMg_old, tPd, S, Y, YS, lbfgs_start, lbfgs_end, Hdiag);
+				System.out.println("lbfgsAdd took " + ((System.nanoTime()-time)/Math.pow(10, 9))+"s" + ",   lbfgs_start="+lbfgsAddResult.lbfgs_start+", lbfgs_end="+lbfgsAddResult.lbfgs_end);
 				S = lbfgsAddResult.S;
 				Y = lbfgsAddResult.Y;
 				YS = lbfgsAddResult.YS;
@@ -885,7 +910,9 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 				Hdiag = lbfgsAddResult.Hdiag;
 				boolean skipped = lbfgsAddResult.skipped;
 
+				time = System.nanoTime();
 				d = lbfgsProd(g, S, Y, YS, lbfgs_start, lbfgs_end, Hdiag);
+				System.out.println("lbfgsProd took " + ((System.nanoTime()-time)/Math.pow(10, 9))+"s");
 			}
 			for (int j = 0; j < g.length; j++)
 				g_old[j] = g[j];
@@ -933,7 +960,9 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		    // Line Search
 		    f_old = f;
 
+		    time = System.nanoTime();
 		    WolfeLineSearchResult wolfeLineSearchResult = WolfeLineSearch(x,t,d,f,g,gtd,c1,c2,LS_interp,LS_multi,25,progTol,1);
+		    System.out.println("WolfeLineSearch took " + ((System.nanoTime()-time)/Math.pow(10, 9))+"s");
 		    t = wolfeLineSearchResult.t;
 		    f = wolfeLineSearchResult.f_new;
 		    g = wolfeLineSearchResult.g_new;
@@ -1013,8 +1042,6 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 	
 	public CdrObjectiveResult cdr_objective(double[] x)
 	{
-		System.out.println("cdr_objective called");
-		
 		double E = 0.0;
 		double[] G = null;
 		
@@ -1035,7 +1062,6 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		for (int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++)
 			py[pixelIndex] = zy - PivotShiftY[pixelIndex];
 
-
 		//--------------------------------------------------------------------------
 		// fitting energy
 		// We compute the energy of the fitting term given v,b,zx,zy. We also
@@ -1050,57 +1076,88 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		double E_fit = 0;
 		double[] G_V_fit = new double[numPixels];
 		double[] G_B_fit = new double[numPixels];
-		
-		double[] mestimator_response = new double[N];
-        double[] d_est_dv = new double[N];
-        double[] d_est_db = new double[N];
         
-        final double[] q = new double[N];
-        int weirdCount = 0;
-		for (int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++) 
-		{
-	        // get the quantile fit for this location and vectorize it
-	        fillSortedVectorFromHistogram( pixelIndex, q );
-	        
-	        v = v_vec[pixelIndex];
-	        b = b_vec[pixelIndex];
-	        
-	        //System.out.println("v="+v+", b="+b+".  Qlast="+Q[N-1]+", qlast="+q[N-1]);
-
-	        switch (MESTIMATOR) {
-	            case LS:
-	            	boolean weird = false;
-	            	for (int i = 0; i < N; i++) {
-	            		double val = Q[i] * v + b - q[i];
-	            		mestimator_response[i] = val * val;
-	            		d_est_dv[i] = Q[i] * val;
-	            		d_est_db[i] = val;
-	            		
-	            		if ( Math.abs(val) > 50 )
-	            			weird = true;
-	            	}
-	            	if ( weird )
-	            		weirdCount++;
-	            	
-	                break;
-	            case CAUCHY:
-	            	for (int i = 0; i < N; i++) {
-	            		double val = Q[i] * v + b - q[i];
-	            		mestimator_response[i] = w*w * Math.log(1 + (val*val) / (w*w)) / 2.0;
-	            		d_est_dv[i] = (Q[i]*val) / (1.0 + (val*val) / (w*w));
-	            		d_est_db[i] = val / (1.0 + (val*val) / (w*w));
-	            	}
-	                break;
-	        }	
-	        
-	        for (int i = 0; i < N; i++) {
-	        	energy_fit [pixelIndex] += mestimator_response[i];
-	        	deriv_v_fit[pixelIndex] += d_est_dv[i];
-	        	deriv_b_fit[pixelIndex] += d_est_db[i];
-	        }
-		}
+		final double[][] q = new double[numThreads][N];
 		
-		System.out.println("Weird pixels count = " + weirdCount + ",   numPixels="+numPixels);
+        ai.set(0);
+		for ( int ithread = 0; ithread < numThreads; ++ithread )
+			futures[ ithread ] = threadPool.submit(() -> {
+				final int myNumber = ai.getAndIncrement();
+				final int wholeSize = numPixels;
+				final int chunk = (wholeSize / numThreads) + (wholeSize % numThreads == 0 ? 0 : 1);
+				final int startInd = chunk * myNumber; 
+				final int endInd = Math.min(startInd+chunk, wholeSize);
+				for (int pixelIndex = startInd; pixelIndex < endInd; pixelIndex++)
+				{
+					fillSortedVectorFromHistogram( pixelIndex, q[myNumber] );
+
+			        switch (MESTIMATOR) {
+			            case LS:
+			            	for (int i = 0; i < N; i++) {
+			            		double val = Q[i] * v_vec[pixelIndex] + b_vec[pixelIndex] - q[myNumber][i];
+			            		energy_fit [pixelIndex] += val * val;
+			            		deriv_v_fit[pixelIndex] += Q[i] * val;
+			            		deriv_b_fit[pixelIndex] += val;
+			            	}
+			                break;
+			            case CAUCHY:
+			            	for (int i = 0; i < N; i++) {
+			            		double val = Q[i] * v_vec[pixelIndex] + b_vec[pixelIndex] - q[myNumber][i];
+			            		energy_fit [pixelIndex] += w*w * Math.log(1 + (val*val) / (w*w)) / 2.0;
+			            		deriv_v_fit[pixelIndex] += (Q[i]*val) / (1.0 + (val*val) / (w*w));
+			            		deriv_b_fit[pixelIndex] += val / (1.0 + (val*val) / (w*w));
+			            	}
+			                break;
+			        }
+				}
+			});
+		for ( Future future : futures )
+			try {
+				future.get();
+			} catch (InterruptedException | ExecutionException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		
+		
+		/*final Thread[] threads = SimpleMultiThreading.newThreads();
+		final int numThreads = threads.length;
+		
+		final double[][] q = new double[numThreads][N];
+		
+		for ( int ithread = 0; ithread < numThreads; ++ithread )
+			threads[ ithread ] = new Thread(() -> {
+				final int myNumber = ai.getAndIncrement();
+				final int wholeSize = numPixels;
+				final int chunk = (wholeSize / numThreads) + (wholeSize % numThreads == 0 ? 0 : 1);
+				final int startInd = chunk * myNumber; 
+				final int endInd = Math.min(startInd+chunk, wholeSize);
+				for (int pixelIndex = startInd; pixelIndex < endInd; pixelIndex++)
+				{
+					fillSortedVectorFromHistogram( pixelIndex, q[myNumber] );
+
+			        switch (MESTIMATOR) {
+			            case LS:
+			            	for (int i = 0; i < N; i++) {
+			            		double val = Q[i] * v_vec[pixelIndex] + b_vec[pixelIndex] - q[myNumber][i];
+			            		energy_fit [pixelIndex] += val * val;
+			            		deriv_v_fit[pixelIndex] += Q[i] * val;
+			            		deriv_b_fit[pixelIndex] += val;
+			            	}
+			                break;
+			            case CAUCHY:
+			            	for (int i = 0; i < N; i++) {
+			            		double val = Q[i] * v_vec[pixelIndex] + b_vec[pixelIndex] - q[myNumber][i];
+			            		energy_fit [pixelIndex] += w*w * Math.log(1 + (val*val) / (w*w)) / 2.0;
+			            		deriv_v_fit[pixelIndex] += (Q[i]*val) / (1.0 + (val*val) / (w*w));
+			            		deriv_b_fit[pixelIndex] += val / (1.0 + (val*val) / (w*w));
+			            	}
+			                break;
+			        }
+				}
+			});
+		SimpleMultiThreading.startAndJoin( threads );*/
+		
 /*
 		// normalize the contribution from fitting energy term by the number of data 
 		// points in S (so our balancing of the energy terms is invariant)
@@ -1335,7 +1392,7 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		System.out.println(String.format("iter = %d  %s %s    zx,zy=(%1.2f,%1.2f)    E=%g", ITER, MESTIMATOR, term_str, zx,zy, E));
 		//System.out.println(String.format("min = %f, max = %f", mmin, mmax));
 		ITER++;
-		
+
 		CdrObjectiveResult result = new CdrObjectiveResult();
 		result.E = E;
 		result.G = G;		
@@ -1434,7 +1491,152 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 		// BFGS Search Direction
 		// This function returns the (L-BFGS) approximate inverse Hessian,
 		// multiplied by the negative gradient
+		
+		// Set up indexing
+		int nVars = S.length;
+		int maxCorrections = S[0].length;
+		int nCor;
+		int[] ind;
+		if (lbfgs_start == 0)
+		{
+			ind = new int[lbfgs_end];
+			for (int j = 0; j < ind.length; j++)
+				ind[j] = j;
+			nCor = lbfgs_end-lbfgs_start+1;
+		} else {
+			ind = new int[maxCorrections];
+			for (int j = lbfgs_start; j < maxCorrections; j++)
+				ind[j - lbfgs_start] = j;
+			for (int j = 0; j <= lbfgs_end; j++)
+				ind[j + maxCorrections - lbfgs_start] = j;			
+			nCor = maxCorrections;			
+		}
 
+		double[] al = new double[nCor];
+		double[] be = new double[nCor];
+
+		double[] d = new double[g.length];
+		for (int j = 0; j < g.length; j++)
+			d[j] = -g[j];
+		
+		for (int j = 0; j < ind.length; j++)
+		{
+			final int i = ind[ind.length-j-1];
+			
+			final double[] sums = new double[numThreads];
+			ai.set(0);
+			for ( int ithread = 0; ithread < numThreads; ++ithread )
+				futures[ ithread ] = threadPool.submit(() -> {
+					final int myNumber = ai.getAndIncrement();
+					final int wholeSize = S.length;
+					final int chunk = (wholeSize / numThreads) + (wholeSize % numThreads == 0 ? 0 : 1);
+					final int startInd = chunk * myNumber; 
+					final int endInd = Math.min(startInd+chunk, wholeSize);
+					for (int k = startInd; k < endInd; k++)
+						sums[myNumber] += (S[k][i] * d[k]) / YS[i];
+				});
+			for ( Future future : futures )
+				try {
+					future.get();
+				} catch (InterruptedException | ExecutionException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			
+			double sumSD = 0.0;
+			for (double partSum : sums)
+				sumSD += partSum;
+			al[i] = sumSD;
+
+			ai.set(0);
+			for ( int ithread = 0; ithread < numThreads; ++ithread )
+				futures[ ithread ] = threadPool.submit(() -> {
+					final int myNumber = ai.getAndIncrement();
+					final int wholeSize = d.length;
+					final int chunk = (wholeSize / numThreads) + (wholeSize % numThreads == 0 ? 0 : 1);
+					final int startInd = chunk * myNumber; 
+					final int endInd = Math.min(startInd+chunk, wholeSize);
+					for (int k = startInd; k < endInd; k++)
+						d[k] -= al[i] * Y[k][i];
+				});
+			for ( Future future : futures )
+				try {
+					future.get();
+				} catch (InterruptedException | ExecutionException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+		}
+
+		// Multiply by Initial Hessian
+		ai.set(0);
+		for ( int ithread = 0; ithread < numThreads; ++ithread )
+			futures[ ithread ] = threadPool.submit(() -> {
+				final int myNumber = ai.getAndIncrement();
+				final int wholeSize = d.length;
+				final int chunk = (wholeSize / numThreads) + (wholeSize % numThreads == 0 ? 0 : 1);
+				final int startInd = chunk * myNumber; 
+				final int endInd = Math.min(startInd+chunk, wholeSize);
+				for (int j = startInd; j < endInd; j++)
+					d[j] = Hdiag * d[j];
+			});
+		for ( Future future : futures )
+			try {
+				future.get();
+			} catch (InterruptedException | ExecutionException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+		for (int ii = 0; ii < ind.length; ii++)
+		{
+			final int i = ii;
+			final double[] sums = new double[numThreads];
+			ai.set(0);
+			for ( int ithread = 0; ithread < numThreads; ++ithread )
+				futures[ ithread ] = threadPool.submit(() -> {
+					final int myNumber = ai.getAndIncrement();
+					final int wholeSize = Y.length;
+					final int chunk = (wholeSize / numThreads) + (wholeSize % numThreads == 0 ? 0 : 1);
+					final int startInd = chunk * myNumber; 
+					final int endInd = Math.min(startInd+chunk, wholeSize);
+					for (int j = startInd; j < endInd; j++)
+						sums[myNumber] += Y[j][ind[i]] * d[j];
+				});
+			for ( Future future : futures )
+				try {
+					future.get();
+				} catch (InterruptedException | ExecutionException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			
+			double sumYd = 0.0;
+			for (double partSum : sums)
+				sumYd += partSum;
+			be[ind[i]] = sumYd / YS[ind[i]];
+			
+			ai.set(0);
+			for ( int ithread = 0; ithread < numThreads; ++ithread )
+				futures[ ithread ] = threadPool.submit(() -> {
+					final int myNumber = ai.getAndIncrement();
+					final int wholeSize = d.length;
+					final int chunk = (wholeSize / numThreads) + (wholeSize % numThreads == 0 ? 0 : 1);
+					final int startInd = chunk * myNumber; 
+					final int endInd = Math.min(startInd+chunk, wholeSize);
+					for (int j = startInd; j < endInd; j++)
+						d[j] += S[j][ind[i]] * (al[ind[i]] - be[ind[i]]);
+				});
+			for ( Future future : futures )
+				try {
+					future.get();
+				} catch (InterruptedException | ExecutionException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+		}
+		return d;
+/*
 		// Set up indexing
 		int nVars = S.length;
 		int maxCorrections = S[0].length;
@@ -1488,6 +1690,7 @@ public class IlluminationCorrectionSpark implements Runnable, Serializable
 				d[j] += S[j][ind[i]] * (al[ind[i]] - be[ind[i]]);
 		}
 		return d;
+*/
 	}
 	
 	
