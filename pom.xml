@@ -8,7 +8,6 @@
 	<description>This project is for running stitching jobs on a Spark cluster.</description>
 
 	<repositories>
-		<!-- NB: for project parent -->
 		<repository>
 			<id>imagej.public</id>
 			<url>http://maven.imagej.net/content/groups/public</url>
@@ -29,13 +28,13 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>Stitching_</artifactId>
-			<version>3.1.1-SNAPSHOT_PATCHED</version>
+			<!--version>3.1.1-SNAPSHOT_PATCHED</version-->
 		</dependency>
-		<dependency>
+		<!--dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>legacy-imglib1</artifactId>
 			<version>1.1.4-DEPRECATED-PATCHED</version>
-		</dependency>
+		</dependency-->
 		<dependency>
 			<groupId>org.apache.spark</groupId>
 			<artifactId>spark-core_2.11</artifactId>
@@ -57,16 +56,16 @@
 		    <artifactId>junit</artifactId>
 		    <scope>test</scope>
 		</dependency>
-		<dependency>
+		<!--dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>bigcat</artifactId>
 			<version>0.0.1-SNAPSHOT</version>
-		</dependency>
-		<dependency>
+		</dependency-->
+		<!--dependency>
 			<groupId>saalfeldlab</groupId>
 			<artifactId>bdv_cellfileviewer</artifactId>
 			<version>0.0.1-SNAPSHOT</version>
-		</dependency>
+		</dependency-->
 		<dependency>
 			<groupId>cisd</groupId>
 			<artifactId>jhdf5</artifactId>
@@ -89,11 +88,11 @@
 			<artifactId>imglib2</artifactId>
 			<version>3.2.1</version>
 		</dependency>
-		<dependency>
+		<!--dependency>
 			<groupId>mpicbg</groupId>
 			<artifactId>mpicbg</artifactId>
 			<version>1.1.2-FORK</version>
-		</dependency>
+		</dependency-->
 		<dependency>
 			<groupId>loci</groupId>
 			<artifactId>bio-formats</artifactId>

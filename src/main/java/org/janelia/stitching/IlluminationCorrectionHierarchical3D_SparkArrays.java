@@ -32,7 +32,6 @@ import org.apache.spark.storage.StorageLevel;
 import org.janelia.util.Conversions;
 import org.janelia.util.FixedScalingAffineModel1D;
 import org.janelia.util.FixedTranslationAffineModel1D;
-import org.janelia.util.MismatchedInterpolatedAffineModel1D;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -115,7 +114,7 @@ public class IlluminationCorrectionHierarchical3D_SparkArrays implements Seriali
 	private final long[] fullTileSize;
 	private final Interval workingInterval;
 
-	private final int bins = 256;
+	private final int bins = 4096;
 	private int histMinValue, histMaxValue;
 	//private final int histMinValue = 0, histMaxValue = 8360;	// TODO: extract from histograms, but it takes some time
 	//private final double binWidth = getBinWidth( histMinValue, histMaxValue, bins );
@@ -572,7 +571,8 @@ public class IlluminationCorrectionHierarchical3D_SparkArrays implements Seriali
 
 				try
 				{
-					interpolatedModel.filter( matches, new ArrayList<>() );
+					// NOTE: if you're running filter() and experiencing ClassCastException, take a look at: https://github.com/axtimwalde/mpicbg/pull/32
+					interpolatedModel.fit( matches );
 				}
 				catch ( final Exception e )
 				{
@@ -694,13 +694,14 @@ public class IlluminationCorrectionHierarchical3D_SparkArrays implements Seriali
 					break;
 				}
 
-				final MismatchedInterpolatedAffineModel1D< M, ConstantAffineModel1D< R > > interpolatedModel = new MismatchedInterpolatedAffineModel1D<>(
+				final InterpolatedAffineModel1D< M, ConstantAffineModel1D< R > > interpolatedModel = new InterpolatedAffineModel1D<>(
 						model,
 						new ConstantAffineModel1D<>( regularizerModel ),
 						INTERPOLATION_LAMBDA );
 
 				try
 				{
+					// NOTE: if you're running filter() and experiencing ClassCastException, take a look at: https://github.com/axtimwalde/mpicbg/pull/32
 					interpolatedModel.fit( matches );
 				}
 				catch ( final Exception e )
@@ -788,7 +789,7 @@ public class IlluminationCorrectionHierarchical3D_SparkArrays implements Seriali
 									srcCursor.get() ) );
 						}
 						return ret.iterator();
-					} ).persist( StorageLevel.MEMORY_ONLY_SER() );
+					} );//.persist( StorageLevel.MEMORY_ONLY_SER() );
 
 		// FIXME: fix the case when min < 0
 		/*final Tuple2< Short, Short > histMinMax = rddTreeMaps
@@ -803,7 +804,7 @@ public class IlluminationCorrectionHierarchical3D_SparkArrays implements Seriali
 		histMaxValue = shortToUnsigned( histMinMax._2() );*/
 
 		histMinValue = 0;
-		histMaxValue = 255;
+		histMaxValue = 10000;
 		System.out.println( "Histograms min=" + histMinValue + ", max=" + histMaxValue );
 
 		final JavaPairRDD< Long, long[] > rddHistograms = rddTreeMaps
@@ -811,14 +812,14 @@ public class IlluminationCorrectionHierarchical3D_SparkArrays implements Seriali
 					{
 						final long[] array = new long[ bins ];
 						for ( final Entry< Short, Integer > entry : histogram.entrySet() )
-							array[ getBinIndex( shortToUnsigned( entry.getKey() ) ) ] += entry.getValue();
+							array[ getBinIndex( /*shortToUnsigned( */entry.getKey() /*)*/ ) ] += entry.getValue();
 						return array;
 					} );
 
 		// enforce the computation so we can unpersist the parent RDD after that
 		System.out.println( "Total histograms (pixels) count = " + rddHistograms.persist( StorageLevel.MEMORY_ONLY_SER() ).count() );
 
-		rddTreeMaps.unpersist();
+		//rddTreeMaps.unpersist();
 		return rddHistograms;
 	}
 

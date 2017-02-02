@@ -25,11 +25,8 @@ import org.janelia.util.SameThreadExecutorService;
 import ij.ImagePlus;
 import mpicbg.models.Tile;
 import mpicbg.stitching.ComparePair;
-import mpicbg.stitching.GlobalOptimization;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
-import mpicbg.stitching.PairWiseStitchingImgLib;
-import mpicbg.stitching.PairWiseStitchingResult;
 import net.imglib2.Cursor;
 import net.imglib2.FinalDimensions;
 import net.imglib2.RandomAccessible;
@@ -331,8 +328,8 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 						System.out.println( "Stitching.." );
 
 						final int timepoint = 1;
-						PairWiseStitchingImgLib.setThreads( 1 ); // TODO: determine automatically based on parallelism / smth else
-						final PairWiseStitchingResult[] result = PairWiseStitchingImgLib.stitchPairwise(
+						PairwiseStitchingPerformer.setThreads( 1 ); // TODO: determine automatically based on parallelism / smth else
+						final SerializablePairWiseStitchingResult[] result = PairwiseStitchingPerformer.stitchPairwise(
 								imps[0], imps[1], null, null, null, null, timepoint, timepoint, job.getParams(), 1 );
 
 						System.out.println( "Stitched tile pair " + pairOfTiles + ", got " + result.length + " peaks" );
@@ -353,10 +350,9 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 						for ( int j = 0; j < pair.length; j++ )
 							imps[ j ].close();
 
-						final SerializablePairWiseStitchingResult[] ret = new SerializablePairWiseStitchingResult[ result.length ];
-						for ( int i = 0; i < ret.length; i++ )
-							ret[ i ] = new SerializablePairWiseStitchingResult( pairOfTiles, result[ i ] );
-						return ret;
+						for ( int i = 0; i < result.length; i++ )
+							result[ i ].setTilePair( pairOfTiles );
+						return result;
 					}
 				});
 		return pairwiseStitching.collect();
@@ -745,7 +741,7 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 		if ( !comparePairs.isEmpty() )
 		{
 			// Save the optimized tile configuration on every iteration
-			final GlobalOptimization.TileConfigurationObserver tileConfigurationObserver = new GlobalOptimization.TileConfigurationObserver()
+			final GlobalOptimizationPerformer.TileConfigurationObserver tileConfigurationObserver = new GlobalOptimizationPerformer.TileConfigurationObserver()
 			{
 				@Override
 				public void configurationUpdated( final ArrayList< ImagePlusTimePoint > updatedTiles )
@@ -763,7 +759,7 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 							anotherChannelTiles.get( optimizedTile.getImpId() ).setPosition( pos );
 					}
 
-					for ( final Tile<?> lostTile : GlobalOptimization.lostTiles )
+					for ( final Tile<?> lostTile : GlobalOptimizationPerformer.lostTiles )
 					{
 						final int lostTileIndex = ((ImagePlusTimePoint)lostTile).getImpId();
 						tilesMap.remove( lostTileIndex );
@@ -787,7 +783,7 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 			};
 
 			optimized.addAll(
-					GlobalOptimization.optimize(
+					GlobalOptimizationPerformer.optimize(
 							comparePairs,
 							comparePairs.get( 0 ).getTile1(),
 							job.getParams(),
@@ -816,7 +812,7 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 				anotherChannelTiles.get( optimizedTile.getImpId() ).setPosition( pos );
 		}
 
-		for ( final Tile<?> lostTile : GlobalOptimization.lostTiles )
+		for ( final Tile<?> lostTile : GlobalOptimizationPerformer.lostTiles )
 		{
 			final int lostTileIndex = ((ImagePlusTimePoint)lostTile).getImpId();
 			tilesMap.remove( lostTileIndex );
