@@ -22,7 +22,7 @@ public class ChooseBestPeak
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( shift.getIsValidOverlap() )
 				valid++;
-		System.out.println( "There are " + valid + " pairs out of " + shifts.size() );
+		System.out.println( "There are " + valid + " valid pairs out of " + shifts.size() );
 
 		TileInfoJSONProvider.savePairwiseShifts( shifts, Utils.addFilenameSuffix( args[0], "_best" ) );
 	}

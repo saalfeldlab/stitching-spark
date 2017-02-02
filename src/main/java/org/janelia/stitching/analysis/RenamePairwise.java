@@ -24,16 +24,16 @@ public class RenamePairwise
 		final Set< Integer > validation = new HashSet<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			validation.add( shift.getTilePair().first().getIndex() );
-			validation.add( shift.getTilePair().second().getIndex() );
+			validation.add( shift.getTilePair().getA().getIndex() );
+			validation.add( shift.getTilePair().getB().getIndex() );
 		}
 		if ( tilesMap.size() != validation.size() )
 			throw new Exception( "Different sets of tiles" );
 
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			shift.getTilePair().first().setFilePath( tilesMap.get( shift.getTilePair().first().getIndex() ).getFilePath() );
-			shift.getTilePair().second().setFilePath( tilesMap.get( shift.getTilePair().second().getIndex() ).getFilePath() );
+			shift.getTilePair().getA().setFilePath( tilesMap.get( shift.getTilePair().getA().getIndex() ).getFilePath() );
+			shift.getTilePair().getB().setFilePath( tilesMap.get( shift.getTilePair().getB().getIndex() ).getFilePath() );
 		}
 
 		TileInfoJSONProvider.savePairwiseShifts( shifts, Utils.addFilenameSuffix( args[ 1 ], "_renamed" ) );

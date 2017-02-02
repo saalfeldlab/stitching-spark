@@ -27,12 +27,12 @@ public class CreateFakePairwiseShifts
 
 		for ( final TilePair pair : overlappingPairs )
 		{
-			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( pair.first(), pair.second() );
+			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( pair.getA(), pair.getB() );
 
 			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
 			{
-				final int maxPossibleOverlap = ( int ) Math.min( pair.first().getSize( d ), pair.second().getSize( d ) );
+				final int maxPossibleOverlap = ( int ) Math.min( pair.getA().getSize( d ), pair.getB().getSize( d ) );
 				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
 					shortEdges[d] = true;
 			}
@@ -46,7 +46,7 @@ public class CreateFakePairwiseShifts
 					)
 			{
 				// non-adjacent shift doesn't need to be computed, replace it with a fake
-				final SerializablePairWiseStitchingResult shift = new SerializablePairWiseStitchingResult( pair, new float[pair.first().numDimensions()], 0,  0 );
+				final SerializablePairWiseStitchingResult shift = new SerializablePairWiseStitchingResult( pair, new float[pair.getA().numDimensions()], 0,  0 );
 				shift.setIsValidOverlap( false );
 				nonAdjacentShifts.add( shift );
 			}

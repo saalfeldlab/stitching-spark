@@ -73,8 +73,8 @@ public class AddMissingTilesMultichannel
 			missingAdjacentPairwiseShifts[ ch ] = new ArrayList<>();
 			for ( final TilePair pair : missingAdjacentPairs )
 			{
-				final int ind1 = Math.min( pair.first().getIndex(), pair.second().getIndex() );
-				final int ind2 = Math.max( pair.first().getIndex(), pair.second().getIndex() );
+				final int ind1 = Math.min( pair.getA().getIndex(), pair.getB().getIndex() );
+				final int ind2 = Math.max( pair.getA().getIndex(), pair.getB().getIndex() );
 				missingAdjacentPairwiseShifts[ ch ].add( missingPairwiseShiftsMap.get( ind1 ).get( ind2 ) );
 			}
 			System.out.println( "Missing pairs for ch"+ch+": " + missingPairs.size() );
@@ -120,7 +120,7 @@ public class AddMissingTilesMultichannel
 			for ( final SerializablePairWiseStitchingResult shift : shifts[ ch ] )
 			{
 				if ( !shift.getIsValidOverlap() ||
-						( !tilesFinal[ ch ].containsKey( shift.getTilePair().first().getIndex() ) || !tilesFinal[ ch ].containsKey( shift.getTilePair().second().getIndex() ) ) )
+						( !tilesFinal[ ch ].containsKey( shift.getTilePair().getA().getIndex() ) || !tilesFinal[ ch ].containsKey( shift.getTilePair().getB().getIndex() ) ) )
 					continue;
 
 				final Tile[] tilePair = new Tile[ 2 ];
@@ -128,10 +128,10 @@ public class AddMissingTilesMultichannel
 					tilePair[ j ] = fakeTileImages.get( shift.getTilePair().toArray()[ j ].getIndex() );
 
 				final Point[] points = new Point[ 2 ];
-				points[ 0 ] = new Point( new double[ shift.getTilePair().first().numDimensions() ] );
-				final double[] offset = new double[ shift.getTilePair().first().numDimensions() ];
+				points[ 0 ] = new Point( new double[ shift.getTilePair().getA().numDimensions() ] );
+				final double[] offset = new double[ shift.getTilePair().getA().numDimensions() ];
 				for ( int d = 0; d < offset.length; d++ )
-					offset[ d ] = tilesFinal[ ch ].get( shift.getTilePair().second().getIndex() ).getPosition( d ) - tilesFinal[ ch ].get( shift.getTilePair().first().getIndex() ).getPosition( d );
+					offset[ d ] = tilesFinal[ ch ].get( shift.getTilePair().getB().getIndex() ).getPosition( d ) - tilesFinal[ ch ].get( shift.getTilePair().getA().getIndex() ).getPosition( d );
 				points[ 1 ] = new Point( offset );
 
 				for ( int j = 0; j < 2; j++ )

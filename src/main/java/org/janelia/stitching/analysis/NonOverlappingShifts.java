@@ -35,8 +35,8 @@ public class NonOverlappingShifts
 		final List< SerializablePairWiseStitchingResult> badShifts = new ArrayList<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			final TileInfo t1 = shift.getTilePair().first().clone();
-			final TileInfo t2 = shift.getTilePair().second().clone();
+			final TileInfo t1 = shift.getTilePair().getA().clone();
+			final TileInfo t2 = shift.getTilePair().getB().clone();
 
 			if ( !TileOperations.overlap( t1, t2 ) )
 				throw new Exception( "impossible" );

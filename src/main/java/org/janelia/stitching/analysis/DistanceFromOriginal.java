@@ -44,6 +44,9 @@ public class DistanceFromOriginal
 
 		int haveSamePosition = 0, haveSameSize = 0;
 		final int[][] range = new int[ tilesOrig[ 0 ].numDimensions() ][ 2 ];
+		
+		long[] tileSize = null;
+		boolean allTilesHaveSameSize = true;
 
 		for ( int i = 0; i < n; i++ )
 		{
@@ -80,6 +83,17 @@ public class DistanceFromOriginal
 				haveSameSize++;
 			else
 				System.out.println( "Size diff: " + tilesOrig[ i ].getIndex() + ": " + Arrays.toString( sizeDiff ) );
+			
+			if ( tileSize == null )
+			{
+				tileSize = tilesOrig[ i ].getSize().clone();
+				allTilesHaveSameSize = sameSize;
+			}
+			else
+			{
+				for ( int d = 0; d < dim; d++ )
+					allTilesHaveSameSize &= sameSize && tileSize[ d ] == tilesOrig[ i ].getSize( d );
+			}
 
 			//System.out.println( tilesOrig[ i ].getIndex() + ": " + Arrays.toString( dist ) );
 
@@ -109,6 +123,9 @@ public class DistanceFromOriginal
 			System.out.println( "The configurations have identical size!" );
 		else
 			System.out.println( "Identical size: " + haveSameSize );
+		
+		if ( allTilesHaveSameSize )
+			System.out.println( "Even better -- all tiles have the same size!" );
 
 		System.out.println( "----------------------" );
 		System.out.println( "Found " + goodTiles.size() + " good tiles out of " + n );

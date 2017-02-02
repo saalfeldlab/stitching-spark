@@ -29,14 +29,14 @@ public class TraceConfigurationsDistance
 
 		for ( final TilePair pair : overlappingTilesBefore )
 		{
-			if ( !tilesMapAfter.containsKey( pair.first().getIndex() ) || !tilesMapAfter.containsKey( pair.second().getIndex() ) )
+			if ( !tilesMapAfter.containsKey( pair.getA().getIndex() ) || !tilesMapAfter.containsKey( pair.getB().getIndex() ) )
 				continue;
 
 			after++;
 
 			final double dist[] = new double[ 3 ];
 			for ( int d = 0; d < 3; d++ )
-				dist[d] = (pair.second().getPosition( d ) - pair.first().getPosition( d )) - (tilesMapAfter.get( pair.second().getIndex() ).getPosition( d ) - tilesMapAfter.get( pair.first().getIndex() ).getPosition( d ));
+				dist[d] = (pair.getB().getPosition( d ) - pair.getA().getPosition( d )) - (tilesMapAfter.get( pair.getB().getIndex() ).getPosition( d ) - tilesMapAfter.get( pair.getA().getIndex() ).getPosition( d ));
 
 			writer.println( dist[0] + " " + dist[1] + " " + dist[2] );
 		}

@@ -6,11 +6,13 @@ import java.util.concurrent.Executors;
 import org.janelia.stitching.Boundaries;
 import org.janelia.stitching.ImageType;
 import org.janelia.stitching.Utils;
+import org.janelia.util.ImageImporter;
 
 import ij.IJ;
 import ij.ImageJ;
 import ij.ImagePlus;
 import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccessible;
@@ -18,6 +20,8 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.exception.IncompatibleTypeException;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgFactory;
@@ -25,6 +29,10 @@ import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.integer.UnsignedShortType;
+import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Intervals;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 public class BlurTest
@@ -60,7 +68,7 @@ public class BlurTest
 
 
 	@SuppressWarnings( { "rawtypes", "unchecked" } )
-	public static void main(final String[] args) throws IncompatibleTypeException
+	public static void main22(final String[] args) throws IncompatibleTypeException
 	{
 		new ImageJ();
 
@@ -150,5 +158,60 @@ public class BlurTest
 		final ExecutorService service = Executors.newFixedThreadPool( 1 );
 		Gauss3.gauss( sigmas, extendedImage, crop, service );
 		service.shutdown();
+	}
+	
+	
+	
+	
+	
+	
+	public static void main(final String[] args) throws Exception
+	{
+		new ImageJ();
+
+		final ImagePlus imp = ImageImporter.openImage( "/groups/betzig/betziglab/Shoh/BBBig/179/Mega_10x21_Z1902_BB_4.5_4colors(170).czi" );
+		Utils.workaroundImagePlusNSlices( imp );
+
+		final Interval region = new FinalInterval( new long[] { 1250, 0, 0 }, new long[] { imp.getWidth() - 1, imp.getHeight() - 1, imp.getNSlices() - 1 } );
+		final Interval regionSlice = new FinalInterval( new long[] { region.min(0), region.min(1) }, new long[] { region.max(0), region.max(1) } );
+		
+		final Img< UnsignedShortType > outImg = ArrayImgs.unsignedShorts( Intervals.dimensionsAsLongArray(region) );
+		
+		final int channels = imp.getNChannels();
+		final int frame = 0;
+		for ( int z = 0; z < imp.getNSlices(); z++ )
+		{
+			if ( z % 100 == 0 )
+				System.out.println( "Processing slice " + z + " out of "+ imp.getNSlices() );
+			
+			//System.out.println( "Grabbing channel data" );
+			final Img< UnsignedShortType >[] data = new Img[ channels ];
+			final Cursor< UnsignedShortType >[] cursors = new Cursor[ channels ];
+			for ( int ch = 0; ch < channels; ch++ )
+			{
+				data[ ch ] = ArrayImgs.unsignedShorts( ( short[] ) imp.getStack().getProcessor( imp.getStackIndex( ch + 1, z + 1, frame + 1 ) ).getPixels(), new long[] { imp.getWidth(), imp.getHeight() } );
+				cursors[ ch ] = Views.flatIterable( Views.offsetInterval( data[ ch ], regionSlice ) ).cursor();
+			}
+			
+			final IntervalView< UnsignedShortType > outSlice = Views.hyperSlice( outImg, 2, z );
+			final Cursor< UnsignedShortType > outSliceCursor = Views.flatIterable( outSlice ).cursor();
+			
+			while ( outSliceCursor.hasNext() )
+			{
+				double val = 0;
+				for ( int ch = 0; ch < channels; ch++ )
+					val += cursors[ch].next().getRealDouble();
+				outSliceCursor.next().setReal( val / channels );
+			}
+			
+			for ( int ch = 0; ch < channels; ch++ )
+				if ( cursors[ch].hasNext() )
+					throw new Exception( "Cursors mismatch" );
+		}
+		
+		System.out.println( "Wrapping into ImagePlus" );
+		final ImagePlus impOut = ImageJFunctions.wrap( outImg, null );
+		Utils.workaroundImagePlusNSlices(impOut);
+		impOut.show();
 	}
 }

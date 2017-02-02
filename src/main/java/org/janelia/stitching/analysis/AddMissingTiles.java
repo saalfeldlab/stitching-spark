@@ -75,8 +75,8 @@ public class AddMissingTiles
 		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > missingPairwiseShiftsMultiMap = Utils.createPairwiseShiftsMultiMap( missingPairwiseShiftsMulti, false );
 		for ( final TilePair pair : missingAdjacentPairs )
 		{
-			final int ind1 = Math.min( pair.first().getIndex(), pair.second().getIndex() );
-			final int ind2 = Math.max( pair.first().getIndex(), pair.second().getIndex() );
+			final int ind1 = Math.min( pair.getA().getIndex(), pair.getB().getIndex() );
+			final int ind2 = Math.max( pair.getA().getIndex(), pair.getB().getIndex() );
 			missingAdjacentPairwiseShiftsMulti.add( missingPairwiseShiftsMultiMap.get( ind1 ).get( ind2 ) );
 		}
 		System.out.println( "Number of missing adjacent pairs: " + missingAdjacentPairwiseShiftsMulti.size() );
@@ -123,7 +123,7 @@ public class AddMissingTiles
 				continue;
 
 			// It could be the case that the pairwise shift is valid, but some of the tiles have formed a separate small graph and therefore have been thrown out
-			if ( !tilesInfoFinal.containsKey( shiftMulti[ 0 ].getTilePair().first().getIndex() ) || !tilesInfoFinal.containsKey( shiftMulti[ 0 ].getTilePair().second().getIndex() ) )
+			if ( !tilesInfoFinal.containsKey( shiftMulti[ 0 ].getTilePair().getA().getIndex() ) || !tilesInfoFinal.containsKey( shiftMulti[ 0 ].getTilePair().getB().getIndex() ) )
 				continue;
 
 			final Tile[] tilePair = new Tile[ 2 ];
@@ -131,10 +131,10 @@ public class AddMissingTiles
 				tilePair[ j ] = tiles.get( shiftMulti[ 0 ].getTilePair().toArray()[ j ].getIndex() );
 
 			final Point[] points = new Point[ 2 ];
-			points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTilePair().first().numDimensions() ] );
-			final double[] offset = new double[ shiftMulti[ 0 ].getTilePair().first().numDimensions() ];
+			points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ] );
+			final double[] offset = new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ];
 			for ( int d = 0; d < offset.length; d++ )
-				offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().first().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().second().getIndex() ).getPosition( d );
+				offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getB().getIndex() ).getPosition( d );
 			points[ 1 ] = new Point( offset );
 
 			for ( int j = 0; j < 2; j++ )
@@ -249,8 +249,8 @@ public class AddMissingTiles
 								tilePair[ j ] = tiles.get( shift.getTilePair().toArray()[ j ].getIndex() );
 
 							final Point[] points = new Point[ 2 ];
-							points[ 0 ] = new Point( new double[ shift.getTilePair().first().numDimensions() ] );
-							final double[] offset = new double[ shift.getTilePair().first().numDimensions() ];
+							points[ 0 ] = new Point( new double[ shift.getTilePair().getA().numDimensions() ] );
+							final double[] offset = new double[ shift.getTilePair().getA().numDimensions() ];
 							for ( int d = 0; d < offset.length; d++ )
 								offset[ d ] = -shift.getOffset( d );
 							points[ 1 ] = new Point( offset );
@@ -353,10 +353,10 @@ public class AddMissingTiles
 								tilePair[ j ] = tiles.get( shiftMulti[ 0 ].getTilePair().toArray()[ j ].getIndex() );
 
 							final Point[] points = new Point[ 2 ];
-							points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTilePair().first().numDimensions() ] );
-							final double[] offset = new double[ shiftMulti[ 0 ].getTilePair().first().numDimensions() ];
+							points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ] );
+							final double[] offset = new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ];
 							for ( int d = 0; d < offset.length; d++ )
-								offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().first().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().second().getIndex() ).getPosition( d );
+								offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getB().getIndex() ).getPosition( d );
 							points[ 1 ] = new Point( offset );
 
 							for ( int j = 0; j < 2; j++ )
@@ -445,8 +445,8 @@ public class AddMissingTiles
 							tilePair[ j ] = tiles.get( shift.getTilePair().toArray()[ j ].getIndex() );
 
 						final Point[] points = new Point[ 2 ];
-						points[ 0 ] = new Point( new double[ shift.getTilePair().first().numDimensions() ] );
-						final double[] offset = new double[ shift.getTilePair().first().numDimensions() ];
+						points[ 0 ] = new Point( new double[ shift.getTilePair().getA().numDimensions() ] );
+						final double[] offset = new double[ shift.getTilePair().getA().numDimensions() ];
 						for ( int d = 0; d < offset.length; d++ )
 							offset[ d ] = -shift.getOffset( d );
 						points[ 1 ] = new Point( offset );
@@ -528,10 +528,10 @@ public class AddMissingTiles
 						tilePair[ j ] = tiles.get( shiftMulti[ 0 ].getTilePair().toArray()[ j ].getIndex() );
 
 					final Point[] points = new Point[ 2 ];
-					points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTilePair().first().numDimensions() ] );
-					final double[] offset = new double[ shiftMulti[ 0 ].getTilePair().first().numDimensions() ];
+					points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ] );
+					final double[] offset = new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ];
 					for ( int d = 0; d < offset.length; d++ )
-						offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().first().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().second().getIndex() ).getPosition( d );
+						offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getB().getIndex() ).getPosition( d );
 					points[ 1 ] = new Point( offset );
 
 					for ( int j = 0; j < 2; j++ )

@@ -33,7 +33,7 @@ public class FilterOutliers
 			final double[] diff = new double[ 3 ];
 
 			for ( int d = 0; d < 3; d++ )
-				diff[d] = (shifts.get(i).getTilePair().second().getPosition( d ) - shifts.get(i).getTilePair().first().getPosition( d )) - shifts.get(i).getOffset( d );
+				diff[d] = (shifts.get(i).getTilePair().getB().getPosition( d ) - shifts.get(i).getTilePair().getA().getPosition( d )) - shifts.get(i).getOffset( d );
 
 			if ( dist(diff) <= 40 && shifts.get(i).getCrossCorrelation() >= 0.75 )
 			{
@@ -72,11 +72,11 @@ public class FilterOutliers
 
 			for ( int j = 0; j < 2; j++ )
 				for ( int d = 0; d < 3; d++ )
-					diff[j][d] = (shifts[j].get(i).getTilePair().second().getPosition( d ) - shifts[j].get(i).getTilePair().first().getPosition( d )) - shifts[j].get(i).getOffset( d );
+					diff[j][d] = (shifts[j].get(i).getTilePair().getB().getPosition( d ) - shifts[j].get(i).getTilePair().getA().getPosition( d )) - shifts[j].get(i).getOffset( d );
 
 			//matches.add( new PairwiseShiftPointMatch( shift, new Point( dist ), zero ) );
 
-			if ( Math.abs( dist(diff[0]) - dist(diff[1]) ) <= 5 && Math.min( shifts[0].get(i).getCrossCorrelation(), shifts[1].get(i).getCrossCorrelation()) >= 0.75 )
+			if ( Math.abs( dist(diff[0]) - dist(diff[1]) ) <= 4 && Math.min( shifts[0].get(i).getCrossCorrelation(), shifts[1].get(i).getCrossCorrelation()) >= 0.7 )
 			{
 				for ( int j = 0; j < 2; j++ )
 					shifts[j].get( i ).setIsValidOverlap( true);

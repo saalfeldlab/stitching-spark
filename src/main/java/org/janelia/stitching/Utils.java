@@ -2,18 +2,27 @@ package org.janelia.stitching;
 
 import java.io.File;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.janelia.util.Conversions;
 
 import ij.IJ;
 import ij.ImagePlus;
+import mpicbg.spim.data.sequence.VoxelDimensions;
 import mpicbg.stitching.ImageCollectionElement;
+import net.imglib2.exception.ImgLibException;
 import net.imglib2.img.Img;
 import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.type.numeric.NumericType;
+import net.imglib2.util.Pair;
+import net.imglib2.util.ValuePair;
 
 /**
  * Provides some useful methods for working with file paths
@@ -82,7 +91,15 @@ public class Utils {
 		if ( possible3rdDim[ 0 ] * possible3rdDim[ 1 ] == 1 )
 			imp.setDimensions( 1, possible3rdDim[ 2 ], 1 );
 	}
-	
+	public static int[] getImagePlusDimensions( final ImagePlus imp )
+	{
+		final int[] dim3 = new int[] { imp.getNChannels(), imp.getNSlices(), imp.getNFrames() };
+		Arrays.sort( dim3 );
+		if ( dim3[ dim3.length - 1 ] == 1 )
+			return new int[] { imp.getWidth(), imp.getHeight() };
+		return new int[] { imp.getWidth(), imp.getHeight(), dim3[ dim3.length - 1 ] };
+	}
+
 	public static ImageType getImageType( final List< TileInfo > tiles )
 	{
 		ImageType imageType = null;
@@ -96,9 +113,9 @@ public class Utils {
 		return imageType;
 	}
 
-	public static < T extends NumericType< T > > void saveTileImageToFile( final TileInfo tile, final Img< T > img )
+	public static < T extends NumericType< T > > void saveTileImageToFile( final TileInfo tile, final Img< T > img ) throws ImgLibException
 	{
-		final ImagePlus imp = ImageJFunctions.wrap( img, "" );
+		final ImagePlus imp = ( img instanceof ImagePlusImg ? ((ImagePlusImg)img).getImagePlus() : ImageJFunctions.wrap( img, "" ) );
 		Utils.workaroundImagePlusNSlices( imp );
 		tile.setType( ImageType.valueOf( imp.getType() ) );
 		System.out.println( "Saving the resulting file for cell " + tile.getIndex() );
@@ -146,8 +163,8 @@ public class Utils {
 		{
 			if ( !onlyValid || shift.getIsValidOverlap() )
 			{
-				final int ind1 = Math.min( shift.getTilePair().first().getIndex(), shift.getTilePair().second().getIndex() );
-				final int ind2 = Math.max( shift.getTilePair().first().getIndex(), shift.getTilePair().second().getIndex() );
+				final int ind1 = Math.min( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
+				final int ind2 = Math.max( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
 
 				if ( !shiftsMap.containsKey( ind1 ) )
 					shiftsMap.put( ind1, new TreeMap<>() );
@@ -170,8 +187,8 @@ public class Utils {
 
 			if ( isValidOverlap )
 			{
-				final int ind1 = Math.min( shiftMulti[ 0 ].getTilePair().first().getIndex(), shiftMulti[ 0 ].getTilePair().second().getIndex() );
-				final int ind2 = Math.max( shiftMulti[ 0 ].getTilePair().first().getIndex(), shiftMulti[ 0 ].getTilePair().second().getIndex() );
+				final int ind1 = Math.min( shiftMulti[ 0 ].getTilePair().getA().getIndex(), shiftMulti[ 0 ].getTilePair().getB().getIndex() );
+				final int ind2 = Math.max( shiftMulti[ 0 ].getTilePair().getA().getIndex(), shiftMulti[ 0 ].getTilePair().getB().getIndex() );
 
 				if ( !shiftsMultiMap.containsKey( ind1 ) )
 					shiftsMultiMap.put( ind1, new TreeMap<>() );
@@ -180,5 +197,133 @@ public class Utils {
 			}
 		}
 		return shiftsMultiMap;
+	}
+
+
+	public static List< Pair< TileInfo, int[] > > getTileCoordinates( final TileInfo[] tiles ) throws Exception
+	{
+		final List< Pair< TileInfo, int[] > > tileCoordinates = new ArrayList<>();
+		final String coordsPatternStr = ".*(\\d{3})x_(\\d{3})y_(\\d{3})z.*";
+		final Pattern coordsPattern = Pattern.compile( coordsPatternStr );
+		for ( final TileInfo tile : tiles )
+		{
+			final String filename = Paths.get( tile.getFilePath() ).getFileName().toString();
+			final Matcher matcher = coordsPattern.matcher( filename );
+			if ( !matcher.find() )
+				throw new Exception( "Can't parse coordinates" );
+
+			// don't forget to swap X and Y axes
+			final int[] coordinates = new int[]
+					{
+						Integer.parseInt( matcher.group( 2 ) ),
+						Integer.parseInt( matcher.group( 1 ) ),
+						Integer.parseInt( matcher.group( 3 ) )
+					};
+			tileCoordinates.add( new ValuePair<>( tile, coordinates ) );
+		}
+		return tileCoordinates;
+	}
+	public static TreeMap< Integer, int[] > getTileCoordinatesMap( final TileInfo[] tiles ) throws Exception
+	{
+		final List< Pair< TileInfo, int[] > > coordinates = getTileCoordinates( tiles );
+		final TreeMap< Integer, int[] > coordinatesMap = new TreeMap<>();
+		for ( final Pair< TileInfo, int[] > pair : coordinates )
+			coordinatesMap.put( pair.getA().getIndex(), pair.getB() );
+		return coordinatesMap;
+	}
+
+	public static List< Pair< TileInfo, Long > > getTileTimestamps( final TileInfo[] tiles ) throws Exception
+	{
+		final List< Pair< TileInfo, Long > > tileTimestamps = new ArrayList<>();
+		final String timePatternStr = ".*_(\\d*)msecAbs.*";
+		final Pattern timePattern = Pattern.compile( timePatternStr );
+		for ( final TileInfo tile : tiles )
+		{
+			final String filename = Paths.get( tile.getFilePath() ).getFileName().toString();
+			final Matcher matcher = timePattern.matcher( filename );
+			if ( !matcher.find() )
+				throw new Exception( "Can't parse timestamp" );
+
+			final long timestamp = Long.parseLong( matcher.group( 1 ) );
+			tileTimestamps.add( new ValuePair<>( tile, timestamp ) );
+		}
+		return tileTimestamps;
+	}
+	public static TreeMap< Integer, Long > getTileTimestampsMap( final TileInfo[] tiles ) throws Exception
+	{
+		final List< Pair< TileInfo, Long > > timestamps = getTileTimestamps( tiles );
+		final TreeMap< Integer, Long > timestampsMap = new TreeMap<>();
+		for ( final Pair< TileInfo, Long > pair : timestamps )
+			timestampsMap.put( pair.getA().getIndex(), pair.getB() );
+		return timestampsMap;
+	}
+
+	public static List< TileInfo > sortTilesByTimestamp( final TileInfo[] tiles ) throws Exception
+	{
+		final List< Pair< TileInfo, Long > > tileTimestamps = getTileTimestamps( tiles );
+
+		final TreeMap< Long, List< TileInfo > > timestampToTiles = new TreeMap<>();
+		for ( final Pair< TileInfo, Long > tileTimestamp : tileTimestamps )
+		{
+			if ( !timestampToTiles.containsKey( tileTimestamp.getB() ) )
+				timestampToTiles.put( tileTimestamp.getB(), new ArrayList<>() );
+			timestampToTiles.get( tileTimestamp.getB() ).add( tileTimestamp.getA() );
+		}
+
+		final List< TileInfo > tilesSortedByTimestamp = new ArrayList<>();
+		for ( final List< TileInfo > timestampTiles : timestampToTiles.values() )
+			tilesSortedByTimestamp.addAll( timestampTiles );
+
+		return tilesSortedByTimestamp;
+	}
+
+
+	public static double[] normalizeVoxelDimensions( final VoxelDimensions voxelDimensions )
+	{
+		final double[] normalizedVoxelDimensions = new double[ voxelDimensions.numDimensions() ];
+		double voxelDimensionsMinValue = Double.MAX_VALUE;
+		for ( int d = 0; d < normalizedVoxelDimensions.length; d++ )
+			voxelDimensionsMinValue = Math.min( voxelDimensions.dimension( d ), voxelDimensionsMinValue );
+		for ( int d = 0; d < normalizedVoxelDimensions.length; d++ )
+			normalizedVoxelDimensions[ d ] = voxelDimensions.dimension( d ) / voxelDimensionsMinValue;
+		return normalizedVoxelDimensions;
+	}
+
+
+	// Implementation of Scala's grouped(N)
+	public static < T > Iterable< List< T > > grouped( final Iterator< T > iter, final int groupSize )
+	{
+		final List< List< T > > groups = new ArrayList<>();
+		List< T > group = new ArrayList<>();
+		while ( iter.hasNext() )
+		{
+			group.add( iter.next() );
+			if ( group.size() == groupSize )
+			{
+				groups.add( group );
+				group = new ArrayList<>();
+			}
+		}
+		if ( !group.isEmpty() )
+			groups.add( group );
+		return groups;
+	}
+
+
+	public static long[] concatArrays( final long[]... arrays )
+	{
+		int totalLength = 0;
+		for ( int i = 0; i < arrays.length; i++ )
+			totalLength += arrays[ i ].length;
+
+		final long[] ret = new long[ totalLength ];
+		int usedLength = 0;
+		for ( int i = 0; i < arrays.length; i++ )
+		{
+			System.arraycopy( arrays[ i ], 0, ret, usedLength, arrays[ i ].length );
+			usedLength += arrays[ i ].length;
+		}
+
+		return ret;
 	}
 }

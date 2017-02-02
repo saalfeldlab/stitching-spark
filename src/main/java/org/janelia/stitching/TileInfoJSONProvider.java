@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.janelia.bdv.fusion.CellFileImageMetaData;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -81,15 +83,25 @@ public class TileInfoJSONProvider
 		}
 	}
 
-	public static void saveMultiscaledExportMetadata( final MultiscaledExportMetadata export, String output ) throws IOException
+	public static void saveMultiscaledExportMetadata( final CellFileImageMetaData export, String output ) throws IOException
 	{
 		if ( !output.endsWith( ".json" ) )
 			output += ".json";
 
-		System.out.println( "Saving multiscaled export description to " + output );
+		System.out.println( "Saving multiscaled export metadata to " + output );
 		try ( final FileWriter writer = new FileWriter( output ) ) {
 			writer.write( new GsonBuilder().setPrettyPrinting().create().toJson( export ) );
 		}
 	}
 
+	public static void saveMultiscaledExportMetadataList( final List< CellFileImageMetaData > exports, String output ) throws IOException
+	{
+		if ( !output.endsWith( ".json" ) )
+			output += ".json";
+
+		System.out.println( "Saving multichannel multiscaled export metadata to " + output );
+		try ( final FileWriter writer = new FileWriter( output ) ) {
+			writer.write( new GsonBuilder().setPrettyPrinting().create().toJson( exports ) );
+		}
+	}
 }

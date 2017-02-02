@@ -140,11 +140,11 @@ public class ThresholdEstimation
 		Collections.sort( tilesCorrSorted );
 		Collections.reverse( tilesCorrSorted );
 
-		System.out.println( "-----------" );
+		/*System.out.println( "-----------" );
 		System.out.println( "Highest correlation value for every tile (with corresponding pair):" );
 		for ( final ComparablePair< Double, Integer > entry : tilesCorrSorted )
-			System.out.println( entry.first + ": " + entry.second + " (" + tilesCorr.get( entry.second ).getTilePair().first().getIndex() + "," + tilesCorr.get( entry.second ).getTilePair().second().getIndex() +")" );
-		System.out.println( "-----------" );
+			System.out.println( entry.a + ": " + entry.b + " (" + tilesCorr.get( entry.b ).getTilePair().getA().getIndex() + "," + tilesCorr.get( entry.b ).getTilePair().getB().getIndex() +")" );
+		System.out.println( "-----------" );*/
 
 
 
@@ -210,7 +210,7 @@ public class ThresholdEstimation
 		System.out.println( "-----------" );
 		System.out.println( "Highest correlation value for every tile:" );
 		for ( final ComparablePair< Double, Integer > pair : tilesCorrList )
-			System.out.println( pair.first + ": " + pair.second );
+			System.out.println( pair.a + ": " + pair.b );
 		System.out.println( "-----------" );
 	}
 
@@ -240,8 +240,8 @@ public class ThresholdEstimation
 			throw new Exception( "Negative cross correlation" );
 
 		final ComparablePair< Double, Integer > thresholdWithIndex = findOptimalThresholdWithIndex( shifts );
-		System.out.println( "Optimal threshold value: " + thresholdWithIndex.first );
-		System.out.println( "Covers " + thresholdWithIndex.second + " pairs out of " + shifts.size() );
+		System.out.println( "Optimal threshold value: " + thresholdWithIndex.a );
+		System.out.println( "Covers " + thresholdWithIndex.b + " pairs out of " + shifts.size() );
 
 		printTilesHighestCorrelationWithPair( shifts );
 	}

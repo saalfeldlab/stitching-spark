@@ -22,7 +22,8 @@ public final class PipelineStepExecutorFactory
 		executors.put( PipelineStep.Metadata, new PipelineMetadataStepExecutor( job, sparkContext ) );
 		executors.put( PipelineStep.Blur, new PipelineBlurStepExecutor( job, sparkContext ) );
 		executors.put( PipelineStep.Shift, new PipelineShiftStepExecutor( job, sparkContext ) );
-		executors.put( PipelineStep.IntensityCorrection, new PipelineIntensityCorrectionStepExecutor( job, sparkContext ) );
+		// TODO: Disabled for now since we have switched to illumination correction and it is applied on the Shift & Fuse phases
+		//executors.put( PipelineStep.IntensityCorrection, new PipelineIntensityCorrectionStepExecutor( job, sparkContext ) );
 		executors.put( PipelineStep.Fusion, new PipelineFusionStepExecutor( job, sparkContext ) );
 		executors.put( PipelineStep.Export, new PipelineExportStepExecutor( job, sparkContext ) );
 	}

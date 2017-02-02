@@ -105,12 +105,12 @@ public class FilterAdjacentShiftsMulti
 			for (int peak=0; peak<shift.length; peak++ )
 				shift[peak].setIsValidOverlap( false );
 
-			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( shift[0].getTilePair().first(), shift[0].getTilePair().second() );
+			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( shift[0].getTilePair().getA(), shift[0].getTilePair().getB() );
 
 			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
 			{
-				final int maxPossibleOverlap = ( int ) Math.min( shift[0].getTilePair().first().getSize( d ), shift[0].getTilePair().second().getSize( d ) );
+				final int maxPossibleOverlap = ( int ) Math.min( shift[0].getTilePair().getA().getSize( d ), shift[0].getTilePair().getB().getSize( d ) );
 				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
 					shortEdges[d] = true;
 			}
@@ -124,8 +124,8 @@ public class FilterAdjacentShiftsMulti
 					)
 				continue;
 
-			final int ind1 = Math.min( shift[0].getTilePair().first().getIndex(), shift[0].getTilePair().second().getIndex() );
-			final int ind2 = Math.max( shift[0].getTilePair().first().getIndex(), shift[0].getTilePair().second().getIndex() );
+			final int ind1 = Math.min( shift[0].getTilePair().getA().getIndex(), shift[0].getTilePair().getB().getIndex() );
+			final int ind2 = Math.max( shift[0].getTilePair().getA().getIndex(), shift[0].getTilePair().getB().getIndex() );
 			if ( !validation.containsKey( ind1 ) )
 				validation.put( ind1, new HashSet<>() );
 			validation.get( ind1 ).add( ind2 );
@@ -136,7 +136,7 @@ public class FilterAdjacentShiftsMulti
 			{
 				if ( shortEdges[ d ] )
 				{
-					if ( shift[0].getTilePair().first().getPosition( d ) > shift[0].getTilePair().second().getPosition( d ) )
+					if ( shift[0].getTilePair().getA().getPosition( d ) > shift[0].getTilePair().getB().getPosition( d ) )
 					{
 						swappedCount++;
 						for (int peak=0; peak<shift.length; peak++ )
@@ -190,12 +190,12 @@ public class FilterAdjacentShiftsMulti
 
 		for ( final TilePair pair : overlappingPairs )
 		{
-			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( pair.first(), pair.second() );
+			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( pair.getA(), pair.getB() );
 
 			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
 			{
-				final int maxPossibleOverlap = ( int ) Math.min( pair.first().getSize( d ), pair.second().getSize( d ) );
+				final int maxPossibleOverlap = ( int ) Math.min( pair.getA().getSize( d ), pair.getB().getSize( d ) );
 				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
 					shortEdges[d] = true;
 			}

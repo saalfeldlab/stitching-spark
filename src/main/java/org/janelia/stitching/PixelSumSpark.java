@@ -92,9 +92,9 @@ public class PixelSumSpark implements Runnable, Serializable
 					@Override
 					public TileInfo call( final TilePair tilePair ) throws Exception
 					{
-						System.out.println( "Processing tiles " + tilePair.first().getIndex() + " and " + tilePair.second().getIndex() );
-						final TileInfo outputTile = tilePair.first().clone();
-						outputTile.setFilePath( outFolder + "/" + "tile" + tilePair.first().getIndex() + ".tif" );
+						System.out.println( "Processing tiles " + tilePair.getA().getIndex() + " and " + tilePair.getB().getIndex() );
+						final TileInfo outputTile = tilePair.getA().clone();
+						outputTile.setFilePath( outFolder + "/" + "tile" + tilePair.getA().getIndex() + ".tif" );
 
 						performPixelSum( tilePair, outputTile.getFilePath() );
 
@@ -116,8 +116,8 @@ public class PixelSumSpark implements Runnable, Serializable
 
 	private < T extends RealType< T > & NativeType< T > > void performPixelSum( final TilePair tilePair, final String outputFilePath ) throws Exception
 	{
-		final ImagePlus imp1 = IJ.openImage( tilePair.first().getFilePath() );
-		final ImagePlus imp2 = IJ.openImage( tilePair.second().getFilePath() );
+		final ImagePlus imp1 = IJ.openImage( tilePair.getA().getFilePath() );
+		final ImagePlus imp2 = IJ.openImage( tilePair.getB().getFilePath() );
 
 		Utils.workaroundImagePlusNSlices( imp1 );
 		Utils.workaroundImagePlusNSlices( imp2 );
@@ -132,10 +132,10 @@ public class PixelSumSpark implements Runnable, Serializable
 		final Cursor< T > cursorIn2 = iterIn2.cursor();
 
 		// Create output image
-		final long[] outSize = new long[ tilePair.first().numDimensions() ];
+		final long[] outSize = new long[ tilePair.getA().numDimensions() ];
 		for ( int d = 0; d < outSize.length; d++ )
-			outSize[ d ] = Math.min( tilePair.first().getSize( d ), tilePair.second().getSize( d ) );
-		final Img< T > out = new ImagePlusImgFactory< T >().create( outSize, ( T ) tilePair.first().getType().getType() );
+			outSize[ d ] = Math.min( tilePair.getA().getSize( d ), tilePair.getB().getSize( d ) );
+		final Img< T > out = new ImagePlusImgFactory< T >().create( outSize, ( T ) tilePair.getA().getType().getType() );
 		final IterableInterval< T > iterOut = Views.flatIterable( out );
 		final Cursor< T > cursorOut = iterOut.cursor();
 

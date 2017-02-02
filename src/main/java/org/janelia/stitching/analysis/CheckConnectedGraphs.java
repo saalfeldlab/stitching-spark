@@ -41,12 +41,12 @@ public class CheckConnectedGraphs
 
 		for ( final TilePair pair : overlappingPairs )
 		{
-			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( pair.first(), pair.second() );
+			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( pair.getA(), pair.getB() );
 
 			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
 			{
-				final int maxPossibleOverlap = ( int ) Math.min( pair.first().getSize( d ), pair.second().getSize( d ) );
+				final int maxPossibleOverlap = ( int ) Math.min( pair.getA().getSize( d ), pair.getB().getSize( d ) );
 				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
 					shortEdges[d] = true;
 			}
@@ -69,16 +69,26 @@ public class CheckConnectedGraphs
 		}
 
 		System.out.println( "Adjacent pairs = " + adjPairs.size() );
-
-
-
-
-
-
-
+		
+		final List< Integer > graphsSize = connectedComponentsSize( adjPairs );
+		
+		int graphSizesSum = 0;
+		for ( final Integer graphSize : graphsSize )
+			graphSizesSum += graphSize;
+		
+		System.out.println( "Tiles total = " + tileInfos.length + ",   graphs=" + graphsSize.size() + ",   sum="+graphSizesSum );
+		System.out.println( graphsSize );
+	}
+	
+	
+	
+	
+	
+	public static List< Integer > connectedComponentsSize( final List< TilePair > overlappingPairs )
+	{
 		// Create fake tile objects so that they don't hold any image data
 		final TreeMap< Integer, Tile< ? > > fakeTileImagesMap = new TreeMap<>();
-		for ( final TilePair pair : adjPairs )
+		for ( final TilePair pair : overlappingPairs )
 		{
 			for ( final TileInfo tileInfo : pair.toArray() )
 			{
@@ -101,20 +111,15 @@ public class CheckConnectedGraphs
 			}
 		}
 
-
-
-
-
-
-		final ArrayList< Tile< ? > > tiles = new ArrayList< >();
-		final Set< Tile< ? > > tilesSet = new HashSet< >();
-		for ( final TilePair pair : adjPairs )
+		final ArrayList< Tile< ? > > tiles = new ArrayList<>();
+		final Set< Tile< ? > > tilesSet = new HashSet<>();
+		for ( final TilePair pair : overlappingPairs )
 		{
-			final Tile t1 = fakeTileImagesMap.get( pair.first().getIndex() );
-			final Tile t2 = fakeTileImagesMap.get( pair.second().getIndex() );
+			final Tile t1 = fakeTileImagesMap.get( pair.getA().getIndex() );
+			final Tile t2 = fakeTileImagesMap.get( pair.getB().getIndex() );
 
-			final Point p1 = new Point( new double[ pair.first().numDimensions() ] );
-			final Point p2 = new Point( new double[ pair.second().numDimensions() ] );
+			final Point p1 = new Point( new double[ pair.getA().numDimensions() ] );
+			final Point p2 = new Point( new double[ pair.getB().numDimensions() ] );
 
 			t1.addMatch( new PointMatch( p1, p2 ) );
 			t2.addMatch( new PointMatch( p2, p1 ) );
@@ -137,15 +142,12 @@ public class CheckConnectedGraphs
 
 		final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tiles );
 		final ArrayList< Integer > graphsSize = new ArrayList<>();
-		int graphSizesSum = 0;
 		for ( final Set< Tile< ? > > graph : graphs )
-		{
 			graphsSize.add( graph.size() );
-			graphSizesSum += graph.size();
-		}
+		
 		Collections.sort( graphsSize );
 		Collections.reverse( graphsSize );
-		System.out.println( "Tiles total = " + tileInfos.length + ",   graphs=" + graphs.size() + ",   sum="+graphSizesSum );
-		System.out.println( graphsSize );
+		
+		return graphsSize;
 	}
 }

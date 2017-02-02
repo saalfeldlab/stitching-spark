@@ -48,13 +48,13 @@ public class CompareOverlaps
 
 		for ( final TilePair pair : overlapsOrig )
 			overlapsOrigSet.add( new ComparablePair< >(
-					Math.min( pair.first().getIndex(), pair.second().getIndex() ),
-					Math.max( pair.first().getIndex(), pair.second().getIndex() ) ) );
+					Math.min( pair.getA().getIndex(), pair.getB().getIndex() ),
+					Math.max( pair.getA().getIndex(), pair.getB().getIndex() ) ) );
 
 		for ( final TilePair pair : overlapsMod )
 			overlapsModSet.add( new ComparablePair< >(
-					Math.min( pair.first().getIndex(), pair.second().getIndex() ),
-					Math.max( pair.first().getIndex(), pair.second().getIndex() ) ) );
+					Math.min( pair.getA().getIndex(), pair.getB().getIndex() ),
+					Math.max( pair.getA().getIndex(), pair.getB().getIndex() ) ) );
 
 		/*int
 		for ( final ComparablePair< Integer, Integer > pair : overlapsOrigSet )

@@ -14,15 +14,18 @@ import mpicbg.stitching.StitchingParameters;
  * @author Igor Pisarev
  */
 
-public class StitchingSpark implements Runnable, Serializable {
-
-	public static void main( final String[] args ) {
+public class StitchingSpark implements Serializable, AutoCloseable
+{
+	public static void main( final String[] args )
+	{
 		final StitchingArguments stitchingArgs = new StitchingArguments( args );
 		if ( !stitchingArgs.parsedSuccessfully() )
 			System.exit( 1 );
 
-		final StitchingSpark driver = new StitchingSpark( stitchingArgs );
-		driver.run();
+		try ( final StitchingSpark driver = new StitchingSpark( stitchingArgs ) )
+		{
+			driver.run();
+		}
 	}
 
 	private static final long serialVersionUID = 6006962943789087537L;
@@ -31,11 +34,11 @@ public class StitchingSpark implements Runnable, Serializable {
 	private StitchingJob job;
 	private transient JavaSparkContext sparkContext;
 
-	public StitchingSpark( final StitchingArguments args ) {
+	public StitchingSpark( final StitchingArguments args )
+	{
 		this.args = args;
 	}
 
-	@Override
 	public void run()
 	{
 		job = new StitchingJob( args );
@@ -50,22 +53,44 @@ public class StitchingSpark implements Runnable, Serializable {
 		final StitchingParameters params = new StitchingParameters();
 		params.channel1 = 1;
 		params.channel2 = 1;
-		params.timeSelect = 0;
 		params.checkPeaks = 100;
 		params.computeOverlap = true;
 		params.subpixelAccuracy = true;
-		params.virtual = true;
-		params.absoluteThreshold = 5;//7;
-		params.relativeThreshold = 3;//5;
+		params.virtual = false;
+		params.absoluteThreshold = 5;
+		params.relativeThreshold = 3;
 		job.setParams( params );
 
-		sparkContext = new JavaSparkContext( new SparkConf().setAppName( "Stitching" ) );
+		sparkContext = new JavaSparkContext( new SparkConf()
+				.setAppName( "Stitching" )
+				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
+			);
 
 		final PipelineStepExecutorFactory pipelineExecutorFactory = new PipelineStepExecutorFactory( job, sparkContext );
 		for ( final PipelineStep step : job.getPipeline() )
-			pipelineExecutorFactory.getPipelineStepExecutor( step ).run();
+		{
+			try
+			{
+				pipelineExecutorFactory.getPipelineStepExecutor( step ).run();
+			}
+			catch ( final PipelineExecutionException e )
+			{
+				e.printStackTrace();
+				System.out.println( "Pipeline execution exception: " + e.getMessage() );
+				return;
+			}
+		}
 
-		sparkContext.close();
-		System.out.println( "done" );
+		System.out.println( "Done" );
+	}
+
+	@Override
+	public void close()
+	{
+		if ( sparkContext != null )
+		{
+			sparkContext.close();
+			sparkContext = null;
+		}
 	}
 }

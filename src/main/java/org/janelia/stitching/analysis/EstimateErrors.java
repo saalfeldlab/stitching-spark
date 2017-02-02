@@ -50,13 +50,13 @@ public class EstimateErrors
 				final TilePair pair = new TilePair( resultingTiles[ i ], resultingTiles[ j ] );
 
 				String s = "";
-				s += originalTiles.get( pair.first().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.first().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.first().getIndex() ).getPosition( 2 ) + " ";
-				s += originalTiles.get( pair.second().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.second().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.second().getIndex() ).getPosition( 2 ) + " ";
+				s += originalTiles.get( pair.getA().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.getA().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.getA().getIndex() ).getPosition( 2 ) + " ";
+				s += originalTiles.get( pair.getB().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.getB().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.getB().getIndex() ).getPosition( 2 ) + " ";
 
-				s += pair.first().getPosition( 0 ) + " " + pair.first().getPosition( 1 ) + " " + pair.first().getPosition( 2 ) + " ";
-				s += pair.second().getPosition( 0 ) + " " + pair.second().getPosition( 1 ) + " " + pair.second().getPosition( 2 ) + " ";
+				s += pair.getA().getPosition( 0 ) + " " + pair.getA().getPosition( 1 ) + " " + pair.getA().getPosition( 2 ) + " ";
+				s += pair.getB().getPosition( 0 ) + " " + pair.getB().getPosition( 1 ) + " " + pair.getB().getPosition( 2 ) + " ";
 
-				s += timestamps.get( pair.first().getIndex() ) + " " + timestamps.get( pair.second().getIndex() );
+				s += timestamps.get( pair.getA().getIndex() ) + " " + timestamps.get( pair.getB().getIndex() );
 
 				processed++;
 				writer.println( s );
@@ -87,18 +87,18 @@ public class EstimateErrors
 		int processed = 0;
 		for ( final TilePair pair : consecutivePairs )
 		{
-			if ( coordinates.get( pair.first().getIndex() ).x != coordinates.get( pair.second().getIndex() ).x || coordinates.get( pair.first().getIndex() ).y != coordinates.get( pair.second().getIndex() ).y )
+			if ( coordinates.get( pair.getA().getIndex() ).x != coordinates.get( pair.getB().getIndex() ).x || coordinates.get( pair.getA().getIndex() ).y != coordinates.get( pair.getB().getIndex() ).y )
 				continue;
 
 			String s = "";
-			s += originalTiles.get( pair.first().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.first().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.first().getIndex() ).getPosition( 2 ) + " ";
-			s += originalTiles.get( pair.second().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.second().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.second().getIndex() ).getPosition( 2 ) + " ";
+			s += originalTiles.get( pair.getA().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.getA().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.getA().getIndex() ).getPosition( 2 ) + " ";
+			s += originalTiles.get( pair.getB().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.getB().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.getB().getIndex() ).getPosition( 2 ) + " ";
 
-			s += pair.first().getPosition( 0 ) + " " + pair.first().getPosition( 1 ) + " " + pair.first().getPosition( 2 ) + " ";
-			s += pair.second().getPosition( 0 ) + " " + pair.second().getPosition( 1 ) + " " + pair.second().getPosition( 2 ) + " ";
+			s += pair.getA().getPosition( 0 ) + " " + pair.getA().getPosition( 1 ) + " " + pair.getA().getPosition( 2 ) + " ";
+			s += pair.getB().getPosition( 0 ) + " " + pair.getB().getPosition( 1 ) + " " + pair.getB().getPosition( 2 ) + " ";
 
 			processed++;
-			if ( coordinates.get( pair.first().getIndex() ).z < coordinates.get( pair.second().getIndex() ).z )
+			if ( coordinates.get( pair.getA().getIndex() ).z < coordinates.get( pair.getB().getIndex() ).z )
 				forwardsWriter.println( s );
 			else
 				backwardsWriter.println( s );

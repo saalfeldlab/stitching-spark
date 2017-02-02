@@ -347,11 +347,11 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		final ArrayList< PointMatch > matches = new ArrayList< >();
 		final double weight = 1;
 
-		final double min1 = ( minsMaxs.containsKey( p1 ) ? minsMaxs.get( p1 ).first  : 0 );
-		final double max1 = ( minsMaxs.containsKey( p1 ) ? minsMaxs.get( p1 ).second : 1 );
+		final double min1 = ( minsMaxs.containsKey( p1 ) ? minsMaxs.get( p1 ).a  : 0 );
+		final double max1 = ( minsMaxs.containsKey( p1 ) ? minsMaxs.get( p1 ).b : 1 );
 
-		final double min2 = ( minsMaxs.containsKey( p2 ) ? minsMaxs.get( p2 ).first  : 0 );
-		final double max2 = ( minsMaxs.containsKey( p2 ) ? minsMaxs.get( p2 ).second : 1 );
+		final double min2 = ( minsMaxs.containsKey( p2 ) ? minsMaxs.get( p2 ).a  : 0 );
+		final double max2 = ( minsMaxs.containsKey( p2 ) ? minsMaxs.get( p2 ).b : 1 );
 
 		matches.add( new PointMatch( new Point( new double[] { min2 } ), new Point( new double[] { min1 } ), weight ) );
 		matches.add( new PointMatch( new Point( new double[] { max2 } ), new Point( new double[] { max1 } ), weight ) );
@@ -445,15 +445,16 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 			double minValue = Double.MAX_VALUE, maxValue = -Double.MAX_VALUE;
 			for ( final ComparablePair< Double, Double > val : minsMaxs.values() )
 			{
-				minValue = Math.min( val.first, minValue );
-				maxValue = Math.max( val.second, maxValue );
+				minValue = Math.min( val.a, minValue );
+				maxValue = Math.max( val.b, maxValue );
 			}
-			final double valuesRange = maxValue - minValue;
+			// TODO: fix updating comparable pair or delete
+			/*final double valuesRange = maxValue - minValue;
 			for ( final ComparablePair< Double, Double > val : minsMaxs.values() )
 			{
-				val.first = ( val.first - minValue ) / valuesRange;
-				val.second = ( val.second - minValue ) / valuesRange;
-			}
+				val.a = ( val.a - minValue ) / valuesRange;
+				val.b = ( val.b - minValue ) / valuesRange;
+			}*/
 
 			//for ( final ComparablePair< Double, Double > val : minsMaxs.values() )
 			//	System.out.println( val );

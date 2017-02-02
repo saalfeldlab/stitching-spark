@@ -58,15 +58,15 @@ public class TracePairwiseShiftsForAllChannels
 		final PrintWriter writer = new PrintWriter(outFilepath, "UTF-8");
 		for ( int ind = 0; ind < shiftsForCombinedChannels.size(); ind++ )
 		{
-			if ( shiftsForCombinedChannels.get( ind ).getTilePair().first().getIndex().intValue() != shifts[ 0 ].get( ind ).getTilePair().first().getIndex().intValue() ||
-					shiftsForCombinedChannels.get( ind ).getTilePair().second().getIndex().intValue() != shifts[ 0 ].get( ind ).getTilePair().second().getIndex().intValue() ||
-					tilesPerChannel+shiftsForCombinedChannels.get( ind ).getTilePair().first().getIndex().intValue() != shifts[ 1 ].get( ind ).getTilePair().first().getIndex().intValue() ||
-					tilesPerChannel+shiftsForCombinedChannels.get( ind ).getTilePair().second().getIndex().intValue() != shifts[ 1 ].get( ind ).getTilePair().second().getIndex().intValue() )
+			if ( shiftsForCombinedChannels.get( ind ).getTilePair().getA().getIndex().intValue() != shifts[ 0 ].get( ind ).getTilePair().getA().getIndex().intValue() ||
+					shiftsForCombinedChannels.get( ind ).getTilePair().getB().getIndex().intValue() != shifts[ 0 ].get( ind ).getTilePair().getB().getIndex().intValue() ||
+					tilesPerChannel+shiftsForCombinedChannels.get( ind ).getTilePair().getA().getIndex().intValue() != shifts[ 1 ].get( ind ).getTilePair().getA().getIndex().intValue() ||
+					tilesPerChannel+shiftsForCombinedChannels.get( ind ).getTilePair().getB().getIndex().intValue() != shifts[ 1 ].get( ind ).getTilePair().getB().getIndex().intValue() )
 			{
-				throw new Exception( "Tile indices don't match: ch0=("+shifts[0].get( ind ).getTilePair().first().getIndex()+","+shifts[0].get( ind ).getTilePair().second().getIndex()+"), ch1=("+
-						shifts[1].get( ind ).getTilePair().first().getIndex()+","+shifts[1].get( ind ).getTilePair().second().getIndex()+"), combined="+
-						shiftsForCombinedChannels.get( ind ).getTilePair().first().getIndex()+","+shiftsForCombinedChannels.get( ind ).getTilePair().second().getIndex()+"), combined sum="+
-						(tilesPerChannel+shiftsForCombinedChannels.get( ind ).getTilePair().first().getIndex())+","+(tilesPerChannel+shiftsForCombinedChannels.get( ind ).getTilePair().second().getIndex())+")");
+				throw new Exception( "Tile indices don't match: ch0=("+shifts[0].get( ind ).getTilePair().getA().getIndex()+","+shifts[0].get( ind ).getTilePair().getB().getIndex()+"), ch1=("+
+						shifts[1].get( ind ).getTilePair().getA().getIndex()+","+shifts[1].get( ind ).getTilePair().getB().getIndex()+"), combined="+
+						shiftsForCombinedChannels.get( ind ).getTilePair().getA().getIndex()+","+shiftsForCombinedChannels.get( ind ).getTilePair().getB().getIndex()+"), combined sum="+
+						(tilesPerChannel+shiftsForCombinedChannels.get( ind ).getTilePair().getA().getIndex())+","+(tilesPerChannel+shiftsForCombinedChannels.get( ind ).getTilePair().getB().getIndex())+")");
 			}
 
 			if ( !shiftsForCombinedChannels.get( ind ).getIsValidOverlap() )
@@ -114,12 +114,12 @@ public class TracePairwiseShiftsForAllChannels
 			outputLine += timestamps[0] + " " + timestamps[1];
 
 			// append final coordinates
-			if ( channelsFinalMap[0].containsKey( shiftsForCombinedChannels.get( ind ).getTilePair().first().getIndex() ) &&
-					channelsFinalMap[0].containsKey( shiftsForCombinedChannels.get( ind ).getTilePair().second().getIndex() ) )
+			if ( channelsFinalMap[0].containsKey( shiftsForCombinedChannels.get( ind ).getTilePair().getA().getIndex() ) &&
+					channelsFinalMap[0].containsKey( shiftsForCombinedChannels.get( ind ).getTilePair().getB().getIndex() ) )
 			{
 				finalPairs++;
-				final TileInfo t1 = channelsFinalMap[0].get( shiftsForCombinedChannels.get( ind ).getTilePair().first().getIndex() );
-				final TileInfo t2 = channelsFinalMap[0].get( shiftsForCombinedChannels.get( ind ).getTilePair().second().getIndex() );
+				final TileInfo t1 = channelsFinalMap[0].get( shiftsForCombinedChannels.get( ind ).getTilePair().getA().getIndex() );
+				final TileInfo t2 = channelsFinalMap[0].get( shiftsForCombinedChannels.get( ind ).getTilePair().getB().getIndex() );
 				outputLine += " " + t1.getPosition( 0 ) + " " + t1.getPosition( 1 ) + " " + t1.getPosition( 2 );
 				outputLine += " " + t2.getPosition( 0 ) + " " + t2.getPosition( 1 ) + " " + t2.getPosition( 2 );
 

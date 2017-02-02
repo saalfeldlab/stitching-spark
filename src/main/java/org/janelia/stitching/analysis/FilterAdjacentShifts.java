@@ -103,12 +103,12 @@ public class FilterAdjacentShifts
 			validShifts++;
 			shift.setIsValidOverlap( false );
 
-			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( shift.getTilePair().first(), shift.getTilePair().second() );
+			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( shift.getTilePair().getA(), shift.getTilePair().getB() );
 
 			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
 			{
-				final int maxPossibleOverlap = ( int ) Math.min( shift.getTilePair().first().getSize( d ), shift.getTilePair().second().getSize( d ) );
+				final int maxPossibleOverlap = ( int ) Math.min( shift.getTilePair().getA().getSize( d ), shift.getTilePair().getB().getSize( d ) );
 				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
 					shortEdges[d] = true;
 			}
@@ -122,8 +122,8 @@ public class FilterAdjacentShifts
 					)
 				continue;
 
-			final int ind1 = Math.min( shift.getTilePair().first().getIndex(), shift.getTilePair().second().getIndex() );
-			final int ind2 = Math.max( shift.getTilePair().first().getIndex(), shift.getTilePair().second().getIndex() );
+			final int ind1 = Math.min( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
+			final int ind2 = Math.max( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
 			if ( !validation.containsKey( ind1 ) )
 				validation.put( ind1, new HashSet<>() );
 			validation.get( ind1 ).add( ind2 );
@@ -134,7 +134,7 @@ public class FilterAdjacentShifts
 			{
 				if ( shortEdges[ d ] )
 				{
-					if ( shift.getTilePair().first().getPosition( d ) > shift.getTilePair().second().getPosition( d ) )
+					if ( shift.getTilePair().getA().getPosition( d ) > shift.getTilePair().getB().getPosition( d ) )
 					{
 						swappedCount++;
 						shift.swap();
@@ -186,12 +186,12 @@ public class FilterAdjacentShifts
 
 		for ( final TilePair pair : overlappingPairs )
 		{
-			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( pair.first(), pair.second() );
+			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( pair.getA(), pair.getB() );
 
 			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
 			{
-				final int maxPossibleOverlap = ( int ) Math.min( pair.first().getSize( d ), pair.second().getSize( d ) );
+				final int maxPossibleOverlap = ( int ) Math.min( pair.getA().getSize( d ), pair.getB().getSize( d ) );
 				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
 					shortEdges[d] = true;
 			}

@@ -20,12 +20,27 @@ public class Conversions {
 			ret[ i ] = (float)arr[ i ];
 		return ret;
 	}
+	public static double[] toDoubleArray( final float[] arr )
+	{
+		final double[] ret = new double[ arr.length ];
+		for ( int i = 0; i < arr.length; i++ )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
 
 	public static long[] toLongArray( final int[] arr )
 	{
 		final long[] ret = new long[ arr.length ];
 		for ( int i = 0; i < arr.length; i++ )
 			ret[ i ] = arr[ i ];
+		return ret;
+	}
+
+	public static int[] toIntArray( final long[] arr )
+	{
+		final int[] ret = new int[ arr.length ];
+		for ( int i = 0; i < arr.length; i++ )
+			ret[ i ] = (int)arr[ i ];
 		return ret;
 	}
 
