@@ -1,46 +1,94 @@
 package org.janelia.stitching.analysis;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
-import org.janelia.stitching.TileModelFactory;
-import org.janelia.stitching.TilePair;
 import org.janelia.stitching.Utils;
 
-import mpicbg.models.Model;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 
 public class FilterOutliers
 {
-	public static void main( final String[] args ) throws Exception
+	static double dist(final double[] a)
+	{
+		return Math.sqrt( a[0]*a[0] + a[1]*a[1] + a[2]*a[2] );
+	}
+
+
+	public static void main_single_channel( final String[] args ) throws Exception
 	{
 		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
 
-		final Point zero = new Point( new double[ shifts.get( 0 ).getNumDimensions() ] );
-		final List< PairwiseShiftPointMatch > matches = new ArrayList<>(), inliers = new ArrayList<>();
-
-		for ( final SerializablePairWiseStitchingResult shift : shifts )
+		int before = 0, after = 0;
+		for ( int i = 0; i < shifts.size(); i++ )
 		{
-			if ( !shift.getIsValidOverlap() )
+			if ( !shifts.get( i ).getIsValidOverlap() )
 				continue;
 
-			shift.setIsValidOverlap( false );
-			final TilePair pair = shift.getTilePair();
-			final double dist[] = new double[ shift.getNumDimensions() ];
+			before++;
+			shifts.get( i ).setIsValidOverlap( false );
 
-			for ( int d = 0; d < shift.getNumDimensions(); d++ )
-				dist[d] = (pair.second().getPosition( d ) - pair.first().getPosition( d )) - shift.getOffset( d );
+			final double[] diff = new double[ 3 ];
 
-			matches.add( new PairwiseShiftPointMatch( shift, new Point( dist ), zero ) );
+			for ( int d = 0; d < 3; d++ )
+				diff[d] = (shifts.get(i).getTilePair().getB().getPosition( d ) - shifts.get(i).getTilePair().getA().getPosition( d )) - shifts.get(i).getOffset( d );
+
+			if ( dist(diff) <= 40 && shifts.get(i).getCrossCorrelation() >= 0.75 )
+			{
+				shifts.get( i ).setIsValidOverlap( true );
+				after++;
+			}
 		}
 
-		final Model< ? > model = TileModelFactory.createDefaultModel( shifts.get( 0 ).getNumDimensions() );
-		model.filter( matches, inliers, 3 );
+		System.out.println( "before="+before + ", after="+after);
 
-		System.out.println( matches.size() + " matches, " + inliers.size() + " inliers" );
+		TileInfoJSONProvider.savePairwiseShifts( shifts, Utils.addFilenameSuffix( args[ 0 ], "_inliers" ) );
+	}
+
+
+
+	public static void main/*_channels_discrepancy*/( final String[] args ) throws Exception
+	{
+		final List< SerializablePairWiseStitchingResult >[] shifts = new List[2];
+		for ( int j = 0; j < 2; j++ )
+			shifts[j]=TileInfoJSONProvider.loadPairwiseShifts( args[ j ] );
+
+		//final Point zero = new Point( new double[ ch0Shifts.get( 0 ).getNumDimensions() ] );
+		//final List< PairwiseShiftPointMatch > matches = new ArrayList<>(), inliers = new ArrayList<>();
+
+		int before = 0, after = 0;
+		for ( int i = 0; i < shifts[0].size(); i++ )
+		{
+			if ( !shifts[0].get( i ).getIsValidOverlap() || !shifts[1].get( i ).getIsValidOverlap() )
+				continue;
+
+			before++;
+			for ( int j = 0; j < 2; j++ )
+				shifts[j].get( i ).setIsValidOverlap( false );
+
+			final double[][] diff = new double[ 2 ][ 3 ];
+
+			for ( int j = 0; j < 2; j++ )
+				for ( int d = 0; d < 3; d++ )
+					diff[j][d] = (shifts[j].get(i).getTilePair().getB().getPosition( d ) - shifts[j].get(i).getTilePair().getA().getPosition( d )) - shifts[j].get(i).getOffset( d );
+
+			//matches.add( new PairwiseShiftPointMatch( shift, new Point( dist ), zero ) );
+
+			if ( Math.abs( dist(diff[0]) - dist(diff[1]) ) <= 4 && Math.min( shifts[0].get(i).getCrossCorrelation(), shifts[1].get(i).getCrossCorrelation()) >= 0.7 )
+			{
+				for ( int j = 0; j < 2; j++ )
+					shifts[j].get( i ).setIsValidOverlap( true);
+				after++;
+			}
+		}
+
+		//final Model< ? > model = TileModelFactory.createDefaultModel( shifts.get( 0 ).getNumDimensions() );
+		//model.filter( matches, inliers, 3 );
+
+		//System.out.println( matches.size() + " matches, " + inliers.size() + " inliers" );
+		System.out.println( "before="+before + ", after="+after);
 
 
 		// output filtered distances
@@ -55,9 +103,11 @@ public class FilterOutliers
 		}
 		writer.close();*/
 
-		for ( final PairwiseShiftPointMatch match : inliers )
-			match.getShift().setIsValidOverlap( true );
-		TileInfoJSONProvider.savePairwiseShifts( shifts, Utils.addFilenameSuffix( args[ 0 ], "_inliers" ) );
+		//for ( final PairwiseShiftPointMatch match : inliers )
+		//	match.getShift().setIsValidOverlap( true );
+
+		for ( int j = 0; j < 2; j++ )
+			TileInfoJSONProvider.savePairwiseShifts( shifts[j], Utils.addFilenameSuffix( args[ j ], "_inliers" ) );
 	}
 
 

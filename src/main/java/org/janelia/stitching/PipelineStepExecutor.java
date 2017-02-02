@@ -10,7 +10,7 @@ import org.apache.spark.api.java.JavaSparkContext;
  * @author Igor Pisarev
  */
 
-public abstract class PipelineStepExecutor implements Runnable, Serializable
+public abstract class PipelineStepExecutor implements Serializable
 {
 	private static final long serialVersionUID = 3546355803511705943L;
 
@@ -22,4 +22,6 @@ public abstract class PipelineStepExecutor implements Runnable, Serializable
 		this.job = job;
 		this.sparkContext = sparkContext;
 	}
+	
+	public abstract void run() throws PipelineExecutionException;
 }

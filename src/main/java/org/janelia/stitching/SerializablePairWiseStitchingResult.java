@@ -2,14 +2,6 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 
-import mpicbg.stitching.PairWiseStitchingResult;
-
-/**
- * Serializable version of {@link PairWiseStitchingResult}.
- *
- * @author Igor Pisarev
- */
-
 public class SerializablePairWiseStitchingResult implements Serializable {
 
 	private static final long serialVersionUID = -8084090265269616284L;
@@ -26,11 +18,16 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 		this.phaseCorrelation = phaseCorrelation;
 	}
 
-	public SerializablePairWiseStitchingResult( final TilePair pairOfTiles, final PairWiseStitchingResult other ) {
-		this( pairOfTiles, other.getOffset(), other.getCrossCorrelation(), other.getPhaseCorrelation() );
-	}
+//	public SerializablePairWiseStitchingResult( final TilePair pairOfTiles, final PairWiseStitchingResult other ) {
+//		this( pairOfTiles, other.getOffset(), other.getCrossCorrelation(), other.getPhaseCorrelation() );
+//	}
 
 	protected SerializablePairWiseStitchingResult() { }
+
+	public void setTilePair( final TilePair tilePair )
+	{
+		this.tilePair = tilePair;
+	}
 
 	public TilePair getTilePair() { return tilePair; }
 	public int getNumDimensions() { return offset.length; }

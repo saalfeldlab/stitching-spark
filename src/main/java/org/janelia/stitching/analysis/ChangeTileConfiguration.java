@@ -1,5 +1,10 @@
 package org.janelia.stitching.analysis;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.TreeMap;
+
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -14,24 +19,47 @@ public class ChangeTileConfiguration
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final TileInfo[] tilesFrom = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
-		final TileInfo[] tilesTo = TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] );
+		final TreeMap<Integer,TileInfo> tilesFrom = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] ) );
+		final TreeMap<Integer, TileInfo > tilesTo = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] ) );
 		final String what = args[ 2 ].trim();
 
-		if ( tilesFrom.length != tilesTo.length )
-			throw new Exception( "Tiles count mismatch" );
+		final int tilesPerChannel = tilesTo.size();
+		final int ch = 0;//tilesTo.firstKey() / tilesPerChannel;
+		if ( tilesTo.firstKey() % tilesPerChannel != 0 )
+			throw new Exception( "Only a part of a channel image collection is present" );
 
-		for ( int i = 0; i < tilesFrom.length; i++ )
+		System.out.println( "tilesTo before: " + tilesTo.size() );
+		System.out.println( "ch=" + ch );
+
+		for (final Iterator<Map.Entry<Integer, TileInfo>> it = tilesTo.entrySet().iterator(); it.hasNext(); )
 		{
+			final Map.Entry<Integer, TileInfo> entry = it.next();
+			if( !tilesFrom.containsKey( entry.getKey() - ch * tilesPerChannel ) )
+				it.remove();
+		}
+
+		int processed = 0;
+		for ( final TileInfo tileFrom : tilesFrom.values() )
+		{
+			final int ind = ch * tilesPerChannel + tileFrom.getIndex();
+			if ( !tilesTo.containsKey( ind ) )
+				continue;
+
+			processed++;
+			final TileInfo tileTo = tilesTo.get( ind );
+
 			if ( what.equals( "position" ) )
-				tilesTo[ i ].setPosition( tilesFrom[ i ].getPosition() );
+				tileTo.setPosition( tileFrom.getPosition() );
 			else if ( what.equals( "filepath" ) )
-				tilesTo[ i ].setFilePath( tilesFrom[ i ].getFilePath() );
+				tileTo.setFilePath( tileFrom.getFilePath() );
 			else
 				throw new Exception( "Unknown property: " + what );
 		}
 
-		TileInfoJSONProvider.saveTilesConfiguration( tilesTo, Utils.addFilenameSuffix( args[ 1 ], "_changed_" + what ) );
+		System.out.println( "Processed: " + processed );
+
+		final TileInfo[] result = new ArrayList<>( tilesTo.values() ).toArray( new TileInfo[0] );
+		TileInfoJSONProvider.saveTilesConfiguration( result, Utils.addFilenameSuffix( args[ 1 ], "_changed_" + what ) );
 
 		System.out.println( "Done" );
 	}

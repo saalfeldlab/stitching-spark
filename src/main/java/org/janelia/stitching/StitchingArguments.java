@@ -1,10 +1,14 @@
 package org.janelia.stitching;
 
 import java.io.Serializable;
+import java.util.Arrays;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
+
+import mpicbg.spim.data.sequence.FinalVoxelDimensions;
+import mpicbg.spim.data.sequence.VoxelDimensions;
 
 /**
  * Command line arguments parser for a stitching job.
@@ -30,11 +34,19 @@ public class StitchingArguments implements Serializable {
 
 	@Option(name = "-b", aliases = { "--blurstrength" }, required = false,
 			usage = "Blur strength")
-	private double blurStrength = 2.0;
+	private double blurStrength = 3.0;
+	
+	@Option(name = "-v", aliases = { "--voxelsize" }, required = false,
+			usage = "Voxel dimensions")
+	private String voxelDimensions = "nm=1.0,1.0,1.0";
 
 	@Option(name = "--noroi", required = false,
 			usage = "Compute phase correlation between full tile images instead of their ROIs")
 	private boolean noRoi;
+	
+	@Option(name = "--adjacent", required = false,
+			usage = "Compute phase correlation only between adjacent tiles (with large intersection plane)")
+	private boolean adjacent;
 
 	/**
 	 * Toggle pipeline stages. By default all stages are executed.
@@ -84,12 +96,25 @@ public class StitchingArguments implements Serializable {
 	protected StitchingArguments() { }
 
 	public boolean parsedSuccessfully() { return parsedSuccessfully; }
+	
+	public VoxelDimensions voxelDimensions()
+	{ 
+		final int delim = voxelDimensions.indexOf( "=" );
+		final String unit = voxelDimensions.substring( 0, delim ); 
+		final String[] tokens = voxelDimensions.substring( delim + 1 ).trim().split( "," );
+		final double[] values = new double[ tokens.length ];
+		for ( int i = 0; i < values.length; i++ )
+			values[ i ] = Double.parseDouble( tokens[ i ] );
+		System.out.println( String.format( "Voxel dimensions = %s (%s)", Arrays.toString( values ), unit ) );
+		return new FinalVoxelDimensions( unit, values );
+	}
 
 	public String inputFilePath() { return inputFilePath; }
 	public double crossCorrelationThreshold() { return crossCorrelationThreshold; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurStrength() { return blurStrength; }
 	public boolean noRoi() { return noRoi; }
+	public boolean adjacent() { return adjacent; }
 
 	public boolean onlyMeta() { return onlyMeta; }
 

@@ -16,40 +16,40 @@ public class TileModelFactory {
 	/**
 	 * @return default translational model initialized to origin
 	 */
-	public static Model< ? > createDefaultModel( final int dim ) throws Exception {
+	public static < M extends Model< M > > M createDefaultModel( final int dim ) throws Exception {
 		return createModel( dim, null );
 	}
 
 	/**
 	 * @return offset translational model set to position of the tile
 	 */
-	public static Model< ? > createOffsetModel( final TileInfo tile ) throws Exception {
+	public static < M extends Model< M > > M createOffsetModel( final TileInfo tile ) throws Exception {
 		return createModel( tile.numDimensions(), tile );
 	}
 
 	/**
 	 * @return offset translational model
 	 */
-	public static Model< ? > createOffsetModel( final double[] offset ) throws Exception {
+	public static < M extends Model< M > > M createOffsetModel( final double[] offset ) throws Exception {
 		final int dim = offset.length;
 		final TileInfo tile = new TileInfo( dim );
 		tile.setPosition( offset );
 		return createModel( dim, tile );
 	}
 
-	private static Model< ? > createModel( final int dim, final TileInfo tile ) throws Exception {
+	private static < M extends Model< M > > M createModel( final int dim, final TileInfo tile ) throws Exception {
 		switch ( dim ) {
 		case 2:
 			final TranslationModel2D m2d = new TranslationModel2D();
 			if ( tile != null)
 				m2d.set( tile.getPosition(0), tile.getPosition(1) );
-			return m2d;
+			return (M)m2d;
 
 		case 3:
 			final TranslationModel3D m3d = new TranslationModel3D();
 			if ( tile != null)
 				m3d.set( tile.getPosition(0), tile.getPosition(1), tile.getPosition(2) );
-			return m3d;
+			return (M)m3d;
 
 		default:
 			throw new Exception( "Not supported" );

@@ -30,7 +30,7 @@ public class FixTilePosition
 			final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( Utils.addFilenameSuffix( args[ 0 ], "_pairwise" ) );
 			final List< SerializablePairWiseStitchingResult > fixedShifts = new ArrayList<>();
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
-				if ( shift.getTilePair().first().getIndex() != tileIndex && shift.getTilePair().second().getIndex() != tileIndex )
+				if ( shift.getTilePair().getA().getIndex() != tileIndex && shift.getTilePair().getB().getIndex() != tileIndex )
 					fixedShifts.add( shift );
 			TileInfoJSONProvider.savePairwiseShifts( fixedShifts, Utils.addFilenameSuffix( outFilename, "_pairwise" ) );
 		}

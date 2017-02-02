@@ -1,27 +1,6 @@
 package org.janelia.stitching;
 
-import static bdv.img.hdf5.Util.reorder;
-
-import java.io.File;
-import java.util.Arrays;
-
 import org.apache.spark.api.java.JavaSparkContext;
-
-import bdv.img.h5.H5Utils;
-import ch.systemsx.cisd.base.mdarray.MDShortArray;
-import ch.systemsx.cisd.hdf5.HDF5Factory;
-import ch.systemsx.cisd.hdf5.HDF5IntStorageFeatures;
-import ch.systemsx.cisd.hdf5.IHDF5ShortWriter;
-import ch.systemsx.cisd.hdf5.IHDF5Writer;
-import ij.IJ;
-import ij.ImagePlus;
-import net.imglib2.Dimensions;
-import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.img.Img;
-import net.imglib2.img.display.imagej.ImageJFunctions;
-import net.imglib2.type.numeric.integer.UnsignedShortType;
-import net.imglib2.util.Intervals;
-import net.imglib2.view.Views;
 
 /**
  * Creates HDF5 dataset consisting of tile images.
@@ -44,13 +23,13 @@ public class PipelineExportStepExecutor extends PipelineStepExecutor
 	@Override
 	public void run()
 	{
-		final String fusedFolder = job.getBaseFolder() + "/fused";
+		/*final String fusedFolder = job.getBaseFolder() + "/fused";
 		new File( fusedFolder ).mkdirs();
 		final String hdf5 = fusedFolder + "/" + job.getDatasetName() + ".hdf5";
-		createHdf5( job.getTiles(), hdf5 );
+		createHdf5( job.getTiles(), hdf5 );*/
 	}
 
-	static public void createSignedShortDataset(
+	/*static public void createSignedShortDataset(
 			final Dimensions dimensions,
 			final IHDF5Writer writer,
 			final String dataset,
@@ -136,5 +115,5 @@ public class PipelineExportStepExecutor extends PipelineStepExecutor
 		}
 
 		writer.close();
-	}
+	}*/
 }

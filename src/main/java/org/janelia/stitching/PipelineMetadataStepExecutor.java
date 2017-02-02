@@ -2,14 +2,17 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
+import org.janelia.stitching.analysis.CheckConnectedGraphs;
 
 import ij.ImagePlus;
+import mpicbg.spim.data.sequence.VoxelDimensions;
 import mpicbg.stitching.ImageCollectionElement;
 
 /**
@@ -19,7 +22,6 @@ import mpicbg.stitching.ImageCollectionElement;
  * @author Igor Pisarev
  */
 public class PipelineMetadataStepExecutor extends PipelineStepExecutor
-
 {
 	private static final long serialVersionUID = -4817219922945295127L;
 
@@ -40,7 +42,8 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			queryMetadata( tilesWithoutMetadata );
 
 		job.validateTiles();
-		TileOperations.translateTilesToOrigin( job.getTiles() );
+		
+		//TileOperations.translateTilesToOriginReal( job.getTiles() );
 	}
 
 	private void queryMetadata( final ArrayList< TileInfo > tilesWithoutMetadata )

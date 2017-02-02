@@ -2,8 +2,8 @@ package org.janelia.stitching.analysis;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -25,10 +25,13 @@ public class FindTilesAtPoint
 
 		final double[] point = Conversions.parseDoubleArray( args[ 1 ].split( "," ) );
 
+		for ( final TileInfo tile : tiles )
+			System.out.println( "  " + tile.getIndex() + ":   " + Arrays.toString( tile.getPosition() ) );
+
 		final TileInfo subregion = new TileInfo( point.length );
 		subregion.setPosition( point );
 		subregion.setSize( new long[] { 1, 1, 1 } );
-		final ArrayList< TileInfo > tilesAtPoint = TileOperations.findTilesWithinSubregion( tiles, subregion );
+		final List< TileInfo > tilesAtPoint = TileOperations.findTilesWithinSubregion( tiles, subregion );
 
 		System.out.println( "There are " + tilesAtPoint.size() + " tiles at the point " + Arrays.toString( point ) + ":" );
 		for ( final TileInfo tile : tilesAtPoint )

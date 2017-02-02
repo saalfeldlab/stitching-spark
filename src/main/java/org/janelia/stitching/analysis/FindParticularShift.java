@@ -28,8 +28,8 @@ public class FindParticularShift
 		int hits = 0;
 		SerializablePairWiseStitchingResult shift = null;
 		for ( final SerializablePairWiseStitchingResult s : shifts ) {
-			if ( (s.getTilePair().first().getIndex() == i1 && s.getTilePair().second().getIndex() == i2) ||
-					(s.getTilePair().first().getIndex() == i2 && s.getTilePair().second().getIndex() == i1) )
+			if ( (s.getTilePair().getA().getIndex() == i1 && s.getTilePair().getB().getIndex() == i2) ||
+					(s.getTilePair().getA().getIndex() == i2 && s.getTilePair().getB().getIndex() == i1) )
 			{
 				shift = s;
 				hits++;
@@ -42,8 +42,8 @@ public class FindParticularShift
 			throw new Exception( "Impossible: present more than once" );
 
 		System.out.println( "Found:" );
-		System.out.println( shift.getTilePair().first().getIndex() + ": " + shift.getTilePair().first().getFilePath() );
-		System.out.println( shift.getTilePair().second().getIndex() + ": " + shift.getTilePair().second().getFilePath() );
+		System.out.println( shift.getTilePair().getA().getIndex() + ": " + shift.getTilePair().getA().getFilePath() );
+		System.out.println( shift.getTilePair().getB().getIndex() + ": " + shift.getTilePair().getB().getFilePath() );
 
 		System.out.println( "------------------");
 		System.out.println( "offset=" + Arrays.toString( shift.getOffset() ) );
@@ -51,8 +51,8 @@ public class FindParticularShift
 		System.out.println( "phase correlation=" + shift.getPhaseCorrelation() );
 		System.out.println( "------------------");
 
-		final TileInfo t1 = shift.getTilePair().first();
-		final TileInfo t2 = shift.getTilePair().second();
+		final TileInfo t1 = shift.getTilePair().getA();
+		final TileInfo t2 = shift.getTilePair().getB();
 
 		Boundaries overlap = TileOperations.getOverlappingRegionGlobal( t1, t2 );
 		System.out.println( "Initial overlap at " + Arrays.toString( overlap.getMin() ) + " with dimensions " + Arrays.toString( overlap.getDimensions() ) );

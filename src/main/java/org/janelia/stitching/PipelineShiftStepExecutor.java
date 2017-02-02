@@ -2,6 +2,8 @@ package org.janelia.stitching;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -14,19 +16,31 @@ import java.util.Vector;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
+import org.apache.spark.broadcast.Broadcast;
+import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.stitching.analysis.ThresholdEstimation;
+import org.janelia.util.ImageImporter;
+import org.janelia.util.SameThreadExecutorService;
 
-import ij.IJ;
 import ij.ImagePlus;
-import ij.gui.Roi;
 import mpicbg.models.Tile;
 import mpicbg.stitching.ComparePair;
-import mpicbg.stitching.GlobalOptimization;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
-import mpicbg.stitching.PairWiseStitchingImgLib;
-import mpicbg.stitching.PairWiseStitchingResult;
-import stitching.utils.Log;
+import net.imglib2.Cursor;
+import net.imglib2.FinalDimensions;
+import net.imglib2.RandomAccessible;
+import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.algorithm.gauss3.Gauss3;
+import net.imglib2.exception.IncompatibleTypeException;
+import net.imglib2.img.imageplus.ImagePlusImg;
+import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.NumericType;
+import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Intervals;
+import net.imglib2.view.Views;
 
 /**
  * Computes updated tile positions using phase correlation for pairwise matches and then global optimization for fitting all of them together.
@@ -45,10 +59,32 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 	}
 
 	@Override
-	public void run()
+	public void run() throws PipelineExecutionException
 	{
+		// Scale positions to the same range as size (make them independent of voxel dimensions)
+		// TODO: inconvenient, better require the input configuration file to be already rescaled with respect to voxel dimensions
+//		final VoxelDimensions voxelDimensions = job.getArgs().voxelDimensions();
+//		for ( final TileInfo tile : job.getTiles() )
+//			for ( int d = 0; d < tile.numDimensions(); d++ )
+//				tile.setPosition( d, tile.getPosition( d ) / voxelDimensions.dimension( d ) );
+
+		System.out.println( "Tiles count = " + job.getTiles().length + " (" + ( job.getDimensionality() == 2 ?"2D" : "3D") + ")");
 		final ArrayList< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles() );
 		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
+
+		// Remove pairs with small overlap area if only adjacent pairs are requested
+		if ( job.getArgs().adjacent() )
+		{
+			final List< TilePair > adjacentOverlappingTiles = FilterAdjacentShifts.filterAdjacentPairs( overlappingTiles );
+			overlappingTiles.clear();
+			overlappingTiles.addAll( adjacentOverlappingTiles );
+			System.out.println( "Retaining only " + overlappingTiles.size() + " adjacent pairs of them" );
+		}
+
+		// TODO: fails with StackOverflowError on the cluster. Pass -Xss to the JVM
+//		final List< Integer > connectedComponentsSize = CheckConnectedGraphs.connectedComponentsSize( overlappingTiles );
+//		if ( connectedComponentsSize.size() > 1 )
+//			throw new PipelineExecutionException( "Overlapping pairs form more than one connected component: " + connectedComponentsSize );
 
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = preparePairwiseShifts( overlappingTiles );
 
@@ -82,8 +118,8 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 		// Create a cache to efficiently lookup the existing pairs of tiles loaded from disk
 		final TreeMap< Integer, TreeSet< Integer > > cache = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult result : pairwiseShifts ) {
-			final int firstIndex  =  Math.min( result.getTilePair().first().getIndex(), result.getTilePair().second().getIndex() ),
-					secondIndex =  Math.max( result.getTilePair().first().getIndex(), result.getTilePair().second().getIndex() );
+			final int firstIndex =  Math.min( result.getTilePair().getA().getIndex(), result.getTilePair().getB().getIndex() ),
+					secondIndex  =  Math.max( result.getTilePair().getA().getIndex(), result.getTilePair().getB().getIndex() );
 			if ( !cache.containsKey( firstIndex ) )
 				cache.put( firstIndex, new TreeSet< Integer >() );
 			cache.get( firstIndex ).add( secondIndex );
@@ -93,11 +129,15 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 		for ( final Iterator< TilePair > it = overlappingTiles.iterator(); it.hasNext(); )
 		{
 			final TilePair pair = it.next();
-			final int firstIndex  =  Math.min( pair.first().getIndex(), pair.second().getIndex() ),
-					secondIndex =  Math.max( pair.first().getIndex(), pair.second().getIndex() );
+			final int firstIndex =  Math.min( pair.getA().getIndex(), pair.getB().getIndex() ),
+					secondIndex =  Math.max( pair.getA().getIndex(), pair.getB().getIndex() );
 			if ( cache.containsKey( firstIndex ) && cache.get( firstIndex ).contains( secondIndex ) )
 				it.remove();
 		}
+
+		final List< SerializablePairWiseStitchingResult[] > pairwiseShiftsMulti = new ArrayList<>();
+		for ( final SerializablePairWiseStitchingResult shift : pairwiseShifts )
+			pairwiseShiftsMulti.add( new SerializablePairWiseStitchingResult[] { shift } );
 
 		if ( overlappingTiles.isEmpty() && !pairwiseShifts.isEmpty() )
 		{
@@ -106,11 +146,13 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 		}
 		else
 		{
-			pairwiseShifts.addAll( computePairwiseShifts( overlappingTiles ) );
+			// Initiate the computation
+			final List< SerializablePairWiseStitchingResult[] > adjacentShiftsMulti = computePairwiseShifts( overlappingTiles );
+			pairwiseShiftsMulti.addAll( adjacentShiftsMulti );
 
 			try {
 				System.out.println( "Stitched all tiles pairwise, store this information on disk.." );
-				TileInfoJSONProvider.savePairwiseShifts( pairwiseShifts, pairwiseResultsFile );
+				TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, Utils.addFilenameSuffix( pairwiseResultsFile, "_multi" ) );
 			} catch ( final IOException e ) {
 				e.printStackTrace();
 			}
@@ -119,75 +161,393 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 		return pairwiseShifts;
 	}
 
+
 	/**
 	 * Computes the best possible pairwise shifts between every pair of tiles on a Spark cluster.
 	 * It uses phase correlation for measuring similarity between two images.
 	 */
-	private List< SerializablePairWiseStitchingResult > computePairwiseShifts( final ArrayList< TilePair > overlappingTiles )
+	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< SerializablePairWiseStitchingResult[] > computePairwiseShifts( final ArrayList< TilePair > overlappingTiles )
 	{
-		if ( !job.getArgs().noRoi() )
+		/*if ( !job.getArgs().noRoi() )
 			System.out.println( "*** Use ROIs as usual ***" );
 		else
-			System.out.println( "*** Compute phase correlation between full tile images instead of their ROIs ***" );
+			System.out.println( "*** Compute phase correlation between full tile images instead of their ROIs ***" );*/
+
+
+		// ignore first slice for the first channel
+		final boolean ignoreFirstSlice = false;//job.getTilesMap().firstKey().equals( 0 );
+		System.out.println( "ignoreFirstSlice = " + ignoreFirstSlice );
+
+
+		System.out.println( "Broadcasting illumination correction images" );
+		final ImagePlus vImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/illumination-correction/v-highres.tif" );
+		final ImagePlus zImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/illumination-correction/z-avg.tif" );
+		Utils.workaroundImagePlusNSlices( vImp );
+
+		final Broadcast< RandomAccessibleInterval< U > > vBroadcast = sparkContext.broadcast( ImagePlusImgs.from( vImp ) );
+		final Broadcast< RandomAccessibleInterval< U > > zBroadcast = sparkContext.broadcast( ImagePlusImgs.from( zImp ) );
+
+		System.out.println( "Processing " + overlappingTiles.size() + " pairs..." );
 
 		final JavaRDD< TilePair > rdd = sparkContext.parallelize( overlappingTiles );
-		final JavaRDD< SerializablePairWiseStitchingResult > pairwiseStitching = rdd.map(
-				new Function< TilePair, SerializablePairWiseStitchingResult >()
+		final JavaRDD< SerializablePairWiseStitchingResult[] > pairwiseStitching = rdd.map(
+				new Function< TilePair, SerializablePairWiseStitchingResult[] >()
 				{
 					private static final long serialVersionUID = -2907426581991906327L;
 
 					@Override
-					public SerializablePairWiseStitchingResult call( final TilePair pairOfTiles ) throws Exception
+					public SerializablePairWiseStitchingResult[] call( final TilePair pairOfTiles ) throws Exception
 					{
-						final ImageCollectionElement el1 = Utils.createElement( job, pairOfTiles.first() );
-						final ImageCollectionElement el2 = Utils.createElement( job, pairOfTiles.second() );
+						System.out.println( "Processing tile pair " + pairOfTiles );
 
-						final ImagePlus imp1 = IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles.first() ) );
-						final ImagePlus imp2 = IJ.openImage( Utils.getAbsoluteImagePath( job, pairOfTiles.second() ) );
+						final TileInfo[] pair = pairOfTiles.toArray();
+						final Boundaries[] overlaps = new Boundaries[ pair.length ];
+						final ImagePlus[] imps = new ImagePlus[ pair.length ];
 
-						Utils.workaroundImagePlusNSlices( imp1 );
-						Utils.workaroundImagePlusNSlices( imp2 );
+						final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( job.getArgs().voxelDimensions() );
+						System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
+						final double blurSigma = job.getArgs().blurStrength();
+						final double[] blurSigmas = new  double[ normalizedVoxelDimensions.length ];
+						for ( int d = 0; d < blurSigmas.length; d++ )
+							blurSigmas[ d ] = blurSigma / normalizedVoxelDimensions[ d ];
 
-						final int timepoint = 1;
-						final ComparePair pair = new ComparePair(
-								new ImagePlusTimePoint( imp1, el1.getIndex(), timepoint, el1.getModel(), el1 ),
-								new ImagePlusTimePoint( imp2, el2.getIndex(), timepoint, el2.getModel(), el2 ) );
+						final RandomAccessibleInterval< U > v = vBroadcast.value();
+						final RandomAccessibleInterval< U > z = zBroadcast.value();
 
-						Roi roi1 = null, roi2 = null;
-						if ( !job.getArgs().noRoi() )
+						for ( int j = 0; j < pair.length; j++ )
 						{
-							final Boundaries overlap1 = TileOperations.getOverlappingRegion( pairOfTiles.first(), pairOfTiles.second() );
-							final Boundaries overlap2 = TileOperations.getOverlappingRegion( pairOfTiles.second(), pairOfTiles.first() );
+							System.out.println( "Prepairing #" + (j+1) + " of a pair" );
 
-							// mpicbg accepts only 2d rectangular ROIs
-							roi1 = new Roi( overlap1.min( 0 ), overlap1.min( 1 ), overlap1.dimension( 0 ), overlap1.dimension( 1 ) );
-							roi2 = new Roi( overlap2.min( 0 ), overlap2.min( 1 ), overlap2.dimension( 0 ), overlap2.dimension( 1 ) );
+							//overlaps[ j ] = TileOperations.getOverlappingRegion( pair[ j ], pair[ ( j + 1 ) % pair.length ] );
+
+							// TODO: Add flexibility. Currently hardcoded padding for Z
+							overlaps[ j ] = TileOperations.padInterval(
+									TileOperations.getOverlappingRegion( pair[ j ], pair[ ( j + 1 ) % pair.length ] ),
+									new FinalDimensions( pair[ j ].getSize() ),
+									new long[] { 0, 0, 200 }
+								);
+
+							// Check if overlap area exists as a separate file
+							final String overlapImagePath = String.format( "%s_overlaps/%d(%d).tif", job.getArgs().inputFilePath(), pair[ j ].getIndex(), pair[ ( j + 1 ) % pair.length ].getIndex() );
+							if ( Files.exists( Paths.get( overlapImagePath ) ) )
+							{
+								System.out.println( String.format( "Found an exported overlap area image on disk for pair %d(%d)", pair[ j ].getIndex(), pair[ ( j + 1 ) % pair.length ].getIndex() ) );
+								imps[ j ] = ImageImporter.openImage( overlapImagePath );
+								Utils.workaroundImagePlusNSlices( imps[ j ] );
+
+								final int[] overlapImgDimensions = Utils.getImagePlusDimensions( imps[ j ] );
+								for ( int d = 0; d < Math.min( overlaps[ j ].numDimensions(), overlapImgDimensions.length ); d++ )
+									if ( overlaps[ j ].numDimensions() != overlapImgDimensions.length || overlaps[ j ].dimension( d ) != overlapImgDimensions[ d ] )
+										throw new PipelineExecutionException( String.format( "Tile pair %s: exported overlap area image %s and actual overlap area %s have different size", pairOfTiles, Arrays.toString( overlapImgDimensions ), Arrays.toString( overlaps[ j ].getDimensions() ) ) );
+							}
+							else
+							{
+								System.out.println( "Loading: " + pair[ j ].getFilePath() );
+								final ImagePlus imp = ImageImporter.openImage( pair[ j ].getFilePath() );
+								Utils.workaroundImagePlusNSlices( imp );
+
+								//RandomAccessibleInterval rai = ImagePlusImgs.from( imp );
+								//RandomAccessibleInterval rai = VirtualStackImageLoader.createUnsignedShortInstance( imp ).getSetupImgLoader( 0 ).getImage( 1 );
+								/*RandomAccessibleInterval rai = null;
+
+								if ( ignoreFirstSlice )
+								{
+									System.out.println( "Chopping off the first slice.." );
+									if( overlaps[ j ].min( 2 ) == 0 )
+										overlaps[ j ].setMin( 2, 1 );
+
+									final Boundaries ignoreFirstSliceInterval = new Boundaries( pair[ j ].getSize() );
+									ignoreFirstSliceInterval.setMin( 2, 1 );
+									rai = Views.interval( rai, ignoreFirstSliceInterval );
+								}*/
+
+								/*if ( blurSigma > 0 )
+								{
+									System.out.println( String.format( "Blurring region at %s of size %s with sigmas=%s (s=%f)",
+											Arrays.toString( overlaps[ j ].getMin() ),
+											Arrays.toString( overlaps[ j ].getDimensions() ),
+											Arrays.toString( blurSigmas ), blurSigma ) );
+									blur( rai, overlaps[ j ], blurSigmas );
+								}*/
+
+								// TODO: use virtual loader if imp is a virtual ImagePlus
+								//imps[ j ] = cropVirtualAveragingChannels( imp, overlaps[ j ] );
+//								imps[ j ] = crop( imp, overlaps[ j ] );
+//								imp.close();
+
+								// average with second channel if it exists
+								// TODO: better scheme for doing this!
+								System.out.println( "Loading corresponding second-channel image" );
+								final TileInfo correspondingOtherChannelTile =
+										Utils.createTilesMap(
+												TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/middle-z/ch1_z=9-10.json" )
+											)
+										.get( pair[ j ].getIndex() );
+								final ImagePlus impOtherChannel = ImageImporter.openImage( correspondingOtherChannelTile.getFilePath() );
+								Utils.workaroundImagePlusNSlices( impOtherChannel );
+
+								final ImagePlus[] impChannels = new ImagePlus[] { imp, impOtherChannel };
+								ImagePlusImg< FloatType, ? > dst = null;
+								for ( int i = 0; i < impChannels.length; i++ )
+								{
+									System.out.println( "Correcting " + i );
+									final RandomAccessibleInterval< T > img = ImagePlusImgs.from( impChannels[ i ] );
+									final ImagePlusImg< FloatType, ? > imgCorrected = IlluminationCorrectionHierarchical3D_SparkArrays.applyIlluminationCorrection(
+											Views.interval( img, overlaps[ j ] ), v, z );
+
+									impChannels[ i ].close();
+
+									if ( dst == null )
+									{
+										dst = imgCorrected;
+									}
+									else
+									{
+										System.out.println( "Averaging" );
+										final Cursor< FloatType > dstCursor = Views.flatIterable( dst ).cursor();
+										final Cursor< FloatType > otherCursor = Views.flatIterable( imgCorrected ).cursor();
+										while ( dstCursor.hasNext() || otherCursor.hasNext() )
+										{
+											dstCursor.fwd();
+											dstCursor.get().set( ( dstCursor.get().get() + otherCursor.next().get() ) / 2 );
+										}
+									}
+								}
+
+								if ( blurSigma > 0 )
+								{
+									System.out.println( String.format( "Blurring the overlap area of size %s with sigmas=%s (s=%f)", Arrays.toString( Intervals.dimensionsAsLongArray( dst ) ), Arrays.toString( blurSigmas ), blurSigma ) );
+									blur( dst, blurSigmas );
+								}
+
+								imps[ j ] = dst.getImagePlus();
+								Utils.workaroundImagePlusNSlices( imps[ j ] );
+							}
 						}
 
-						final double[] initialOffset = new double[ job.getDimensionality() ];
-						for ( int d = 0; d < initialOffset.length; d++ )
-							initialOffset[ d ] = pairOfTiles.second().getPosition( d ) - pairOfTiles.first().getPosition( d );
+						System.out.println( "Stitching.." );
 
-						PairWiseStitchingImgLib.setThreads( 1 );
-						final PairWiseStitchingResult result = PairWiseStitchingImgLib.stitchPairwise(
-								pair.getImagePlus1(), pair.getImagePlus2(), roi1, roi2, pair.getTimePoint1(), pair.getTimePoint2(), job.getParams()/*, initialOffset, pairOfTiles.first().getSize()*/ );
+						final int timepoint = 1;
+						PairwiseStitchingPerformer.setThreads( 1 ); // TODO: determine automatically based on parallelism / smth else
+						final SerializablePairWiseStitchingResult[] result = PairwiseStitchingPerformer.stitchPairwise(
+								imps[0], imps[1], null, null, null, null, timepoint, timepoint, job.getParams(), 1 );
 
-						System.out.println( "Stitched tiles " + pairOfTiles.first().getIndex() + " and " + pairOfTiles.second().getIndex() + System.lineSeparator() +
-								"   CrossCorr=" + result.getCrossCorrelation() + ", PhaseCorr=" + result.getPhaseCorrelation() + ", RelShift=" + Arrays.toString( result.getOffset() ) );
+						System.out.println( "Stitched tile pair " + pairOfTiles + ", got " + result.length + " peaks" );
 
-						pair.getImagePlus1().close();
-						pair.getImagePlus2().close();
+						for ( int i = 0; i < result.length; i++ )
+							for ( int j = 0; j < pair.length; j++ )
+								for ( int d = 0; d < job.getDimensionality(); d++ )
+									result[ i ].getOffset()[ d ] += (j==0?1:-1) * overlaps[ j ].min( d );
 
-						return new SerializablePairWiseStitchingResult( pairOfTiles, result );
+						/*System.out.println( "*****" );
+						System.out.println( "Original offset: " + Arrays.toString( new double[]{
+								pair[1].getPosition( 0 ) - pair[0].getPosition( 0 ),
+								pair[1].getPosition( 1 ) - pair[0].getPosition( 1 ),
+								pair[1].getPosition( 2 ) - pair[0].getPosition( 2 ) } ) );
+						System.out.println( "New offset: " + Arrays.toString( result[0].getOffset() ) );
+						System.out.println( "*****" );*/
+
+						for ( int j = 0; j < pair.length; j++ )
+							imps[ j ].close();
+
+						for ( int i = 0; i < result.length; i++ )
+							result[ i ].setTilePair( pairOfTiles );
+						return result;
 					}
 				});
 		return pairwiseStitching.collect();
 	}
 
+
+//	private static < T extends RealType< T > & NativeType< T > > ImagePlus crop( final ImagePlus inImp, final Boundaries region )
+//	{
+//		final T type = ( T ) ImageType.valueOf( inImp.getType() ).getType();
+//
+//		final RandomAccessible< T > inImg = ImagePlusImgs.from( inImp );
+//		final ImagePlusImg< T, ? > outImg = new ImagePlusImgFactory< T >().create( region, type.createVariable() );
+//
+//		final IterableInterval< T > inInterval = Views.flatIterable( Views.offsetInterval( inImg, region ) );
+//		final IterableInterval< T > outInterval = Views.flatIterable( outImg );
+//
+//		final Cursor< T > inCursor = inInterval.cursor();
+//		final Cursor< T > outCursor = outInterval.cursor();
+//
+//		while ( inCursor.hasNext() || outCursor.hasNext() )
+//			outCursor.next().set( inCursor.next() );
+//
+//
+//		final ImagePlus impOut = outImg.getImagePlus();
+//		Utils.workaroundImagePlusNSlices( impOut );
+//		return impOut;
+//	}
+
+	// Based on slices + raw pixels
+	/*private static < T extends RealType< T > & NativeType< T > > ImagePlus cropVirtualAveragingChannels( final ImagePlus imp, final Boundaries region )
+	{
+		final Interval regionSlice = new FinalInterval( new long[] { region.min(0), region.min(1) }, new long[] { region.max(0), region.max(1) } );
+
+		final T type = ( T ) ImageType.valueOf( imp.getType() ).getType();
+		final ImagePlusImg< T, ? > outImg = new ImagePlusImgFactory< T >().create( region, type.createVariable() );
+
+		final int channels = imp.getNChannels();
+		final int frame = 0;
+		for ( int z = 0; z < imp.getNSlices(); z++ )
+		{
+			final Img< T >[] data = new Img[ channels ];
+			final Cursor< T >[] cursors = new Cursor[ channels ];
+			for ( int ch = 0; ch < channels; ch++ )
+			{
+				data[ ch ] = ( Img ) ArrayImgs.unsignedShorts( ( short[] ) imp.getStack().getProcessor( imp.getStackIndex( ch + 1, z + 1, frame + 1 ) ).getPixels(), new long[] { imp.getWidth(), imp.getHeight() } );
+				cursors[ ch ] = Views.flatIterable( Views.offsetInterval( data[ ch ], regionSlice ) ).cursor();
+			}
+
+			final IntervalView< T > outSlice = Views.hyperSlice( outImg, 2, z );
+			final Cursor< T > outSliceCursor = Views.flatIterable( outSlice ).cursor();
+
+			while ( outSliceCursor.hasNext() )
+			{
+				double val = 0;
+				for ( int ch = 0; ch < channels; ch++ )
+					val += cursors[ch].next().getRealDouble();
+				outSliceCursor.next().setReal( val / channels );
+			}
+
+			for ( int ch = 0; ch < channels; ch++ )
+				if ( cursors[ch].hasNext() )
+				{
+					System.out.println( "Cursors mismatch" );
+					return null;
+				}
+		}
+
+		final ImagePlus impOut = ImageJFunctions.wrap( outImg, null );
+		Utils.workaroundImagePlusNSlices(impOut);
+		return impOut;
+	}*/
+
+	// Fully imglib2 approach
+	/*private static < T extends RealType< T > & NativeType< T > > ImagePlus cropVirtualAveragingChannels( final ImagePlus inImp, final Boundaries region )
+	{
+		final int timepoint = 1;
+		final int channels = inImp.getNChannels();
+
+		final VirtualStackImageLoader< T, ?, ? > virtualLoader = ( VirtualStackImageLoader ) VirtualStackImageLoader.createUnsignedShortInstance( inImp );
+		final Img< FloatType > tmpImg = new ImagePlusImgFactory< FloatType >().create( region, new FloatType() );
+
+		for ( int ch = 0; ch < channels; ch++ )
+		{
+			System.out.println( "Cropping channel " + ch );
+			final RandomAccessibleInterval< T > inImg = virtualLoader.getSetupImgLoader( ch ).getImage( timepoint );
+
+			final Cursor< T > inCursor = Views.flatIterable( Views.offsetInterval( inImg, region ) ).cursor();
+			final Cursor< FloatType > tmpCursor = Views.flatIterable( tmpImg ).cursor();
+
+			while ( tmpCursor.hasNext() || inCursor.hasNext() )
+			{
+				final FloatType val = tmpCursor.next();
+				val.set( val.get() + inCursor.next().getRealFloat() );
+			}
+		}
+
+		System.out.println( "Averaging the results" );
+		final T type = ( T ) ImageType.valueOf( inImp.getType() ).getType();
+		final ImagePlusImg< T, ? > outImg = new ImagePlusImgFactory< T >().create( region, type.createVariable() );
+		final Cursor< FloatType > tmpCursor = Views.flatIterable( tmpImg ).cursor();
+		final Cursor< T > outCursor = Views.flatIterable( outImg ).cursor();
+
+		while ( outCursor.hasNext() || tmpCursor.hasNext() )
+			outCursor.next().setReal( tmpCursor.next().getRealFloat() / channels );
+
+		final ImagePlus impOut;
+		try
+		{
+			impOut = outImg.getImagePlus();
+		}
+		catch ( final ImgLibException e )
+		{
+			e.printStackTrace();
+			return null;
+		}
+		Utils.workaroundImagePlusNSlices( impOut );
+		return impOut;
+	}*/
+
+	// virtualstack loader + slice by slice traversing with cache reset
+//	private static < T extends RealType< T > & NativeType< T > > ImagePlus cropVirtualAveragingChannels( final ImagePlus inImp, final Boundaries region )
+//	{
+//		final int timepoint = 1;
+//		final int channels = inImp.getNChannels();
+//
+//		final VirtualStackImageLoader< T, ?, ? > virtualLoader = ( VirtualStackImageLoader ) VirtualStackImageLoader.createUnsignedShortInstance( inImp );
+//		final RandomAccessibleInterval< T >[] channelImgs = new RandomAccessibleInterval[ channels ];
+//		for ( int ch = 0; ch < channels; ch++ )
+//			channelImgs[ ch ] = virtualLoader.getSetupImgLoader( ch ).getImage( timepoint );
+//
+//		final Interval regionSlice = new FinalInterval( new long[] { region.min(0), region.min(1) }, new long[] { region.max(0), region.max(1) } );
+//
+//		final T type = ( T ) ImageType.valueOf( inImp.getType() ).getType();
+//		final ImagePlusImg< T, ? > outImg = new ImagePlusImgFactory< T >().create( region, type.createVariable() );
+//
+//		final int slices = inImp.getNSlices();
+//		for ( int z = 0; z < slices; z++ )
+//		{
+//			final Cursor< T >[] cursors = new Cursor[ channels ];
+//			for ( int ch = 0; ch < channels; ch++ )
+//				cursors[ ch ] = Views.flatIterable( Views.offsetInterval( Views.hyperSlice( channelImgs[ ch ], 2, z ), regionSlice ) ).cursor();
+//
+//			final Cursor< T > outSliceCursor = Views.flatIterable( Views.hyperSlice( outImg, 2, z ) ).cursor();
+//
+//			while ( outSliceCursor.hasNext() )
+//			{
+//				double val = 0;
+//				for ( int ch = 0; ch < channels; ch++ )
+//					val += cursors[ch].next().getRealDouble();
+//				outSliceCursor.next().setReal( val / channels );
+//			}
+//
+//			for ( int ch = 0; ch < channels; ch++ )
+//				if ( cursors[ch].hasNext() )
+//				{
+//					System.out.println( "Cursors mismatch" );
+//					return null;
+//				}
+//
+//			for ( int ch = 0; ch < channels; ch++ )
+//				virtualLoader.getCacheControl().clearCache();
+//		}
+//
+//		final ImagePlus impOut = outImg.getImagePlus();
+//		Utils.workaroundImagePlusNSlices(impOut);
+//		return impOut;
+//	}
+
+
+//	private static <T extends NumericType< T > >void blur(
+//			final RandomAccessibleInterval< T > image,
+//			final Interval interval,
+//			final double[] sigmas ) throws IncompatibleTypeException
+//	{
+//		final RandomAccessible< T > extendedImage = Views.extendMirrorSingle( image );
+//		final RandomAccessibleInterval< T > crop = Views.interval( extendedImage, interval );
+//		final ExecutorService service = Executors.newFixedThreadPool( 1 );
+//		Gauss3.gauss( sigmas, extendedImage, crop, service );
+//		service.shutdown();
+//	}
+
+	private static <T extends NumericType< T > >void blur(
+			final RandomAccessibleInterval< T > image,
+			final double[] sigmas ) throws IncompatibleTypeException
+	{
+		final RandomAccessible< T > extendedImage = Views.extendMirrorSingle( image );
+		Gauss3.gauss( sigmas, extendedImage, image, new SameThreadExecutorService() );
+	}
+
+
+
 	/**
 	 * Finds final tile positions by globally optimizing pairwise shifts and stores updated tile configuration on the disk
 	 */
-	private void optimizeShifts( final List< SerializablePairWiseStitchingResult > pairwiseShifts, final double threshold )
+	private void optimizeShifts( final List< SerializablePairWiseStitchingResult > pairwiseShifts, final double threshold ) throws PipelineExecutionException
 	{
 		job.getParams().regThreshold = threshold;
 
@@ -209,27 +569,232 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 			}
 		}
 
+
+
+//		for ( int d = 0; d < job.getDimensionality(); d++ )
+//		{
+//			final List< Double > distances = new ArrayList<>();
+//			for ( final SerializablePairWiseStitchingResult pair : pairwiseShifts )
+//				if ( pair.getIsValidOverlap() )
+//					distances.add( pair.getTilePair().getB().getPosition( d ) - pair.getTilePair().getA().getPosition( d ) - pair.getOffset( d ) );
+//			System.out.println( "Exporting " + distances.size() + " distance values for dim="+d );
+//			Collections.sort( distances );
+//			try ( final PrintWriter writer = new PrintWriter(Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/distances-"+(d==0?"x":(d==1?"y":"z"))+".txt", "UTF-8") )
+//			{
+//				for ( final double dist : distances )
+//					writer.println( dist );
+//			} catch (FileNotFoundException | UnsupportedEncodingException e) {
+//				e.printStackTrace();
+//			}
+//		}
+
+		// export distances.txt
+//		try {
+//			final List<Pair<TileInfo, int[]>> coordsList = Utils.getTileCoordinates( job.getTiles() );
+//			final Map< Integer, int[] > tileIndexToCoords = new TreeMap<>();
+//			for ( final Pair<TileInfo, int[]> x : coordsList )
+//				tileIndexToCoords.put( x.getA().getIndex(), x.getB() );
+//
+//			for ( int d = 0; d < job.getDimensionality(); d++ )
+//			{
+//				final List< Double > distances = new ArrayList<>();
+//				for ( final SerializablePairWiseStitchingResult pair : pairwiseShifts )
+//					if ( pair.getIsValidOverlap() && tileIndexToCoords.get(pair.getTilePair().getA().getIndex())[ d ] != tileIndexToCoords.get(pair.getTilePair().getB().getIndex())[ d ] )
+//						distances.add( pair.getTilePair().getB().getPosition( d ) - pair.getTilePair().getA().getPosition( d ) - pair.getOffset( d ) );
+//				System.out.println( "Exporting " + distances.size() + " distance values for dim="+d );
+//				Collections.sort( distances );
+//				try ( final PrintWriter writer = new PrintWriter(Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/distances-"+(d==0?"x":(d==1?"y":"z"))+".txt", "UTF-8") )
+//				{
+//					for ( final double dist : distances )
+//						writer.println( dist );
+//				} catch (FileNotFoundException | UnsupportedEncodingException e) {
+//					e.printStackTrace();
+//				}
+//			}
+//		} catch (final Exception e) {
+//			e.printStackTrace();
+//			throw new PipelineExecutionException(e.getMessage());
+//		}
+
+		/*try
+		{
+			final List< TileInfo > tilesSortedByTimestamp = Utils.sortTilesByTimestamp( job.getTiles() );
+
+		}
+		catch ( final Exception e )
+		{
+			e.printStackTrace();
+			throw new PipelineExecutionException( e.getMessage() );
+		}*/
+
+		// Mark pairs with large offset as invalid
+		/*System.out.println( "Removing pairs with large offset" );
+		int validPairsBefore = 0, validPairsAfter = 0;
+		for ( final SerializablePairWiseStitchingResult pair : pairwiseShifts )
+		{
+			if ( pair.getIsValidOverlap() )
+			{
+				validPairsBefore++;
+
+				boolean largeOffset = false;
+				for ( int d = 0; d < pair.getNumDimensions(); d++ )
+				{
+					final double dist = pair.getTilePair().getB().getPosition( d ) - pair.getTilePair().getA().getPosition( d ) - pair.getOffset( d );
+					if ( dist > Math.min( pair.getTilePair().getA().getSize( d ), pair.getTilePair().getB().getSize( d ) ) / 2 )
+					{
+						largeOffset = true;
+						break;
+					}
+				}
+				if ( largeOffset )
+					pair.setIsValidOverlap( false );
+				else
+					validPairsAfter++;
+			}
+		}
+		System.out.println( "Were valid before=" + validPairsBefore + ", after large offset filtering=" + validPairsAfter );*/
+
+
 		final Vector< ComparePair > comparePairs = new Vector<>();
 		for ( final SerializablePairWiseStitchingResult pair : pairwiseShifts ) {
 			final ComparePair comparePair = new ComparePair(
-					(ImagePlusTimePoint)fakeTileImagesMap.get( pair.getTilePair().first().getIndex() ),
-					(ImagePlusTimePoint)fakeTileImagesMap.get( pair.getTilePair().second().getIndex() ) );
+					(ImagePlusTimePoint)fakeTileImagesMap.get( pair.getTilePair().getA().getIndex() ),
+					(ImagePlusTimePoint)fakeTileImagesMap.get( pair.getTilePair().getB().getIndex() ) );
 
 			comparePair.setRelativeShift( pair.getOffset() );
 			comparePair.setCrossCorrelation( pair.getCrossCorrelation() );
+			comparePair.setIsValidOverlap( pair.getIsValidOverlap() );
 
 			comparePairs.addElement( comparePair );
 		}
+
+
+
+
+
+		final boolean loadAnotherChannel = false;
+
+		final Map< Integer, Map< Integer, ComparePair > > anotherChannel = new TreeMap<>();
+		final Map< Integer, TileInfo > anotherChannelTiles = new TreeMap<>();
+		List< SerializablePairWiseStitchingResult > anotherChannelShifts;
+
+		if ( loadAnotherChannel )
+		{
+			try
+			{
+				anotherChannelShifts = TileInfoJSONProvider.loadPairwiseShifts( "/nobackup/saalfeld/igor/Sample1_C1/ch0/optimization/ch1-merged_pairwise_shifts_set.json" );
+				//anotherChannelShifts = TileInfoJSONProvider.loadPairwiseShifts( "/nobackup/saalfeld/igor/Yoshi_Flybrain/fix-blur/decon/ch0/optimization/both_channels_together/ch1-merged_pairwise_shifts_set.json" );
+			}
+			catch ( final IOException e1 )
+			{
+				e1.printStackTrace();
+				return;
+			}
+
+			if ( anotherChannelShifts != null )
+				anotherChannelTiles.putAll( Utils.createTilesMap( anotherChannelShifts, false ) );
+			final int tilesPerChannel = anotherChannelTiles.size();
+			System.out.println( "Tiles per channel=" + tilesPerChannel );
+
+			final TreeMap< Integer, Tile< ? > > anotherChannelFakeTileImagesMap = new TreeMap<>();
+			for ( final SerializablePairWiseStitchingResult pair : anotherChannelShifts ) {
+				for ( final TileInfo tileInfo : pair.getTilePair().toArray() ) {
+					if ( !anotherChannelFakeTileImagesMap.containsKey( tileInfo.getIndex() ) ) {
+						try {
+							final ImageCollectionElement el = Utils.createElement( job, tileInfo );
+							final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
+							final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
+							anotherChannelFakeTileImagesMap.put( tileInfo.getIndex(), fakeTile );
+						} catch ( final Exception e ) {
+							e.printStackTrace();
+						}
+					}
+				}
+			}
+			int additionalMatches = 0;
+			for ( final SerializablePairWiseStitchingResult shift : anotherChannelShifts )
+			{
+				final int ind1 = Math.min( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() ) - tilesPerChannel;
+				final int ind2 = Math.max( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() ) - tilesPerChannel;
+
+				if ( !anotherChannel.containsKey( ind1 ) )
+					anotherChannel.put( ind1, new TreeMap<>() );
+
+
+				final ComparePair comparePair = new ComparePair(
+						(ImagePlusTimePoint)anotherChannelFakeTileImagesMap.get( shift.getTilePair().getA().getIndex() ),
+						(ImagePlusTimePoint)anotherChannelFakeTileImagesMap.get( shift.getTilePair().getB().getIndex() ) );
+
+				comparePair.setRelativeShift( shift.getOffset() );
+				comparePair.setCrossCorrelation( shift.getCrossCorrelation() );
+				comparePair.setIsValidOverlap( shift.getIsValidOverlap() );
+
+				anotherChannel.get( ind1 ).put( ind2, comparePair );
+				additionalMatches++;
+			}
+		}
+
 
 		final long lastTime = System.nanoTime();
 		System.out.println( "Perform global optimization" );
 		final ArrayList< ImagePlusTimePoint > optimized = new ArrayList<>();
 		if ( !comparePairs.isEmpty() )
-			optimized.addAll( GlobalOptimization.optimize( comparePairs, comparePairs.get( 0 ).getTile1(), job.getParams() ) );
+		{
+			// Save the optimized tile configuration on every iteration
+			final GlobalOptimizationPerformer.TileConfigurationObserver tileConfigurationObserver = new GlobalOptimizationPerformer.TileConfigurationObserver()
+			{
+				@Override
+				public void configurationUpdated( final ArrayList< ImagePlusTimePoint > updatedTiles )
+				{
+					// Update tile positions
+					final Map< Integer, TileInfo > tilesMap = job.getTilesMap();
+					for ( final ImagePlusTimePoint optimizedTile : updatedTiles )
+					{
+						final double[] pos = new double[ job.getDimensionality() ];
+						optimizedTile.getModel().applyInPlace( pos );
+
+						if ( tilesMap.containsKey( optimizedTile.getImpId() ) )
+							tilesMap.get( optimizedTile.getImpId() ).setPosition( pos );
+						else
+							anotherChannelTiles.get( optimizedTile.getImpId() ).setPosition( pos );
+					}
+
+					for ( final Tile<?> lostTile : GlobalOptimizationPerformer.lostTiles )
+					{
+						final int lostTileIndex = ((ImagePlusTimePoint)lostTile).getImpId();
+						tilesMap.remove( lostTileIndex );
+						anotherChannelTiles.remove( lostTileIndex );
+					}
+
+					System.out.println( "Intermediate tiles configuration: " + "Channel #0 tiles=" + tilesMap.size()+", Channel #1 tiles=" + anotherChannelTiles.size() );
+
+					try
+					{
+						TileInfoJSONProvider.saveTilesConfiguration( tilesMap.values().toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( job.getArgs().inputFilePath(), "-intermediate" ) );
+
+						if ( !anotherChannelTiles.isEmpty() )
+							TileInfoJSONProvider.saveTilesConfiguration( anotherChannelTiles.values().toArray( new TileInfo[ 0 ] ), job.getBaseFolder() + "/ch1-intermediate.json" );
+					}
+					catch ( final IOException e )
+					{
+						e.printStackTrace();
+					}
+				}
+			};
+
+			optimized.addAll(
+					GlobalOptimizationPerformer.optimize(
+							comparePairs,
+							comparePairs.get( 0 ).getTile1(),
+							job.getParams(),
+							tileConfigurationObserver,
+							loadAnotherChannel ? anotherChannel : null )
+					);
+		}
 
 		System.out.println( "Global optimization done" );
-		for ( final ImagePlusTimePoint imt : optimized )
-			Log.info( imt.getImpId() + ": " + imt.getModel() );
+		//for ( final ImagePlusTimePoint imt : optimized )
+		//	Log.info( imt.getImpId() + ": " + imt.getModel() );
 
 		System.out.println( "****" );
 		System.out.println( "Global optimization took " + ((System.nanoTime() - lastTime)/Math.pow( 10, 9 )) +"s" );
@@ -240,12 +805,32 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 		{
 			final double[] pos = new double[ job.getDimensionality() ];
 			optimizedTile.getModel().applyInPlace( pos );
-			tilesMap.get( optimizedTile.getImpId() ).setPosition( pos );
+
+			if ( tilesMap.containsKey( optimizedTile.getImpId() ) )
+				tilesMap.get( optimizedTile.getImpId() ).setPosition( pos );
+			else
+				anotherChannelTiles.get( optimizedTile.getImpId() ).setPosition( pos );
 		}
 
-		try {
-			TileInfoJSONProvider.saveTilesConfiguration( job.getTiles(), Utils.addFilenameSuffix( Utils.removeFilenameSuffix( job.getArgs().inputFilePath(), "_full" ), "_shifted" ) );
-		} catch ( final IOException e ) {
+		for ( final Tile<?> lostTile : GlobalOptimizationPerformer.lostTiles )
+		{
+			final int lostTileIndex = ((ImagePlusTimePoint)lostTile).getImpId();
+			tilesMap.remove( lostTileIndex );
+			anotherChannelTiles.remove( lostTileIndex );
+		}
+
+		System.out.println( "Channel #0 tiles: " + tilesMap.size() );
+		System.out.println( "Channel #1 tiles: " + anotherChannelTiles.size() );
+
+		try
+		{
+			TileInfoJSONProvider.saveTilesConfiguration( tilesMap.values().toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( job.getArgs().inputFilePath(), "-final" ) );
+
+			if ( !anotherChannelTiles.isEmpty() )
+				TileInfoJSONProvider.saveTilesConfiguration( anotherChannelTiles.values().toArray( new TileInfo[ 0 ] ), job.getBaseFolder() + "/ch1-final.json" );
+		}
+		catch ( final IOException e )
+		{
 			e.printStackTrace();
 		}
 	}

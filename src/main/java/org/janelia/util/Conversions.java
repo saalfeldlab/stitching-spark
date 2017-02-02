@@ -20,6 +20,13 @@ public class Conversions {
 			ret[ i ] = (float)arr[ i ];
 		return ret;
 	}
+	public static double[] toDoubleArray( final float[] arr )
+	{
+		final double[] ret = new double[ arr.length ];
+		for ( int i = 0; i < arr.length; i++ )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
 
 	public static long[] toLongArray( final int[] arr )
 	{
@@ -29,11 +36,19 @@ public class Conversions {
 		return ret;
 	}
 
+	public static int[] toIntArray( final long[] arr )
+	{
+		final int[] ret = new int[ arr.length ];
+		for ( int i = 0; i < arr.length; i++ )
+			ret[ i ] = (int)arr[ i ];
+		return ret;
+	}
+
 	public static int[] parseIntArray( final String[] arrStr )
 	{
 		final int[] arr = new int[ arrStr.length ];
 		for ( int i = 0; i < arr.length; i++ )
-			arr[ i ] = Integer.parseInt( arrStr[ i ] );
+			arr[ i ] = Integer.parseInt( arrStr[ i ].trim() );
 		return arr;
 	}
 
@@ -41,7 +56,7 @@ public class Conversions {
 	{
 		final double[] arr = new double[ arrStr.length ];
 		for ( int i = 0; i < arr.length; i++ )
-			arr[ i ] = Double.parseDouble( arrStr[ i ] );
+			arr[ i ] = Double.parseDouble( arrStr[ i ].trim() );
 		return arr;
 	}
 

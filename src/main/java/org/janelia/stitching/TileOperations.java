@@ -2,9 +2,17 @@ package org.janelia.stitching;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.function.LongConsumer;
 
 import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
+import net.imglib2.FinalInterval;
+import net.imglib2.FinalRealInterval;
+import net.imglib2.Interval;
+import net.imglib2.RealInterval;
+import net.imglib2.util.IntervalIndexer;
+import net.imglib2.util.Intervals;
 
 /**
  * Contains a number of useful operations on a set of tiles.
@@ -15,6 +23,33 @@ import net.imglib2.FinalDimensions;
 public class TileOperations
 {
 	/**
+	 * Pads the {@code interval} defined within the outer space of size {@code outerDimensions} with {@code padding}.
+	 * Tries to equally pad the {@code interval} from both sides (which means to expand it by {@code padding}/2 on each side).
+	 * If the {@code padding} is odd, it adds the remaining 1 towards the min side.
+	 * The padded interval cannot exceed the outer space boundaries (e.g., 0 and {@code outerDimensions}-1), so in this case the remainder is applied towards the other side.
+	 * If the resulting interval has reached the outer space size (0, {@code outerDimensions}-1), the rest of the remaining padding is ignored.
+	 */
+	public static Boundaries padInterval( final Boundaries interval, final Dimensions outerDimensions, final long[] padding )
+	{
+		final long[] paddedMin = new long[ interval.numDimensions() ], paddedMax = new long[ interval.numDimensions() ];
+		for ( int d = 0; d < interval.numDimensions(); d++ )
+		{
+			paddedMin[ d ] = Math.max( interval.min( d ) - padding[ d ] / 2, 0 );
+			paddedMax[ d ] = Math.min( interval.max( d ) + padding[ d ] / 2, outerDimensions.dimension( d ) - 1 );
+
+			final long remainder = padding[ d ] - ( interval.min( d ) - paddedMin[ d ] ) - ( paddedMax[ d ] - interval.max( d ) );
+			if ( remainder > 0 )
+			{
+				if ( paddedMin[ d ] == 0 )
+					paddedMax[ d ] = Math.min( paddedMax[ d ] + remainder, outerDimensions.dimension( d ) - 1 );
+				else
+					paddedMin[ d ] = Math.max( paddedMin[ d ] - remainder, 0 );
+			}
+		}
+		return new Boundaries( paddedMin, paddedMax );
+	}
+
+	/**
 	 * @return a list of overlapping pairs
 	 */
 	public static ArrayList< TilePair > findOverlappingTiles( final TileInfo[] tiles )
@@ -22,7 +57,7 @@ public class TileOperations
 		final ArrayList< TilePair > overlappingTiles = new ArrayList<>();
 		for ( int i = 0; i < tiles.length; i++ )
 			for ( int j = i + 1; j < tiles.length; j++ )
-				if ( getOverlappingRegion( tiles[ i ], tiles[ j ] ) != null )
+				if ( overlap( tiles[ i ], tiles[ j ] ) )
 					overlappingTiles.add( new TilePair( tiles[ i ], tiles[ j ] ) );
 		return overlappingTiles;
 	}
@@ -64,6 +99,19 @@ public class TileOperations
 		return true;
 	}
 
+	public static boolean overlap( final RealInterval t1, final RealInterval t2 )
+	{
+		for ( int d = 0; d < t1.numDimensions(); d++ )
+		{
+			final double p1 = Math.round( t1.realMin( d ) ), p2 = Math.round( t2.realMin( d ) );
+			final double q1 = t1.realMax( d ), q2 = t2.realMax( d );
+
+			if ( !( ( p2 >= p1 && p2 < q1 ) || ( p1 >= p2 && p1 < q2 ) ) )
+				return false;
+		}
+		return true;
+	}
+
 	/**
 	 * @return an overlap with global coordinates
 	 */
@@ -85,7 +133,7 @@ public class TileOperations
 	/**
 	 * @return a list of tiles lying within specified subregion (overlapping with it)
 	 */
-	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final long[] min, final int[] dimensions )
+	public static List< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final long[] min, final int[] dimensions )
 	{
 		assert min.length == dimensions.length;
 		final TileInfo subregion = new TileInfo( min.length );
@@ -99,17 +147,26 @@ public class TileOperations
 	/**
 	 * @return a list of tiles lying within specified subregion (overlapping with it)
 	 */
-	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final TileInfo subregion )
+	public static List< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final TileInfo subregion )
 	{
-		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
+		final List< TileInfo > tilesWithinSubregion = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			if ( TileOperations.overlap( tile, subregion ) )
 				tilesWithinSubregion.add( tile );
 		return tilesWithinSubregion;
 	}
 
+	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final RealInterval subregion )
+	{
+		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+			if ( TileOperations.overlap( new FinalRealInterval( tile.getPosition(), tile.getMax() ), subregion ) )
+				tilesWithinSubregion.add( tile );
+		return tilesWithinSubregion;
+	}
+
 	/**
-	 * @return a bounding box of a collection of tiles
+	 * @return an integer bounding box of a collection of tiles
 	 */
 	public static Boundaries getCollectionBoundaries( final TileInfo[] tiles )
 	{
@@ -137,6 +194,31 @@ public class TileOperations
 
 		return boundaries;
 	}
+	/**
+	 * @return a real bounding box of a collection of tiles
+	 */
+	public static RealInterval getRealCollectionBoundaries( final TileInfo[] tiles )
+	{
+		if ( tiles.length == 0 )
+			return null;
+
+		final int dim = tiles[ 0 ].numDimensions();
+
+		final double[] min = new double[ dim ], max = new double[ dim ];
+		Arrays.fill( min, Double.MAX_VALUE );
+		Arrays.fill( max, -Double.MAX_VALUE );
+
+		for ( final TileInfo tile : tiles )
+		{
+			for ( int d = 0; d < dim; d++ )
+			{
+				min[ d ] = Math.min( min[ d ], tile.getPosition( d ) );
+				max[ d ] = Math.max( max[ d ], tile.getPosition( d ) + tile.getSize( d ) - 1 );
+			}
+		}
+
+		return new FinalRealInterval( min, max );
+	}
 
 	/**
 	 * Translates a set of tiles in a way such that the lowest coordinate of every dimension is at the origin.
@@ -148,6 +230,13 @@ public class TileOperations
 			for ( int d = 0; d < tile.numDimensions(); d++ )
 				tile.setPosition( d, Math.round( tile.getPosition( d ) ) - space.min( d ) );
 	}
+	public static void translateTilesToOriginReal( final TileInfo[] tiles )
+	{
+		final RealInterval space = TileOperations.getRealCollectionBoundaries( tiles );
+		for ( final TileInfo tile : tiles )
+			for ( int d = 0; d < tile.numDimensions(); d++ )
+				tile.setPosition( d, tile.getPosition( d ) - space.realMin( d ) );
+	}
 
 	/**
 	 * Applies translation to a set of tiles with a specified {@code offset}.
@@ -157,6 +246,42 @@ public class TileOperations
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
 				tile.setPosition( d, tile.getPosition( d ) + offset[ d ] );
+	}
+
+	/**
+	 * Applies a user-defined {@code function} for each pixel of an {@code interval} defined within a larger {@code space}.
+	 */
+	public static void forEachPixel( final Interval interval, final Dimensions space, final LongConsumer function )
+	{
+		assert interval.numDimensions() == space.numDimensions();
+		for ( int d = 0; d < space.numDimensions(); d++ )
+			assert interval.max( d ) < space.dimension( d );
+
+		final int n = interval.numDimensions();
+		final long[] min = Intervals.minAsLongArray( interval );
+		final long[] max = Intervals.maxAsLongArray( interval );
+		final long[] dimensions = Intervals.dimensionsAsLongArray( space );
+		final long[] position = min.clone();
+		for ( int d = 0; d < n; )
+		{
+			function.accept( IntervalIndexer.positionToIndex( position, dimensions ) );
+			for ( d = 0; d < n; ++d )
+			{
+				position[ d ]++;
+				if ( position[ d ] <= max[ d ] )
+					break;
+				else
+					position[ d ] = min[ d ];
+			}
+		}
+	}
+
+	/**
+	 * Applies a user-defined {@code function} for each pixel of an {@code interval}.
+	 */
+	public static void forEachPixel( final Dimensions dimensions, final LongConsumer function )
+	{
+		forEachPixel( new FinalInterval( dimensions ), dimensions, function );
 	}
 
 	/**
