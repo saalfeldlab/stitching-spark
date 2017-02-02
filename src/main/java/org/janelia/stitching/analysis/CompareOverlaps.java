@@ -9,7 +9,8 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 import org.janelia.stitching.TilePair;
-import org.janelia.util.ComparablePair;
+
+import net.imglib2.util.ComparablePair;
 
 /**
  * Evaluates the quality of a final solution by estimating the distances of every tile

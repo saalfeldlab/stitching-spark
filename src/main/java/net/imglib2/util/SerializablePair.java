@@ -1,13 +1,13 @@
-package org.janelia.util;
+package net.imglib2.util;
 
 import java.io.Serializable;
 
 import net.imglib2.util.Pair;
 
-public class SerializablePair< 
-	A extends Serializable, 
+public class SerializablePair<
+	A extends Serializable,
 	B extends Serializable >
-implements 
+implements
 	Pair< A, B >,
 	Serializable
 {
@@ -15,13 +15,13 @@ implements
 
 	public final A a;
 	public final B b;
-	
+
 	public SerializablePair( final A a, final B b )
 	{
 		this.a = a;
 		this.b = b;
 	}
-	
+
 	protected SerializablePair()
 	{
 		this.a = null;
@@ -29,7 +29,7 @@ implements
 	}
 
 	@Override
-	public A getA() 
+	public A getA()
 	{
 		return a;
 	}
@@ -39,7 +39,7 @@ implements
 	{
 		return b;
 	}
-	
+
 	@Override
 	public String toString()
 	{

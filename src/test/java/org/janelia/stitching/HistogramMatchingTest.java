@@ -132,15 +132,15 @@ public class HistogramMatchingTest
 
 	private double getBinWidth()
 	{
-		return IlluminationCorrectionHierarchical3D_SparkArrays.getBinWidth( histMinValue, histMaxValue, bins );
+		return IlluminationCorrection.getBinWidth( histMinValue, histMaxValue, bins );
 	}
 	private int getBinIndex( final int value )
 	{
-		return IlluminationCorrectionHierarchical3D_SparkArrays.getBinIndex( value, histMinValue, histMaxValue, bins );
+		return IlluminationCorrection.getBinIndex( value, histMinValue, histMaxValue, bins );
 	}
 	private List< PointMatch > generateHistogramMatches( final long[] histogram, final long[] referenceHistogram, final long referenceHistogramMultiplier )
 	{
-		return IlluminationCorrectionHierarchical3D_SparkArrays.generateHistogramMatches(
+		return IlluminationCorrection.generateHistogramMatches(
 				histogram, referenceHistogram, referenceHistogramMultiplier,
 				histMinValue, histMaxValue, bins );
 	}

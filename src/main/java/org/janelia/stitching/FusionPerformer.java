@@ -78,7 +78,95 @@ public class FusionPerformer
 	 * Performs the fusion of a collection of {@link TileInfo} objects within specified cell.
 	 * It uses min-distance strategy within overlapped regions and takes an average when there are more than one value.
 	 */
-	@SuppressWarnings( { "unchecked", "rawtypes" } )
+	/*@SuppressWarnings( { "unchecked", "rawtypes" } )
+	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< FloatType, ? > fuseTilesWithinCellUsingMaxMinDistance(
+			final List< TileInfo > tiles,
+			final Interval targetInterval,
+			final Class< ? extends InterpolatorFactory > interpolatorFactoryClass,
+			final RandomAccessibleInterval< FloatType > v,
+			final RandomAccessibleInterval< FloatType > z ) throws Exception
+	{
+		final ImageType imageType = Utils.getImageType( tiles );
+		if ( imageType == null )
+			throw new Exception( "Can't fuse images of different or unknown types" );
+
+		final ImagePlusImg< FloatType, ? > out = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
+		final ArrayImg< DoubleType, DoubleArray > maxMinDistances = ArrayImgs.doubles(
+				Intervals.dimensionsAsLongArray( targetInterval ) );
+
+		for ( final TileInfo tile : tiles )
+		{
+			System.out.println( "Loading tile image " + tile.getFilePath() );
+
+			final ImagePlus imp = IJ.openImage( tile.getFilePath() );
+			Utils.workaroundImagePlusNSlices( imp );
+
+			final FinalRealInterval intersection = RealIntervals.intersectReal(
+					new FinalRealInterval( tile.getPosition(), tile.getMax() ),
+					targetInterval );
+
+			final double[] offset = new double[ targetInterval.numDimensions() ];
+			final Translation translation = new Translation( targetInterval.numDimensions() );
+			final long[] minIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
+			final long[] maxIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
+			for ( int d = 0; d < minIntersectionInTargetInterval.length; ++d )
+			{
+				final double shiftInTargetInterval = intersection.realMin( d ) - targetInterval.min( d );
+				minIntersectionInTargetInterval[ d ] = ( long )Math.floor( shiftInTargetInterval );
+				maxIntersectionInTargetInterval[ d ] = ( long )Math.min( Math.ceil( intersection.realMax( d ) ), targetInterval.max( d ) ) - targetInterval.min( d );
+				offset[ d ] = tile.getPosition( d ) - targetInterval.min( d );
+				translation.set( offset[ d ], d );
+			}
+			final Interval intersectionIntervalInTargetInterval = new FinalInterval( minIntersectionInTargetInterval, maxIntersectionInTargetInterval );
+
+			final RandomAccessibleInterval< T > tileRaw = ImagePlusImgs.from( imp );
+			final RandomAccessible< T > tileExtended = Views.extendBorder( tileRaw );
+			final RealRandomAccessible< T > tileInterpolated = Views.interpolate( tileExtended, interpolatorFactoryClass.newInstance() );
+			final RandomAccessible< T > tileRasteredInterpolated = Views.raster( RealViews.affine( tileInterpolated, translation ) );
+
+
+			final RandomAccessible< FloatType > vExtended = Views.extendBorder( v );
+			final RealRandomAccessible< FloatType > vInterpolated = Views.interpolate( vExtended, interpolatorFactoryClass.newInstance() );
+			final RandomAccessible< FloatType > vRasteredInterpolated = Views.raster( RealViews.affine( vInterpolated, translation ) );
+
+			final RandomAccessible< FloatType > zExtended = Views.extendBorder( Views.stack( z ) );
+			final RealRandomAccessible< FloatType > zInterpolated = Views.interpolate( zExtended, interpolatorFactoryClass.newInstance() );
+			final RandomAccessible< FloatType > zRasteredInterpolated = Views.raster( RealViews.affine( zInterpolated, translation ) );
+
+
+			final IterableInterval< T > sourceInterval = Views.flatIterable( Views.interval( tileRasteredInterpolated, intersectionIntervalInTargetInterval ) );
+			final IterableInterval< FloatType > outInterval = Views.flatIterable( Views.interval( out, intersectionIntervalInTargetInterval ) );
+			final IterableInterval< DoubleType > maxMinDistancesInterval = Views.flatIterable( Views.interval( maxMinDistances, intersectionIntervalInTargetInterval ) );
+
+			final Cursor< T > sourceCursor = sourceInterval.localizingCursor();
+			final Cursor< FloatType > outCursor = outInterval.cursor();
+			final Cursor< DoubleType > maxMinDistanceCursor = maxMinDistancesInterval.cursor();
+
+			while ( sourceCursor.hasNext() || outCursor.hasNext() || maxMinDistanceCursor.hasNext() )
+			{
+				sourceCursor.fwd();
+				outCursor.fwd();
+				final DoubleType maxMinDistance = maxMinDistanceCursor.next();
+				double minDistance = Double.MAX_VALUE;
+				for ( int d = 0; d < offset.length; ++d )
+				{
+					final double cursorPosition = sourceCursor.getDoublePosition( d );
+					final double dx = Math.min(
+							cursorPosition - offset[ d ],
+							tile.getSize( d ) - 1 + offset[ d ] - cursorPosition );
+					if ( dx < minDistance ) minDistance = dx;
+				}
+				if ( minDistance >= maxMinDistance.get() )
+				{
+					maxMinDistance.set( minDistance );
+					outCursor.get().set( sourceCursor.get() );
+				}
+			}
+		}
+
+		return out;
+	}*/
+
 	public static <
 		T extends RealType< T > & NativeType< T >,
 		U extends RealType< U > & NativeType< U > >
@@ -124,7 +212,7 @@ public class FusionPerformer
 
 			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
 			final ImagePlusImg< FloatType, ? > correctedTile =
-					( v != null && z != null ) ? IlluminationCorrectionHierarchical3D_SparkArrays.applyIlluminationCorrection( rawTile, v, z ) : convertToFloat( rawTile );
+					( v != null && z != null ) ? IlluminationCorrection.applyCorrection( rawTile, v, z ) : convertToFloat( rawTile );
 			final RandomAccessible< FloatType > extendedTile = Views.extendBorder( correctedTile );
 			final RealRandomAccessible< FloatType > interpolatedTile = Views.interpolate( extendedTile, interpolatorFactory );
 			final RandomAccessible< FloatType > rasteredInterpolatedTile = Views.raster( RealViews.affine( interpolatedTile, translation ) );

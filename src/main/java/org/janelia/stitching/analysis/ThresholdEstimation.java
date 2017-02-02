@@ -14,7 +14,8 @@ import java.util.TreeSet;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
-import org.janelia.util.ComparablePair;
+
+import net.imglib2.util.ComparablePair;
 
 /**
  * Evaluates the quality of pairwise matching by two different approaches:

@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.stitching.experimental;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -10,27 +10,20 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function;
-import org.apache.spark.api.java.function.Function2;
-import org.apache.spark.broadcast.Broadcast;
-import org.apache.spark.serializer.KryoSerializer;
+import org.janelia.stitching.TileInfo;
+import org.janelia.stitching.TileInfoJSONProvider;
+import org.janelia.stitching.Utils;
+import org.janelia.util.concurrent.MultithreadedExecutor;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -48,7 +41,6 @@ import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
-import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.InverseRealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
@@ -58,104 +50,87 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
-import net.imglib2.util.Intervals;
 import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.RandomAccessibleOnRealRandomAccessible;
 import net.imglib2.view.Views;
 import scala.Tuple2;
-import scala.Tuple3;
 
 
 
-public class IlluminationCorrectionSlice implements Serializable
+public class IlluminationCorrectionLocal
 {
-	private static final long serialVersionUID = -8987192045944606043L;
+	private enum Mestimator { LS, CAUCHY };
+
+	class Parameters
+	{
+		public TreeMap< Float, Short >[] histograms;
+
+		public double CAUCHY_W;		// width of the Cauchy function used for robust regression
+		public double[] PivotShiftY;	// shift on the q axis into the pivot space
+		public int ITER;				// iteration count for the optimization
+		public Mestimator MESTIMATOR;	// specifies "CAUCHY" or "LS" (least squares)
+		public int TERMSFLAG;			// flag specifing which terms to include in the energy function
+		public double LAMBDA_ZERO = Math.sqrt(10)/* / 2500*/;	// coefficient for the zero-light term ----- worked well with 1e6
+		public double LAMBDA_VREG = 1e14/* / 2500*/;			// coefficient for the v regularization
+		public double LAMBDA_BARR = 1e6;//1e0/* / 2500*/;				// the barrier term coefficient  ---- doesn't affect much!
+		public double ZMIN;			// minimum possible value for Z
+		public double ZMAX;			// maximum possible value for Z
+
+		public long[] currentSize;
+
+		// solution
+		public double[] vFinal;
+		public double[] zFinal;
+	}
 
 	private static final double WINDOW_POINTS_PERCENT = 0.25;
 
-	private transient double[] Q;
-
-	private enum Mestimator { LS, CAUCHY };
-	private transient double CAUCHY_W;		// width of the Cauchy function used for robust regression
-	private transient double PivotShiftX;		// shift on the Q axis into the pivot space
-	private transient double[] PivotShiftY;	// shift on the q axis into the pivot space
-	private transient int ITER;				// iteration count for the optimization
-	private transient Mestimator MESTIMATOR;	// specifies "CAUCHY" or "LS" (least squares)
-	private transient int TERMSFLAG;			// flag specifing which terms to include in the energy function
-	private transient double LAMBDA_ZERO = Math.sqrt(10)/* / 2500*/;	// coefficient for the zero-light term ----- worked well with 1e6
-	private transient double LAMBDA_VREG = 1e14/* / 2500*/;			// coefficient for the v regularization
-	private transient double LAMBDA_BARR = 1e6;//1e0/* / 2500*/;				// the barrier term coefficient  ---- doesn't affect much!
-	private transient double ZMIN;			// minimum possible value for Z
-	private transient double ZMAX;			// maximum possible value for Z
-
-	//private static int histSize = 256;
-	//private static double histMin = 100.0, histMax = 3271.0;
-
+	private double[] Q;
 	private final String inputFilepath;
-	private transient JavaSparkContext sparkContext;
-	private transient TileInfo[] tiles;
-	private transient TileInfo[] correctedTiles;
+	private String outPath;
+	private TileInfo[] tiles;
+	private TileInfo[] correctedTiles;
 
-	// Solution
-	private transient double[] vFinal;
-	private transient double[] zFinal;
+	private Parameters[] parameters;
 
-	//private transient Kryo kryo;
-	private KryoSerializer kryoSerializer;
+	private int mid_ind;
+	private double PivotShiftX;		// shift on the Q axis into the pivot space
 
-	private transient long elapsed;
-	private transient ExecutorService threadPool;
+	private long elapsed;
+	private int numThreads = Runtime.getRuntime().availableProcessors();
+	private MultithreadedExecutor multithreadedExecutor;
 
 	private int N;	// stack size
 	private int quantiles = 200; // shrinked stack size
 	private int numPixels;
 	private long[] originalSize;
-	//private JavaPairRDD< Long, TreeMap< Short, Integer > > rddHistograms;
-	private JavaPairRDD< Long, TreeMap< Float, Short > > rddHistogramsShrinked;
-
-	private Broadcast< double[] > QBroadcasted;
-	private Broadcast< double[] > PivotShiftYBroadcasted;
-
 
 
 
 	public static void main( final String[] args ) throws Exception
 	{
-		final IlluminationCorrectionSlice driver = new IlluminationCorrectionSlice( args[ 0 ] );
+		final IlluminationCorrectionLocal driver = new IlluminationCorrectionLocal( args[ 0 ] );
 		driver.run();
 		driver.shutdown();
 		System.out.println("Done");
 	}
 
 
-	public IlluminationCorrectionSlice( final String inputFilepath )
+	public IlluminationCorrectionLocal( final String inputFilepath )
 	{
 		this.inputFilepath = inputFilepath;
 	}
 
 	public void shutdown()
 	{
-		if ( threadPool != null )
-			threadPool.shutdown();
-		if ( sparkContext != null )
-			sparkContext.close();
+		if ( multithreadedExecutor != null )
+			multithreadedExecutor.shutdown();
 	}
 
 
 	public void run() throws Exception
 	{
-		sparkContext = new JavaSparkContext( new SparkConf()
-				.setAppName( "IlluminationCorrection2" )
-				//.set( "spark.driver.maxResultSize", "8g" )
-				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
-				//.set( "spark.kryoserializer.buffer.max", "1g" )
-				.registerKryoClasses( new Class[] { Short.class, Integer.class, Long.class, Double.class, TreeMap.class, TreeMap[].class, double[].class, List.class, Tuple2.class, Tuple3.class } )
-				.set( "spark.rdd.compress", "true" )
-				//.set( "spark.executor.heartbeatInterval", "10000000" )
-				//.set( "spark.network.timeout", "10000000" )
-			);
-
 		try {
 			tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilepath );
 			N = tiles.length;
@@ -175,70 +150,22 @@ public class IlluminationCorrectionSlice implements Serializable
 					System.exit(1);
 				}
 
-		/*
-		if ( loadSolution() )
-		{
-			System.out.println( "Successfully loaded V and Z" );
-			correctImages();
-			return;
-		}
-		*/
-
-		//kryoSerializer = new KryoSerializer( sparkContext.getConf() );
-
-		/*kryo = new Kryo();
-		final MapSerializer serializer = new MapSerializer();
-		serializer.setKeysCanBeNull( false );
-		serializer.setKeyClass( Short.class, kryo.getSerializer( Short.class ) );
-		serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
-		kryo.register( TreeMap.class, serializer );
-		kryo.register( TreeMap[].class );*/
-
-
-		elapsed = System.nanoTime();
 		if ( !allShrinkedSliceHistogramsReady() )
-		{
-			System.out.println("Computing histograms..." );
+			throw new Exception( "Histograms should be precomputed" );
 
-			long elapsed = System.nanoTime();
-			populateHistograms();
-			elapsed = System.nanoTime() - elapsed;
+		Q = readReferenceVectorFromDisk();
+		if ( Q == null )
+			throw new Exception( "Reference vector should be precomputed" );
 
-			System.out.println( "Done" );
-			System.out.println( "Elapsed time: " + (int)(elapsed / Math.pow(10, 9)) + "s" );
-			return;
-		}
-
-		System.out.println( "Loading histograms..");
-		loadHistograms();
-		//numPixels = (int) rddHistogramsShrinked.count();
-		numPixels = (int) ( originalSize[0]*originalSize[1]*originalSize[2] );
-
-		final double minKey = 0;/*rddHistogramsShrinked.mapToDouble( tuple -> tuple._2().firstKey() ).min();
-		System.out.println( "minKey=" + minKey );
-
-		threadPool = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() / 2 );*/
-
+		numPixels = (int) ( originalSize[0]*originalSize[1] );
 		N = quantiles;
-		System.out.println( "Now working with shrinked stack of size " + N );
+		System.out.println( "Now working with shrinked stack of size " + N + ",  "+ String.format("%d slices x %d pixels", getNumSlices(), numPixels ) );
 
-		long elapsed = System.nanoTime();
-		estimateQ();
-		elapsed = System.nanoTime() - elapsed;
-		System.out.println("estimateQ() took " + (elapsed/Math.pow(10,9))+"s");
+		outPath = Paths.get(inputFilepath).getParent().toString()+"/estimated";
+		new File( outPath+"/v" ).mkdirs();
+		new File( outPath+"/z" ).mkdirs();
 
-		/*if ( Q != null )
-		{
-			saveReferenceVectorToDisk( Q );
-			return;
-		}*/
-
-		// initial guesses for the correction surfaces
-		final double[] v0 = new double[ numPixels ];
-		final double[] b0 = new double[ numPixels ];
-		Arrays.fill( v0, 1.0 );
-
-		//PivotShiftY = new double[ numPixels ];
+		parameters = new Parameters[ numThreads ];
 
 		// Transform Q and S (which contains q) to the pivot space.
 		// The pivot space is just a shift of the origin to the median datum. First, the shift for Q:
@@ -248,26 +175,64 @@ public class IlluminationCorrectionSlice implements Serializable
 		for (int i = 0; i < N; i++)
 			Q[i] -= PivotShiftX;
 
-		// next, the shift for each location q
-		elapsed = System.nanoTime();
-		computePivotShiftY( mid_ind );
-		elapsed = System.nanoTime() - elapsed;
-		System.out.println("computePivotShiftY() took  " + (elapsed/Math.pow(10,9))+"s");
+		multithreadedExecutor = new MultithreadedExecutor( Executors.newFixedThreadPool( numThreads ), numThreads );
+		multithreadedExecutor.run( ( thread, slice ) -> {
+			try {
+				run( thread, slice );
+				return 0;
+			} catch (final Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+				return -1;
+			}
+		}, getNumSlices() );
+	}
+
+	private void run( final int thread, final int slice ) throws Exception
+	{
+		parameters[ thread ] = new Parameters();
+		parameters[ thread ].histograms = readShrinkedSliceHistogramsFromDisk( slice + 1 );
+		parameters[ thread ].currentSize = new long[] { originalSize[0],originalSize[1] };
+
+		// initial guesses for the correction surfaces
+		final double[] v0 = new double[ numPixels ];
+		final double[] b0 = new double[ numPixels ];
+		Arrays.fill( v0, 1.0 );
+
+		parameters[ thread ].PivotShiftY = new double[ numPixels ];
+
+		// the shift for each location q
+		for ( int pixel = 0; pixel < numPixels; pixel++ )
+		{
+			int counter = 0;
+	        for ( final Entry< Float, Short > entry : parameters[thread].histograms[pixel].entrySet() )
+	        {
+	        	counter += entry.getValue();
+	        	if ( counter > mid_ind )
+	        	{
+	        		parameters[thread].PivotShiftY[ pixel ] = entry.getKey();
+	        		break;
+	        	}
+	        }
+		}
 
 		// also, account for the pivot shift in b0
 		//b0 = b0 + PivotShiftX*v0 - PivotShiftY;
 		for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
-			b0[ pixelIndex ] += PivotShiftX * v0[ pixelIndex ] - PivotShiftY[ pixelIndex ];
+			b0[ pixelIndex ] += PivotShiftX * v0[ pixelIndex ] - parameters[thread].PivotShiftY[ pixelIndex ];
 
-
-		QBroadcasted = sparkContext.broadcast( Q );
-		PivotShiftYBroadcasted = sparkContext.broadcast( PivotShiftY );
-
+		float minKey = Float.MAX_VALUE, maxKey = -Float.MAX_VALUE;
+		for ( int pixel = 0; pixel < numPixels; pixel++ )
+		{
+			minKey = Math.min( parameters[thread].histograms[ pixel ].firstKey(), minKey );
+			maxKey = Math.max( parameters[thread].histograms[ pixel ].lastKey(),  maxKey );
+		}
+		System.out.println( "slice="+slice+": minKey=" + minKey + ", maxKey=" + maxKey );
 
 		// some parameters initialization
-		ZMIN = 0;
-		ZMAX = minKey;
-		final double zx0 = 0.85 * ZMAX, zy0 = zx0;
+		parameters[thread].ZMIN = 0;
+		parameters[thread].ZMAX = minKey;
+		final double zx0 = 0.85 * parameters[thread].ZMAX, zy0 = zx0;
 
 		// vector containing initial values of the variables we want to estimate
 		//x0 = [v0(:); b0(:); zx0; zy0];
@@ -288,10 +253,10 @@ public class IlluminationCorrectionSlice implements Serializable
 		minFuncOptions.Corr         = 100;							// number of corrections to store in memory (default: 100)
 
 		// First call to roughly estimate our variables
-		ITER = 1;
-		MESTIMATOR = Mestimator.LS;
-		TERMSFLAG = 0;
-		MinFuncResult minFuncResult = minFunc( x0, minFuncOptions );
+		parameters[thread].ITER = 1;
+		parameters[thread].MESTIMATOR = Mestimator.LS;
+		parameters[thread].TERMSFLAG = 0;
+		MinFuncResult minFuncResult = minFunc( x0, minFuncOptions, thread );
 
 		double[] x  = minFuncResult.x;
 		double fval = minFuncResult.f;
@@ -317,13 +282,13 @@ public class IlluminationCorrectionSlice implements Serializable
 		// 2nd optimization using REGULARIZED ROBUST fitting
 		// use the mean standard error of the LS fitting to set the width of the
 		// CAUCHY function
-		CAUCHY_W = computeStandardError(v1, b1);
-		System.out.println("CAUCHY_W="+CAUCHY_W);
+		parameters[thread].CAUCHY_W = computeStandardError(v1, b1, thread);
+		System.out.println("CAUCHY_W="+parameters[thread].CAUCHY_W);
 
 		// assign the remaining global variables needed in cdr_objective
-		ITER = 1;
-		MESTIMATOR = Mestimator.CAUCHY;
-		TERMSFLAG = 1;
+		parameters[thread].ITER = 1;
+		parameters[thread].MESTIMATOR = Mestimator.CAUCHY;
+		parameters[thread].TERMSFLAG = 1;
 
 		// vector containing initial values of the variables we want to estimate
 		final double[] x1 = new double[2 * numPixels + 2];
@@ -336,7 +301,7 @@ public class IlluminationCorrectionSlice implements Serializable
 		x1[pX1++] = zx1;
 		x1[pX1++] = zy1;
 
-		minFuncResult = minFunc(x1, minFuncOptions);
+		minFuncResult = minFunc(x1, minFuncOptions, thread);
 		x = minFuncResult.x;
 		fval = minFuncResult.f;
 
@@ -353,7 +318,7 @@ public class IlluminationCorrectionSlice implements Serializable
 
 		// Unpivot b: move pivot point back to the original location
 		for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
-			b[ pixelIndex ] -= PivotShiftX * v[ pixelIndex ] - PivotShiftY[ pixelIndex ];
+			b[ pixelIndex ] -= PivotShiftX * v[ pixelIndex ] - parameters[thread].PivotShiftY[ pixelIndex ];
 
 		//rescaleHelper(b, "b_unpivoted");
 
@@ -363,8 +328,19 @@ public class IlluminationCorrectionSlice implements Serializable
 			z[pixelIndex] = b[pixelIndex] + zx * v[pixelIndex];
 
 
-		vFinal = rescaleHelper( v, "V" );
-		zFinal = rescaleHelper( z, "Z" );
+		//parameters[thread].vFinal = rescaleHelper( v, "V", thread, slice );
+		//parameters[thread].zFinal = rescaleHelper( z, "Z", thread, slice );
+
+		final ArrayImg< DoubleType, DoubleArray > vImg = ArrayImgs.doubles( v, parameters[thread].currentSize );
+		final ImagePlus vImp = ImageJFunctions.wrap( vImg, "V_"+(slice+1) );
+		Utils.workaroundImagePlusNSlices( vImp );
+		IJ.saveAsTiff( vImp, outPath + "/v/" + (slice+1) + ".tif" );
+
+		final ArrayImg< DoubleType, DoubleArray > zImg = ArrayImgs.doubles( z, parameters[thread].currentSize );
+		final ImagePlus zImp = ImageJFunctions.wrap( zImg, "Z_"+(slice+1) );
+		Utils.workaroundImagePlusNSlices( zImp );
+		IJ.saveAsTiff( zImp, outPath + "/z/" + (slice+1) + ".tif" );
+
 
 		//correctImages();
 	}
@@ -660,124 +636,6 @@ public class IlluminationCorrectionSlice implements Serializable
 	}*/
 
 
-	private < T extends NativeType< T > & RealType< T > > void populateHistograms() throws Exception
-	{
-		final int treeDepth = (int) Math.ceil( Math.log( sparkContext.defaultParallelism() ) / Math.log( 2 ) );
-		System.out.println( "default parallelism = " + sparkContext.defaultParallelism() + ",  tree depth = " + treeDepth );
-
-		final JavaRDD< TileInfo > rddTiles = sparkContext.parallelize( Arrays.asList( tiles ) ).cache();
-
-		for ( int slice = 1; slice <= getNumSlices(); slice++ )
-		{
-			final int currentSlice = slice;
-			System.out.println( "Processing slice " + currentSlice);
-
-			final TreeMap<Short,Integer>[] result = rddTiles.treeAggregate(
-				null, // zero value
-
-				// generator
-				new Function2< TreeMap<Short,Integer>[], TileInfo, TreeMap<Short,Integer>[] >()
-				{
-					private static final long serialVersionUID = -4991255417353136684L;
-
-					@Override
-					public TreeMap<Short,Integer>[] call( final TreeMap<Short,Integer>[] intermediateHist, final TileInfo tile ) throws Exception
-					{
-						final ImagePlus imp = TiffSliceLoader.loadSlice( tile, currentSlice );
-						final Img< T > img = ImagePlusImgs.from( imp );
-						final Cursor< T > cursor = Views.iterable( img ).localizingCursor();
-
-						final int[] dimensions = Intervals.dimensionsAsIntArray( img );
-						final int[] position = new int[ img.numDimensions() ];
-
-						final TreeMap<Short,Integer>[] result;
-						if ( intermediateHist != null )
-						{
-							result = intermediateHist;
-						}
-						else
-						{
-							result = new TreeMap[ dimensions[ 0 ] * dimensions[ 1 ] ];
-							for ( int i = 0; i < result.length; i++ )
-								result[ i ] = new TreeMap<>();
-						}
-
-						while ( cursor.hasNext() )
-						{
-							cursor.fwd();
-							cursor.localize( position );
-							final int pixel = IntervalIndexer.positionToIndex( position, dimensions );
-							final short key = ( short ) cursor.get().getRealDouble();
-							result[ pixel ].put( key, result[ pixel ].getOrDefault( key, 0 ) + 1 );
-						}
-
-						imp.close();
-						return result;
-					}
-				},
-
-				// reducer
-				new Function2< TreeMap<Short,Integer>[], TreeMap<Short,Integer>[], TreeMap<Short,Integer>[] >()
-				{
-					private static final long serialVersionUID = 3979781907633918053L;
-
-					@Override
-					public TreeMap<Short,Integer>[] call( final TreeMap<Short,Integer>[] a, final TreeMap<Short,Integer>[] b ) throws Exception
-					{
-						if ( a == null )
-							return b;
-						else if ( b == null )
-							return a;
-
-						for ( int pixel = 0; pixel < b.length; pixel++ )
-							for ( final Entry< Short, Integer > entry : b[ pixel ].entrySet() )
-								a[ pixel ].put( entry.getKey(), a[ pixel ].getOrDefault( entry.getKey(), 0 ) + entry.getValue() );
-						return a;
-					}
-				}
-
-			, treeDepth );
-
-			System.out.println( "Obtained result for slice " + currentSlice + ", saving..");
-
-			saveSliceHistogramsToDisk( slice, result );
-		}
-	}
-
-
-	private void loadHistograms() throws Exception
-	{
-		final List< Integer > slices = new ArrayList<>();
-		for ( int slice = 1; slice <= getNumSlices(); slice++ )
-			slices.add( slice );
-
-		final JavaRDD< Integer > rddSlices = sparkContext.parallelize( slices );
-		rddHistogramsShrinked =
-
-		rddSlices.flatMapToPair( slice ->
-			{
-				final TreeMap< Float, Short >[] sliceHistograms = readShrinkedSliceHistogramsFromDisk( slice );
-				final List< Tuple2< Long, TreeMap< Float, Short > > > ret = new ArrayList<>( sliceHistograms.length );
-
-				final long[] dimensions2d = new long[] { originalSize[0], originalSize[1] };
-				final long[] dimensions3d = new long[] { originalSize[0], originalSize[1], getNumSlices() };
-				final long[] position2d = new long[ 2 ], position3d = new long[ 3 ];
-				position3d[ 2 ] = slice - 1;
-
-				for ( int pixel = 0; pixel < sliceHistograms.length; pixel++ )
-				{
-					IntervalIndexer.indexToPosition( pixel, dimensions2d, position2d );
-					position3d[ 0 ] = position2d[ 0 ];
-					position3d[ 1 ] = position2d[ 1 ];
-					final long offsetPixelIndex = IntervalIndexer.positionToIndex( position3d, dimensions3d );
-					ret.add( new Tuple2<>( offsetPixelIndex, sliceHistograms[ pixel ] ) );
-				}
-				return ret.iterator();
-			}
-		)
-		//.cache()
-		;
-	}
 
 	private void saveShrinkedSliceHistograms( final JavaPairRDD< Long, TreeMap< Float, Short > > rdd ) throws Exception
 	{
@@ -1234,10 +1092,10 @@ public class IlluminationCorrectionSlice implements Serializable
 			dstImgCursor.next().set( srcImgScaledCursor.next() );
 	}
 
-	private final double[] rescaleHelper( final double[] srcArr, final String title )
+	private final double[] rescaleHelper( final double[] srcArr, final String title, final int thread, final int slice )
 	{
-		final ArrayImg< DoubleType, DoubleArray > srcImg = ArrayImgs.doubles( srcArr, originalSize );
-		final ArrayImg< DoubleType, DoubleArray > dstImg = ArrayImgs.doubles( originalSize );
+		final ArrayImg< DoubleType, DoubleArray > srcImg = ArrayImgs.doubles( srcArr, parameters[thread].currentSize );
+		final ArrayImg< DoubleType, DoubleArray > dstImg = ArrayImgs.doubles( parameters[thread].currentSize );
 		rescale( srcImg, dstImg );
 
 		final ImagePlus imp = ImageJFunctions.wrap( dstImg, title );
@@ -1247,243 +1105,8 @@ public class IlluminationCorrectionSlice implements Serializable
 		return dstImg.update( null ).getCurrentStorageArray();
 	}
 
-	private void correctImages()
-	{
-		final String subfolder = "corrected";
-		new File( Paths.get( inputFilepath ).getParent().toString() + "/" + subfolder ).mkdirs();
 
-		// Prepare broadcast variables for V and Z
-		final double[] vFinalData = vFinal, zFinalData = zFinal;
-		final Broadcast< double[] > vFinalBroadcasted = sparkContext.broadcast( vFinalData ), zFinalBroadcasted = sparkContext.broadcast( zFinalData );
-
-		//final double v_mean = mean( vFinal );
-		//final double z_mean = mean( zFinal );
-
-		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( Arrays.asList( tiles ) );
-		final JavaRDD< TileInfo > task = rdd.map(
-				new Function< TileInfo, TileInfo >()
-				{
-					private static final long serialVersionUID = 4991255417353136684L;
-
-					@Override
-					public TileInfo call( final TileInfo tile ) throws Exception
-					{
-						final ImagePlus imp = IJ.openImage( tile.getFilePath() );
-						Utils.workaroundImagePlusNSlices( imp );
-						final Img< ? extends RealType > img = ImagePlusImgs.from( imp );
-						final Cursor< ? extends RealType > imgCursor = Views.flatIterable( img ).cursor();
-
-						final ArrayImg< DoubleType, DoubleArray > vFinalImg = ArrayImgs.doubles( vFinalBroadcasted.value(), originalSize );
-						final ArrayImg< DoubleType, DoubleArray > zFinalImg = ArrayImgs.doubles( zFinalBroadcasted.value(), originalSize );
-						final Cursor< DoubleType > vCursor = Views.flatIterable( vFinalImg ).cursor();
-						final Cursor< DoubleType > zCursor = Views.flatIterable( zFinalImg ).cursor();
-
-						final ArrayImg< DoubleType, DoubleArray > correctedImg = ArrayImgs.doubles( originalSize );
-						final Cursor< DoubleType > correctedImgCursor = Views.flatIterable( correctedImg ).cursor();
-
-						while ( correctedImgCursor.hasNext() || imgCursor.hasNext() )
-							correctedImgCursor.next().setReal( (imgCursor.next().getRealDouble() - zCursor.next().get()) / vCursor.next().get() /* * v_mean + z_mean */ );
-
-
-						/*final ArrayImg< UnsignedShortType, ShortArray > correctedImgShort = ArrayImgs.unsignedShorts( originalSize );
-						final Cursor< UnsignedShortType > correctedImgShortCursor = Views.flatIterable( correctedImgShort ).cursor();
-						correctedImgCursor.reset();
-						while ( correctedImgShortCursor.hasNext() || correctedImgCursor.hasNext() )
-							correctedImgShortCursor.next().setReal( correctedImgCursor.next().get() );*/
-
-						final ImagePlus correctedImp = ImageJFunctions.wrap( correctedImg/*Short*/, "" );
-						Utils.workaroundImagePlusNSlices( correctedImp );
-						tile.setType( ImageType.valueOf( correctedImp.getType() ) );
-						tile.setFilePath( Paths.get( inputFilepath ).getParent().toString() + "/" + subfolder +"/" + Utils.addFilenameSuffix( Paths.get( tile.getFilePath() ).getFileName().toString(), "_corrected" ) );
-						IJ.saveAsTiff( correctedImp, tile.getFilePath() );
-
-						imp.close();
-						correctedImp.close();
-						return tile;
-					}
-				});
-
-		correctedTiles = task.collect().toArray( new TileInfo[0] );
-		try {
-			TileInfoJSONProvider.saveTilesConfiguration( correctedTiles, Utils.addFilenameSuffix( inputFilepath, "_corrected" ) );
-		} catch ( final IOException e ) {
-			e.printStackTrace();
-		}
-	}
-
-
-	private void estimateQ()
-	{
-		int numWindowPoints = (int) Math.round( numPixels * WINDOW_POINTS_PERCENT );
-		final int mStart = (int)( Math.round( numPixels / 2.0 ) - Math.round( numWindowPoints / 2.0 ) ) - 1;
-		final int mEnd   = (int)( Math.round( numPixels / 2.0 ) + Math.round( numWindowPoints / 2.0 ) );
-		numWindowPoints = mEnd - mStart;
-
-		System.out.println("Estimating Q using mStart="+mStart+", mEnd="+mEnd+" (points="+numWindowPoints+")");
-
-		final int treeDepth = (int) Math.ceil( Math.log( sparkContext.defaultParallelism() ) / Math.log( 2 ) );
-		System.out.println( "default parallelism = " + sparkContext.defaultParallelism() + ",  tree depth = " + treeDepth );
-
-
-
-		Q = rddHistogramsShrinked.mapToPair( tuple ->
-		{
-			double pixelMean = 0;
-			int count = 0;
-			for ( final Entry< Float, Short > entry : tuple._2().entrySet() )
-			{
-				pixelMean += entry.getKey() * entry.getValue();
-				count += entry.getValue();
-			}
-			pixelMean /= count;
-			return new Tuple2<>( pixelMean, tuple._1() );
-		}
-	)
-	.sortByKey()
-	.zipWithIndex()
-	.mapToPair( pair -> pair.swap() )
-	.filter( tuple -> tuple._1() >= mStart && tuple._1() < mEnd )
-	.mapToPair( tuple -> tuple._2().swap() )
-	.join( rddHistogramsShrinked )
-	.mapToPair( item -> item._2() )
-	.treeAggregate(
-		new double[ N ],
-		( ret, tuple ) ->
-		{
-			int counter = 0;
-			for ( final Entry< Float, Short > entry : tuple._2().entrySet() )
-				for ( int j = 0; j < entry.getValue(); j++ )
-					ret[ counter++ ] += entry.getKey();
-			return ret;
-		},
-		( ret, other ) ->
-		{
-			for ( int i = 0; i < N; i++ )
-				ret[ i ] += other[ i ];
-			return ret;
-		},
-		treeDepth
-	);
-
-
-		/*Q = rddHistograms.mapToPair( tuple ->
-			{
-				double pixelMean = 0;
-				int count = 0;
-				for ( final Entry< Short, Integer > entry : tuple._2().entrySet() )
-				{
-					pixelMean += entry.getKey() * entry.getValue();
-					count += entry.getValue();
-				}
-				pixelMean /= count;
-				return new Tuple2<>( pixelMean, tuple._1() );
-			}
-		)
-		.sortByKey()
-		.zipWithIndex()
-		.mapToPair( pair -> pair.swap() )
-		.filter( tuple -> tuple._1() >= mStart && tuple._1() < mEnd )
-		.mapToPair( tuple -> tuple._2().swap() )
-		.join( rddHistograms )
-		.mapToPair( item -> item._2() )
-		.treeAggregate(
-			new double[ N ],
-			( ret, tuple ) ->
-			{
-				int counter = 0;
-				for ( final Entry< Short, Integer > entry : tuple._2().entrySet() )
-					for ( int j = 0; j < entry.getValue(); j++ )
-						ret[ counter++ ] += entry.getKey();
-				return ret;
-			},
-			( ret, other ) ->
-			{
-				for ( int i = 0; i < N; i++ )
-					ret[ i ] += other[ i ];
-				return ret;
-			},
-			treeDepth
-		);*/
-
-		for ( int i = 0; i < N; i++ )
-			Q[ i ] /= numWindowPoints;
-
-
-	}
-
-	private void computePivotShiftY( final int pivotIndex )
-	{
-		/*final List< Tuple2< Long, Short > > pivotList = rddHistograms.mapToPair( tuple ->
-			{
-				int counter = 0;
-		        for ( final Entry< Short, Integer > entry : tuple._2().entrySet() )
-		        {
-		        	counter += entry.getValue();
-		        	if ( counter > pivotIndex )
-		        		return new Tuple2<>( tuple._1(), entry.getKey() );
-		        }
-				return null;
-			}
-		)
-		.collect();*/
-
-		final List< Tuple2< Long, Float > > pivotList = rddHistogramsShrinked.mapToPair( tuple ->
-		{
-			int counter = 0;
-	        for ( final Entry< Float, Short > entry : tuple._2().entrySet() )
-	        {
-	        	counter += entry.getValue();
-	        	if ( counter > pivotIndex )
-	        		return new Tuple2<>( tuple._1(), entry.getKey() );
-	        }
-			return null;
-		}
-	)
-	.collect();
-
-		PivotShiftY = new double[ numPixels ];
-		for ( final Tuple2< Long, Float > tuple : pivotList )
-			PivotShiftY[ tuple._1().intValue() ] = tuple._2();
-	}
-
-
-	private boolean loadSolution()
-	{
-		final Map< String, double[] > imagesFlattened = new HashMap<>();
-		imagesFlattened.put( "V", null );
-		imagesFlattened.put( "Z", null );
-
-		for ( final Entry< String, double[] > entry : imagesFlattened.entrySet() )
-		{
-			final ImagePlus imp = IJ.openImage( inputFilepath + "_" + entry.getKey() + ".tif" );
-			if ( imp == null )
-				return false;
-			Utils.workaroundImagePlusNSlices( imp );
-
-			final Img< ? extends RealType > img = ImagePlusImgs.from( imp );
-			final Cursor< ? extends RealType > imgCursor = Views.flatIterable( img ).cursor();
-
-			final ArrayImg< DoubleType, DoubleArray > arrayImg = ArrayImgs.doubles( originalSize );
-			final Cursor< DoubleType > arrayImgCursor = Views.flatIterable( arrayImg ).cursor();
-
-			while ( arrayImgCursor.hasNext() || imgCursor.hasNext() )
-				arrayImgCursor.next().setReal( imgCursor.next().getRealDouble() );
-
-			imp.close();
-			entry.setValue( arrayImg.update( null ).getCurrentStorageArray() );
-		}
-
-		vFinal = imagesFlattened.get( "V" );
-		zFinal = imagesFlattened.get( "Z" );
-		return true;
-	}
-
-
-
-
-
-
-	private MinFuncResult minFunc(final double[] x0, final MinFuncOptions minFuncOptions) throws Exception
+	private MinFuncResult minFunc(final double[] x0, final MinFuncOptions minFuncOptions, final int thread) throws Exception
 	{
 		final double[] x;
 		double f = 0.0;
@@ -1517,7 +1140,7 @@ public class IlluminationCorrectionSlice implements Serializable
 		// Evaluate Initial Point
 
 		long time = System.nanoTime();
-		final CdrObjectiveResult cdrObjectiveResult = cdr_objective(x);
+		final CdrObjectiveResult cdrObjectiveResult = cdr_objective(x, thread);
 		f = cdrObjectiveResult.E;
 		double[] g = cdrObjectiveResult.G;
 		final double[] g_old = new double[g.length];
@@ -1638,7 +1261,7 @@ public class IlluminationCorrectionSlice implements Serializable
 		    f_old = f;
 
 		    time = System.nanoTime();
-		    final WolfeLineSearchResult wolfeLineSearchResult = WolfeLineSearch(x,t,d,f,g,gtd,c1,c2,LS_interp,LS_multi,25,progTol,1);
+		    final WolfeLineSearchResult wolfeLineSearchResult = WolfeLineSearch(x,t,d,f,g,gtd,c1,c2,LS_interp,LS_multi,25,progTol,1, thread);
 		    System.out.println("WolfeLineSearch took " + ((System.nanoTime()-time)/Math.pow(10, 9))+"s");
 		    t = wolfeLineSearchResult.t;
 		    f = wolfeLineSearchResult.f_new;
@@ -1721,7 +1344,7 @@ public class IlluminationCorrectionSlice implements Serializable
 
 
 
-	public CdrObjectiveResult cdr_objective(final double[] x) throws Exception
+	public CdrObjectiveResult cdr_objective(final double[] x, final int thread) throws Exception
 	{
 		long elapsed = System.nanoTime();
 
@@ -1729,7 +1352,7 @@ public class IlluminationCorrectionSlice implements Serializable
 
 		// some basic definitions
 		//int N_stan = 200;				// the standard number of quantiles used for empirical parameter setting
-		final double w           = CAUCHY_W;  // width of the Cauchy function
+		final double w           = parameters[thread].CAUCHY_W;  // width of the Cauchy function
 
 		// unpack
 		final double[] v_vec = Arrays.copyOfRange(x, 0, numPixels);
@@ -1741,7 +1364,7 @@ public class IlluminationCorrectionSlice implements Serializable
 		final double px = zx - PivotShiftX;		// a scalar
 		final double[] py = new double[numPixels];
 		for ( int i = 0; i < numPixels; i++ )
-			py[i] = zy - PivotShiftY[i];
+			py[i] = zy - parameters[thread].PivotShiftY[i];
 
 		//--------------------------------------------------------------------------
 		// fitting energy
@@ -1752,70 +1375,50 @@ public class IlluminationCorrectionSlice implements Serializable
 		final double[] deriv_v_fit = new double[numPixels];		// derivative of fit term wrt v
 		final double[] deriv_b_fit = new double[numPixels];		// derivative of fit term wrt b
 
-		final Mestimator estimator = MESTIMATOR;
-		//final Broadcast< double[] > v_vecBroadcasted = sparkContext.broadcast( v_vec );
-		//final Broadcast< double[] > b_vecBroadcasted = sparkContext.broadcast( b_vec );
-
-		final List< Tuple2< Long, Tuple3< Double, Double, Double > > > fitResult = rddHistogramsShrinked.mapToPair( tuple ->
+		for ( int pixel = 0; pixel < numPixels; pixel++ )
+		{
+			int counter = 0;
+			for ( final Entry< Float, Short > entry : parameters[thread].histograms[ pixel ].entrySet() )
 			{
-				final int pixel = tuple._1().intValue();
-				double energy_fit_pixel = 0, deriv_v_fit_pixel = 0, deriv_b_fit_pixel = 0;
-				int counter = 0;
-				for ( final Entry< Float, Short > entry : tuple._2().entrySet() )
+				final double qi = entry.getKey() - parameters[thread].PivotShiftY[pixel];
+				for ( int j = 0; j < entry.getValue(); j++ )
 				{
-					final double qi = entry.getKey() - PivotShiftYBroadcasted.value()[ pixel ];
-					for ( int j = 0; j < entry.getValue(); j++ )
-					{
-						final int i = counter++;
-						//final double val = QBroadcasted.value()[ i ] * v_vecBroadcasted.value()[ pixel ] + b_vecBroadcasted.value()[ pixel ] - qi;
-						final double val = QBroadcasted.value()[ i ] * v_vec[ pixel ] + b_vec[ pixel ] - qi;
-						switch (estimator)
-				        {
-				            case LS:
-			            		energy_fit_pixel  += val * val;
-			            		deriv_v_fit_pixel += QBroadcasted.value()[ i ] * val;
-			            		deriv_b_fit_pixel += val;
-				                break;
+					final int i = counter++;
+					final double val = Q[i] * v_vec[pixel] + b_vec[pixel] - qi;
+					switch (parameters[thread].MESTIMATOR)
+			        {
+			            case LS:
+		            		energy_fit [pixel] += val * val;
+		            		deriv_v_fit[pixel] += Q[i] * val;
+		            		deriv_b_fit[pixel] += val;
+			                break;
 
-				            case CAUCHY:
-			            		energy_fit_pixel  += w*w * Math.log(1 + (val*val) / (w*w)) / 2.0;
-			            		deriv_v_fit_pixel += (QBroadcasted.value()[ i ]*val) / (1.0 + (val*val) / (w*w));
-			            		deriv_b_fit_pixel += val / (1.0 + (val*val) / (w*w));
-				                break;
-				        }
-					}
+			            case CAUCHY:
+		            		energy_fit [pixel] += w*w * Math.log(1 + (val*val) / (w*w)) / 2.0;
+		            		deriv_v_fit[pixel] += (Q[i]*val) / (1.0 + (val*val) / (w*w));
+		            		deriv_b_fit[pixel] += val / (1.0 + (val*val) / (w*w));
+			                break;
+			        }
 				}
-				return new Tuple2<>( tuple._1(), new Tuple3<>( energy_fit_pixel, deriv_v_fit_pixel, deriv_b_fit_pixel ) );
 			}
-		).collect();
-
-		//v_vecBroadcasted.destroy();
-		//b_vecBroadcasted.destroy();
+		}
 
 		double E_fit = 0;
 		final double[] G_V_fit = new double[numPixels];
 		final double[] G_B_fit = new double[numPixels];
 
 
-/*
+
 		// normalize the contribution from fitting energy term by the number of data
 		// points in S (so our balancing of the energy terms is invariant)
-		int data_size_factor = N_stan/histSize;
+		final int data_size_factor = 1;//N_stan/histSize;
 		for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ ) {
 			E_fit += energy_fit[pixelIndex];
 			G_V_fit[pixelIndex] = deriv_v_fit[pixelIndex] * data_size_factor;	// fit term derivative wrt v
 			G_B_fit[pixelIndex] = deriv_b_fit[pixelIndex] * data_size_factor;	// fit term derivative wrt b
 		}
 		E_fit *= data_size_factor;		// fit term energy
-*/
 
-		for ( final Tuple2< Long, Tuple3< Double, Double, Double > > tuple : fitResult )
-		{
-			final int pixel   = tuple._1().intValue();
-			E_fit            += tuple._2()._1();
-			G_V_fit[ pixel ]  = tuple._2()._2();	// fit term derivative wrt v
-			G_B_fit[ pixel ]  = tuple._2()._3();	// fit term derivative wrt b
-		}
 		//E_fit /= numPixels;
 
 
@@ -1887,7 +1490,7 @@ public class IlluminationCorrectionSlice implements Serializable
 		// Approximate using DoG
 		// determine the widths we will use for the LoG filter
 		long maxSide = Long.MIN_VALUE;
-		for ( final long side : originalSize )
+		for ( final long side : parameters[thread].currentSize )
 			maxSide = Math.max(side, maxSide);
 		final int max_exp = (int)Math.max(1.0, Math.log(Math.floor(maxSide / 50.0))/Math.log(2.0));
 
@@ -1901,22 +1504,22 @@ public class IlluminationCorrectionSlice implements Serializable
 
 		for ( final double sigma : sigmas )
 		{
-			final double[] sigmaSmaller = new double[ originalSize.length ];
+			final double[] sigmaSmaller = new double[ parameters[thread].currentSize.length ];
 			Arrays.fill( sigmaSmaller, sigma * 0.75 );
-			final double[] sigmaLarger = new double[ originalSize.length ];
+			final double[] sigmaLarger = new double[ parameters[thread].currentSize.length ];
 			Arrays.fill( sigmaLarger, sigma * 1.25 );
 
-			if ( originalSize.length == 3 )
+			if ( parameters[thread].currentSize.length == 3 )
 			{
 				final double coeff = 80.0 / 150.0;
 				sigmaSmaller[ 2 ] *= coeff;
 				sigmaLarger [ 2 ] *= coeff;
 			}
 
-			final ArrayImg< DoubleType, DoubleArray > vImg = ArrayImgs.doubles( v_vec, originalSize );
+			final ArrayImg< DoubleType, DoubleArray > vImg = ArrayImgs.doubles( v_vec, parameters[thread].currentSize );
 			final ExtendedRandomAccessibleInterval< DoubleType, ArrayImg< DoubleType, DoubleArray > > vImgExtended = Views.extendMirrorSingle( vImg );
-			final ArrayImg< DoubleType, DoubleArray > vDoGImg = ArrayImgs.doubles( originalSize );
-			DifferenceOfGaussian.DoG( sigmaSmaller, sigmaLarger, vImgExtended, vDoGImg, threadPool );
+			final ArrayImg< DoubleType, DoubleArray > vDoGImg = ArrayImgs.doubles( parameters[thread].currentSize );
+			DifferenceOfGaussian.DoG( sigmaSmaller, sigmaLarger, vImgExtended, vDoGImg, Executors.newSingleThreadExecutor() /*multithreadedExecutor.getThreadPool()*/ );
 
 			final double[] vDoG_vec = vDoGImg.update(null).getCurrentStorageArray();
 			for ( int pixel = 0; pixel < numPixels; pixel++ )
@@ -1927,8 +1530,8 @@ public class IlluminationCorrectionSlice implements Serializable
 			}
 
 			final ExtendedRandomAccessibleInterval< DoubleType, ArrayImg< DoubleType, DoubleArray > > vDoGImgExtended = Views.extendMirrorSingle( vDoGImg );
-			final ArrayImg< DoubleType, DoubleArray > vDoGDoGImg = ArrayImgs.doubles( originalSize );
-			DifferenceOfGaussian.DoG( sigmaSmaller, sigmaLarger, vDoGImgExtended, vDoGDoGImg, threadPool );
+			final ArrayImg< DoubleType, DoubleArray > vDoGDoGImg = ArrayImgs.doubles( parameters[thread].currentSize );
+			DifferenceOfGaussian.DoG( sigmaSmaller, sigmaLarger, vDoGImgExtended, vDoGDoGImg, Executors.newSingleThreadExecutor() /* multithreadedExecutor.getThreadPool() */ );
 
 			final double[] vDoGDoG_vec = vDoGDoGImg.update(null).getCurrentStorageArray();
 			for ( int pixel = 0; pixel < numPixels; pixel++ )
@@ -1979,8 +1582,8 @@ public class IlluminationCorrectionSlice implements Serializable
 		// We compute the energy of the barrier term given v,b,zx,zy. We also
 		// compute its gradient wrt the random variables.
 
-		final double Q_UPPER_LIMIT = ZMAX;	// upper limit - transition from zero energy to quadratic increase
-		final double Q_LOWER_LIMIT = ZMIN;	// lower limit - transition from quadratic to zero energy
+		final double Q_UPPER_LIMIT = parameters[thread].ZMAX;	// upper limit - transition from zero energy to quadratic increase
+		final double Q_LOWER_LIMIT = parameters[thread].ZMIN;	// lower limit - transition from quadratic to zero energy
 		final double Q_RATE = 0.001;			// rate of increase in energy
 
 		// barrier term gradients and energy components
@@ -1995,22 +1598,22 @@ public class IlluminationCorrectionSlice implements Serializable
 		final double E_barr = E_barr_xc + E_barr_yc;		// barrier term energy
 
 		//--------------------------------------------------------------------------
-		if ( TERMSFLAG == 0)
+		if ( parameters[thread].TERMSFLAG == 0)
 			System.out.println("Cost function components: " + Arrays.toString(new double[] { E_fit } ));
 		else
-			System.out.println("Cost function components: " + Arrays.toString(new double[] { E_fit, LAMBDA_VREG*E_vreg, LAMBDA_ZERO*E_zero, LAMBDA_BARR*E_barr } ));
+			System.out.println("Cost function components: " + Arrays.toString(new double[] { E_fit, parameters[thread].LAMBDA_VREG*E_vreg, parameters[thread].LAMBDA_ZERO*E_zero, parameters[thread].LAMBDA_BARR*E_barr } ));
 		//--------------------------------------------------------------------------
 		// The total energy
 		// Find the sum of all components of the energy. TERMSFLAG switches on and
 		// off different components of the energy.
 		String term_str = "";
-		switch (TERMSFLAG) {
+		switch (parameters[thread].TERMSFLAG) {
 		    case 0:
 		        E = E_fit;
 		        term_str = "fitting only";
 		        break;
 		    case 1:
-		        E = E_fit + LAMBDA_VREG*E_vreg + LAMBDA_ZERO*E_zero + LAMBDA_BARR*E_barr;
+		        E = E_fit + parameters[thread].LAMBDA_VREG*E_vreg + parameters[thread].LAMBDA_ZERO*E_zero + parameters[thread].LAMBDA_BARR*E_barr;
 		        term_str = "all terms";
 		        break;
 		}
@@ -2023,7 +1626,7 @@ public class IlluminationCorrectionSlice implements Serializable
 		double G_ZX = 0;
 		double G_ZY = 0;
 
-		switch (TERMSFLAG) {
+		switch (parameters[thread].TERMSFLAG) {
 		    case 0:
 		        G_V = G_V_fit;
 		        G_B = G_B_fit;
@@ -2032,13 +1635,13 @@ public class IlluminationCorrectionSlice implements Serializable
 		        break;
 		    case 1:
 		    	for (int i = 0; i < G_V_fit.length; i++) {
-		    		G_V_fit[i] = G_V_fit[i] + LAMBDA_VREG*G_V_vreg[i] + LAMBDA_ZERO*G_V_zero[i];
-		    		G_B_fit[i] = G_B_fit[i] + LAMBDA_VREG*G_B_vreg[i] + LAMBDA_ZERO*G_B_zero[i];
+		    		G_V_fit[i] = G_V_fit[i] + parameters[thread].LAMBDA_VREG*G_V_vreg[i] + parameters[thread].LAMBDA_ZERO*G_V_zero[i];
+		    		G_B_fit[i] = G_B_fit[i] + parameters[thread].LAMBDA_VREG*G_B_vreg[i] + parameters[thread].LAMBDA_ZERO*G_B_zero[i];
 		    	}
 		    	G_V = G_V_fit;
 		    	G_B = G_B_fit;
-		        G_ZX = LAMBDA_ZERO*G_ZX_zero + LAMBDA_BARR*G_ZX_barr;
-		        G_ZY = LAMBDA_ZERO*G_ZY_zero + LAMBDA_BARR*G_ZY_barr;
+		        G_ZX = parameters[thread].LAMBDA_ZERO*G_ZX_zero + parameters[thread].LAMBDA_BARR*G_ZX_barr;
+		        G_ZY = parameters[thread].LAMBDA_ZERO*G_ZY_zero + parameters[thread].LAMBDA_BARR*G_ZY_barr;
 		        break;
 	        default:
 	        	G_V = null;
@@ -2073,16 +1676,15 @@ public class IlluminationCorrectionSlice implements Serializable
 
 		//writeToCSVFile(PathIn + "csv\\x_ml_res", mlX2, 1, n);
 
-		System.out.println(String.format("iter = %d  %s %s    zx,zy=(%1.2f,%1.2f)    E=%g", ITER, MESTIMATOR, term_str, zx,zy, E));
+		System.out.println("thread #"+thread+":  " +String.format("iter = %d  %s %s    zx,zy=(%1.2f,%1.2f)    E=%g", parameters[thread].ITER, parameters[thread].MESTIMATOR, term_str, zx,zy, E));
 		//System.out.println(String.format("min = %f, max = %f", mmin, mmax));
-		ITER++;
+		parameters[thread].ITER++;
 
 		final CdrObjectiveResult result = new CdrObjectiveResult();
 		result.E = E;
 		result.G = G;
 
 		elapsed = System.nanoTime() - elapsed;
-		System.out.println( "cdr_objective took " + (elapsed/Math.pow(10, 9)) +"s");
 
 		return result;
 	}
@@ -2258,14 +1860,14 @@ public class IlluminationCorrectionSlice implements Serializable
 
 
 	private WolfeLineSearchResult WolfeLineSearch(final double[] x, double t, final double[] d, final double f, final double[] g, final double gtd, final double c1, final double c2,
-			final int LS_interp, final int LS_multi, final int maxLS, final double progTol, final int saveHessianComp) throws Exception
+			final int LS_interp, final int LS_multi, final int maxLS, final double progTol, final int saveHessianComp, final int thread) throws Exception
 	{
 
 
 		double[] x2 = new double[x.length];
 		for (int j = 0; j < x.length; j++)
 			x2[j] = x[j] + t * d[j];
-		CdrObjectiveResult cdrObjectiveResult = cdr_objective(x2);
+		CdrObjectiveResult cdrObjectiveResult = cdr_objective(x2, thread);
 		double f_new = cdrObjectiveResult.E;
 		double[] g_new = cdrObjectiveResult.G;
 		int funEvals = 1;
@@ -2355,7 +1957,7 @@ public class IlluminationCorrectionSlice implements Serializable
 			x2 = new double[x.length];
 			for (int j = 0; j < x.length; j++)
 				x2[j] = x[j] + t * d[j];
-		    cdrObjectiveResult = cdr_objective(x2);
+		    cdrObjectiveResult = cdr_objective(x2, thread);
 			f_new = cdrObjectiveResult.E;
 			g_new = cdrObjectiveResult.G;
 			funEvals++;
@@ -2453,7 +2055,7 @@ public class IlluminationCorrectionSlice implements Serializable
 			x2 = new double[x.length];
 			for (int j = 0; j < x.length; j++)
 				x2[j] = x[j] + t * d[j];
-		    cdrObjectiveResult = cdr_objective(x2);
+		    cdrObjectiveResult = cdr_objective(x2, thread);
 			f_new = cdrObjectiveResult.E;
 			g_new = cdrObjectiveResult.G;
 			funEvals++;
@@ -2614,34 +2216,29 @@ public class IlluminationCorrectionSlice implements Serializable
 
 
 	// computes the mean standard error of the regression
-	private double computeStandardError( final double[] v, final double[] b )
-	{
-		final Broadcast< double[] > vBroadcast = sparkContext.broadcast( v );
-		final Broadcast< double[] > bBroadcast = sparkContext.broadcast( b );
+	private double computeStandardError(final double[] v, final double[] b, final int thread) {
+		// initialize a matrix to contain all the standard error calculations
+		final double[] se = new double[numPixels];
 
-		final double errorSum = rddHistogramsShrinked.mapToDouble( tuple ->
-			{
-				double sum_residuals2 = 0;
-		        int counter = 0;
-		        for ( final Entry< Float, Short > entry : tuple._2().entrySet() )
-		        {
-		        	final int pixel = tuple._1().intValue();
-		        	final double qi = entry.getKey() - PivotShiftYBroadcasted.value()[ pixel ];
-					for ( int j = 0; j < entry.getValue(); j++ )
-					{
-			        	final double fitval = bBroadcast.value()[ pixel ] + QBroadcasted.value()[ counter++ ] * vBroadcast.value()[ pixel ];
-			        	final double residual = qi - fitval;
-			        	sum_residuals2 += residual * residual;
-					}
-		        }
-		        return Math.sqrt( sum_residuals2 / (N-2) );
-			}
-		).reduce( ( x, y ) -> x + y );
+		// compute the standard error at each location
+		for ( int pixel = 0; pixel < numPixels; pixel++ )
+		{
+	        double fitval, residual, sum_residuals2 = 0;
+	        int counter = 0;
+	        for ( final Entry< Float, Short > entry : parameters[thread].histograms[pixel].entrySet() )
+	        {
+	        	final double qi = entry.getKey() - parameters[thread].PivotShiftY[pixel];
+				for ( int j = 0; j < entry.getValue(); j++ )
+				{
+		        	fitval = b[pixel] + Q[counter++] * v[pixel];
+		        	residual = qi - fitval;
+		        	sum_residuals2 += residual * residual;
+				}
+	        }
 
-		vBroadcast.destroy();
-		bBroadcast.destroy();
-
-		return errorSum / numPixels;
+	        se[pixel] = Math.sqrt(sum_residuals2 / (N-2));
+		}
+		return mean(se);
 	}
 
 	private double mean(final double[] a)

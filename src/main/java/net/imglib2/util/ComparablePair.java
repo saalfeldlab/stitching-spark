@@ -1,4 +1,4 @@
-package org.janelia.util;
+package net.imglib2.util;
 
 import net.imglib2.util.ValuePair;
 

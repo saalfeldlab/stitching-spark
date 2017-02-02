@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.stitching.experimental;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -6,6 +6,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
 
+import org.janelia.stitching.Boundaries;
+import org.janelia.stitching.ImageType;
+import org.janelia.stitching.PipelineExecutionException;
+import org.janelia.stitching.TileInfo;
+import org.janelia.stitching.TileInfoJSONProvider;
+import org.janelia.stitching.TileOperations;
+import org.janelia.stitching.TilePair;
+import org.janelia.stitching.Utils;
 import org.janelia.stitching.analysis.CheckConnectedGraphs;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.ImageImporter;

@@ -1,4 +1,4 @@
-package org.janelia.util;
+package mpicbg.models;
 
 import java.util.Collection;
 

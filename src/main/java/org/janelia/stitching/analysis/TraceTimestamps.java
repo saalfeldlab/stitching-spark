@@ -9,8 +9,8 @@ import java.util.TreeSet;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
-import org.janelia.util.ComparablePair;
 
+import net.imglib2.util.ComparablePair;
 import net.imglib2.util.Pair;
 
 public class TraceTimestamps

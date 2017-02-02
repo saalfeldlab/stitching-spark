@@ -1,4 +1,4 @@
-package org.janelia.util;
+package org.janelia.util.concurrent;
 
 import java.util.List;
 import java.util.concurrent.AbstractExecutorService;

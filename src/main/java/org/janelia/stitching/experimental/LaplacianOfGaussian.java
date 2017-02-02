@@ -1,4 +1,4 @@
-package org.janelia.util;
+package org.janelia.stitching.experimental;
 
 import net.imglib2.Cursor;
 import net.imglib2.img.array.ArrayImg;

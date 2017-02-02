@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.stitching.experimental;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -30,8 +30,10 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.storage.StorageLevel;
-import org.janelia.util.FixedScalingAffineModel1D;
-import org.janelia.util.FixedTranslationAffineModel1D;
+import org.janelia.stitching.TiffSliceLoader;
+import org.janelia.stitching.TileInfo;
+import org.janelia.stitching.TileInfoJSONProvider;
+import org.janelia.stitching.Utils;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -43,6 +45,8 @@ import ij.ImagePlus;
 import mpicbg.models.Affine1D;
 import mpicbg.models.AffineModel1D;
 import mpicbg.models.ConstantAffineModel1D;
+import mpicbg.models.FixedScalingAffineModel1D;
+import mpicbg.models.FixedTranslationAffineModel1D;
 import mpicbg.models.IdentityModel;
 import mpicbg.models.InterpolatedAffineModel1D;
 import mpicbg.models.InvertibleBoundable;

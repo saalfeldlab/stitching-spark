@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.stitching.experimental;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -21,13 +21,18 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
-import org.janelia.util.MultithreadedExecutor;
+import org.janelia.stitching.TileInfo;
+import org.janelia.stitching.TileInfoJSONProvider;
+import org.janelia.stitching.Utils;
+import org.janelia.util.concurrent.MultithreadedExecutor;
+import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -45,7 +50,6 @@ import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
-import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.InverseRealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
@@ -55,7 +59,6 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
-import net.imglib2.util.Intervals;
 import net.imglib2.util.RealSum;
 import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.IntervalView;
@@ -65,7 +68,7 @@ import scala.Tuple2;
 
 
 
-public class IlluminationCorrectionSliceParallel implements Serializable
+public class IlluminationCorrectionSliceParallelShrinked implements Serializable
 {
 	private static final long serialVersionUID = -8987192045944606043L;
 
@@ -78,14 +81,14 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 
 	public static void main( final String[] args ) throws Exception
 	{
-		final IlluminationCorrectionSliceParallel driver = new IlluminationCorrectionSliceParallel( args[ 0 ] );
+		final IlluminationCorrectionSliceParallelShrinked driver = new IlluminationCorrectionSliceParallelShrinked( args[ 0 ] );
 		driver.run();
 		driver.shutdown();
 		System.out.println("Done");
 	}
 
 
-	public IlluminationCorrectionSliceParallel( final String inputFilepath )
+	public IlluminationCorrectionSliceParallelShrinked( final String inputFilepath )
 	{
 		this.inputFilepath = inputFilepath;
 	}
@@ -129,25 +132,14 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 					System.exit(1);
 				}
 
-
-		final Map< Integer, Map< String, double[] > > solutions = new TreeMap<>();
-		for ( int slice = 1; slice <= getNumSlices(); slice++ )
+		/*
+		if ( loadSolution() )
 		{
-			final Map<String, double[]> s = loadSolution( slice );
-			if ( s != null )
-				solutions.put(slice, s);
-		}
-		if ( !solutions.isEmpty() )
-		{
-			System.out.println( "Successfully loaded solution for "+solutions.size()+" slices" );
-			for ( final Entry<Integer, Map<String, double[]>> entry : solutions.entrySet() )
-			{
-				System.out.println( "Correcting slice " + entry.getKey() );
-				correctImages(entry.getKey(), entry.getValue().get("v"), entry.getValue().get("z"));
-			}
+			System.out.println( "Successfully loaded V and Z" );
+			correctImages();
 			return;
 		}
-
+		*/
 
 		//kryoSerializer = new KryoSerializer( sparkContext.getConf() );
 
@@ -159,48 +151,39 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 		kryo.register( TreeMap.class, serializer );
 		kryo.register( TreeMap[].class );*/
 
-		if ( !allSliceHistogramsReady() )
+		if ( !allShrinkedSliceHistogramsReady() )
 			throw new Exception( "All histograms should be precomputed" );
 
 		final double[] Q = readReferenceVectorFromDisk();
 		if ( Q == null )
 		{
-			saveReferenceVectorToDisk( estimateQ( tiles.length ) );
+			saveReferenceVectorToDisk( estimateQ() );
 			System.out.println( "Computed and saved Q to disk" );
 			return;
 		}
 
 		final int N = Q.length;
 		System.out.println( "Working with stack of size " + N );
+		Thread.sleep(1000);
 
-		final String outPath = Paths.get(inputFilepath).getParent().toString()+"/estimated_middle-slice";
+		final String outPath = Paths.get(inputFilepath).getParent().toString()+"/estimated_test";
 		new File( outPath+"/v" ).mkdirs();
 		new File( outPath+"/z" ).mkdirs();
-
-		System.out.println( "Output directory: " + outPath );
-		System.out.println( "*** Cidre parameters ***" );
-		System.out.println( "LAMBDA_VREG = " + Cidre.LAMBDA_VREG );
-		System.out.println( "LAMBDA_ZERO = " + Cidre.LAMBDA_ZERO );
-		System.out.println( "LAMBDA_BARR = " + Cidre.LAMBDA_BARR );
-		System.out.println( "pivoting = " + Cidre.USE_PIVOTING );
-		System.out.println( "global minKey = " + Cidre.USE_GLOBAL_MIN_KEY );
-		System.out.println( "opt.c1 = " + Cidre.OPT_C1 );
-		System.out.println( "opt.c2 = " + Cidre.OPT_C2 );
 
 		final Broadcast< double[] > QBroadcasted = sparkContext.broadcast( Q );
 
 		final List< Integer > slices = new ArrayList<>();
 		for ( int slice = 1; slice <= getNumSlices(); slice++ )
 			slices.add( slice );
-
 		final JavaRDD< Integer > rddSlices = sparkContext.parallelize( slices.subList(slices.size() / 2, slices.size() / 2 + 1) );
 
 		rddSlices.foreach( slice ->
 			{
 				System.out.println( "Processing slice " + slice);
+				Thread.sleep(1000);
 				final Cidre cidre = new Cidre(
-						readSliceHistogramsFromDisk( slice ),
-						QBroadcasted.value().clone(),
+						readShrinkedSliceHistogramsFromDisk( slice ),
+						QBroadcasted.value(),
 						sliceSize );
 				cidre.run();
 
@@ -217,6 +200,8 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 				}
 			}
 		);
+
+		QBroadcasted.destroy();
 	}
 
 
@@ -250,6 +235,47 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 		);
 	}
 
+	private JavaPairRDD< Long, TreeMap< Float, Short > > loadShrinkedHistograms() throws Exception
+	{
+		final List< Integer > slices = new ArrayList<>();
+		for ( int slice = 1; slice <= getNumSlices(); slice++ )
+			slices.add( slice );
+
+		return sparkContext.parallelize( slices ).flatMapToPair( slice ->
+			{
+				final TreeMap< Float, Short >[] sliceHistograms = readShrinkedSliceHistogramsFromDisk( slice );
+				final List< Tuple2< Long, TreeMap< Float, Short > > > ret = new ArrayList<>( sliceHistograms.length );
+
+				final long[] dimensions2d = new long[] { originalSize[0], originalSize[1] };
+				final long[] dimensions3d = new long[] { originalSize[0], originalSize[1], getNumSlices() };
+				final long[] position2d = new long[ 2 ], position3d = new long[ 3 ];
+				position3d[ 2 ] = slice - 1;
+
+				for ( int pixel = 0; pixel < sliceHistograms.length; pixel++ )
+				{
+					IntervalIndexer.indexToPosition( pixel, dimensions2d, position2d );
+					position3d[ 0 ] = position2d[ 0 ];
+					position3d[ 1 ] = position2d[ 1 ];
+					final long offsetPixelIndex = IntervalIndexer.positionToIndex( position3d, dimensions3d );
+					ret.add( new Tuple2<>( offsetPixelIndex, sliceHistograms[ pixel ] ) );
+				}
+				return ret.iterator();
+			}
+		);
+	}
+
+
+	private double[] estimateQ() throws Exception
+	{
+		// first, find out N from one of the histograms
+		int count = 0;
+		for ( final Entry<Float, Short> entry : readShrinkedSliceHistogramsFromDisk( 1 )[ 0 ].entrySet() )
+			count += entry.getValue();
+		System.out.println( String.format( "Estimating the reference vector Q using %d points in the stack", count ) );
+		Thread.sleep(1000);
+		return estimateQ( count );
+	}
+
 	private double[] estimateQ( final int N ) throws Exception
 	{
 		long numPixels = 1;
@@ -266,13 +292,13 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 		final int treeDepth = (int) Math.ceil( Math.log( sparkContext.defaultParallelism() ) / Math.log( 2 ) );
 		System.out.println( "default parallelism = " + sparkContext.defaultParallelism() + ",  tree depth = " + treeDepth );
 
-		final JavaPairRDD< Long, TreeMap< Short, Integer > > rddHistograms = loadHistograms();
+		final JavaPairRDD< Long, TreeMap< Float, Short > > rddHistograms = loadShrinkedHistograms();
 
 		final double[] Q = rddHistograms.mapToPair( tuple ->
 			{
 				double pixelMean = 0;
 				int count = 0;
-				for ( final Entry< Short, Integer > entry : tuple._2().entrySet() )
+				for ( final Entry< Float, Short > entry : tuple._2().entrySet() )
 				{
 					pixelMean += entry.getKey() * entry.getValue();
 					count += entry.getValue();
@@ -293,7 +319,7 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 			( ret, tuple ) ->
 			{
 				int counter = 0;
-				for ( final Entry< Short, Integer > entry : tuple._2().entrySet() )
+				for ( final Entry< Float, Short > entry : tuple._2().entrySet() )
 					for ( int j = 0; j < entry.getValue(); j++ )
 						ret[ counter++ ] += entry.getKey();
 				return ret;
@@ -798,90 +824,6 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 		);
 	}
 	*/
-
-
-
-	private Map< String, double[] > loadSolution( final int slice )
-	{
-		final Map< String, double[] > imagesFlattened = new HashMap<>();
-		imagesFlattened.put( "v", null );
-		imagesFlattened.put( "z", null );
-
-		for ( final Entry< String, double[] > entry : imagesFlattened.entrySet() )
-		{
-			final String path = Paths.get(inputFilepath).getParent() + "/solution/" + entry.getKey() + "/" + slice + ".tif";
-			if ( !Files.exists(Paths.get(path)) )
-				return null;
-
-			final ImagePlus imp = IJ.openImage( path );
-			Utils.workaroundImagePlusNSlices( imp );
-
-			final Img< ? extends RealType > img = ImagePlusImgs.from( imp );
-			final Cursor< ? extends RealType > imgCursor = Views.flatIterable( img ).cursor();
-
-			final ArrayImg< DoubleType, DoubleArray > arrayImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( img ) );
-			final Cursor< DoubleType > arrayImgCursor = Views.flatIterable( arrayImg ).cursor();
-
-			while ( arrayImgCursor.hasNext() || imgCursor.hasNext() )
-				arrayImgCursor.next().setReal( imgCursor.next().getRealDouble() );
-
-			imp.close();
-			entry.setValue( arrayImg.update( null ).getCurrentStorageArray() );
-		}
-
-		return imagesFlattened;
-	}
-
-	private void correctImages( final int slice, final double[] v, final double[] z )
-	{
-		final String outPath = Paths.get( inputFilepath ).getParent() + "/solution/corrected/"+slice;
-		new File( outPath ).mkdirs();
-
-		// Prepare broadcast variables for V and Z
-		final Broadcast< double[] > vBroadcasted = sparkContext.broadcast( v ), zBroadcasted = sparkContext.broadcast( z );
-
-		//final double v_mean = mean( vFinal );
-		//final double z_mean = mean( zFinal );
-
-		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( Arrays.asList( tiles ) );
-		rdd.foreach( tile ->
-				{
-					final ImagePlus imp = TiffSliceLoader.loadSlice(tile, slice);
-					Utils.workaroundImagePlusNSlices( imp );
-					final Img< ? extends RealType > img = ImagePlusImgs.from( imp );
-					final Cursor< ? extends RealType > imgCursor = Views.flatIterable( img ).cursor();
-
-					final ArrayImg< DoubleType, DoubleArray > vImg = ArrayImgs.doubles( vBroadcasted.value(), Intervals.dimensionsAsLongArray( img ) );
-					final ArrayImg< DoubleType, DoubleArray > zImg = ArrayImgs.doubles( zBroadcasted.value(), Intervals.dimensionsAsLongArray( img ) );
-					final Cursor< DoubleType > vCursor = Views.flatIterable( vImg ).cursor();
-					final Cursor< DoubleType > zCursor = Views.flatIterable( zImg ).cursor();
-
-					final ArrayImg< DoubleType, DoubleArray > correctedImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( img ) );
-					final Cursor< DoubleType > correctedImgCursor = Views.flatIterable( correctedImg ).cursor();
-
-					while ( correctedImgCursor.hasNext() || imgCursor.hasNext() )
-						correctedImgCursor.next().setReal( (imgCursor.next().getRealDouble() - zCursor.next().get()) / vCursor.next().get() );   // * v_mean + z_mean
-
-
-//						final ArrayImg< UnsignedShortType, ShortArray > correctedImgShort = ArrayImgs.unsignedShorts( originalSize );
-//						final Cursor< UnsignedShortType > correctedImgShortCursor = Views.flatIterable( correctedImgShort ).cursor();
-//						correctedImgCursor.reset();
-//						while ( correctedImgShortCursor.hasNext() || correctedImgCursor.hasNext() )
-//							correctedImgShortCursor.next().setReal( correctedImgCursor.next().get() );
-
-					final ImagePlus correctedImp = ImageJFunctions.wrap( correctedImg, "" );
-					Utils.workaroundImagePlusNSlices( correctedImp );
-					IJ.saveAsTiff( correctedImp, outPath + "/"+ Utils.addFilenameSuffix( Paths.get(tile.getFilePath()).getFileName().toString(), "_corrected" ) );
-
-					imp.close();
-					correctedImp.close();
-				}
-			);
-	}
-
-
-
-
 
 	private void saveSliceHistogramsToDisk( final int slice, final TreeMap<Short,Integer>[] sliceHist ) throws Exception
 	{
@@ -1434,7 +1376,41 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 		for ( final Tuple2< Long, Float > tuple : pivotList )
 			PivotShiftY[ tuple._1().intValue() ] = tuple._2();
 	}
+
+
+	private boolean loadSolution()
+	{
+		final Map< String, double[] > imagesFlattened = new HashMap<>();
+		imagesFlattened.put( "V", null );
+		imagesFlattened.put( "Z", null );
+
+		for ( final Entry< String, double[] > entry : imagesFlattened.entrySet() )
+		{
+			final ImagePlus imp = IJ.openImage( inputFilepath + "_" + entry.getKey() + ".tif" );
+			if ( imp == null )
+				return false;
+			Utils.workaroundImagePlusNSlices( imp );
+
+			final Img< ? extends RealType > img = ImagePlusImgs.from( imp );
+			final Cursor< ? extends RealType > imgCursor = Views.flatIterable( img ).cursor();
+
+			final ArrayImg< DoubleType, DoubleArray > arrayImg = ArrayImgs.doubles( originalSize );
+			final Cursor< DoubleType > arrayImgCursor = Views.flatIterable( arrayImg ).cursor();
+
+			while ( arrayImgCursor.hasNext() || imgCursor.hasNext() )
+				arrayImgCursor.next().setReal( imgCursor.next().getRealDouble() );
+
+			imp.close();
+			entry.setValue( arrayImg.update( null ).getCurrentStorageArray() );
+		}
+
+		vFinal = imagesFlattened.get( "V" );
+		zFinal = imagesFlattened.get( "Z" );
+		return true;
+	}
 	*/
+
+
 
 
 
@@ -1450,33 +1426,27 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 		private int ITER;				// iteration count for the optimization
 		private Mestimator MESTIMATOR;	// specifies "CAUCHY" or "LS" (least squares)
 		private int TERMSFLAG;			// flag specifing which terms to include in the energy function
-		private final static double LAMBDA_ZERO = Math.sqrt(10)/* / 2500*/;	// coefficient for the zero-light term ----- worked well with 1e6
-		private final static double LAMBDA_VREG = 1e13/* / 2500*/;			// coefficient for the v regularization
-		private final static double LAMBDA_BARR = 1e6;//1e0/* / 2500*/;				// the barrier term coefficient  ---- doesn't affect much!
+		private double LAMBDA_ZERO = Math.sqrt(10)/* / 2500*/;	// coefficient for the zero-light term ----- worked well with 1e6
+		private double LAMBDA_VREG = 1e14/* / 2500*/;			// coefficient for the v regularization
+		private double LAMBDA_BARR = 1e6;//1e0/* / 2500*/;				// the barrier term coefficient  ---- doesn't affect much!
 		private double ZMIN;			// minimum possible value for Z
 		private double ZMAX;			// maximum possible value for Z
-
-		private final static boolean USE_PIVOTING = true;
-		private final static boolean USE_GLOBAL_MIN_KEY = true;
-
-		private final static double OPT_C1 = 1e-4;
-		private final static double OPT_C2 = 0.9;
 
 		private final int N;	// stack size
 		private final int numPixels;
 		private final long[] size;
 
-		private final TreeMap< Short, Integer >[] histograms;
+		private final TreeMap< Float, Short >[] histograms;
 		private double[] Q;
+		private ExecutorService executorService;
 
-		//private ExecutorService executorService;
 		private MultithreadedExecutor multithreadedExecutor;
 
 		// solution
 		private double[] vFinal, zFinal;
 
 
-		public Cidre( final TreeMap< Short, Integer >[] histograms, final double[] Q, final long[] size )
+		public Cidre( final TreeMap< Float, Short >[] histograms, final double[] Q, final long[] size )
 		{
 			this.histograms = histograms;
 			this.Q = Q;
@@ -1497,7 +1467,7 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 
 		public void run() throws Exception
 		{
-			//executorService = new SameThreadExecutorService();
+			executorService = new SameThreadExecutorService();
 			multithreadedExecutor = new MultithreadedExecutor();
 
 			// initial guesses for the correction surfaces
@@ -1507,49 +1477,44 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 
 			// Transform Q and S (which contains q) to the pivot space.
 			// The pivot space is just a shift of the origin to the median datum. First, the shift for Q:
-			if ( USE_PIVOTING )
-			{
-				final int mid_ind = (N-1) / 2;
-				PivotShiftX = Q[mid_ind];
-				System.out.println( "PivotShiftX="+PivotShiftX);
-				for (int i = 0; i < N; i++)
-					Q[i] -= PivotShiftX;
+//			int mid_ind = (N-1) / 2;
+			final int mid_ind = centerValueIndex(Q);
+			PivotShiftX = Q[mid_ind];
+			System.out.println( "min_ind="+mid_ind+", PivotShiftX="+PivotShiftX);
+			for (int i = 0; i < N; i++)
+				Q[i] -= PivotShiftX;
 
-				// next, the shift for each location q
-				PivotShiftY = new double[ numPixels ];
-				for ( int pixel = 0; pixel < numPixels; pixel++ )
-				{
-					int counter = 0;
-			        for ( final Entry< Short, Integer > entry : histograms[pixel].entrySet() )
-			        {
-			        	counter += entry.getValue();
-			        	if ( counter > mid_ind )
-			        	{
-			        		PivotShiftY[ pixel ] = entry.getKey();
-			        		break;
-			        	}
-			        }
-				}
-
-				// also, account for the pivot shift in b0
-				//b0 = b0 + PivotShiftX*v0 - PivotShiftY;
-				for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
-					b0[ pixelIndex ] += PivotShiftX * v0[ pixelIndex ] - PivotShiftY[ pixelIndex ];
-			}
-			else
+			// next, the shift for each location q
+			PivotShiftY = new double[ numPixels ];
+			for ( int pixel = 0; pixel < numPixels; pixel++ )
 			{
-				PivotShiftX = 0;
-				PivotShiftY = new double[ numPixels ];
+				int counter = 0;
+		        for ( final Entry< Float, Short > entry : histograms[pixel].entrySet() )
+		        {
+		        	counter += entry.getValue();
+		        	if ( counter > mid_ind )
+		        	{
+		        		PivotShiftY[ pixel ] = entry.getKey();
+		        		break;
+		        	}
+		        }
 			}
 
-			short minKey = 0;
-			if ( !USE_GLOBAL_MIN_KEY )
+			// also, account for the pivot shift in b0
+			//b0 = b0 + PivotShiftX*v0 - PivotShiftY;
+			for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
+				b0[ pixelIndex ] += PivotShiftX * v0[ pixelIndex ] - PivotShiftY[ pixelIndex ];
+
+
+			float minKey = Float.MAX_VALUE, maxKey = -Float.MAX_VALUE;
+			for ( int pixel = 0; pixel < numPixels; pixel++ )
 			{
-				minKey = Short.MAX_VALUE;
-				for ( int pixel = 0; pixel < numPixels; pixel++ )
-					minKey = (short) Math.min( histograms[ pixel ].firstKey(), minKey );
-				System.out.println( "minKey=" + minKey );
+				minKey = Math.min( histograms[ pixel ].firstKey(), minKey );
+				maxKey = Math.max( histograms[ pixel ].lastKey(),  maxKey );
 			}
+			System.out.println( "minKey=" + minKey + ", maxKey=" + maxKey );
+			Thread.sleep(2500);
+			//final float minKey = 0;
 
 			// some parameters initialization
 			ZMIN = 0;
@@ -1606,6 +1571,7 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 			// CAUCHY function
 			CAUCHY_W = computeStandardError(v1, b1);
 			System.out.println("CAUCHY_W="+CAUCHY_W);
+			Thread.sleep(2500);
 
 			// assign the remaining global variables needed in cdr_objective
 			ITER = 1;
@@ -1638,11 +1604,8 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 			//rescaleHelper(b, "b");
 
 			// Unpivot b: move pivot point back to the original location
-			if ( USE_PIVOTING )
-			{
-				for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
-					b[ pixelIndex ] -= PivotShiftX * v[ pixelIndex ] - PivotShiftY[ pixelIndex ];
-			}
+			for ( int pixelIndex = 0; pixelIndex < numPixels; pixelIndex++ )
+				b[ pixelIndex ] -= PivotShiftX * v[ pixelIndex ] - PivotShiftY[ pixelIndex ];
 
 			//rescaleHelper(b, "b_unpivoted");
 
@@ -1657,7 +1620,7 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 			vFinal = v;
 			zFinal = z;
 
-			//executorService.shutdown();
+			executorService.shutdown();
 			multithreadedExecutor.shutdown();
 		}
 
@@ -1673,8 +1636,8 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 			final double optTol    = minFuncOptions.optTol;
 			final int corrections  = minFuncOptions.Corr;
 
-			final double c1 = OPT_C1;
-			final double c2 = OPT_C2;
+			final double c1 = 1e-4;
+			final double c2 = 0.9;
 			final int LS_interp = 2;
 			final int LS_multi = 0;
 
@@ -1977,7 +1940,7 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 					final RealSum deriv_b_fitSum = new RealSum();
 
 					int counter = 0;
-					for ( final Entry< Short, Integer > entry : histograms[ pixel ].entrySet() )
+					for ( final Entry< Float, Short > entry : histograms[ pixel ].entrySet() )
 					{
 						final double qi = entry.getKey() - PivotShiftY[pixel];
 						for ( int j = 0; j < entry.getValue(); j++ )
@@ -2101,6 +2064,15 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 				final double[] sigmas = new double[max_exp + 2];
 				for (int i = -1; i <= max_exp; i++)
 					sigmas[i + 1] = Math.pow(2, i);
+//				int min_exp = -1, max_exp = -1;
+//				double[] sigmas = new double[max_exp - min_exp + 1];
+//				for (int i = min_exp; i <= max_exp; i++)
+//					sigmas[i - min_exp] = Math.pow(2, i);
+				if ( ITER == 1 )
+				{
+					System.out.println("LoG using sigmas: " + Arrays.toString(sigmas));
+					Thread.sleep(2500);
+				}
 
 				final RealSum E_vregSum = new RealSum();
 				//double E_vreg = 0;										// vreg term energy
@@ -2113,7 +2085,7 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 					final double[] sigmaSmaller = new double[ size.length ];
 					Arrays.fill( sigmaSmaller, sigma * 0.75 );
 					final double[] sigmaLarger = new double[ size.length ];
-					Arrays.fill( sigmaLarger, sigma * 1.2 );
+					Arrays.fill( sigmaLarger, sigma * 1.25 ); // *1.2
 
 					final ArrayImg< DoubleType, DoubleArray > vImg = ArrayImgs.doubles( v_vec, size );
 					final ExtendedRandomAccessibleInterval< DoubleType, ArrayImg< DoubleType, DoubleArray > > vImgExtended = Views.extendMirrorSingle( vImg );
@@ -2861,7 +2833,7 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 			{
 				final RealSum sum_residuals2 = new RealSum();
 		        int counter = 0;
-		        for ( final Entry< Short, Integer > entry : histograms[pixel].entrySet() )
+		        for ( final Entry< Float, Short > entry : histograms[pixel].entrySet() )
 		        {
 		        	final double qi = entry.getKey() - PivotShiftY[pixel];
 					for ( int j = 0; j < entry.getValue(); j++ )
@@ -2884,6 +2856,29 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 		    for (int i = 0; i < a.length; i++)
 		        sum.add( a[i] );
 		    return sum.getSum() / a.length;
+		}
+
+		private int centerValueIndex(final double[] a)
+		{
+			final double[] lSums = new double[a.length];
+			lSums[0] = a[0];
+			for ( int i = 1; i < a.length; i++ )
+				lSums[i] = lSums[i-1] + a[i];
+
+			double minDiff = Double.MAX_VALUE;
+			int minDiffIndex = -1;
+			for ( int i = 0; i < a.length; i++ )
+			{
+				final double sumLeft = i > 0 ? lSums[i-1] : 0;
+				final double sumRight = lSums[lSums.length-1] - lSums[i];
+				final double diff = Math.abs( sumRight - sumLeft );
+				if (minDiff > diff)
+				{
+					minDiff = diff;
+					minDiffIndex = i;
+				}
+			}
+			return minDiffIndex;
 		}
 
 

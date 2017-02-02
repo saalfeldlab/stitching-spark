@@ -17,7 +17,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.janelia.intensity.LinearIntensityMap;
-import org.janelia.util.ComparablePair;
 
 import ij.IJ;
 import ij.ImagePlus;
@@ -40,6 +39,7 @@ import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
+import net.imglib2.util.ComparablePair;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.SubsampleIntervalView;

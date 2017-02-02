@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.stitching.experimental;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -22,7 +22,6 @@ import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -32,6 +31,11 @@ import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.serializer.KryoSerializer;
+import org.janelia.stitching.ImageType;
+import org.janelia.stitching.TiffSliceLoader;
+import org.janelia.stitching.TileInfo;
+import org.janelia.stitching.TileInfoJSONProvider;
+import org.janelia.stitching.Utils;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -69,7 +73,7 @@ import scala.Tuple3;
 
 
 
-public class IlluminationCorrectionSpark implements Serializable
+public class IlluminationCorrectionSlice implements Serializable
 {
 	private static final long serialVersionUID = -8987192045944606043L;
 
@@ -123,14 +127,14 @@ public class IlluminationCorrectionSpark implements Serializable
 
 	public static void main( final String[] args ) throws Exception
 	{
-		final IlluminationCorrectionSpark driver = new IlluminationCorrectionSpark( args[ 0 ] );
+		final IlluminationCorrectionSlice driver = new IlluminationCorrectionSlice( args[ 0 ] );
 		driver.run();
 		driver.shutdown();
 		System.out.println("Done");
 	}
 
 
-	public IlluminationCorrectionSpark( final String inputFilepath )
+	public IlluminationCorrectionSlice( final String inputFilepath )
 	{
 		this.inputFilepath = inputFilepath;
 	}
@@ -197,7 +201,7 @@ public class IlluminationCorrectionSpark implements Serializable
 
 
 		elapsed = System.nanoTime();
-		if ( !allSliceHistogramsReady() )
+		if ( !allShrinkedSliceHistogramsReady() )
 		{
 			System.out.println("Computing histograms..." );
 
@@ -210,13 +214,15 @@ public class IlluminationCorrectionSpark implements Serializable
 			return;
 		}
 
+		System.out.println( "Loading histograms..");
 		loadHistograms();
-		numPixels = (int) rddHistogramsShrinked.count();
+		//numPixels = (int) rddHistogramsShrinked.count();
+		numPixels = (int) ( originalSize[0]*originalSize[1]*originalSize[2] );
 
-		final double minKey = rddHistogramsShrinked.mapToDouble( tuple -> tuple._2().firstKey() ).min();
+		final double minKey = 0;/*rddHistogramsShrinked.mapToDouble( tuple -> tuple._2().firstKey() ).min();
 		System.out.println( "minKey=" + minKey );
 
-		threadPool = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() / 2 );
+		threadPool = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() / 2 );*/
 
 		N = quantiles;
 		System.out.println( "Now working with shrinked stack of size " + N );
@@ -225,6 +231,12 @@ public class IlluminationCorrectionSpark implements Serializable
 		estimateQ();
 		elapsed = System.nanoTime() - elapsed;
 		System.out.println("estimateQ() took " + (elapsed/Math.pow(10,9))+"s");
+
+		/*if ( Q != null )
+		{
+			saveReferenceVectorToDisk( Q );
+			return;
+		}*/
 
 		// initial guesses for the correction surfaces
 		final double[] v0 = new double[ numPixels ];
@@ -747,12 +759,10 @@ public class IlluminationCorrectionSpark implements Serializable
 		final JavaRDD< Integer > rddSlices = sparkContext.parallelize( slices );
 		rddHistogramsShrinked =
 
-		shrinkStack(
-
 		rddSlices.flatMapToPair( slice ->
 			{
-				final TreeMap< Short, Integer >[] sliceHistograms = readSliceHistogramsFromDisk( slice );
-				final List< Tuple2< Long, TreeMap< Short, Integer > > > ret = new ArrayList<>( sliceHistograms.length );
+				final TreeMap< Float, Short >[] sliceHistograms = readShrinkedSliceHistogramsFromDisk( slice );
+				final List< Tuple2< Long, TreeMap< Float, Short > > > ret = new ArrayList<>( sliceHistograms.length );
 
 				final long[] dimensions2d = new long[] { originalSize[0], originalSize[1] };
 				final long[] dimensions3d = new long[] { originalSize[0], originalSize[1], getNumSlices() };
@@ -770,14 +780,8 @@ public class IlluminationCorrectionSpark implements Serializable
 				return ret.iterator();
 			}
 		)
-
-		)
-		.cache()
+		//.cache()
 		;
-
-
-		saveShrinkedSliceHistograms( rddHistogramsShrinked );
-		rddHistogramsShrinked = null;
 	}
 
 	private void saveShrinkedSliceHistograms( final JavaPairRDD< Long, TreeMap< Float, Short > > rdd ) throws Exception
@@ -912,6 +916,52 @@ public class IlluminationCorrectionSpark implements Serializable
 		}
 	}
 
+
+	private void saveReferenceVectorToDisk( final double[] vec ) throws Exception
+	{
+		final String path = inputFilepath + "_Q.ser";
+
+		final OutputStream os = new DataOutputStream(
+				new BufferedOutputStream(
+						new FileOutputStream( path )
+						)
+				);
+
+		//final Kryo kryo = kryoSerializer.newKryo();
+		final Kryo kryo = new Kryo();
+		kryo.register( double[].class );
+
+		//try ( final Output output = kryoSerializer.newKryoOutput() )
+		//{
+		//	output.setOutputStream( os );
+		try ( final Output output = new Output( os ) )
+		{
+			kryo.writeClassAndObject( output, vec );
+		}
+	}
+
+	private double[] readReferenceVectorFromDisk() throws Exception
+	{
+		final String path = inputFilepath + "_Q.ser";
+
+		if ( !Files.exists(Paths.get(path)) )
+			return null;
+
+		final InputStream is = new DataInputStream(
+				new BufferedInputStream(
+						new FileInputStream( path )
+						)
+				);
+
+		//final Kryo kryo = kryoSerializer.newKryo();
+		final Kryo kryo = new Kryo();
+		kryo.register( double[].class );
+
+		try ( final Input input = new Input( is ) )
+		{
+			return ( double[] ) kryo.readClassAndObject( input );
+		}
+	}
 
 
 	private void saveShrinkedSliceHistogramsToDisk( final int slice, final TreeMap<Float,Short>[] sliceHist ) throws Exception
@@ -1362,6 +1412,8 @@ public class IlluminationCorrectionSpark implements Serializable
 
 		for ( int i = 0; i < N; i++ )
 			Q[ i ] /= numWindowPoints;
+
+
 	}
 
 	private void computePivotShiftY( final int pivotIndex )

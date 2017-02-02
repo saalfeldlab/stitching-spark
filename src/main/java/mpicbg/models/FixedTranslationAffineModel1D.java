@@ -1,4 +1,4 @@
-package org.janelia.util;
+package mpicbg.models;
 
 import java.util.Collection;
 
@@ -9,7 +9,7 @@ import mpicbg.models.NoninvertibleModelException;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
 
-public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScalingAffineModel1D > implements InvertibleBoundable
+public class FixedTranslationAffineModel1D extends AbstractAffineModel1D< FixedTranslationAffineModel1D > implements InvertibleBoundable
 {
 	private static final long serialVersionUID = -6691788501310913119L;
 
@@ -21,14 +21,14 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 	protected double
 		i00 = 1.0, i01 = 0.0;
 
-	public FixedScalingAffineModel1D() { }
-	
-	public FixedScalingAffineModel1D( final double m00 )
+	public FixedTranslationAffineModel1D() { }
+
+	public FixedTranslationAffineModel1D( final double m01 )
 	{
-		this.m00 = m00;
+		this.m01 = m01;
 		invert();
 	}
-		
+
 	@Override
 	public double[] getMatrix( final double[] m )
 	{
@@ -93,7 +93,7 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 			final double[][] p,
 			final double[][] q,
 			final double[] w )
-		throws NotEnoughDataPointsException
+		throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		assert
 		p.length >= 1 &&
@@ -112,24 +112,27 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 
 		double pcx = 0;
 		double qcx = 0;
-	
+
 		double ws = 0.0;
-	
+
 		for ( int i = 0; i < l; ++i )
 		{
 			final double[] pX = p[ 0 ];
 			final double[] qX = q[ 0 ];
-	
+
 			final double ww = w[ i ];
 			ws += ww;
-	
+
 			pcx += ww * pX[ i ] * m00;
 			qcx += ww * qX[ i ];
 		}
 		pcx /= ws;
 		qcx /= ws;
-	
-		m01 = qcx - pcx;
+
+		if ( pcx == 0 )
+			throw new IllDefinedDataPointsException();
+
+		m00 = ( qcx - m01 ) / pcx;
 
 		invert();
 	}
@@ -144,7 +147,7 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 			final float[][] p,
 			final float[][] q,
 			final float[] w )
-		throws NotEnoughDataPointsException
+		throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		assert
 		p.length >= 1 &&
@@ -163,24 +166,27 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 
 		double pcx = 0;
 		double qcx = 0;
-	
+
 		double ws = 0.0;
-	
+
 		for ( int i = 0; i < l; ++i )
 		{
 			final float[] pX = p[ 0 ];
 			final float[] qX = q[ 0 ];
-	
+
 			final double ww = w[ i ];
 			ws += ww;
-	
+
 			pcx += ww * pX[ i ] * m00;
 			qcx += ww * qX[ i ];
 		}
 		pcx /= ws;
 		qcx /= ws;
-	
-		m01 = qcx - pcx;
+
+		if ( pcx == 0 )
+			throw new IllDefinedDataPointsException();
+
+		m00 = ( qcx - m01 ) / pcx;
 
 		invert();
 	}
@@ -193,37 +199,40 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 	 */
 	@Override
 	final public < P extends PointMatch >void fit( final Collection< P > matches )
-		throws NotEnoughDataPointsException
+		throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		if ( matches.size() < MIN_NUM_MATCHES )
 			throw new NotEnoughDataPointsException( matches.size() + " data points are not enough to estimate a 2d affine model, at least " + MIN_NUM_MATCHES + " data points required." );
 
 		double pcx = 0;
 		double qcx = 0;
-	
+
 		double ws = 0.0;
-	
+
 		for ( final P m : matches )
 		{
 			final double[] p = m.getP1().getL();
 			final double[] q = m.getP2().getW();
-	
+
 			final double w = m.getWeight();
 			ws += w;
-	
-			pcx += w * p[ 0 ] * m00;
+
+			pcx += w * p[ 0 ];
 			qcx += w * q[ 0 ];
 		}
 		pcx /= ws;
 		qcx /= ws;
-	
-		m01 = qcx - pcx;
-		
+
+		if ( pcx == 0 )
+			throw new IllDefinedDataPointsException();
+
+		m00 = ( qcx - m01 ) / pcx;
+
 		invert();
 	}
 
 	@Override
-	final public void set( final FixedScalingAffineModel1D m )
+	final public void set( final FixedTranslationAffineModel1D m )
 	{
 		m00 = m.m00;
 		m01 = m.m01;
@@ -234,9 +243,9 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 	}
 
 	@Override
-	public FixedScalingAffineModel1D copy()
+	public FixedTranslationAffineModel1D copy()
 	{
-		final FixedScalingAffineModel1D m = new FixedScalingAffineModel1D();
+		final FixedTranslationAffineModel1D m = new FixedTranslationAffineModel1D();
 		m.set( this );
 		return m;
 	}
@@ -256,7 +265,7 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 	}
 
 	@Override
-	final public void preConcatenate( final FixedScalingAffineModel1D model )
+	final public void preConcatenate( final FixedTranslationAffineModel1D model )
 	{
 		final double a00 = model.m00 * m00;
 		final double a01 = model.m00 * m01 + model.m01;
@@ -268,7 +277,7 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 	}
 
 	@Override
-	final public void concatenate( final FixedScalingAffineModel1D model )
+	final public void concatenate( final FixedTranslationAffineModel1D model )
 	{
 		final double a00 = m00 * model.m00;
 		final double a01 = m00 * model.m01 + m01;
@@ -310,9 +319,9 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 	 * TODO Not yet tested
 	 */
 	@Override
-	public FixedScalingAffineModel1D createInverse()
+	public FixedTranslationAffineModel1D createInverse()
 	{
-		final FixedScalingAffineModel1D ict = new FixedScalingAffineModel1D();
+		final FixedTranslationAffineModel1D ict = new FixedTranslationAffineModel1D();
 
 		ict.m00 = i00;
 		ict.m01 = i01;

@@ -30,8 +30,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.storage.StorageLevel;
 import org.janelia.util.Conversions;
-import org.janelia.util.FixedScalingAffineModel1D;
-import org.janelia.util.FixedTranslationAffineModel1D;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -44,6 +42,8 @@ import ij.plugin.ZProjector;
 import mpicbg.models.Affine1D;
 import mpicbg.models.AffineModel1D;
 import mpicbg.models.ConstantAffineModel1D;
+import mpicbg.models.FixedScalingAffineModel1D;
+import mpicbg.models.FixedTranslationAffineModel1D;
 import mpicbg.models.IdentityModel;
 import mpicbg.models.InterpolatedAffineModel1D;
 import mpicbg.models.InvertibleBoundable;
@@ -86,7 +86,7 @@ import net.imglib2.view.Views;
 import scala.Tuple2;
 
 
-public class IlluminationCorrectionHierarchical3D_SparkArrays implements Serializable, AutoCloseable
+public class IlluminationCorrection implements Serializable, AutoCloseable
 {
 	private static final long serialVersionUID = -8987192045944606043L;
 
@@ -127,7 +127,7 @@ public class IlluminationCorrectionHierarchical3D_SparkArrays implements Seriali
 
 	public static void main( final String[] args ) throws Exception
 	{
-		try ( final IlluminationCorrectionHierarchical3D_SparkArrays driver = new IlluminationCorrectionHierarchical3D_SparkArrays( args[ 0 ], args.length > 1 ? args[ 1 ] : null ) )
+		try ( final IlluminationCorrection driver = new IlluminationCorrection( args[ 0 ], args.length > 1 ? args[ 1 ] : null ) )
 		{
 			driver.run();
 		}
@@ -138,7 +138,7 @@ public class IlluminationCorrectionHierarchical3D_SparkArrays implements Seriali
 	public static <
 		T extends NativeType< T > & RealType< T >,
 		U extends NativeType< U > & RealType< U > >
-	ImagePlusImg< FloatType, ? > applyIlluminationCorrection(
+	ImagePlusImg< FloatType, ? > applyCorrection(
 			final RandomAccessibleInterval< T > src,
 			final RandomAccessibleInterval< U > v,
 			final RandomAccessibleInterval< U > z )
@@ -161,7 +161,7 @@ public class IlluminationCorrectionHierarchical3D_SparkArrays implements Seriali
 
 
 
-	public IlluminationCorrectionHierarchical3D_SparkArrays( final String inputFilepath, final String intervalStr ) throws Exception
+	public IlluminationCorrection( final String inputFilepath, final String intervalStr ) throws Exception
 	{
 		final String outputPath = Paths.get( inputFilepath ).getParent().toString() + "/" + subfolder;
 		histogramsPath = outputPath + "/" + "histograms";

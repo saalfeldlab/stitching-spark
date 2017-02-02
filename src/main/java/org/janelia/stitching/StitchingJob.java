@@ -28,7 +28,7 @@ public class StitchingJob implements Serializable {
 	{
 		Metadata, // mandatory step
 		Blur,
-		Shift,
+		Stitching,
 		IntensityCorrection,
 		Fusion,
 		Export
@@ -70,14 +70,14 @@ public class StitchingJob implements Serializable {
 	{
 		final List< PipelineStep > pipelineOnlyStepsList = new ArrayList<>();
 		if ( args.onlyBlur() ) 					pipelineOnlyStepsList.add( PipelineStep.Blur );
-		if ( args.onlyShift() ) 				pipelineOnlyStepsList.add( PipelineStep.Shift );
+		if ( args.onlyShift() ) 				pipelineOnlyStepsList.add( PipelineStep.Stitching );
 		if ( args.onlyIntensityCorrection() ) 	pipelineOnlyStepsList.add( PipelineStep.IntensityCorrection );
 		if ( args.onlyFuse() ) 					pipelineOnlyStepsList.add( PipelineStep.Fusion );
 		if ( args.onlyExport() ) 				pipelineOnlyStepsList.add( PipelineStep.Export );
 
 		final List< PipelineStep > pipelineNoStepsList = new ArrayList<>();
 		if ( args.noBlur() ) 					pipelineNoStepsList.add( PipelineStep.Blur );
-		if ( args.noShift() ) 					pipelineNoStepsList.add( PipelineStep.Shift );
+		if ( args.noShift() ) 					pipelineNoStepsList.add( PipelineStep.Stitching );
 		if ( args.noIntensityCorrection() ) 	pipelineNoStepsList.add( PipelineStep.IntensityCorrection );
 		if ( args.noFuse() ) 					pipelineNoStepsList.add( PipelineStep.Fusion );
 		if ( args.noExport() ) 					pipelineNoStepsList.add( PipelineStep.Export );

@@ -1,22 +1,13 @@
-package org.janelia.stitching;
+package mpicbg.models;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 
 import org.janelia.util.Conversions;
-import org.janelia.util.FixedScalingAffineModel1D;
-import org.janelia.util.FixedTranslationAffineModel1D;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-
-import mpicbg.models.AbstractAffineModel1D;
-import mpicbg.models.AffineModel1D;
-import mpicbg.models.IllDefinedDataPointsException;
-import mpicbg.models.NotEnoughDataPointsException;
-import mpicbg.models.Point;
-import mpicbg.models.PointMatch;
 
 public class AffineModel1DTest
 {

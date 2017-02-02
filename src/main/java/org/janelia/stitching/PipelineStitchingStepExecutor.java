@@ -20,7 +20,7 @@ import org.apache.spark.broadcast.Broadcast;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.stitching.analysis.ThresholdEstimation;
 import org.janelia.util.ImageImporter;
-import org.janelia.util.SameThreadExecutorService;
+import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
 import mpicbg.models.Tile;
@@ -49,11 +49,11 @@ import net.imglib2.view.Views;
  * @author Igor Pisarev
  */
 
-public class PipelineShiftStepExecutor extends PipelineStepExecutor
+public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 {
 	private static final long serialVersionUID = -7152174064553332061L;
 
-	public PipelineShiftStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
+	public PipelineStitchingStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
 		super( job, sparkContext );
 	}
@@ -292,8 +292,7 @@ public class PipelineShiftStepExecutor extends PipelineStepExecutor
 								{
 									System.out.println( "Correcting " + i );
 									final RandomAccessibleInterval< T > img = ImagePlusImgs.from( impChannels[ i ] );
-									final ImagePlusImg< FloatType, ? > imgCorrected = IlluminationCorrectionHierarchical3D_SparkArrays.applyIlluminationCorrection(
-											Views.interval( img, overlaps[ j ] ), v, z );
+									final ImagePlusImg< FloatType, ? > imgCorrected = IlluminationCorrection.applyCorrection( Views.interval( img, overlaps[ j ] ), v, z );
 
 									impChannels[ i ].close();
 
