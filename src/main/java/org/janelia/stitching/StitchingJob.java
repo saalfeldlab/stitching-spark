@@ -51,7 +51,7 @@ public class StitchingJob implements Serializable {
 	public StitchingJob( final StitchingArguments args )
 	{
 		this.args = args;
-		pipeline = createPipeline( args );
+		pipeline = setUpPipeline( args );
 
 		final File inputFile = new File( args.inputFilePath() ).getAbsoluteFile();
 		baseFolder = saveFolder = inputFile.getParent();
@@ -66,31 +66,18 @@ public class StitchingJob implements Serializable {
 		baseFolder = "";
 	}
 
-	private EnumSet< PipelineStep > createPipeline( final StitchingArguments args )
+	private EnumSet< PipelineStep > setUpPipeline( final StitchingArguments args )
 	{
-		final List< PipelineStep > pipelineOnlyStepsList = new ArrayList<>();
-		if ( args.onlyBlur() ) 					pipelineOnlyStepsList.add( PipelineStep.Blur );
-		if ( args.onlyShift() ) 				pipelineOnlyStepsList.add( PipelineStep.Stitching );
-		if ( args.onlyIntensityCorrection() ) 	pipelineOnlyStepsList.add( PipelineStep.IntensityCorrection );
-		if ( args.onlyFuse() ) 					pipelineOnlyStepsList.add( PipelineStep.Fusion );
-		if ( args.onlyExport() ) 				pipelineOnlyStepsList.add( PipelineStep.Export );
+		final List< PipelineStep > pipelineStepsList = new ArrayList<>();
+		pipelineStepsList.add( PipelineStep.Metadata );
 
-		final List< PipelineStep > pipelineNoStepsList = new ArrayList<>();
-		if ( args.noBlur() ) 					pipelineNoStepsList.add( PipelineStep.Blur );
-		if ( args.noShift() ) 					pipelineNoStepsList.add( PipelineStep.Stitching );
-		if ( args.noIntensityCorrection() ) 	pipelineNoStepsList.add( PipelineStep.IntensityCorrection );
-		if ( args.noFuse() ) 					pipelineNoStepsList.add( PipelineStep.Fusion );
-		if ( args.noExport() ) 					pipelineNoStepsList.add( PipelineStep.Export );
+		if ( !args.fuseOnly() )
+			pipelineStepsList.add( PipelineStep.Stitching );
 
-		if ( !pipelineOnlyStepsList.isEmpty() && !pipelineNoStepsList.isEmpty() )
-			throw new IllegalArgumentException( "Contradicting pipeline steps" );
+		if ( !args.stitchOnly() )
+			pipelineStepsList.add( PipelineStep.Fusion );
 
-		if ( !pipelineOnlyStepsList.isEmpty() || args.onlyMeta() )
-			return EnumSet.of( PipelineStep.Metadata, pipelineOnlyStepsList.toArray( new PipelineStep[ 0 ] ) );
-		else if ( !pipelineNoStepsList.isEmpty() )
-			return EnumSet.complementOf( EnumSet.copyOf( pipelineNoStepsList ) );
-		else
-			return null;
+		return EnumSet.copyOf( pipelineStepsList );
 	}
 
 	public EnumSet< PipelineStep > getPipeline() { return pipeline; }

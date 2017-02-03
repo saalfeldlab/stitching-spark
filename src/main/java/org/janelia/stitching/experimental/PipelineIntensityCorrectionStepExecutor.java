@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.stitching.experimental;
 
 import java.io.File;
 import java.io.IOException;
@@ -17,6 +17,14 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.janelia.intensity.LinearIntensityMap;
+import org.janelia.stitching.Boundaries;
+import org.janelia.stitching.PipelineStepExecutor;
+import org.janelia.stitching.StitchingJob;
+import org.janelia.stitching.TileInfo;
+import org.janelia.stitching.TileInfoJSONProvider;
+import org.janelia.stitching.TileOperations;
+import org.janelia.stitching.TilePair;
+import org.janelia.stitching.Utils;
 
 import ij.IJ;
 import ij.ImagePlus;

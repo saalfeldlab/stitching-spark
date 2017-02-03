@@ -5,16 +5,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
 import net.imglib2.util.Pair;
 
+// TODO: add flexibility
 public class FilterStageCoordinates
 {
-	// TODO: add flexibility
-	/*public static void main( final String[] args ) throws Exception
+	// For extracting Z sections
+	public static void main( final String[] args ) throws Exception
 	{
 		final int d = 2;
 		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
@@ -30,7 +32,7 @@ public class FilterStageCoordinates
 
 		System.out.println( "zmin="+zMin+",zmax="+zMax );
 
-		for ( int z = 13; z <= 16; ++z )
+		for ( int z = zMin; z <= zMax; ++z )
 		{
 			final Map< Integer, int[] > tileIndexToCoord = new TreeMap<>();
 			for ( final Pair< TileInfo, int[] > tileCoord : tileCoords )
@@ -55,9 +57,11 @@ public class FilterStageCoordinates
 			TileInfoJSONProvider.saveTilesConfiguration( tilesDesired, newConfigPath );
 			TileInfoJSONProvider.savePairwiseShifts( shiftsDesired, Utils.addFilenameSuffix(newConfigPath, "_pairwise") );
 		}
-	}*/
+	}
 
-	public static void main( final String[] args ) throws Exception
+
+	// For extracting a range of sections [from, to]
+	/*public static void main( final String[] args ) throws Exception
 	{
 		final int d = 1;
 		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
@@ -85,5 +89,5 @@ public class FilterStageCoordinates
 		System.out.println("There are "+tilesDesired.size()+" desired tiles");
 
 		TileInfoJSONProvider.saveTilesConfiguration( tilesDesired.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix(args[0], "_20-22y" ) );
-	}
+	}*/
 }

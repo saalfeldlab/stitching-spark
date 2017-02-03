@@ -524,7 +524,7 @@ public class GlobalOptimizationPerformer
 				Log.info( "avgError (avg avg displacement) = " + avgError + ",  maxError (max avg displacement) = " + maxError );
 
 
-				if ( ( ( avgError*params.relativeThreshold < maxError && maxError > 0.95 ) || avgError > params.absoluteThreshold ) )
+				if ( ( ( avgError*params.relativeThreshold < maxError && maxError > params.absoluteThreshold ) || avgError > params.absoluteThreshold ) )
 				{
 					/*
 					Tile worstTile = tc.getWorstTile();

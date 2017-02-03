@@ -206,7 +206,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 						final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( job.getArgs().voxelDimensions() );
 						System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
-						final double blurSigma = job.getArgs().blurStrength();
+						final double blurSigma = job.getArgs().blurSigma();
 						final double[] blurSigmas = new  double[ normalizedVoxelDimensions.length ];
 						for ( int d = 0; d < blurSigmas.length; d++ )
 							blurSigmas[ d ] = blurSigma / normalizedVoxelDimensions[ d ];
@@ -567,91 +567,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				}
 			}
 		}
-
-
-
-//		for ( int d = 0; d < job.getDimensionality(); d++ )
-//		{
-//			final List< Double > distances = new ArrayList<>();
-//			for ( final SerializablePairWiseStitchingResult pair : pairwiseShifts )
-//				if ( pair.getIsValidOverlap() )
-//					distances.add( pair.getTilePair().getB().getPosition( d ) - pair.getTilePair().getA().getPosition( d ) - pair.getOffset( d ) );
-//			System.out.println( "Exporting " + distances.size() + " distance values for dim="+d );
-//			Collections.sort( distances );
-//			try ( final PrintWriter writer = new PrintWriter(Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/distances-"+(d==0?"x":(d==1?"y":"z"))+".txt", "UTF-8") )
-//			{
-//				for ( final double dist : distances )
-//					writer.println( dist );
-//			} catch (FileNotFoundException | UnsupportedEncodingException e) {
-//				e.printStackTrace();
-//			}
-//		}
-
-		// export distances.txt
-//		try {
-//			final List<Pair<TileInfo, int[]>> coordsList = Utils.getTileCoordinates( job.getTiles() );
-//			final Map< Integer, int[] > tileIndexToCoords = new TreeMap<>();
-//			for ( final Pair<TileInfo, int[]> x : coordsList )
-//				tileIndexToCoords.put( x.getA().getIndex(), x.getB() );
-//
-//			for ( int d = 0; d < job.getDimensionality(); d++ )
-//			{
-//				final List< Double > distances = new ArrayList<>();
-//				for ( final SerializablePairWiseStitchingResult pair : pairwiseShifts )
-//					if ( pair.getIsValidOverlap() && tileIndexToCoords.get(pair.getTilePair().getA().getIndex())[ d ] != tileIndexToCoords.get(pair.getTilePair().getB().getIndex())[ d ] )
-//						distances.add( pair.getTilePair().getB().getPosition( d ) - pair.getTilePair().getA().getPosition( d ) - pair.getOffset( d ) );
-//				System.out.println( "Exporting " + distances.size() + " distance values for dim="+d );
-//				Collections.sort( distances );
-//				try ( final PrintWriter writer = new PrintWriter(Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/distances-"+(d==0?"x":(d==1?"y":"z"))+".txt", "UTF-8") )
-//				{
-//					for ( final double dist : distances )
-//						writer.println( dist );
-//				} catch (FileNotFoundException | UnsupportedEncodingException e) {
-//					e.printStackTrace();
-//				}
-//			}
-//		} catch (final Exception e) {
-//			e.printStackTrace();
-//			throw new PipelineExecutionException(e.getMessage());
-//		}
-
-		/*try
-		{
-			final List< TileInfo > tilesSortedByTimestamp = Utils.sortTilesByTimestamp( job.getTiles() );
-
-		}
-		catch ( final Exception e )
-		{
-			e.printStackTrace();
-			throw new PipelineExecutionException( e.getMessage() );
-		}*/
-
-		// Mark pairs with large offset as invalid
-		/*System.out.println( "Removing pairs with large offset" );
-		int validPairsBefore = 0, validPairsAfter = 0;
-		for ( final SerializablePairWiseStitchingResult pair : pairwiseShifts )
-		{
-			if ( pair.getIsValidOverlap() )
-			{
-				validPairsBefore++;
-
-				boolean largeOffset = false;
-				for ( int d = 0; d < pair.getNumDimensions(); d++ )
-				{
-					final double dist = pair.getTilePair().getB().getPosition( d ) - pair.getTilePair().getA().getPosition( d ) - pair.getOffset( d );
-					if ( dist > Math.min( pair.getTilePair().getA().getSize( d ), pair.getTilePair().getB().getSize( d ) ) / 2 )
-					{
-						largeOffset = true;
-						break;
-					}
-				}
-				if ( largeOffset )
-					pair.setIsValidOverlap( false );
-				else
-					validPairsAfter++;
-			}
-		}
-		System.out.println( "Were valid before=" + validPairsBefore + ", after large offset filtering=" + validPairsAfter );*/
 
 
 		final Vector< ComparePair > comparePairs = new Vector<>();
