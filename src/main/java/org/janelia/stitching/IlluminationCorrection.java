@@ -29,7 +29,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.storage.StorageLevel;
-import org.janelia.util.Conversions;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -38,7 +37,6 @@ import com.esotericsoftware.kryo.serializers.MapSerializer;
 
 import ij.IJ;
 import ij.ImagePlus;
-import ij.plugin.ZProjector;
 import mpicbg.models.Affine1D;
 import mpicbg.models.AffineModel1D;
 import mpicbg.models.ConstantAffineModel1D;
@@ -61,6 +59,7 @@ import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.array.ArrayLocalizingCursor;
 import net.imglib2.img.array.ArrayRandomAccess;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
@@ -82,7 +81,6 @@ import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.IntervalView;
-import net.imglib2.view.RandomAccessiblePair;
 import net.imglib2.view.Views;
 import scala.Tuple2;
 
@@ -245,25 +243,6 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 		System.out.println( "Loading histograms.." );
 		final JavaPairRDD< Long, long[] > rddFullHistograms = loadHistograms();
 
-		/*final A additiveNoiseComponent;
-		if ( Files.exists( Paths.get( solutionPath + "/" + "z-avgProj.tif" ) ) )
-		{
-			final ImagePlus imp = IJ.openImage( solutionPath + "/" + "z-avgProj.tif" );
-			additiveNoiseComponent = ( A ) ArrayImgs.doubles(
-					Conversions.toDoubleArray( ( float[] ) imp.getProcessor().getPixels() ),
-					imp.getWidth(),
-					imp.getHeight() );
-			System.out.println( "Loaded additive component from disk" );
-		}
-		else
-		{
-			additiveNoiseComponent = estimateAdditiveNoiseComponent( rddFullHistograms );
-			final ImagePlus additiveNoiseComponentImp = ImageJFunctions.wrap( additiveNoiseComponent, "z-avgProj" );
-			new File( solutionPath ).mkdirs();
-			IJ.saveAsTiff( additiveNoiseComponentImp, solutionPath + "/" + additiveNoiseComponentImp.getTitle() + ".tif" );
-		}*/
-
-
 		final long[] referenceHistogram;
 		// Don't save & read the reference histogram for now, because it should be recalculated in case the number of bins or min/max values have changed
 //		if ( Files.exists( Paths.get( solutionPath + "/" + "referenceHistogram.ser" ) ) )
@@ -333,101 +312,70 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 		// Generate solutions iteratively from the smallest scale to the full size
 		Collections.reverse( scales );
 
-		// First Phase
-		if ( !Files.exists( Paths.get( solutionPath + "/0/v.tif" ) ) || !Files.exists( Paths.get( solutionPath + "/0/z.tif" ) ) )
+
+		final int iterations = 2;
+		Pair< A, A > lastSolution = null;
+		A downsampledSameComponent = null;
+		for ( int iter = 0; iter < iterations; iter++ )
 		{
-			Pair< A, A > lastSolution = null;
+			// For even iterations estimate only V (starting from it), for odd iterations estimate only Z
+			final ModelType modelType = iter % 2 == 0 ? ModelType.FixedTranslationAffineModel : ModelType.FixedScalingAffineModel;
+
+			final A fullScaleOtherComponent;
+			if ( lastSolution != null )
+				fullScaleOtherComponent = modelType == ModelType.FixedTranslationAffineModel ? lastSolution.getA() : lastSolution.getB();
+			else
+				fullScaleOtherComponent = null;
+
 			for ( final int scale : scales )
 			{
-				final ModelType modelType;
-				if ( lastSolution == null )
-					modelType = ModelType.AffineModel;
-				else if ( scale >= scales.size() / 2 )
-					modelType = ModelType.FixedTranslationAffineModel;
-				else
-					modelType = ModelType.FixedScalingAffineModel;
+				final RegularizerModelType regularizerModelType = downsampledSameComponent == null ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel;
 
-				final RegularizerModelType regularizerModelType;
-				if ( lastSolution == null )
-					regularizerModelType = RegularizerModelType.IdentityModel;
-				else
-					regularizerModelType = RegularizerModelType.AffineModel;
+				final JavaPairRDD< Long, long[] > rddDownsampledHistograms;
+				final A sameScaleOtherComponent;
 
-				lastSolution = leastSquaresInterpolationFitFirstPhase(
-						downsampleHistogramsFirstPhase(
-								rddFullHistograms,
-								scaleLevelToPixelSize.get( scale ),
-								scaleLevelToOffset.get( scale ),
-								scaleLevelToDimensions.get( scale ) ),
+				if ( scale > 0 )
+				{
+					final Map< Long, Interval > downsampledPixelToFullPixels = createMappingFromDownsampledPixelToFullPixels(
+							scaleLevelToPixelSize.get( scale ),
+							scaleLevelToOffset.get( scale ),
+							scaleLevelToDimensions.get( scale ) );
+
+					broadcastMappingFromDownsampledPixelToFullPixels( downsampledPixelToFullPixels );
+
+					rddDownsampledHistograms = downsampleHistograms( rddFullHistograms );
+
+					if ( fullScaleOtherComponent != null )
+						sameScaleOtherComponent = downsampleSolutionComponent( fullScaleOtherComponent, downsampledPixelToFullPixels, scaleLevelToDimensions.get( scale ) );
+					else
+						sameScaleOtherComponent = null;
+				}
+				else
+				{
+					rddDownsampledHistograms = rddFullHistograms;
+					sameScaleOtherComponent = fullScaleOtherComponent;
+				}
+
+				downsampledSameComponent = leastSquaresInterpolationFit(
+						rddDownsampledHistograms,
 						scale,
 						scaleLevelToDimensions.get( scale ),
 						referenceHistogram,
-						lastSolution,
+						downsampledSameComponent,
+						sameScaleOtherComponent,
 						downsamplingTransform,
 						modelType,
 						regularizerModelType );
 
-				if ( broadcastedFullPixelToDownsampledPixel != null )
-				{
-					broadcastedFullPixelToDownsampledPixel.destroy();
-					broadcastedFullPixelToDownsampledPixel = null;
-				}
-				if ( broadcastedDownsampledPixelToFullPixelsCount != null )
-				{
-					broadcastedDownsampledPixelToFullPixelsCount.destroy();
-					broadcastedDownsampledPixelToFullPixelsCount = null;
-				}
-
-				saveSolution( lastSolution, scale );
+				destroyBroadcastedMappingFromDownsampledPixelToFullPixels();
 			}
+
+			lastSolution = new ValuePair<>(
+					modelType == ModelType.FixedTranslationAffineModel ? downsampledSameComponent : fullScaleOtherComponent,
+					modelType == ModelType.FixedScalingAffineModel ? downsampledSameComponent : fullScaleOtherComponent );
+
+			saveSolution( iter, lastSolution );
 		}
-
-
-
-		// Second Phase
-		final ImagePlus zImp = IJ.openImage( solutionPath + "/0/z.tif" );
-		Utils.workaroundImagePlusNSlices( zImp );
-		final ZProjector zProj = new ZProjector( zImp );
-		zProj.setMethod( ZProjector.AVG_METHOD );
-		zProj.setStartSlice( 3 );
-		zProj.doProjection();
-		final ImagePlus zProjImp = zProj.getProjection();
-		final A additiveNoiseComponent = ( A ) ArrayImgs.doubles( Conversions.toDoubleArray( ( float[] ) zProjImp.getProcessor().getPixels() ), zProjImp.getWidth(), zProjImp.getHeight() );
-
-		A lastMultiplicativeComponent = null;
-		for ( final int scale : scales )
-		{
-			final RegularizerModelType regularizerModelType = ( lastMultiplicativeComponent == null ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel );
-			lastMultiplicativeComponent = leastSquaresInterpolationFitSecondPhase(
-					downsampleHistogramsSecondPhase(
-							rddFullHistograms,
-							additiveNoiseComponent,
-							scaleLevelToPixelSize.get( scale ),
-							scaleLevelToOffset.get( scale ),
-							scaleLevelToDimensions.get( scale ) ),
-					scale,
-					scaleLevelToDimensions.get( scale ),
-					referenceHistogram,
-					lastMultiplicativeComponent,
-					downsamplingTransform,
-					regularizerModelType );
-
-			if ( broadcastedFullPixelToDownsampledPixel != null )
-			{
-				broadcastedFullPixelToDownsampledPixel.destroy();
-				broadcastedFullPixelToDownsampledPixel = null;
-			}
-			if ( broadcastedDownsampledPixelToFullPixelsCount != null )
-			{
-				broadcastedDownsampledPixelToFullPixelsCount.destroy();
-				broadcastedDownsampledPixelToFullPixelsCount = null;
-			}
-
-			saveSolution( lastMultiplicativeComponent, "v-highres", scale );
-		}
-
-		//final RandomAccessibleInterval< DoubleType > correctedStack = generateCorrectionOutput( solution[ 0 ] );
-		//outputMeanStdBlockwise( correctedStack, null );
 
 		elapsed = System.nanoTime() - elapsed;
 		System.out.println( "----------" );
@@ -610,71 +558,72 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 		A extends ArrayImg< DoubleType, DoubleArray >,
 		M extends Model< M > & Affine1D< M >,
 		R extends Model< R > & Affine1D< R > & InvertibleBoundable >
-	Pair< A, A > leastSquaresInterpolationFitFirstPhase(
+	A leastSquaresInterpolationFit(
 			final JavaPairRDD< Long, long[] > rddHistograms,
 			final int scale,
 			final long[] size,
 			final long[] referenceHistogram,
-			final Pair< A, A > downsampledSolution,
+			final A downsampledSameComponent,
+			final A sameScaleOtherComponent,
 			final AffineTransform3D downsamplingTransform,
 			final ModelType modelType,
 			final RegularizerModelType regularizerModelType ) throws Exception
 	{
-		final long[] downsampledSize = ( downsampledSolution != null ? Intervals.dimensionsAsLongArray( downsampledSolution.getA() ) : null );
+		final long[] downsampledSize = ( downsampledSameComponent != null ? Intervals.dimensionsAsLongArray( downsampledSameComponent ) : null );
 		System.out.println( String.format("Working size: %s%s;  model: %s,  regularizer model: %s", Arrays.toString(size), (downsampledSize != null ? String.format(", downsampled size: %s", Arrays.toString(downsampledSize)) : ""), modelType, regularizerModelType) );
 
-		final Broadcast< Pair< A, A > > downsampledSolutionBroadcast = sparkContext.broadcast( downsampledSolution );
+		final Broadcast< A > downsampledSameComponentBroadcast = sparkContext.broadcast( downsampledSameComponent );
+		final Broadcast< A > sameScaleOtherComponentBroadcast = sparkContext.broadcast( sameScaleOtherComponent );
 		final Broadcast< AffineTransform3D > downsamplingTransformBroadcast = sparkContext.broadcast( downsamplingTransform );
 
-		final JavaPairRDD< Long, Pair< Double, Double > > rddSolutionPixels = rddHistograms.mapToPair( tuple ->
+		final JavaPairRDD< Long, Double > rddSolutionPixels = rddHistograms.mapToPair( tuple ->
 			{
 				final long[] histogram = tuple._2();
-				final Pair< A, A > downsampledSolutionLocal = downsampledSolutionBroadcast.value();
+
+				final long[] position = new long[ size.length ];
+				IntervalIndexer.indexToPosition( tuple._1(), size, position );
 
 				// accumulated histograms have N*(number of aggregated full-scale pixels) items,
 				// so we need to compensate for that by multuplying reference histogram values by the same amount
 				final int referenceHistogramMultiplier = broadcastedDownsampledPixelToFullPixelsCount != null ? broadcastedDownsampledPixelToFullPixelsCount.value()[ tuple._1().intValue() ] : 1;
-
 				final List< PointMatch > matches = generateHistogramMatches( histogram, referenceHistogram, referenceHistogramMultiplier );
 
-				final double[] mPrev;
-				if ( downsampledSolutionLocal != null )
+				final Double downsampledSameComponentValue;
+				if ( downsampledSameComponentBroadcast.value() != null )
 				{
-					final long[] position = new long[ size.length ];
-					IntervalIndexer.indexToPosition( tuple._1(), size, position );
-
-//					final RandomAccessiblePair< DoubleType, DoubleType > interpolatedDownsampledSolution = new RandomAccessiblePair<>(
-//							prepareRegularizerImage( downsampledSolutionLocal.getA(), scale ),
-//							prepareRegularizerImage( downsampledSolutionLocal.getB(), scale ) );
-					final RandomAccessiblePair< DoubleType, DoubleType > interpolatedDownsampledSolution = new RandomAccessiblePair<>(
-							prepareRegularizerImage( downsampledSolutionLocal.getA(), downsamplingTransformBroadcast.value() ),
-							prepareRegularizerImage( downsampledSolutionLocal.getB(), downsamplingTransformBroadcast.value() ) );
-
-					final RandomAccessiblePair< DoubleType, DoubleType >.RandomAccess interpolatedDownsampledSolutionRandomAccess = interpolatedDownsampledSolution.randomAccess();
-					interpolatedDownsampledSolutionRandomAccess.setPosition( position );
-
-					mPrev = new double[]
-						{
-							interpolatedDownsampledSolutionRandomAccess.getA().get(),
-							interpolatedDownsampledSolutionRandomAccess.getB().get()
-						};
+					final RandomAccessible< DoubleType > downsampledSameComponentImg = prepareRegularizerImage(
+							downsampledSameComponentBroadcast.value(),
+							downsamplingTransformBroadcast.value() );
+					final RandomAccess< DoubleType > downsampledSameComponentImgRandomAccess = downsampledSameComponentImg.randomAccess();
+					downsampledSameComponentImgRandomAccess.setPosition( position );
+					downsampledSameComponentValue = downsampledSameComponentImgRandomAccess.get().get();
 				}
 				else
 				{
-					mPrev = null;
+					downsampledSameComponentValue = null;
+				}
+
+				final Double sameScaleOtherComponentValue;
+				if ( sameScaleOtherComponentBroadcast.value() != null )
+				{
+					final RandomAccessible< DoubleType > sameScaleOtherComponentImg = sameScaleOtherComponentBroadcast.value();
+					final RandomAccess< DoubleType > sameScaleOtherComponentImgRandomAccess = sameScaleOtherComponentImg.randomAccess();
+					sameScaleOtherComponentImgRandomAccess.setPosition( position );
+					sameScaleOtherComponentValue = sameScaleOtherComponentImgRandomAccess.get().get();
+				}
+				else
+				{
+					sameScaleOtherComponentValue = null;
 				}
 
 				final M model;
 				switch ( modelType )
 				{
-				case AffineModel:
-					model = ( M ) new AffineModel1D();
-					break;
 				case FixedTranslationAffineModel:
-					model = ( M ) new FixedTranslationAffineModel1D( mPrev[ 1 ] );
+					model = ( M ) new FixedTranslationAffineModel1D( sameScaleOtherComponentValue == null ? 0 : sameScaleOtherComponentValue );
 					break;
 				case FixedScalingAffineModel:
-					model = ( M ) new FixedScalingAffineModel1D( mPrev[ 0 ] );
+					model = ( M ) new FixedScalingAffineModel1D( sameScaleOtherComponentValue == null ? 1 : sameScaleOtherComponentValue );
 					break;
 				default:
 					model = null;
@@ -688,8 +637,12 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 					regularizerModel = ( R ) new IdentityModel();
 					break;
 				case AffineModel:
+					final Double multiplicativeComponentValue = modelType == ModelType.FixedTranslationAffineModel ? downsampledSameComponentValue : sameScaleOtherComponentValue;
+					final Double additiveComponentValue = modelType == ModelType.FixedScalingAffineModel ? downsampledSameComponentValue : sameScaleOtherComponentValue;
 					final AffineModel1D downsampledModel = new AffineModel1D();
-					downsampledModel.set( mPrev[ 0 ], mPrev[ 1 ] );
+					downsampledModel.set(
+							multiplicativeComponentValue != null ? multiplicativeComponentValue : 1,
+							additiveComponentValue != null ? additiveComponentValue : 0 );
 					regularizerModel = ( R ) downsampledModel;
 					break;
 				default:
@@ -715,42 +668,31 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 				final double[] mCurr = new double[ 2 ];
 				interpolatedModel.toArray( mCurr );
 
-				return new Tuple2<>( tuple._1(), new ValuePair<>( mCurr[ 0 ], mCurr[ 1 ] ) );
+				return new Tuple2<>(
+						tuple._1(),
+						modelType == ModelType.FixedTranslationAffineModel ? mCurr[ 0 ] : mCurr[ 1 ] );
 			} );
 
-		final List< Tuple2< Long, Pair< Double, Double > > > solutionPixels  = rddSolutionPixels.collect();
+		final List< Tuple2< Long, Double > > solutionPixels  = rddSolutionPixels.collect();
 
-		downsampledSolutionBroadcast.destroy();
+		downsampledSameComponentBroadcast.destroy();
+		sameScaleOtherComponentBroadcast.destroy();
+		downsamplingTransformBroadcast.destroy();
 
-		final Pair< A, A > solution = ( Pair< A, A >) new ValuePair<>( ArrayImgs.doubles( size ), ArrayImgs.doubles( size ) );
-		final RandomAccessiblePair< DoubleType, DoubleType >.RandomAccess solutionRandomAccess = new RandomAccessiblePair<>( solution.getA(), solution.getB() ).randomAccess();
+		final A solution = ( A ) ArrayImgs.doubles( size );
+		final ArrayRandomAccess< DoubleType > solutionRandomAccess = solution.randomAccess();
 		final long[] position = new long[ size.length ];
-		for ( final Tuple2< Long, Pair< Double, Double > > tuple : solutionPixels )
+		for ( final Tuple2< Long, Double > tuple : solutionPixels )
 		{
 			IntervalIndexer.indexToPosition( tuple._1(), size, position );
 			solutionRandomAccess.setPosition( position );
-
-			solutionRandomAccess.getA().set( tuple._2().getA() );
-			solutionRandomAccess.getB().set( tuple._2().getB() );
+			solutionRandomAccess.get().set( tuple._2() );
 		}
 
 		System.out.println( "Got solution for scale=" + scale );
 		return solution;
 	}
 
-
-	/*private < T extends RealType< T > & NativeType< T > > RandomAccessible< T > prepareRegularizerImage( final Img< T > srcImg, final int level )
-	{
-		// Define the transform
-		final double[] scale = new double[ srcImg.numDimensions() ], translation = new double[ srcImg.numDimensions() ];
-		Arrays.fill( scale, 2 );
-		Arrays.fill( translation, ( level > 0 ? -0.5 : -1 ) );
-		final ScaleAndTranslation transform = new ScaleAndTranslation( scale, translation );
-
-		return RealViews.affine(
-				Views.interpolate( Views.extendBorder( srcImg ), new NLinearInterpolatorFactory<>() ),
-				transform );
-	}*/
 
 	private < T extends RealType< T > & NativeType< T > > RandomAccessible< T > prepareRegularizerImage( final Img< T > downsampledImg, final AffineTransform3D downsamplingTransform )
 	{
@@ -884,30 +826,16 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	}
 
 
-	private JavaPairRDD< Long, long[] > downsampleHistogramsFirstPhase(
-			final JavaPairRDD< Long, long[] > rddFullHistograms,
+	private Map< Long, Interval > createMappingFromDownsampledPixelToFullPixels(
 			final long[] pixelSize,
 			final long[] offset,
 			final long[] downsampledSize )
 	{
-		// Check if targetScaleLevel==fullScaleLevel so we don't have to downsample
-		boolean fullScale = true;
-		for ( int d = 0; d < workingInterval.numDimensions(); d++ )
-			fullScale &= ( workingInterval.dimension( d ) == downsampledSize[ d ] );
-		if ( fullScale )
-			return rddFullHistograms;
-
-		System.out.println( "Downsampling histograms from " + Arrays.toString( Intervals.dimensionsAsLongArray( workingInterval ) ) + " to " + Arrays.toString( downsampledSize ) );
-
-		// create a mapping of: downsampled pixel -> list of original pixels
-		long elapsed = System.nanoTime();
-
 		final int n = workingInterval.numDimensions();
 		final long numFullPixels = Intervals.numElements( workingInterval );
 		final long numDownsampledPixels = Intervals.numElements( new FinalDimensions( downsampledSize ) );
 
-		final int[] fullPixelToDownsampledPixel = new int[ ( int ) numFullPixels ];
-		final int[] downsampledPixelToFullPixelsCount = new int[ ( int ) numDownsampledPixels ];
+		final Map< Long, Interval > downsampledPixelToFullPixels = new HashMap<>();
 
 		final int[] downsampledPosition = new int[ downsampledSize.length ];
 		for ( long downsampledPixel = 0; downsampledPixel < numDownsampledPixels; downsampledPixel++ )
@@ -929,8 +857,26 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 			}
 			final Interval srcInterval = new FinalInterval( mins, maxs );
 
-			final long[] dimensions = Intervals.dimensionsAsLongArray( workingInterval );
+			downsampledPixelToFullPixels.put( downsampledPixel, srcInterval );
+		}
+
+		return downsampledPixelToFullPixels;
+	}
+
+	private void broadcastMappingFromDownsampledPixelToFullPixels( final Map< Long, Interval > downsampledPixelToFullPixels )
+	{
+		final int[] fullPixelToDownsampledPixel = new int[ ( int ) Intervals.numElements( workingInterval ) ];
+		final int[] downsampledPixelToFullPixelsCount = new int[ downsampledPixelToFullPixels.size() ];
+
+		final long[] dimensions = Intervals.dimensionsAsLongArray( workingInterval );
+		for ( final Entry< Long, Interval > entry : downsampledPixelToFullPixels.entrySet() )
+		{
+			final long downsampledPixel = entry.getKey();
+			final long[] mins = Intervals.minAsLongArray( entry.getValue() );
+			final long[] maxs = Intervals.maxAsLongArray( entry.getValue() );
+
 			final long[] position = mins.clone();
+			final int n = entry.getValue().numDimensions();
 			for ( int d = 0; d < n; )
 			{
 				fullPixelToDownsampledPixel[ ( int ) IntervalIndexer.positionToIndex( position, dimensions ) ] = ( int ) downsampledPixel;
@@ -945,15 +891,28 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 				}
 			}
 
-			downsampledPixelToFullPixelsCount[ ( int ) downsampledPixel ] = ( int ) Intervals.numElements( srcInterval );
+			downsampledPixelToFullPixelsCount[ ( int ) downsampledPixel ] = ( int ) Intervals.numElements( entry.getValue() );
 		}
-
-		elapsed = System.nanoTime() - elapsed;
-		System.out.println( "Populating matching arrays took " + elapsed / 1e9 + "s" );
 
 		broadcastedFullPixelToDownsampledPixel = sparkContext.broadcast( fullPixelToDownsampledPixel );
 		broadcastedDownsampledPixelToFullPixelsCount = sparkContext.broadcast( downsampledPixelToFullPixelsCount );
+	}
+	private void destroyBroadcastedMappingFromDownsampledPixelToFullPixels()
+	{
+		if ( broadcastedFullPixelToDownsampledPixel != null )
+		{
+			broadcastedFullPixelToDownsampledPixel.destroy();
+			broadcastedFullPixelToDownsampledPixel = null;
+		}
+		if ( broadcastedDownsampledPixelToFullPixelsCount != null )
+		{
+			broadcastedDownsampledPixelToFullPixelsCount.destroy();
+			broadcastedDownsampledPixelToFullPixelsCount = null;
+		}
+	}
 
+	private JavaPairRDD< Long, long[] > downsampleHistograms( final JavaPairRDD< Long, long[] > rddFullHistograms )
+	{
 		return rddFullHistograms
 				.mapToPair( tuple -> new Tuple2<>( ( long ) broadcastedFullPixelToDownsampledPixel.value()[ tuple._1().intValue() ], tuple._2() ) )
 				.reduceByKey(
@@ -966,133 +925,53 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	}
 
 
-
-	private < A extends ArrayImg< DoubleType, DoubleArray > > JavaPairRDD< Long, long[] > downsampleHistogramsSecondPhase(
-			final JavaPairRDD< Long, long[] > rddFullHistograms,
-			final A fullAdditiveComponent,
-			final long[] pixelSize,
-			final long[] offset,
+	private < A extends ArrayImg< DoubleType, DoubleArray > > A downsampleSolutionComponent(
+			final A fullComponent,
+			final Map< Long, Interval > downsampledPixelToFullPixels,
 			final long[] downsampledSize )
 	{
-		// Check if targetScaleLevel==fullScaleLevel
-		boolean fullScale = true;
-		for ( int d = 0; d < workingInterval.numDimensions(); d++ )
-			fullScale &= ( workingInterval.dimension( d ) == downsampledSize[ d ] );
-		if ( fullScale )
-		{
-			additiveComponent = fullAdditiveComponent;
-			return rddFullHistograms;
-		}
-
-		System.out.println( "Downsampling histograms from " + Arrays.toString( Intervals.dimensionsAsLongArray( workingInterval ) ) + " to " + Arrays.toString( downsampledSize ) );
-
-		// create a mapping of: downsampled pixel -> list of original pixels
-		long elapsed = System.nanoTime();
-
-		final int n = workingInterval.numDimensions();
 		final long numFullPixels = Intervals.numElements( workingInterval );
 		final long numDownsampledPixels = Intervals.numElements( new FinalDimensions( downsampledSize ) );
 
-
-		// prepare downsampled additive noise component
-		additiveComponent = ArrayImgs.doubles( downsampledSize[ 0 ], downsampledSize[ 1 ] );
-		final ArrayRandomAccess< DoubleType > srcRandomAccess = fullAdditiveComponent.randomAccess();
-		final ArrayRandomAccess< DoubleType > dstRandomAccess = additiveComponent.randomAccess();
-		final long[] fullPositionSlice = new long[ 2 ], downsampledPositionSlice = new long[ 2 ];
-		double additiveComponentPixelsSum = 0;
-
-		final int[] fullPixelToDownsampledPixel = new int[ ( int ) numFullPixels ];
-		final int[] downsampledPixelToFullPixelsCount = new int[ ( int ) numDownsampledPixels ];
-
-		final int[] downsampledPosition = new int[ downsampledSize.length ];
-		for ( long downsampledPixel = 0; downsampledPixel < numDownsampledPixels; downsampledPixel++ )
+		final A downsampledComponent = ( A ) ArrayImgs.doubles( downsampledSize );
+		final ArrayLocalizingCursor< DoubleType > downsampledComponentCursor = downsampledComponent.localizingCursor();
+		final long[] downsampledPosition = new long[ downsampledComponent.numDimensions() ];
+		while ( downsampledComponentCursor.hasNext() )
 		{
-			IntervalIndexer.indexToPosition( downsampledPixel, downsampledSize, downsampledPosition );
-			final long[] mins = new long[ workingInterval.numDimensions() ], maxs = new long[ workingInterval.numDimensions() ];
-			for ( int d = 0; d < mins.length; d++ )
-			{
-				if ( downsampledPosition[ d ] == 0 )
-				{
-					mins[ d ] = 0;
-					maxs[ d ] = offset[ d ] - 1;
-				}
-				else
-				{
-					mins[ d ] = offset[ d ] + pixelSize[ d ] * ( downsampledPosition[ d ] - 1 );
-					maxs[ d ] = Math.min( mins[ d ] + pixelSize[ d ], workingInterval.dimension( d ) ) - 1;
-				}
-			}
-			final Interval srcInterval = new FinalInterval( mins, maxs );
+			double fullPixelsSum = 0;
+			final DoubleType downsampledVal = downsampledComponentCursor.next();
 
-			final long[] dimensions = Intervals.dimensionsAsLongArray( workingInterval );
-			final long[] position = mins.clone();
-			for ( int d = 0; d < n; )
-			{
-				fullPixelToDownsampledPixel[ ( int ) IntervalIndexer.positionToIndex( position, dimensions ) ] = ( int ) downsampledPixel;
+			downsampledComponentCursor.localize( downsampledPosition );
+			final long downsampledPixel = IntervalIndexer.positionToIndex( downsampledPosition, downsampledSize );
 
-				// prepare downsampled additive noise component
-				if ( position[ 2 ] == 0 )
-				{
-					fullPositionSlice[ 0 ] = position[ 0 ];
-					fullPositionSlice[ 1 ] = position[ 1 ];
-					srcRandomAccess.setPosition( fullPositionSlice );
-					additiveComponentPixelsSum += srcRandomAccess.get().get();
-				}
+			final IntervalView< DoubleType > fullComponentInterval = Views.interval( fullComponent, downsampledPixelToFullPixels.get( downsampledPixel ) );
+			final Cursor< DoubleType > fullComponentIntervalCursor = Views.iterable( fullComponentInterval ).cursor();
+			while ( fullComponentIntervalCursor.hasNext() )
+				fullPixelsSum += fullComponentIntervalCursor.next().get();
 
-				for ( d = 0; d < n; ++d )
-				{
-					position[ d ]++;
-					if ( position[ d ] <= maxs[ d ] )
-						break;
-					else
-						position[ d ] = mins[ d ];
-				}
-			}
-
-			downsampledPixelToFullPixelsCount[ ( int ) downsampledPixel ] = ( int ) Intervals.numElements( srcInterval );
-
-			// prepare downsampled additive noise component
-			if ( downsampledPosition[ 2 ] == 0 )
-			{
-				downsampledPositionSlice[ 0 ] = downsampledPosition[ 0 ];
-				downsampledPositionSlice[ 1 ] = downsampledPosition[ 1 ];
-				dstRandomAccess.setPosition( downsampledPositionSlice );
-				dstRandomAccess.get().set( additiveComponentPixelsSum / ( Intervals.numElements( srcInterval ) / srcInterval.dimension( 2 ) ) );
-				additiveComponentPixelsSum = 0;
-			}
+			downsampledVal.set( fullPixelsSum / fullComponentInterval.size() );
 		}
 
-		elapsed = System.nanoTime() - elapsed;
-		System.out.println( "Populating matching arrays took " + elapsed / 1e9 + "s" );
-
-		broadcastedFullPixelToDownsampledPixel = sparkContext.broadcast( fullPixelToDownsampledPixel );
-		broadcastedDownsampledPixelToFullPixelsCount = sparkContext.broadcast( downsampledPixelToFullPixelsCount );
-
-		return rddFullHistograms
-				.mapToPair( tuple -> new Tuple2<>( ( long ) broadcastedFullPixelToDownsampledPixel.value()[ tuple._1().intValue() ], tuple._2() ) )
-				.reduceByKey(
-						( ret, other ) ->
-						{
-							for ( int i = 0; i < ret.length; i++ )
-								ret[ i ] += other[ i ];
-							return ret;
-						} );
+		return downsampledComponent;
 	}
 
-	private < A extends ArrayImg< DoubleType, DoubleArray > > void saveSolution( final Pair< A, A > solution, final int scale )
+	private < A extends ArrayImg< DoubleType, DoubleArray > > void saveSolution( final int iteration, final Pair< A, A > solution )
 	{
-		saveSolution( solution.getA(), "v", scale);
-		saveSolution( solution.getB(), "z", scale);
+		if ( solution.getA() != null )
+			saveSolution( iteration, solution.getA(), "v" );
+
+		if ( solution.getB() != null )
+			saveSolution( iteration, solution.getB(), "z" );
 	}
 
 
-	private < A extends ArrayImg< DoubleType, DoubleArray > > void saveSolution( final A solution, final String title, final int scale )
+	private < A extends ArrayImg< DoubleType, DoubleArray > > void saveSolution( final int iteration, final A solution, final String title )
 	{
-		final String path = solutionPath + "/" + scale + "/" + title + ".tif";
+		final String path = solutionPath + "/iter" + iteration + "/" + title + ".tif";
 
 		Paths.get( path ).getParent().toFile().mkdirs();
 
-		final ImagePlus imp = ImageJFunctions.wrap( solution, title + "-" + scale );
+		final ImagePlus imp = ImageJFunctions.wrap( solution, title );
 		Utils.workaroundImagePlusNSlices( imp );
 		IJ.saveAsTiff( imp, path );
 	}
