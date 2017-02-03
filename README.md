@@ -25,10 +25,20 @@ The application requires an input file containing the registered tiles configura
 ]
 ```
 
-#### Output
-The application performs pairwise stitching of the tiles and then finds the best shifts using global optimization.
-As a result, it generates JSON file with updated tile positions in the same format.
-The fusion of tile images should be performed separately for now.
+Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L23-L66)
+
+```bash
+./flintstone.sh \
+  10 \
+  stitching-spark-0.0.1-SNAPSHOT.jar \
+  org.janelia.stitching.StitchingSpark \
+  -i '/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/ch0-xy/10z/ch0_10z.json' \
+  [--stitch|fuse] \
+  -f 256
+  -v um=0.097,0.097,0.180
+```
+
+The application checks if a file 'ch0_10z_pairwise.json' exists. If not, it computes pairwise shifts for all tile pairs in approximate 3D six-neighborhood (i.e. diagonal overlaps are typically ignored, this is subject to change and for parameterization, e.g. how much overlap we consider sufficient to calculate pairwise shift vectors).  Shift vectors are stored in the earlier mentioned pairwise file.  Then, it performs global optimization with the parameters specified (or [hardcoded](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/PipelineStitchingStepExecutor.java#L703)).  Out put is saved as 'ch0_10z-final.json'
 
 
 # flat-field correction
