@@ -57,7 +57,7 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.SerializableFinalInterval;
+import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
@@ -69,9 +69,10 @@ import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.img.list.ListRandomAccess;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.realtransform.AffineGet;
+import net.imglib2.realtransform.AffineRandomAccessible;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
-import net.imglib2.realtransform.ScaleAndTranslation;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
@@ -105,7 +106,6 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 		IdentityModel
 	}
 
-	private final String subfolder = "hierarchical";
 	private final String histogramsPath, solutionPath;
 
 	private transient final JavaSparkContext sparkContext;
@@ -114,10 +114,8 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	private final long[] fullTileSize;
 	private final Interval workingInterval;
 
-	private final int bins = 4096;
-	private int histMinValue, histMaxValue;
-	//private final int histMinValue = 0, histMaxValue = 8360;	// TODO: extract from histograms, but it takes some time
-	//private final double binWidth = getBinWidth( histMinValue, histMaxValue, bins );
+	private final int bins;
+	private int histMinValue = Integer.MAX_VALUE, histMaxValue = Integer.MIN_VALUE;
 
 	private Broadcast< int[] > broadcastedFullPixelToDownsampledPixel;
 	private Broadcast< int[] > broadcastedDownsampledPixelToFullPixelsCount;
@@ -127,7 +125,11 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 
 	public static void main( final String[] args ) throws Exception
 	{
-		try ( final IlluminationCorrection driver = new IlluminationCorrection( args[ 0 ], args.length > 1 ? args[ 1 ] : null ) )
+		final IlluminationCorrectionArguments illuminationCorrectionArgs = new IlluminationCorrectionArguments( args );
+		if ( !illuminationCorrectionArgs.parsedSuccessfully() )
+			System.exit( 1 );
+
+		try ( final IlluminationCorrection driver = new IlluminationCorrection( illuminationCorrectionArgs ) )
 		{
 			driver.run();
 		}
@@ -161,29 +163,22 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 
 
 
-	public IlluminationCorrection( final String inputFilepath, final String intervalStr ) throws Exception
+	public IlluminationCorrection( final IlluminationCorrectionArguments args ) throws Exception
 	{
-		final String outputPath = Paths.get( inputFilepath ).getParent().toString() + "/" + subfolder;
-		histogramsPath = outputPath + "/" + "histograms";
-		solutionPath   = outputPath + "/" + "solution";
-
-		tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilepath );
+		tiles = TileInfoJSONProvider.loadTilesConfiguration( args.inputFilePath() );
 		fullTileSize = getMinSize( tiles );
+		workingInterval = args.cropMinMaxInterval( fullTileSize );
+		bins = args.bins();
 
-		if ( intervalStr != null )
-		{
-			final String[] intervalStrSplit = intervalStr.trim().split(",");
-			final long[] intervalMinMax = new long[ intervalStrSplit.length ];
-			for ( int i = 0; i < intervalMinMax.length; i++ )
-				intervalMinMax[ i ] = Long.parseLong( intervalStrSplit[ i ] );
-			workingInterval = SerializableFinalInterval.createMinMax( intervalMinMax );
-		}
-		else
-		{
-			workingInterval = SerializableFinalInterval.createMinSize( 0,0,0, fullTileSize[0],fullTileSize[1],fullTileSize[2] );
-		}
+		if ( args.histMinValue() != null ) histMinValue = args.histMinValue();
+		if ( args.histMaxValue() != null ) histMaxValue = args.histMaxValue();
 
 		System.out.println( "Working interval is at " + Arrays.toString( Intervals.minAsLongArray( workingInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsLongArray( workingInterval ) ) );
+
+		final String basePath = args.inputFilePath().substring( 0, args.inputFilePath().lastIndexOf( "." ) );
+		final String outputPath = basePath + "/" + ( args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr() );
+		histogramsPath = basePath + "/" + "histograms";
+		solutionPath = outputPath + "/" + "solution";
 
 		// check if all tiles have the same size
 		for ( final TileInfo tile : tiles )
@@ -198,7 +193,7 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 				.setAppName( "IlluminationCorrection3D" )
 				//.set( "spark.driver.maxResultSize", "8g" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
-				.set( "spark.kryoserializer.buffer.max", "2047m" )
+				//.set( "spark.kryoserializer.buffer.max", "2047m" )
 				.registerKryoClasses( new Class[] { Short.class, Integer.class, Long.class, Double.class, TreeMap.class, TreeMap[].class, long[].class, short[][].class, double[].class, List.class, Tuple2.class, Interval.class, FinalInterval.class, ArrayImg.class, DoubleType.class, DoubleArray.class } )
 				.set( "spark.rdd.compress", "true" )
 				//.set( "spark.executor.heartbeatInterval", "10000000" )
@@ -268,27 +263,29 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 			IJ.saveAsTiff( additiveNoiseComponentImp, solutionPath + "/" + additiveNoiseComponentImp.getTitle() + ".tif" );
 		}*/
 
+
 		final long[] referenceHistogram;
-		if ( Files.exists( Paths.get( solutionPath + "/" + "referenceHistogram.ser" ) ) )
-		{
-			referenceHistogram = readReferenceHistogramFromDisk();
-			System.out.println( "Loaded reference histogram from disk" );
-		}
-		else
+		// Don't save & read the reference histogram for now, because it should be recalculated in case the number of bins or min/max values have changed
+//		if ( Files.exists( Paths.get( solutionPath + "/" + "referenceHistogram.ser" ) ) )
+//		{
+//			referenceHistogram = readReferenceHistogramFromDisk();
+//			System.out.println( "Loaded reference histogram from disk" );
+//		}
+//		else
 		{
 			referenceHistogram = estimateReferenceHistogram( rddFullHistograms );
 			System.out.println( "Obtained reference histogram of size " + referenceHistogram.length );
 			System.out.println( "Reference histogram:");
 			System.out.println( Arrays.toString( referenceHistogram ) );
-			saveReferenceHistogramToDisk( referenceHistogram );
+//			saveReferenceHistogramToDisk( referenceHistogram );
 		}
 
 		// Define the transform and calculate the image size on each scale level
 		final AffineTransform3D downsamplingTransform = new AffineTransform3D();
 		downsamplingTransform.set(
-				0.5, 0, 0, -1,
-				0, 0.5, 0, -1,
-				0, 0, 0.5, -1
+				0.5, 0, 0, -0.5,
+				0, 0.5, 0, -0.5,
+				0, 0, 0.5, -0.5
 			);
 
 		final List< Integer > scales = new ArrayList<>();
@@ -309,7 +306,7 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 				pixelSize[ d ] = ( long ) ( scale == 0 ? 1 : scaleLevelToPixelSize.get( scale - 1 )[ d ] / downsamplingTransform.get( d, d ) );
 
 				// how many original pixels form the leftmost pixel on this scale level (which could be different from pixelSize[d] because of the translation component)
-				offset[ d ] = ( long ) ( scale == 0 ? 0 : Math.min( scaleLevelToPixelSize.get( scale - 1 )[ d ] * downsamplingTransform.get( d, 4 ) + pixelSize[ d ], workingInterval.dimension( d ) ) );
+				offset[ d ] = ( long ) ( scale == 0 ? 0 : Math.min( pixelSize[ d ] * downsamplingTransform.get( d, 4 ) + pixelSize[ d ], workingInterval.dimension( d ) ) );
 
 				// how many original pixels form the rightmost pixel on this scale level
 				final long remaining = workingInterval.dimension( d ) - offset[ d ];
@@ -508,6 +505,7 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 		System.out.println( String.format("Working size: %s%s;  model: FixedTranslationAffineModel,  regularizer model: %s", Arrays.toString(size), (downsampledSize != null ? String.format(", downsampled size: %s", Arrays.toString(downsampledSize)) : ""), regularizerModelType) );
 
 		final Broadcast< A > downsampledMultiplicativeComponentBroadcast = sparkContext.broadcast( downsampledMultiplicativeComponent );
+		final Broadcast< AffineTransform3D > downsamplingTransformBroadcast = sparkContext.broadcast( downsamplingTransform );
 
 		// prepare downsampled additive noise component
 		final Broadcast< A > additiveComponentBroadcast = sparkContext.broadcast( ( A ) additiveComponent );
@@ -531,7 +529,8 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 				final Double multiplicativeRegularizerValue, additiveRegularizerValue;
 				if ( downsampledMultiplicativeComponentLocal != null )
 				{
-					final RandomAccessible< DoubleType > multiplicativeRegularizerImg = prepareRegularizerImage( downsampledMultiplicativeComponentLocal, scale );
+//					final RandomAccessible< DoubleType > multiplicativeRegularizerImg = prepareRegularizerImage( downsampledMultiplicativeComponentLocal, scale );
+					final RandomAccessible< DoubleType > multiplicativeRegularizerImg = prepareRegularizerImage( downsampledMultiplicativeComponentLocal, downsamplingTransformBroadcast.value() );
 					final RandomAccess< DoubleType > multiplicativeRegularizerImgRandomAccess = multiplicativeRegularizerImg.randomAccess();
 					multiplicativeRegularizerImgRandomAccess.setPosition( position );
 					multiplicativeRegularizerValue = multiplicativeRegularizerImgRandomAccess.get().get();
@@ -625,6 +624,7 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 		System.out.println( String.format("Working size: %s%s;  model: %s,  regularizer model: %s", Arrays.toString(size), (downsampledSize != null ? String.format(", downsampled size: %s", Arrays.toString(downsampledSize)) : ""), modelType, regularizerModelType) );
 
 		final Broadcast< Pair< A, A > > downsampledSolutionBroadcast = sparkContext.broadcast( downsampledSolution );
+		final Broadcast< AffineTransform3D > downsamplingTransformBroadcast = sparkContext.broadcast( downsamplingTransform );
 
 		final JavaPairRDD< Long, Pair< Double, Double > > rddSolutionPixels = rddHistograms.mapToPair( tuple ->
 			{
@@ -643,9 +643,12 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 					final long[] position = new long[ size.length ];
 					IntervalIndexer.indexToPosition( tuple._1(), size, position );
 
+//					final RandomAccessiblePair< DoubleType, DoubleType > interpolatedDownsampledSolution = new RandomAccessiblePair<>(
+//							prepareRegularizerImage( downsampledSolutionLocal.getA(), scale ),
+//							prepareRegularizerImage( downsampledSolutionLocal.getB(), scale ) );
 					final RandomAccessiblePair< DoubleType, DoubleType > interpolatedDownsampledSolution = new RandomAccessiblePair<>(
-							prepareRegularizerImage( downsampledSolutionLocal.getA(), scale ),
-							prepareRegularizerImage( downsampledSolutionLocal.getB(), scale ) );
+							prepareRegularizerImage( downsampledSolutionLocal.getA(), downsamplingTransformBroadcast.value() ),
+							prepareRegularizerImage( downsampledSolutionLocal.getB(), downsamplingTransformBroadcast.value() ) );
 
 					final RandomAccessiblePair< DoubleType, DoubleType >.RandomAccess interpolatedDownsampledSolutionRandomAccess = interpolatedDownsampledSolution.randomAccess();
 					interpolatedDownsampledSolutionRandomAccess.setPosition( position );
@@ -736,7 +739,7 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	}
 
 
-	private < T extends RealType< T > & NativeType< T > > RandomAccessible< T > prepareRegularizerImage( final Img< T > srcImg, final int level )
+	/*private < T extends RealType< T > & NativeType< T > > RandomAccessible< T > prepareRegularizerImage( final Img< T > srcImg, final int level )
 	{
 		// Define the transform
 		final double[] scale = new double[ srcImg.numDimensions() ], translation = new double[ srcImg.numDimensions() ];
@@ -747,14 +750,24 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 		return RealViews.affine(
 				Views.interpolate( Views.extendBorder( srcImg ), new NLinearInterpolatorFactory<>() ),
 				transform );
-	}
-
-	/*private < T extends RealType< T > & NativeType< T > > RandomAccessible< T > prepareRegularizerImage( final Img< T > srcImg, final AffineTransform3D downsamplingTransform )
-	{
-		return RealViews.transform(
-				Views.interpolate( Views.extendBorder( srcImg ), new NLinearInterpolatorFactory<>() ),
-				downsamplingTransform.inverse() );
 	}*/
+
+	private < T extends RealType< T > & NativeType< T > > RandomAccessible< T > prepareRegularizerImage( final Img< T > downsampledImg, final AffineTransform3D downsamplingTransform )
+	{
+		final RealRandomAccessible< T > interpolatedDownsampledImage = Views.interpolate( Views.extendBorder( downsampledImg ), new NLinearInterpolatorFactory<>() );
+
+		// Preapply the transform with a positive translation in order to align the downsampled image to the upsampled image (in its coordinate space)
+		final double[] translation = downsamplingTransform.getTranslation();
+		for ( int d = 0; d < translation.length; d++ )
+			translation[ d ] = Math.abs( translation[ d ] );
+		final AffineTransform3D translationTransform = new AffineTransform3D();
+		translationTransform.setTranslation( translation );
+
+		final AffineRandomAccessible< T, AffineGet > alignedDownsampledImg = RealViews.affine( interpolatedDownsampledImage, translationTransform );
+
+		// Then, apply the inverse of the downsampling transform in order to map the downsampled image to the upsampled image
+		return RealViews.affine( alignedDownsampledImg, downsamplingTransform.inverse() );
+	}
 
 
 	private < V extends TreeMap< Short, Integer > > JavaPairRDD< Long, long[] > loadHistograms() throws Exception
@@ -789,22 +802,35 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 									srcCursor.get() ) );
 						}
 						return ret.iterator();
-					} );//.persist( StorageLevel.MEMORY_ONLY_SER() );
+					} );
 
-		// FIXME: fix the case when min < 0
-		/*final Tuple2< Short, Short > histMinMax = rddTreeMaps
-				.map( tuple -> tuple._2() )
-				.treeAggregate(
-					new Tuple2<>( Short.MAX_VALUE, Short.MIN_VALUE ),
-					( ret, map ) -> new Tuple2<>( ( short ) Math.min( ret._1(), map.firstKey() ), 	( short ) Math.max( ret._2(), map.lastKey() ) ),
-					( ret, val ) -> new Tuple2<>( ( short ) Math.min( ret._1(), val._1() ), 		( short ) Math.max( ret._2(), val._2() ) ),
-					getAggregationTreeDepth() );
+		if ( histMinValue == Integer.MAX_VALUE || histMaxValue == Integer.MIN_VALUE )
+		{
+			// extract min/max value from the histograms
+			rddTreeMaps.persist( StorageLevel.MEMORY_ONLY_SER() );
 
-		histMinValue = shortToUnsigned( histMinMax._1() );
-		histMaxValue = shortToUnsigned( histMinMax._2() );*/
+			final Tuple2< Integer, Integer > histMinMax = rddTreeMaps
+					.map( tuple -> tuple._2() )
+					.treeAggregate(
+						new Tuple2<>( Integer.MAX_VALUE, Integer.MIN_VALUE ),
+						( ret, map ) ->
+							{
+								int min = ret._1(), max = ret._2();
+								for ( final Short key : map.keySet() )
+								{
+									final int unsignedKey = shortToUnsigned( key );
+									min = Math.min( unsignedKey, min );
+									max = Math.max( unsignedKey, max );
+								}
+								return new Tuple2<>( min, max );
+							},
+						( ret, val ) -> new Tuple2<>( Math.min( ret._1(), val._1() ), Math.max( ret._2(), val._2() ) ),
+						getAggregationTreeDepth() );
 
-		histMinValue = 0;
-		histMaxValue = 10000;
+			histMinValue = histMinMax._1();
+			histMaxValue = histMinMax._2();
+		}
+
 		System.out.println( "Histograms min=" + histMinValue + ", max=" + histMaxValue );
 
 		final JavaPairRDD< Long, long[] > rddHistograms = rddTreeMaps
@@ -812,14 +838,14 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 					{
 						final long[] array = new long[ bins ];
 						for ( final Entry< Short, Integer > entry : histogram.entrySet() )
-							array[ getBinIndex( /*shortToUnsigned( */entry.getKey() /*)*/ ) ] += entry.getValue();
+							array[ getBinIndex( shortToUnsigned( entry.getKey() ) ) ] += entry.getValue();
 						return array;
 					} );
 
 		// enforce the computation so we can unpersist the parent RDD after that
 		System.out.println( "Total histograms (pixels) count = " + rddHistograms.persist( StorageLevel.MEMORY_ONLY_SER() ).count() );
 
-		//rddTreeMaps.unpersist();
+		rddTreeMaps.unpersist();
 		return rddHistograms;
 	}
 
@@ -836,7 +862,6 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	}
 	private int getBinIndex( final int value )
 	{
-		//return Math.min( ( int ) ( ( value - histMinValue ) / binWidth ), bins - 1 );
 		return getBinIndex( value, histMinValue, histMaxValue, bins );
 	}
 	public static int getBinIndex( final int value, final int histMinValue, final int histMaxValue, final int bins )
@@ -851,7 +876,6 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 
 	private int getBinValue( final int index )
 	{
-		//return ( short ) ( histMinValue + index * binWidth + binWidth / 2 );
 		return getBinValue( index, histMinValue, histMaxValue, bins );
 	}
 	public static int getBinValue( final int index, final int histMinValue, final int histMaxValue, final int bins )
@@ -866,7 +890,7 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 			final long[] offset,
 			final long[] downsampledSize )
 	{
-		// Check if targetScaleLevel==fullScaleLevel
+		// Check if targetScaleLevel==fullScaleLevel so we don't have to downsample
 		boolean fullScale = true;
 		for ( int d = 0; d < workingInterval.numDimensions(); d++ )
 			fullScale &= ( workingInterval.dimension( d ) == downsampledSize[ d ] );
