@@ -39,6 +39,8 @@ Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](htt
 
 The application checks if a file 'ch0_10z_pairwise.json' exists. If not, it computes pairwise shifts for all tile pairs in approximate 3D six-neighborhood (i.e. diagonal overlaps are typically ignored, this is subject to change and for parameterization, e.g. how much overlap we consider sufficient to calculate pairwise shift vectors).  Shift vectors are stored in the earlier mentioned pairwise file.  Then, it performs global optimization with the parameters specified (or [hardcoded](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/PipelineStitchingStepExecutor.java#L703)).  Out put is saved as 'ch0_10z-final.json'
 
+If the directory of the input json file contains two files `v.tif` and `z.tif`, then they are used as flatfield correction coefficients that are applied to each input tile.  TODO specify this nicely in the configuration, e.g. we have independent and actually pretty different correction fields fopr each channel.
+
 If you omit the `--stitch` parameter, the job also exports (fuses) the result.
 
 
@@ -58,6 +60,7 @@ Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](htt
 ```
 This generates an export of the stitched volume as specified in the json file.  The export uses '''max-border distance''' as fusion mode, no blending.  It currently exports into the ad-hoc BDV cell file format into the directory of the json input file, e.g. `/home/igor/3d-fullsize-ch1/stitching/ch0-xy/10z/channel0` and generates a json file for the BDV cell file viewer.
 
+As with stitching, if the directory of the input json file contains two files `v.tif` and `z.tif`, then they are used as flatfield correction coefficients that are applied to each input tile.  TODO specify this nicely in the configuration, e.g. we have independent and actually pretty different correction fields fopr each channel.
 
 # flat-field correction
 Run `org.janelia.stitching.IlluminationCorrection` with arguments explained [inline](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/IlluminationCorrectionArguments.java#L18-L36)
