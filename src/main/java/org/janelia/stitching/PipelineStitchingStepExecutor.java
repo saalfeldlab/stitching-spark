@@ -180,8 +180,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 
 		System.out.println( "Broadcasting illumination correction images" );
-		final ImagePlus vImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/illumination-correction/v-highres.tif" );
-		final ImagePlus zImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/illumination-correction/z-avg.tif" );
+		final ImagePlus vImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/v.tif" );
+		final ImagePlus zImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/z.tif" );
 		Utils.workaroundImagePlusNSlices( vImp );
 
 		final Broadcast< RandomAccessibleInterval< U > > vBroadcast = sparkContext.broadcast( ImagePlusImgs.from( vImp ) );

@@ -605,8 +605,8 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 		final List< CellFileImageMetaData > exports = new ArrayList<>();
 
 		System.out.println( "Broadcasting illumination correction images" );
-		final ImagePlus vImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/illumination-correction/v-highres.tif" );
-		final ImagePlus zImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/illumination-correction/z-avg.tif" );
+		final ImagePlus vImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/v.tif" );
+		final ImagePlus zImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/z.tif" );
 		if ( vImp != null )
 			Utils.workaroundImagePlusNSlices( vImp );
 
