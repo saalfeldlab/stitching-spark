@@ -48,6 +48,9 @@ If you omit the `--stitch` parameter, the job also exports (fuses) the result.
 
 Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L23-L66)
 
+## TODO
+* Should the '-v' flag below actually be '-r'? [Check here](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L47-L49)
+
 ```bash
 ./flintstone.sh \
   10 \
