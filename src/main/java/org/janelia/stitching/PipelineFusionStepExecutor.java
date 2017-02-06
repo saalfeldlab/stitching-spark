@@ -748,15 +748,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 									new File( levelTmpFolder + "/" + innerFolder ).mkdirs();
 									cell.setFilePath( levelTmpFolder + "/" + innerFolder + "/" + outFilename );
 
-									final ImagePlusImg< T, ? > outImg;
-									try
-									{
-										outImg = ( ImagePlusImg< T, ? > ) FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, tmpDownsampleFactors );
-									}
-									catch ( final Exception e )
-									{
-										throw new Exception( "Something wrong with cell " +cell.getIndex() );
-									}
+									final ImagePlusImg< T, ? > outImg = ( ImagePlusImg< T, ? > ) FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, tmpDownsampleFactors );
 
 									for ( int d = 0; d < cell.numDimensions(); d++ )
 									{
@@ -847,14 +839,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 							}
 							else
 							{
-								try
-								{
-									outImg = ( ImagePlusImg< T, ? > ) FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, downsampleFactors );
-								}
-								catch ( final Exception e )
-								{
-									throw new Exception( "Something wrong with cell " +cell.getIndex() );
-								}
+								outImg = ( ImagePlusImg< T, ? > ) FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, downsampleFactors );
 
 								for ( int d = 0; d < cell.numDimensions(); d++ )
 								{
