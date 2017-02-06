@@ -24,14 +24,6 @@ public class StitchingArguments implements Serializable {
 			usage = "Path to a tile configuration JSON file")
 	private String inputFilePath;
 
-	@Option(name = "-v", required = false,
-			usage = "Path to a multiplicative component of the illumination correction")
-	private String vFilePath;
-
-	@Option(name = "-z", required = false,
-			usage = "Path to a additive component of the illumination correction")
-	private String zFilePath;
-
 	@Option(name = "-t", aliases = { "--threshold" }, required = false,
 			usage = "A threshold value of cross correlation for accepting a shift")
 	private double crossCorrelationThreshold = -1.0;
@@ -109,8 +101,6 @@ public class StitchingArguments implements Serializable {
 	}
 
 	public String inputFilePath() { return inputFilePath; }
-	public String vFilePath() { return vFilePath; }
-	public String zFilePath() { return zFilePath; }
 	public double crossCorrelationThreshold() { return crossCorrelationThreshold; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurSigma() { return blurSigma; }
