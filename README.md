@@ -34,7 +34,7 @@ Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](htt
   org.janelia.stitching.StitchingSpark \
   -i '/home/igor/3d-fullsize-ch1/stitching/ch0-xy/10z/ch0_10z.json' \
   --stitch \
-  -v um=0.097,0.097,0.180
+  -r um=0.097,0.097,0.180
 ```
 
 The application checks if a file 'ch0_10z_pairwise.json' exists. If not, it computes pairwise shifts for all tile pairs in approximate 3D six-neighborhood (i.e. diagonal overlaps are typically ignored, this is subject to change and for parameterization, e.g. how much overlap we consider sufficient to calculate pairwise shift vectors).  Shift vectors are stored in the earlier mentioned pairwise file.  Then, it performs global optimization with the parameters specified (or [hardcoded](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/PipelineStitchingStepExecutor.java#L703)).  Output is saved as 'ch0_10z-final.json'
@@ -48,9 +48,6 @@ If you omit the `--stitch` parameter, the job also exports (fuses) the result.
 
 Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L23-L66)
 
-## TODO
-* Should the '-v' flag below actually be '-r'? [Check here](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L47-L49)
-
 ```bash
 ./flintstone.sh \
   10 \
@@ -59,7 +56,7 @@ Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](htt
   -i '/home/igor/3d-fullsize-ch1/stitching/ch0-xy/10z/ch0_10z.json' \
   --fuse \
   -f 256 \
-  -v um=0.097,0.097,0.180
+  -r um=0.097,0.097,0.180
 ```
 This generates an export of the stitched volume as specified in the json file.  The export uses '''max-border distance''' as fusion mode, no blending.  It currently exports into the ad-hoc BDV cell file format into the directory of the json input file, e.g. `/home/igor/3d-fullsize-ch1/stitching/ch0-xy/10z/channel0` and generates a json file for the BDV cell file viewer.
 
