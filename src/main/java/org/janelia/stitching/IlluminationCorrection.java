@@ -90,7 +90,8 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	private static final long serialVersionUID = -8987192045944606043L;
 
 	private static final double WINDOW_POINTS_PERCENT = 0.25;
-	private static final double INTERPOLATION_LAMBDA = 0.1;
+	private static final double INTERPOLATION_LAMBDA_V = 0.5;
+	private static final double INTERPOLATION_LAMBDA_Z = 0.0;
 
 	private enum ModelType
 	{
@@ -514,7 +515,7 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 				final InterpolatedAffineModel1D< M, ConstantAffineModel1D< R > > interpolatedModel = new InterpolatedAffineModel1D<>(
 						model,
 						new ConstantAffineModel1D<>( regularizerModel ),
-						INTERPOLATION_LAMBDA );
+						INTERPOLATION_LAMBDA_V );
 
 				try
 				{
@@ -649,21 +650,27 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 					regularizerModel = null;
 					break;
 				}
-
-				final InterpolatedAffineModel1D< M, ConstantAffineModel1D< R > > interpolatedModel = new InterpolatedAffineModel1D<>(
-						model,
-						new ConstantAffineModel1D<>( regularizerModel ),
-						INTERPOLATION_LAMBDA );
-
+				
+				boolean modelFound = false;
+				final ArrayList< PointMatch > inliers = new ArrayList<>();
 				try
 				{
-					// NOTE: if you're running filter() and experiencing ClassCastException, take a look at: https://github.com/axtimwalde/mpicbg/pull/32
-					interpolatedModel.fit( matches );
+//					modelFound = model.filter( matches, inliers, 4.0 );
+					model.fit( matches );
+					modelFound = true;
 				}
 				catch ( final Exception e )
 				{
+					modelFound = false;
 					e.printStackTrace();
 				}
+
+				final Affine1D< ? > interpolatedModel = modelFound ?
+						new InterpolatedAffineModel1D<>(
+							model,
+							new ConstantAffineModel1D<>( regularizerModel ),
+							modelType == ModelType.FixedTranslationAffineModel ? INTERPOLATION_LAMBDA_V : INTERPOLATION_LAMBDA_Z ) :
+						regularizerModel;
 
 				final double[] mCurr = new double[ 2 ];
 				interpolatedModel.toArray( mCurr );
