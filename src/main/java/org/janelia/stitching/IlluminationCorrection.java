@@ -323,7 +323,7 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 
 			final A fullScaleOtherComponent;
 			if ( lastSolution != null )
-				fullScaleOtherComponent = modelType == ModelType.FixedTranslationAffineModel ? lastSolution.getA() : lastSolution.getB();
+				fullScaleOtherComponent = modelType == ModelType.FixedTranslationAffineModel ? lastSolution.getB() : lastSolution.getA();
 			else
 				fullScaleOtherComponent = null;
 
