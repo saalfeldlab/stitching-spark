@@ -8,9 +8,13 @@ import mpicbg.models.NoninvertibleModelException;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
 
+/**
+ *
+ * @author Igor Pisarev &lt;pisarevi@janelia.hhmi.org&gt;
+ */
 public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScalingAffineModel1D > implements InvertibleBoundable
 {
-	private static final long serialVersionUID = -6691788501310913119L;
+	private static final long serialVersionUID = 7192480772943234240L;
 
 	static final protected int MIN_NUM_MATCHES = 2;
 

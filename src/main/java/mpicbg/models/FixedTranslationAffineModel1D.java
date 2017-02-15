@@ -9,9 +9,13 @@ import mpicbg.models.NoninvertibleModelException;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
 
+/**
+*
+* @author Igor Pisarev &lt;pisarevi@janelia.hhmi.org&gt;
+*/
 public class FixedTranslationAffineModel1D extends AbstractAffineModel1D< FixedTranslationAffineModel1D > implements InvertibleBoundable
 {
-	private static final long serialVersionUID = -6691788501310913119L;
+	private static final long serialVersionUID = -8230546552233602484L;
 
 	static final protected int MIN_NUM_MATCHES = 2;
 
@@ -110,29 +114,24 @@ public class FixedTranslationAffineModel1D extends AbstractAffineModel1D< FixedT
 		if ( l < MIN_NUM_MATCHES )
 			throw new NotEnoughDataPointsException( l + " data points are not enough to estimate a 2d affine model, at least " + MIN_NUM_MATCHES + " data points required." );
 
-		double pcx = 0;
-		double qcx = 0;
-
-		double ws = 0.0;
-
+		final double[] pX = p[ 0 ];
+		final double[] qX = q[ 0 ];
+		
+		double a = 0;
+		double b = 0;
 		for ( int i = 0; i < l; ++i )
 		{
-			final double[] pX = p[ 0 ];
-			final double[] qX = q[ 0 ];
-
-			final double ww = w[ i ];
-			ws += ww;
-
-			pcx += ww * pX[ i ] * m00;
-			qcx += ww * qX[ i ];
+			final double px = pX[ i ];
+			final double qx = qX[ i ] - m01;
+			final double wwpx = w[ i ] * px;
+			a += wwpx * px;
+			b += wwpx * qx;
 		}
-		pcx /= ws;
-		qcx /= ws;
 
-		if ( pcx == 0 )
+		if ( a == 0 )
 			throw new IllDefinedDataPointsException();
 
-		m00 = ( qcx - m01 ) / pcx;
+		m00 = b / a;
 
 		invert();
 	}
@@ -164,29 +163,24 @@ public class FixedTranslationAffineModel1D extends AbstractAffineModel1D< FixedT
 		if ( l < MIN_NUM_MATCHES )
 			throw new NotEnoughDataPointsException( l + " data points are not enough to estimate a 2d affine model, at least " + MIN_NUM_MATCHES + " data points required." );
 
-		double pcx = 0;
-		double qcx = 0;
-
-		double ws = 0.0;
-
+		final float[] pX = p[ 0 ];
+		final float[] qX = q[ 0 ];
+		
+		double a = 0;
+		double b = 0;
 		for ( int i = 0; i < l; ++i )
 		{
-			final float[] pX = p[ 0 ];
-			final float[] qX = q[ 0 ];
-
-			final double ww = w[ i ];
-			ws += ww;
-
-			pcx += ww * pX[ i ] * m00;
-			qcx += ww * qX[ i ];
+			final double px = pX[ i ];
+			final double qx = qX[ i ] - m01;
+			final double wwpx = w[ i ] * px;
+			a += wwpx * px;
+			b += wwpx * qx;
 		}
-		pcx /= ws;
-		qcx /= ws;
 
-		if ( pcx == 0 )
+		if ( a == 0 )
 			throw new IllDefinedDataPointsException();
 
-		m00 = ( qcx - m01 ) / pcx;
+		m00 = b / a;
 
 		invert();
 	}
@@ -204,29 +198,25 @@ public class FixedTranslationAffineModel1D extends AbstractAffineModel1D< FixedT
 		if ( matches.size() < MIN_NUM_MATCHES )
 			throw new NotEnoughDataPointsException( matches.size() + " data points are not enough to estimate a 2d affine model, at least " + MIN_NUM_MATCHES + " data points required." );
 
-		double pcx = 0;
-		double qcx = 0;
-
-		double ws = 0.0;
-
+		double a = 0;
+		double b = 0;
+		
 		for ( final P m : matches )
 		{
 			final double[] p = m.getP1().getL();
 			final double[] q = m.getP2().getW();
-
-			final double w = m.getWeight();
-			ws += w;
-
-			pcx += w * p[ 0 ];
-			qcx += w * q[ 0 ];
+		
+			final double px = p[ 0 ];
+			final double qx = q[ 0 ] - m01;
+			final double wwpx = m.getWeight() * px;
+			a += wwpx * px;
+			b += wwpx * qx;
 		}
-		pcx /= ws;
-		qcx /= ws;
 
-		if ( pcx == 0 )
+		if ( a == 0 )
 			throw new IllDefinedDataPointsException();
 
-		m00 = ( qcx - m01 ) / pcx;
+		m00 = b / a;
 
 		invert();
 	}
