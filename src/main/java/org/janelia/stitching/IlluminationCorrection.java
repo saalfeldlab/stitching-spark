@@ -313,7 +313,7 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 		Collections.reverse( scales );
 
 
-		final int iterations = 2;
+		final int iterations = 16;
 		Pair< A, A > lastSolution = null;
 		A downsampledSameComponent = null;
 		for ( int iter = 0; iter < iterations; iter++ )
