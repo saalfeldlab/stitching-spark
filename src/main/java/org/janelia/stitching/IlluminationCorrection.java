@@ -211,24 +211,6 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	public < A extends ArrayImg< DoubleType, DoubleArray >, V extends TreeMap< Short, Integer > >
 	void run() throws Exception
 	{
-		/*final Map< Integer, Map< String, double[] > > solutions = new TreeMap<>();
-		for ( int slice = 1; slice <= getNumSlices(); slice++ )
-		{
-			final Map< String, double[] > s = loadSolution( slice );
-			if ( s != null )
-				solutions.put(slice, s);
-		}
-		if ( !solutions.isEmpty() )
-		{
-			System.out.println( "Successfully loaded a solution for "+solutions.size()+" slices" );
-			for ( final Entry<Integer, Map<String, double[]>> entry : solutions.entrySet() )
-			{
-				System.out.println( "Correcting slice " + entry.getKey() );
-				correctImages(entry.getKey(), entry.getValue().get("v"), entry.getValue().get("z"));
-			}
-			return;
-		}*/
-
 		if ( !allHistogramsReady() )
 		{
 			populateHistograms();
@@ -244,21 +226,10 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 		System.out.println( "Loading histograms.." );
 		final JavaPairRDD< Long, long[] > rddFullHistograms = loadHistograms();
 
-		final long[] referenceHistogram;
-		// Don't save & read the reference histogram for now, because it should be recalculated in case the number of bins or min/max values have changed
-//		if ( Files.exists( Paths.get( solutionPath + "/" + "referenceHistogram.ser" ) ) )
-//		{
-//			referenceHistogram = readReferenceHistogramFromDisk();
-//			System.out.println( "Loaded reference histogram from disk" );
-//		}
-//		else
-		{
-			referenceHistogram = estimateReferenceHistogram( rddFullHistograms );
-			System.out.println( "Obtained reference histogram of size " + referenceHistogram.length );
-			System.out.println( "Reference histogram:");
-			System.out.println( Arrays.toString( referenceHistogram ) );
-//			saveReferenceHistogramToDisk( referenceHistogram );
-		}
+		final long[] referenceHistogram = estimateReferenceHistogram( rddFullHistograms );
+		System.out.println( "Obtained reference histogram of size " + referenceHistogram.length );
+		System.out.println( "Reference histogram:");
+		System.out.println( Arrays.toString( referenceHistogram ) );
 
 		// Define the transform and calculate the image size on each scale level
 		final AffineTransform3D downsamplingTransform = new AffineTransform3D();
@@ -437,124 +408,8 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 		return matches;
 	}
 
-	private <
-		A extends ArrayImg< DoubleType, DoubleArray >,
-		M extends Model< M > & Affine1D< M >,
-		R extends Model< R > & Affine1D< R > & InvertibleBoundable >
-	A leastSquaresInterpolationFitSecondPhase(
-			final JavaPairRDD< Long, long[] > rddHistograms,
-			final int scale,
-			final long[] size,
-			final long[] referenceHistogram,
-			final A downsampledMultiplicativeComponent,
-			final AffineTransform3D downsamplingTransform,
-			final RegularizerModelType regularizerModelType ) throws Exception
-	{
-		final long[] downsampledSize = ( downsampledMultiplicativeComponent != null ? Intervals.dimensionsAsLongArray( downsampledMultiplicativeComponent ) : null );
-		System.out.println( String.format("Working size: %s%s;  model: FixedTranslationAffineModel,  regularizer model: %s", Arrays.toString(size), (downsampledSize != null ? String.format(", downsampled size: %s", Arrays.toString(downsampledSize)) : ""), regularizerModelType) );
 
-		final Broadcast< A > downsampledMultiplicativeComponentBroadcast = sparkContext.broadcast( downsampledMultiplicativeComponent );
-		final Broadcast< AffineTransform3D > downsamplingTransformBroadcast = sparkContext.broadcast( downsamplingTransform );
-
-		// prepare downsampled additive noise component
-		final Broadcast< A > additiveComponentBroadcast = sparkContext.broadcast( ( A ) additiveComponent );
-		final ImagePlus additiveNoiseComponentImp = ImageJFunctions.wrap( additiveComponent, "z-avgProj-"+scale );
-		IJ.saveAsTiff( additiveNoiseComponentImp, solutionPath + "/" + additiveNoiseComponentImp.getTitle() + ".tif" );
-
-		final JavaPairRDD< Long, Double > rddMultiplicativeComponentPixels = rddHistograms.mapToPair( tuple ->
-			{
-				final long[] histogram = tuple._2();
-				final A downsampledMultiplicativeComponentLocal = downsampledMultiplicativeComponentBroadcast.value();
-				final A additiveComponentLocal = additiveComponentBroadcast.value();
-
-				final long[] position = new long[ size.length ];
-				IntervalIndexer.indexToPosition( tuple._1(), size, position );
-
-				// accumulated histograms have N*(number of aggregated full-scale pixels) items,
-				// so we need to compensate for that by multuplying reference histogram values by the same amount
-				final int referenceHistogramMultiplier = broadcastedDownsampledPixelToFullPixelsCount != null ? broadcastedDownsampledPixelToFullPixelsCount.value()[ tuple._1().intValue() ] : 1;
-				final List< PointMatch > matches = generateHistogramMatches( histogram, referenceHistogram, referenceHistogramMultiplier );
-
-				final Double multiplicativeRegularizerValue, additiveRegularizerValue;
-				if ( downsampledMultiplicativeComponentLocal != null )
-				{
-//					final RandomAccessible< DoubleType > multiplicativeRegularizerImg = prepareRegularizerImage( downsampledMultiplicativeComponentLocal, scale );
-					final RandomAccessible< DoubleType > multiplicativeRegularizerImg = prepareRegularizerImage( downsampledMultiplicativeComponentLocal, downsamplingTransformBroadcast.value() );
-					final RandomAccess< DoubleType > multiplicativeRegularizerImgRandomAccess = multiplicativeRegularizerImg.randomAccess();
-					multiplicativeRegularizerImgRandomAccess.setPosition( position );
-					multiplicativeRegularizerValue = multiplicativeRegularizerImgRandomAccess.get().get();
-				}
-				else
-				{
-					multiplicativeRegularizerValue = null;
-				}
-
-				final RandomAccessible< DoubleType > additiveRegularizerImg = Views.translate( Views.stack( additiveComponentLocal ), new long[] { 0, 0, position[ 2 ] } );
-				final RandomAccess< DoubleType > additiveRegularizerImgRandomAccess = additiveRegularizerImg.randomAccess();
-				additiveRegularizerImgRandomAccess.setPosition( position );
-				additiveRegularizerValue = additiveRegularizerImgRandomAccess.get().get();
-
-				final M model = ( M ) new FixedTranslationAffineModel1D( additiveRegularizerValue );
-
-				final R regularizerModel;
-				switch ( regularizerModelType )
-				{
-				case IdentityModel:
-					regularizerModel = ( R ) new IdentityModel();
-					break;
-				case AffineModel:
-					final AffineModel1D downsampledModel = new AffineModel1D();
-					downsampledModel.set( multiplicativeRegularizerValue, additiveRegularizerValue );
-					regularizerModel = ( R ) downsampledModel;
-					break;
-				default:
-					regularizerModel = null;
-					break;
-				}
-
-				final InterpolatedAffineModel1D< M, ConstantAffineModel1D< R > > interpolatedModel = new InterpolatedAffineModel1D<>(
-						model,
-						new ConstantAffineModel1D<>( regularizerModel ),
-						INTERPOLATION_LAMBDA_V );
-
-				try
-				{
-					// NOTE: if you're running filter() and experiencing ClassCastException, take a look at: https://github.com/axtimwalde/mpicbg/pull/32
-					interpolatedModel.fit( matches );
-				}
-				catch ( final Exception e )
-				{
-					e.printStackTrace();
-				}
-
-				final double[] mCurr = new double[ 2 ];
-				interpolatedModel.toArray( mCurr );
-
-				return new Tuple2<>( tuple._1(), mCurr[ 0 ] );
-			} );
-
-		final List< Tuple2< Long, Double > > multiplicativeComponentPixels  = rddMultiplicativeComponentPixels.collect();
-
-		downsampledMultiplicativeComponentBroadcast.destroy();
-		additiveComponentBroadcast.destroy();
-
-		final A multiplicativeComponent = ( A ) ArrayImgs.doubles( size );
-		final ArrayRandomAccess< DoubleType > randomAccess = multiplicativeComponent.randomAccess();
-		final long[] position = new long[ size.length ];
-		for ( final Tuple2< Long, Double > tuple : multiplicativeComponentPixels )
-		{
-			IntervalIndexer.indexToPosition( tuple._1(), size, position );
-			randomAccess.setPosition( position );
-			randomAccess.get().set( tuple._2() );
-		}
-
-		System.out.println( "Got solution for scale=" + scale );
-		return multiplicativeComponent;
-	}
-
-
-
-
+	@SuppressWarnings("unchecked")
 	private <
 		A extends ArrayImg< DoubleType, DoubleArray >,
 		M extends Model< M > & Affine1D< M >,
@@ -650,12 +505,11 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 					regularizerModel = null;
 					break;
 				}
-				
+
 				boolean modelFound = false;
-				final ArrayList< PointMatch > inliers = new ArrayList<>();
 				try
 				{
-//					modelFound = model.filter( matches, inliers, 4.0 );
+//					modelFound = model.filter( matches, new ArrayList<>(), 4.0 );
 					model.fit( matches );
 					modelFound = true;
 				}
@@ -838,12 +692,9 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 			final long[] offset,
 			final long[] downsampledSize )
 	{
-		final int n = workingInterval.numDimensions();
-		final long numFullPixels = Intervals.numElements( workingInterval );
-		final long numDownsampledPixels = Intervals.numElements( new FinalDimensions( downsampledSize ) );
-
 		final Map< Long, Interval > downsampledPixelToFullPixels = new HashMap<>();
 
+		final long numDownsampledPixels = Intervals.numElements( new FinalDimensions( downsampledSize ) );
 		final int[] downsampledPosition = new int[ downsampledSize.length ];
 		for ( long downsampledPixel = 0; downsampledPixel < numDownsampledPixels; downsampledPixel++ )
 		{
@@ -932,14 +783,12 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	}
 
 
+	@SuppressWarnings("unchecked")
 	private < A extends ArrayImg< DoubleType, DoubleArray > > A downsampleSolutionComponent(
 			final A fullComponent,
 			final Map< Long, Interval > downsampledPixelToFullPixels,
 			final long[] downsampledSize )
 	{
-		final long numFullPixels = Intervals.numElements( workingInterval );
-		final long numDownsampledPixels = Intervals.numElements( new FinalDimensions( downsampledSize ) );
-
 		final A downsampledComponent = ( A ) ArrayImgs.doubles( downsampledSize );
 		final ArrayLocalizingCursor< DoubleType > downsampledComponentCursor = downsampledComponent.localizingCursor();
 		final long[] downsampledPosition = new long[ downsampledComponent.numDimensions() ];
@@ -1054,10 +903,6 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 			if ( !Files.exists( Paths.get( generateSliceHistogramsPath( 0, slice ) ) ) )
 				remainingSlices.add( slice );
 
-		// FIXME: hardcoded for the second channel of the Sample1_C1 dataset
-		histMinValue = 0;
-		histMaxValue = 10000;
-
 		final int slicePixelsCount = ( int ) ( workingInterval.dimension( 0 ) * workingInterval.dimension( 1 ) );
 
 		for ( final int currentSlice : remainingSlices )
@@ -1109,6 +954,7 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	}*/
 
 	// TreeMap
+	@SuppressWarnings("unchecked")
 	private <
 		T extends NativeType< T > & RealType< T >,
 		V extends TreeMap< Short, Integer > >
@@ -1188,217 +1034,6 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	}
 
 
-
-
-	private < T extends NativeType< T > & RealType< T > > short[][] getHistogramsArrays( final int currentSlice ) throws Exception
-	{
-		final JavaRDD< TileInfo > rddTiles = sparkContext.parallelize( Arrays.asList( tiles ) );
-
-		final int slicePixelsCount = ( int ) ( workingInterval.dimension( 0 ) * workingInterval.dimension( 1 ) );
-
-		final short[][] histograms = rddTiles.treeAggregate(
-			new short[ slicePixelsCount ][ bins ],	// zero value
-
-			// generator
-			( intermediateHist, tile ) ->
-			{
-				final ImagePlus imp = TiffSliceLoader.loadSlice( tile, currentSlice );
-				Utils.workaroundImagePlusNSlices( imp );
-
-				final Img< T > img = ImagePlusImgs.from( imp );
-				final Cursor< T > cursor = Views.iterable( img ).localizingCursor();
-				final int[] dimensions = Intervals.dimensionsAsIntArray( img );
-				final int[] position = new int[ dimensions.length ];
-
-				while ( cursor.hasNext() )
-				{
-					cursor.fwd();
-					cursor.localize( position );
-					final int pixel = IntervalIndexer.positionToIndex( position, dimensions );
-					final short val = ( short ) cursor.get().getRealDouble();
-					intermediateHist[ pixel ][ getBinIndex( shortToUnsigned( val ) ) ]++;
-				}
-
-				imp.close();
-				return intermediateHist;
-			},
-
-			// reducer
-			( a, b ) ->
-			{
-				for ( int pixel = 0; pixel < a.length; pixel++ )
-					for ( int i = 0; i < bins; i++ )
-					a[ pixel ][ i ] += b[ pixel ][ i ];
-				return a;
-			},
-
-			getAggregationTreeDepth() );
-
-		return histograms;
-	}
-	private <
-		T extends NativeType< T > & RealType< T >,
-		V extends TreeMap< Short, Integer > >
-	V[] getHistogramsTreeMaps(final int currentSlice) throws Exception
-	{
-		final JavaRDD< TileInfo > rddTiles = sparkContext.parallelize( Arrays.asList( tiles ) );
-
-		final V[] histograms = rddTiles.treeAggregate(
-			null, // zero value
-
-			// generator
-			( intermediateHist, tile ) ->
-			{
-				final ImagePlus imp = TiffSliceLoader.loadSlice( tile, currentSlice );
-				Utils.workaroundImagePlusNSlices( imp );
-
-				final Img< T > img = ImagePlusImgs.from( imp );
-				final Cursor< T > cursor = Views.iterable( img ).localizingCursor();
-				final int[] dimensions = Intervals.dimensionsAsIntArray( img );
-				final int[] position = new int[ dimensions.length ];
-
-				final V[] ret;
-				if ( intermediateHist != null )
-				{
-					ret = intermediateHist;
-				}
-				else
-				{
-					ret = ( V[] ) new TreeMap[ (int) img.size() ];
-					for ( int i = 0; i < ret.length; i++ )
-						ret[ i ] = ( V ) new TreeMap< Short, Integer >();
-				}
-
-				while ( cursor.hasNext() )
-				{
-					cursor.fwd();
-					cursor.localize( position );
-					final int pixel = IntervalIndexer.positionToIndex( position, dimensions );
-					final short key = ( short ) cursor.get().getRealDouble();
-					ret[ pixel ].put( key, ret[ pixel ].getOrDefault( key, 0 ) + 1 );
-				}
-
-				imp.close();
-				return ret;
-			},
-
-			// reducer
-			( a, b ) ->
-			{
-				if ( a == null )
-					return b;
-				else if ( b == null )
-					return a;
-
-				for ( int pixel = 0; pixel < b.length; pixel++ )
-					for ( final Entry< Short, Integer > entry : b[ pixel ].entrySet() )
-						a[ pixel ].put( entry.getKey(), a[ pixel ].getOrDefault( entry.getKey(), 0 ) + entry.getValue() );
-				return a;
-			},
-
-			getAggregationTreeDepth() );
-
-		return histograms;
-	}
-
-	private Map< String, double[] > loadSolution( final int slice )
-	{
-		final Map< String, double[] > imagesFlattened = new HashMap<>();
-		imagesFlattened.put( "v", null );
-		imagesFlattened.put( "z", null );
-
-		for ( final Entry< String, double[] > entry : imagesFlattened.entrySet() )
-		{
-			final String path = solutionPath + "/" + entry.getKey() + "/" + slice + ".tif";
-			if ( !Files.exists( Paths.get( path ) ) )
-				return null;
-
-			final ImagePlus imp = IJ.openImage( path );
-			Utils.workaroundImagePlusNSlices( imp );
-
-			final Img< ? extends RealType > img = ImagePlusImgs.from( imp );
-			final Cursor< ? extends RealType > imgCursor = Views.flatIterable( img ).cursor();
-
-			final ArrayImg< DoubleType, DoubleArray > arrayImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( img ) );
-			final Cursor< DoubleType > arrayImgCursor = Views.flatIterable( arrayImg ).cursor();
-
-			while ( arrayImgCursor.hasNext() || imgCursor.hasNext() )
-				arrayImgCursor.next().setReal( imgCursor.next().getRealDouble() );
-
-			imp.close();
-			entry.setValue( arrayImg.update( null ).getCurrentStorageArray() );
-		}
-
-		return imagesFlattened;
-	}
-
-	private void correctImages( final int slice, final double[] v, final double[] z )
-	{
-		final String outPath = solutionPath + "/corrected/" + slice;
-		Paths.get( outPath ).toFile().mkdirs();
-
-		// Prepare broadcast variables for V and Z
-		final Broadcast< double[] > vBroadcasted = sparkContext.broadcast( v ), zBroadcasted = sparkContext.broadcast( z );
-
-		//final double v_mean = mean( vFinal );
-		//final double z_mean = mean( zFinal );
-
-		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( Arrays.asList( tiles ) );
-		rdd.foreach( tile ->
-				{
-					final ImagePlus imp = TiffSliceLoader.loadSlice(tile, slice);
-					Utils.workaroundImagePlusNSlices( imp );
-					final Img< ? extends RealType > img = ImagePlusImgs.from( imp );
-					final Cursor< ? extends RealType > imgCursor = Views.flatIterable( img ).cursor();
-
-					final ArrayImg< DoubleType, DoubleArray > vImg = ArrayImgs.doubles( vBroadcasted.value(), Intervals.dimensionsAsLongArray( img ) );
-					final ArrayImg< DoubleType, DoubleArray > zImg = ArrayImgs.doubles( zBroadcasted.value(), Intervals.dimensionsAsLongArray( img ) );
-					final Cursor< DoubleType > vCursor = Views.flatIterable( vImg ).cursor();
-					final Cursor< DoubleType > zCursor = Views.flatIterable( zImg ).cursor();
-
-					final ArrayImg< DoubleType, DoubleArray > correctedImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( img ) );
-					final Cursor< DoubleType > correctedImgCursor = Views.flatIterable( correctedImg ).cursor();
-
-					while ( correctedImgCursor.hasNext() || imgCursor.hasNext() )
-						correctedImgCursor.next().setReal( (imgCursor.next().getRealDouble() - zCursor.next().get()) / vCursor.next().get() );   // * v_mean + z_mean
-
-
-//						final ArrayImg< UnsignedShortType, ShortArray > correctedImgShort = ArrayImgs.unsignedShorts( originalSize );
-//						final Cursor< UnsignedShortType > correctedImgShortCursor = Views.flatIterable( correctedImgShort ).cursor();
-//						correctedImgCursor.reset();
-//						while ( correctedImgShortCursor.hasNext() || correctedImgCursor.hasNext() )
-//							correctedImgShortCursor.next().setReal( correctedImgCursor.next().get() );
-
-					final ImagePlus correctedImp = ImageJFunctions.wrap( correctedImg, "" );
-					Utils.workaroundImagePlusNSlices( correctedImp );
-					IJ.saveAsTiff( correctedImp, outPath + "/"+ Utils.addFilenameSuffix( Paths.get(tile.getFilePath()).getFileName().toString(), "_corrected" ) );
-
-					imp.close();
-					correctedImp.close();
-				}
-			);
-	}
-
-
-	private void saveSliceArrayHistogramsToDisk( final int scale, final int slice, final short[][] hist ) throws Exception
-	{
-		final String path = generateSliceHistogramsPath( scale, slice );
-
-		Paths.get( path ).getParent().toFile().mkdirs();
-
-		final OutputStream os = new DataOutputStream(
-				new BufferedOutputStream(
-						new FileOutputStream( path )
-						)
-				);
-
-		final Kryo kryo = new Kryo();
-		try ( final Output output = new Output( os ) )
-		{
-			kryo.writeClassAndObject( output, hist );
-		}
-	}
-
 	private < V extends TreeMap< Short, Integer > >void saveSliceHistogramsToDisk( final int scale, final int slice, final V[] hist ) throws Exception
 	{
 		final String path = generateSliceHistogramsPath( scale, slice );
@@ -1470,53 +1105,6 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	}
 
 
-	private void saveReferenceHistogramToDisk( final long[] referenceHistogram ) throws Exception
-	{
-		final String path = solutionPath + "/" + "referenceHistogram.ser";
-
-		Paths.get( path ).getParent().toFile().mkdirs();
-
-		final OutputStream os = new DataOutputStream(
-				new BufferedOutputStream(
-						new FileOutputStream( path )
-						)
-				);
-
-//		final Kryo kryo = kryoSerializer.newKryo();
-		final Kryo kryo = new Kryo();
-
-		//try ( final Output output = kryoSerializer.newKryoOutput() )
-		//{
-		//	output.setOutputStream( os );
-		try ( final Output output = new Output( os ) )
-		{
-			kryo.writeClassAndObject( output, referenceHistogram );
-		}
-	}
-
-	private long[] readReferenceHistogramFromDisk() throws Exception
-	{
-		final String path = solutionPath + "/" + "referenceHistogram.ser";
-
-		if ( !Files.exists(Paths.get(path)) )
-			return null;
-
-		final InputStream is = new DataInputStream(
-				new BufferedInputStream(
-						new FileInputStream( path )
-						)
-				);
-
-//		final Kryo kryo = kryoSerializer.newKryo();
-		final Kryo kryo = new Kryo();
-
-		try ( final Input input = new Input( is ) )
-		{
-			return ( long[] ) kryo.readClassAndObject( input );
-		}
-	}
-
-
 	private boolean allHistogramsReady() throws Exception
 	{
 		for ( int slice = 1; slice <= getNumSlices(); slice++ )
@@ -1539,10 +1127,6 @@ public class IlluminationCorrection implements Serializable, AutoCloseable
 	{
 		return ( int ) Math.ceil( Math.log( sparkContext.defaultParallelism() ) / Math.log( 2 ) );
 	}
-	/*private int getNumPartitionsForScaleLevel( final int scale )
-	{
-		return sparkContext.defaultParallelism() * ( 1 << scale );
-	}*/
 
 	private long[] getMinSize( final TileInfo[] tiles )
 	{

@@ -18,7 +18,7 @@ public class HistogramMatchingTest
 		histMinValue = 0;
 		histMaxValue = 8360;
 
-		for ( int i = - 20000; i <= 0; i += 100 )
+		for ( int i = -20000; i <= 0; i += 100 )
 			Assert.assertEquals( 0, getBinIndex( i ) );
 
 		for ( int i = 8360; i <= 20000; i += 100 )
