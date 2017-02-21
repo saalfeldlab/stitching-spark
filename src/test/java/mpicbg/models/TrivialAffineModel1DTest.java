@@ -9,7 +9,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-public class AffineModel1DTest
+public class TrivialAffineModel1DTest
 {
 	private static final double DELTA = 1e-15;
 
@@ -39,7 +39,7 @@ public class AffineModel1DTest
 	}
 
 	@Test
-	public void testFixedScalingAffineModel1D() throws Exception
+	public void testFixedScalingAffineModel1D() throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		testFitDouble ( new FixedScalingAffineModel1D( expectedModel[ 0 ] ), "FixedScalingAffineModel1D" );
 		testFitFloat  ( new FixedScalingAffineModel1D( expectedModel[ 0 ] ), "FixedScalingAffineModel1D" );
@@ -47,7 +47,7 @@ public class AffineModel1DTest
 	}
 
 	@Test
-	public void testFixedTranslationAffineModel1D() throws Exception
+	public void testFixedTranslationAffineModel1D() throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		testFitDouble ( new FixedTranslationAffineModel1D( expectedModel[ 1 ] ), "FixedTranslationAffineModel1D" );
 		testFitFloat  ( new FixedTranslationAffineModel1D( expectedModel[ 1 ] ), "FixedTranslationAffineModel1D" );
