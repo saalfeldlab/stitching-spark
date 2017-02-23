@@ -1,7 +1,9 @@
-package org.janelia.stitching;
+package org.janelia.flatfield;
 
 import java.util.List;
 
+import org.janelia.flatfield.FlatfieldCorrectionSolver;
+import org.janelia.flatfield.HistogramSettings;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -9,52 +11,48 @@ import mpicbg.models.PointMatch;
 
 public class HistogramMatchingTest
 {
-	private int histMinValue, histMaxValue, bins;
+	private HistogramSettings histogramSettings;
 
 	@Test
 	public void testBinning()
 	{
-		bins = 4096;
-		histMinValue = 0;
-		histMaxValue = 8360;
+		histogramSettings = new HistogramSettings( 0, 8360, 4096 );
 
-		for ( int i = -20000; i <= 0; i += 100 )
-			Assert.assertEquals( 0, getBinIndex( i ) );
+		for ( int i = -20000; i <= histogramSettings.minValue; i += 100 )
+			Assert.assertEquals( 0, histogramSettings.getBinIndex( i ) );
 
-		for ( int i = 8360; i <= 20000; i += 100 )
-			Assert.assertEquals( 4095, getBinIndex( i ) );
+		for ( int i = histogramSettings.maxValue; i <= 20000; i += 100 )
+			Assert.assertEquals( 4095, histogramSettings.getBinIndex( i ) );
 
-		for ( int i = histMinValue; i <= histMaxValue; i++ )
+		for ( int i = histogramSettings.minValue; i <= histogramSettings.maxValue; i++ )
 		{
-			final int binIndex = getBinIndex( i );
-			Assert.assertTrue( binIndex >= 0 && binIndex < bins );
+			final int bin = histogramSettings.getBinIndex( i );
+			Assert.assertTrue( bin >= 0 && bin < histogramSettings.bins );
 		}
 	}
 
 	@Test
 	public void testBinningAndMatching()
 	{
-		bins = 8;
-		histMinValue = 0;
-		histMaxValue = 15;
+		histogramSettings = new HistogramSettings( 0, 15, 8 );
 
-		Assert.assertEquals( 2.0, getBinWidth(), 0.f );
+		Assert.assertEquals( 2.0, histogramSettings.getBinWidth(), 0.f );
 
 		final short[] arr1 = new short[] { 0, 1, 4, 4, 4, 5, 5, 9, 9, 14 };
 		final short[] arr2 = new short[] { 1, 2, 3, 4, 5, 5, 6, 8, 9, 13 };
 
-		final long[] hist1 = new long[ bins ], hist2 = new long[ bins ];
+		final long[] hist1 = new long[ histogramSettings.bins ], hist2 = new long[ histogramSettings.bins ];
 
 		for ( final short val1 : arr1 )
-			hist1[ getBinIndex( val1 ) ]++;
+			hist1[ histogramSettings.getBinIndex( val1 ) ]++;
 
 		for ( final short val2 : arr2 )
-			hist2[ getBinIndex( val2 ) ]++;
+			hist2[ histogramSettings.getBinIndex( val2 ) ]++;
 
 		Assert.assertArrayEquals( new long[] { 2, 0, 5, 0, 2, 0, 0, 1 }, hist1 );
 		Assert.assertArrayEquals( new long[] { 1, 2, 3, 1, 2, 0, 1, 0 }, hist2 );
 
-		final List< PointMatch > matches = generateHistogramMatches( hist1, hist2, 1 );
+		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches( histogramSettings, hist1, hist2, 1 );
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] { 5, 5, 5, 9 }, arrays[ 0 ] );
 		Assert.assertArrayEquals( new int[] { 3, 5, 7, 9 }, arrays[ 1 ] );
@@ -64,13 +62,14 @@ public class HistogramMatchingTest
 	@Test
 	public void testMatchingFirstWithLastBin()
 	{
-		bins = 4;
-		histMinValue = 0;
-		histMaxValue = 15;
-		final List< PointMatch > matches = generateHistogramMatches(
+		histogramSettings = new HistogramSettings( 0, 15, 4 );
+
+		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches(
+				histogramSettings,
 				new long[] { 0, 6, 0, 0 },
 				new long[] { 0, 0, 2, 0 },
 				3 );
+
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] {  6 }, arrays[ 0 ] );
 		Assert.assertArrayEquals( new int[] { 10 }, arrays[ 1 ] );
@@ -80,13 +79,14 @@ public class HistogramMatchingTest
 	@Test
 	public void testMatchingEveryBinWithLastBin()
 	{
-		bins = 5;
-		histMinValue = 0;
-		histMaxValue = 19;
-		final List< PointMatch > matches = generateHistogramMatches(
+		histogramSettings = new HistogramSettings( 0, 19, 5 );
+
+		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches(
+				histogramSettings,
 				new long[] { 0, 1, 1, 1, 0 },
 				new long[] { 0, 0, 0, 1, 0 },
 				3 );
+
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] {  6, 10, 14 }, arrays[ 0 ] );
 		Assert.assertArrayEquals( new int[] { 14, 14, 14 }, arrays[ 1 ] );
@@ -96,23 +96,28 @@ public class HistogramMatchingTest
 	@Test
 	public void testMatchingEmptyHistograms()
 	{
-		bins = 4;
-		histMinValue = 0;
-		histMaxValue = 15;
-		final List< PointMatch > matches = generateHistogramMatches( new long[ bins ], new long[ bins ], 10000000 );
+		histogramSettings = new HistogramSettings( 0, 15, 4 );
+
+		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches(
+				histogramSettings,
+				new long[ histogramSettings.bins ],
+				new long[ histogramSettings.bins ],
+				10000000 );
+
 		Assert.assertTrue( matches.isEmpty() );
 	}
 
 	@Test
 	public void testMatchingUndersaturatedValuesWithOversaturatedValues()
 	{
-		bins = 4;
-		histMinValue = 0;
-		histMaxValue = 15;
-		final List< PointMatch > matches = generateHistogramMatches(
+		histogramSettings = new HistogramSettings( 0, 15, 4 );
+
+		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches(
+				histogramSettings,
 				new long[] { 8, 0, 0, 0 },
 				new long[] { 0, 0, 0, 2 },
 				4 );
+
 		Assert.assertTrue( matches.isEmpty() );
 	}
 
@@ -128,20 +133,5 @@ public class HistogramMatchingTest
 			w[ i ] = ( int ) matches.get( i ).getWeight();
 		}
 		return new int[][] { p, q, w };
-	}
-
-	private double getBinWidth()
-	{
-		return IlluminationCorrection.getBinWidth( histMinValue, histMaxValue, bins );
-	}
-	private int getBinIndex( final int value )
-	{
-		return IlluminationCorrection.getBinIndex( value, histMinValue, histMaxValue, bins );
-	}
-	private List< PointMatch > generateHistogramMatches( final long[] histogram, final long[] referenceHistogram, final long referenceHistogramMultiplier )
-	{
-		return IlluminationCorrection.generateHistogramMatches(
-				histogram, referenceHistogram, referenceHistogramMultiplier,
-				histMinValue, histMaxValue, bins );
 	}
 }

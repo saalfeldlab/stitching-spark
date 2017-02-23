@@ -17,6 +17,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.stitching.analysis.ThresholdEstimation;
 import org.janelia.util.ImageImporter;
@@ -292,7 +293,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 								{
 									System.out.println( "Correcting " + i );
 									final RandomAccessibleInterval< T > img = ImagePlusImgs.from( impChannels[ i ] );
-									final ImagePlusImg< FloatType, ? > imgCorrected = IlluminationCorrection.applyCorrection( Views.interval( img, overlaps[ j ] ), v, z );
+									final ImagePlusImg< FloatType, ? > imgCorrected = FlatfieldCorrection.applyCorrection( Views.interval( img, overlaps[ j ] ), v, z );
 
 									impChannels[ i ].close();
 

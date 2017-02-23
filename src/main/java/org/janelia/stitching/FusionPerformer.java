@@ -3,6 +3,8 @@ package org.janelia.stitching;
 import java.util.Arrays;
 import java.util.List;
 
+import org.janelia.flatfield.FlatfieldCorrection;
+
 import bdv.export.Downsample;
 import ij.IJ;
 import ij.ImagePlus;
@@ -121,7 +123,7 @@ public class FusionPerformer
 
 			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
 			final ImagePlusImg< FloatType, ? > correctedTile =
-					( v != null && z != null ) ? IlluminationCorrection.applyCorrection( rawTile, v, z ) : convertToFloat( rawTile );
+					( v != null && z != null ) ? FlatfieldCorrection.applyCorrection( rawTile, v, z ) : convertToFloat( rawTile );
 			final RandomAccessible< FloatType > extendedTile = Views.extendBorder( correctedTile );
 			final RealRandomAccessible< FloatType > interpolatedTile = Views.interpolate( extendedTile, interpolatorFactory );
 			final RandomAccessible< FloatType > rasteredInterpolatedTile = Views.raster( RealViews.affine( interpolatedTile, translation ) );
