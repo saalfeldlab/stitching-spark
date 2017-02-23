@@ -79,8 +79,11 @@ public class TransformBoundingBox
 		
 		int nd = interval.numDimensions();
 		long[] min = new long[ nd ];
+		Arrays.fill( min, Long.MAX_VALUE );
+
 		long[] max = new long[ nd ];
-		
+		Arrays.fill( max, Long.MIN_VALUE );
+
 		double[] ptOrig = new double[ nd ];
 		double[] ptWarp = new double[ nd ];
 
@@ -91,13 +94,45 @@ public class TransformBoundingBox
 		{
 			cornerCursor.fwd();
 			cornerPoint( ptOrig, interval, cornerCursor );
-//			double error = invxfm.inverseTol( ptOrig, ptWarp, 0.05, 3000 );
 			invxfm.applyInverse( ptWarp, ptOrig );
-//			ptWarp = invtps.inverse(ptOrig, 0.05 );
 
 //			System.out.println( "error: " + error );
-			System.out.println( "corner: " + ptOrig[ 0 ] + " " + ptOrig[ 1 ]);
-			System.out.println( "goes to: " + ptWarp[ 0 ] + " " + ptWarp[ 1 ]);
+//			System.out.println( "corner: " + ptOrig[ 0 ] + " " + ptOrig[ 1 ] + " " + ptOrig[ 2 ]);
+//			System.out.println( "goes to: " + ptWarp[ 0 ] + " " + ptWarp[ 1 ] + " " + ptWarp[ 2 ]);
+
+			updateMin( min, ptWarp );
+			updateMax( max, ptWarp );
+		}
+
+		return new FinalInterval( min, max );
+	}
+
+	public static FinalInterval boundingBoxFowardCorners( Interval interval, RealTransform xfm )
+	{
+//		assert( interval.numDimensions() == invtps.getNumDims() );
+
+		int nd = interval.numDimensions();
+		long[] min = new long[ nd ];
+		Arrays.fill( min, Long.MAX_VALUE );
+
+		long[] max = new long[ nd ];
+		Arrays.fill( max, Long.MIN_VALUE );
+
+		double[] ptOrig = new double[ nd ];
+		double[] ptWarp = new double[ nd ];
+
+		// inverse transform each corner of the input interval 
+		// and keep track of where they end up
+		Cursor<?> cornerCursor = cornerIterator( interval );
+		while( cornerCursor.hasNext() )
+		{
+			cornerCursor.fwd();
+			cornerPoint( ptOrig, interval, cornerCursor );
+			xfm.apply( ptOrig, ptWarp );
+
+//			System.out.println( "error: " + error );
+//			System.out.println( "corner: " + ptOrig[ 0 ] + " " + ptOrig[ 1 ] + " " + ptOrig[ 2 ]);
+//			System.out.println( "goes to: " + ptWarp[ 0 ] + " " + ptWarp[ 1 ] + " " + ptWarp[ 2 ] );
 			
 			updateMin( min, ptWarp );
 			updateMax( max, ptWarp );
