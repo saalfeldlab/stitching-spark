@@ -32,7 +32,7 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
-import net.imglib2.util.RealIntervals;
+import net.imglib2.util.IntervalsNullable;
 import net.imglib2.view.Views;
 
 public class FusionPerformer
@@ -101,9 +101,12 @@ public class FusionPerformer
 			final ImagePlus imp = IJ.openImage( tile.getFilePath() );
 			Utils.workaroundImagePlusNSlices( imp );
 
-			final FinalRealInterval intersection = RealIntervals.intersectReal(
+			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
 					new FinalRealInterval( tile.getPosition(), tile.getMax() ),
 					targetInterval );
+
+			if ( intersection == null )
+				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval" );
 
 			final double[] offset = new double[ targetInterval.numDimensions() ];
 			final Translation translation = new Translation( targetInterval.numDimensions() );
@@ -211,7 +214,10 @@ public class FusionPerformer
 				throw new Exception( "Can't open image: " + tile.getFilePath() );
 
 			final Boundaries tileBoundaries = tile.getBoundaries();
-			final FinalInterval intersection = Intervals.intersect( new FinalInterval( tileBoundaries.getMin(), tileBoundaries.getMax() ), cellImg );
+			final FinalInterval intersection = IntervalsNullable.intersect( new FinalInterval( tileBoundaries.getMin(), tileBoundaries.getMax() ), cellImg );
+
+			if ( intersection == null )
+				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval" );
 
 			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
 			final RandomAccessibleInterval< T > correctedDimTile = rawTile.numDimensions() < cell.numDimensions() ? Views.stack( rawTile ) : rawTile;
