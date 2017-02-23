@@ -56,6 +56,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 		this.sparkContext = sparkContext;
 	}
 
+	@SuppressWarnings("unchecked")
 	public <
 		A extends ArrayImg< DoubleType, DoubleArray >,
 		M extends Model< M > & Affine1D< M >,

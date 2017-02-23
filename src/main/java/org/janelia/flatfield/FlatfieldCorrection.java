@@ -206,17 +206,17 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				try ( ShiftedDownsampling.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
 				{
 					final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer;
-					if ( regularizerModelType == regularizerModelType.AffineModel )
+					if ( regularizerModelType == RegularizerModelType.AffineModel )
 					{
 						final RandomAccessible< DoubleType > scalingRegularizer;
 						final RandomAccessible< DoubleType > translationRegularizer;
 
-						if ( modelType != modelType.FixedScalingAffineModel || lastSolution == null )
+						if ( modelType != ModelType.FixedScalingAffineModel || lastSolution == null )
 							scalingRegularizer = downsampledSolution != null ? shiftedDownsampling.upsample( downsampledSolution.getA() ) : null;
 						else
 							scalingRegularizer = shiftedDownsampling.downsampleSolutionComponent( lastSolution.getA(), pixelsMapping );
 
-						if ( modelType != modelType.FixedTranslationAffineModel || lastSolution == null )
+						if ( modelType != ModelType.FixedTranslationAffineModel || lastSolution == null )
 							translationRegularizer = downsampledSolution != null ? shiftedDownsampling.upsample( downsampledSolution.getB() ) : null;
 						else
 							translationRegularizer = shiftedDownsampling.downsampleSolutionComponent( lastSolution.getB(), pixelsMapping );

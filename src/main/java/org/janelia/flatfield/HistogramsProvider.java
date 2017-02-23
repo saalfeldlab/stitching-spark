@@ -375,6 +375,7 @@ public class HistogramsProvider implements Serializable
 	{
 		return new ListImg<>( Arrays.asList( readSliceHistogramsArrayFromDisk( 0, slice ) ), new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } );
 	}
+	@SuppressWarnings("unchecked")
 	private < V extends TreeMap< Short, Integer > > V[] readSliceHistogramsArrayFromDisk( final int scale, final int slice )
 	{
 		System.out.println( "Loading slice " + slice );
