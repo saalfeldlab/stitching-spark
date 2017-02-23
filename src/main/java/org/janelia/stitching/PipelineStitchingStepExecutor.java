@@ -684,10 +684,16 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 					try
 					{
-						TileInfoJSONProvider.saveTilesConfiguration( tilesMap.values().toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( job.getArgs().inputFilePath(), "-intermediate" ) );
+						final TileInfo[] tilesToSave = tilesMap.values().toArray( new TileInfo[ 0 ] );
+						TileOperations.translateTilesToOriginReal( tilesToSave );
+						TileInfoJSONProvider.saveTilesConfiguration( tilesToSave, Utils.addFilenameSuffix( job.getArgs().inputFilePath(), "-intermediate" ) );
 
 						if ( !anotherChannelTiles.isEmpty() )
-							TileInfoJSONProvider.saveTilesConfiguration( anotherChannelTiles.values().toArray( new TileInfo[ 0 ] ), job.getBaseFolder() + "/ch1-intermediate.json" );
+						{
+							final TileInfo[] anotherChannelTilesToSave = anotherChannelTiles.values().toArray( new TileInfo[ 0 ] );
+							TileOperations.translateTilesToOriginReal( anotherChannelTilesToSave );
+							TileInfoJSONProvider.saveTilesConfiguration( anotherChannelTilesToSave, job.getBaseFolder() + "/ch1-intermediate.json" );
+						}
 					}
 					catch ( final IOException e )
 					{
@@ -738,10 +744,16 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		try
 		{
-			TileInfoJSONProvider.saveTilesConfiguration( tilesMap.values().toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( job.getArgs().inputFilePath(), "-final" ) );
+			final TileInfo[] tilesToSave = tilesMap.values().toArray( new TileInfo[ 0 ] );
+			TileOperations.translateTilesToOriginReal( tilesToSave );
+			TileInfoJSONProvider.saveTilesConfiguration( tilesToSave, Utils.addFilenameSuffix( job.getArgs().inputFilePath(), "-final" ) );
 
 			if ( !anotherChannelTiles.isEmpty() )
-				TileInfoJSONProvider.saveTilesConfiguration( anotherChannelTiles.values().toArray( new TileInfo[ 0 ] ), job.getBaseFolder() + "/ch1-final.json" );
+			{
+				final TileInfo[] anotherChannelTilesToSave = anotherChannelTiles.values().toArray( new TileInfo[ 0 ] );
+				TileOperations.translateTilesToOriginReal( anotherChannelTilesToSave );
+				TileInfoJSONProvider.saveTilesConfiguration( anotherChannelTilesToSave, job.getBaseFolder() + "/ch1-final.json" );
+			}
 		}
 		catch ( final IOException e )
 		{
