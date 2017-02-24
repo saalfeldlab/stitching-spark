@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.flatfield;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -8,12 +8,12 @@ import net.imglib2.Interval;
 import net.imglib2.SerializableFinalInterval;
 
 /**
- * Command line arguments parser for illumination correction.
+ * Command line arguments parser for flatfield correction.
  *
  * @author Igor Pisarev
  */
 
-public class IlluminationCorrectionArguments
+public class FlatfieldCorrectionArguments
 {
 	@Option(name = "-i", aliases = { "--input" }, required = true,
 			usage = "Path to a tile configuration JSON file")
@@ -38,7 +38,7 @@ public class IlluminationCorrectionArguments
 
 	private boolean parsedSuccessfully = false;
 
-	public IlluminationCorrectionArguments( final String[] args ) throws CmdLineException
+	public FlatfieldCorrectionArguments( final String[] args ) throws CmdLineException
 	{
 		final CmdLineParser parser = new CmdLineParser( this );
 		try
