@@ -27,6 +27,7 @@ import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImg;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.imageplus.ImagePlusImg;
@@ -38,6 +39,8 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
+import net.imglib2.util.ValuePair;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 import scala.Tuple2;
@@ -121,6 +124,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 					System.exit(1);
 				}
 
+
 		sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "IlluminationCorrection3D" )
 				//.set( "spark.driver.maxResultSize", "8g" )
@@ -141,7 +145,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	public < A extends ArrayImg< DoubleType, DoubleArray >, V extends TreeMap< Short, Integer > >
+	public < T extends NativeType< T > & RealType< T >, V extends TreeMap< Short, Integer > >
 	void run() throws FileNotFoundException
 	{
 		long elapsed = System.nanoTime();
@@ -179,15 +183,15 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final FlatfieldCorrectionSolver solver = new FlatfieldCorrectionSolver( sparkContext );
 
 		final int iterations = 16;
-		Pair< A, A > lastSolution = null;
+		Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > lastSolution = null;
 		for ( int iter = 0; iter < iterations; iter++ )
 		{
-			Pair< A, A > downsampledSolution = null;
+			Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > downsampledSolution = null;
 
-			// solve in a bottom-top fashion (starting from the smallest scale)
+			// solve in a bottom-up fashion (starting from the smallest scale level)
 			for ( int scale = shiftedDownsampling.getNumScales() - 1; scale >= 0; scale-- )
 			{
-				final Pair< A, A > solution;
+				final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution;
 
 				final ModelType modelType;
 				final RegularizerModelType regularizerModelType;
@@ -197,11 +201,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				else
 					modelType = iter % 2 == 1 ? ModelType.FixedTranslationAffineModel : ModelType.FixedScalingAffineModel;
 
-				if ( iter == 0 )
-					regularizerModelType = scale == shiftedDownsampling.getNumScales() - 1 ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel;
-				else
-					regularizerModelType = RegularizerModelType.AffineModel;
-
+				regularizerModelType = iter == 0 && scale == shiftedDownsampling.getNumScales() - 1 ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel;
 
 				try ( ShiftedDownsampling.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
 				{
@@ -212,12 +212,12 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 						final RandomAccessible< DoubleType > translationRegularizer;
 
 						if ( modelType != ModelType.FixedScalingAffineModel || lastSolution == null )
-							scalingRegularizer = downsampledSolution != null ? shiftedDownsampling.upsample( downsampledSolution.getA() ) : null;
+							scalingRegularizer = downsampledSolution != null ? shiftedDownsampling.upsample( downsampledSolution.getA(), scale ) : null;
 						else
 							scalingRegularizer = shiftedDownsampling.downsampleSolutionComponent( lastSolution.getA(), pixelsMapping );
 
 						if ( modelType != ModelType.FixedTranslationAffineModel || lastSolution == null )
-							translationRegularizer = downsampledSolution != null ? shiftedDownsampling.upsample( downsampledSolution.getB() ) : null;
+							translationRegularizer = downsampledSolution != null ? shiftedDownsampling.upsample( downsampledSolution.getB(), scale ) : null;
 						else
 							translationRegularizer = shiftedDownsampling.downsampleSolutionComponent( lastSolution.getB(), pixelsMapping );
 
@@ -247,6 +247,18 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 			}
 
 			lastSolution = downsampledSolution;
+
+			if ( iter % 2 == 0 )
+			{
+				final RandomAccessibleInterval< DoubleType > averageTranslationalComponent = averageSolutionComponent( lastSolution.getB() );
+				saveSolutionComponent( iter, 0, averageTranslationalComponent, "z_avg" );
+
+				lastSolution = new ValuePair<>(
+						lastSolution.getA(),
+						Views.interval( Views.extendBorder( Views.stack( averageTranslationalComponent ) ), lastSolution.getA() ) );
+
+				//saveSolutionComponent( iter, 0, lastSolution.getB(), "z_avg_extended-test" );
+			}
 		}
 
 		elapsed = System.nanoTime() - elapsed;
@@ -255,22 +267,51 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	private < A extends ArrayImg< DoubleType, DoubleArray > > void saveSolution( final int iteration, final int scale, final Pair< A, A > solution )
+	@SuppressWarnings("unchecked")
+	private RandomAccessibleInterval< DoubleType > averageSolutionComponent( final RandomAccessibleInterval< DoubleType > solutionComponent )
 	{
-		if ( solution.getA() != null )
-			saveSolution( iteration, scale, solution.getA(), "v" );
+		final RandomAccessibleInterval< DoubleType > dst = ArrayImgs.doubles( new long[] { solutionComponent.dimension( 0 ), solutionComponent.dimension( 1 ) } );
 
-		if ( solution.getB() != null )
-			saveSolution( iteration, scale, solution.getB(), "z" );
+		final IntervalView< DoubleType > src = Views.interval( solutionComponent, new FinalInterval(
+				new long[] { dst.min( 0 ), dst.min( 1 ), solutionComponent.min( 2 ) + 3 },
+				new long[] { dst.max( 0 ), dst.max( 1 ), solutionComponent.max( 2 ) - 3 } ) );
+
+		for ( long slice = src.min( 2 ); slice <= src.max( 2 ); slice++ )
+		{
+			final Cursor< DoubleType > srcSliceCursor = Views.flatIterable( Views.hyperSlice( src, 2, slice ) ).cursor();
+			final Cursor< DoubleType > dstCursor = Views.flatIterable( dst ).cursor();
+
+			while ( dstCursor.hasNext() || srcSliceCursor.hasNext() )
+				dstCursor.next().add( srcSliceCursor.next() );
+		}
+
+		final Cursor< DoubleType > dstCursor = Views.iterable( dst ).cursor();
+		while ( dstCursor.hasNext() )
+		{
+			final DoubleType val = dstCursor.next();
+			val.set( val.get() / src.dimension( 2 ) );
+		}
+
+		return dst;
 	}
 
-	private < A extends ArrayImg< DoubleType, DoubleArray > > void saveSolution( final int iteration, final int scale, final A solution, final String title )
+
+	private void saveSolution( final int iteration, final int scale, final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution )
+	{
+		if ( solution.getA() != null )
+			saveSolutionComponent( iteration, scale, solution.getA(), "v" );
+
+		if ( solution.getB() != null )
+			saveSolutionComponent( iteration, scale, solution.getB(), "z" );
+	}
+
+	private void saveSolutionComponent( final int iteration, final int scale, final RandomAccessibleInterval< DoubleType > solutionComponent, final String title )
 	{
 		final String path = solutionPath + "/iter" + iteration + "/" + scale + "/" + title + ".tif";
 
 		Paths.get( path ).getParent().toFile().mkdirs();
 
-		final ImagePlus imp = ImageJFunctions.wrap( solution, title );
+		final ImagePlus imp = ImageJFunctions.wrap( solutionComponent, title );
 		Utils.workaroundImagePlusNSlices( imp );
 		IJ.saveAsTiff( imp, path );
 	}

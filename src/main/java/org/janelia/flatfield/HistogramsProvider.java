@@ -258,6 +258,16 @@ public class HistogramsProvider implements Serializable
 		System.out.println( "Total histograms (pixels) count = " + rddHistograms.persist( StorageLevel.MEMORY_ONLY_SER() ).count() );
 
 		rddTreeMaps.unpersist();
+
+		// for testing purposes
+		final Tuple2< Long, Long > testing = rddHistograms
+			.map( tuple -> new Tuple2<>( tuple._2()[ 0 ], tuple._2()[ tuple._2().length - 1 ] ) )
+			.reduce( ( a, b ) -> new Tuple2<>( Math.max( a._1(), b._1() ), Math.max( a._2(), b._2() ) ) );
+		System.out.println();
+		System.out.println( "Max at 0: " + testing._1() );
+		System.out.println( "Max at " + ( histogramSettings.bins - 1 ) +": " + testing._2() );
+		System.out.println( "out of " + tiles.length + " elements" );
+		System.out.println();
 	}
 
 

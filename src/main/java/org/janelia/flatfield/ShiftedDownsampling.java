@@ -19,18 +19,15 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
-import net.imglib2.img.array.ArrayImg;
-import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.array.ArrayLocalizingCursor;
-import net.imglib2.img.basictypeaccess.array.DoubleArray;
+import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
-import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Util;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import scala.Tuple2;
@@ -121,44 +118,44 @@ public class ShiftedDownsampling
 	}
 
 	@SuppressWarnings("unchecked")
-	public < A extends ArrayImg< DoubleType, DoubleArray > > A downsampleSolutionComponent(
-			final A fullComponent,
+	public < T extends NativeType< T > & RealType< T > > RandomAccessibleInterval< T > downsampleSolutionComponent(
+			final RandomAccessibleInterval< T > fullComponent,
 			final PixelsMapping pixelsMapping )
 	{
 		if ( pixelsMapping.scale == 0 )
 			return fullComponent;
 
 		final long[] downsampledSize = pixelsMapping.getDimensions();
-		final A downsampledComponent = ( A ) ArrayImgs.doubles( downsampledSize );
-		final ArrayLocalizingCursor< DoubleType > downsampledComponentCursor = downsampledComponent.localizingCursor();
+		final RandomAccessibleInterval< T > downsampledComponent = new ArrayImgFactory< T >().create( downsampledSize, Util.getTypeFromInterval( fullComponent ).createVariable() );
+		final Cursor< T > downsampledComponentCursor = Views.iterable( downsampledComponent ).localizingCursor();
 		final long[] downsampledPosition = new long[ downsampledComponent.numDimensions() ];
 		while ( downsampledComponentCursor.hasNext() )
 		{
 			double fullPixelsSum = 0;
-			final DoubleType downsampledVal = downsampledComponentCursor.next();
+			final T downsampledVal = downsampledComponentCursor.next();
 
 			downsampledComponentCursor.localize( downsampledPosition );
 			final long downsampledPixel = IntervalIndexer.positionToIndex( downsampledPosition, downsampledSize );
 
-			final IntervalView< DoubleType > fullComponentInterval = Views.interval( fullComponent, pixelsMapping.downsampledPixelToFullPixels.get( downsampledPixel ) );
-			final Cursor< DoubleType > fullComponentIntervalCursor = Views.iterable( fullComponentInterval ).cursor();
+			final IntervalView< T > fullComponentInterval = Views.interval( fullComponent, pixelsMapping.downsampledPixelToFullPixels.get( downsampledPixel ) );
+			final Cursor< T > fullComponentIntervalCursor = Views.iterable( fullComponentInterval ).cursor();
 			while ( fullComponentIntervalCursor.hasNext() )
-				fullPixelsSum += fullComponentIntervalCursor.next().get();
+				fullPixelsSum += fullComponentIntervalCursor.next().getRealDouble();
 
-			downsampledVal.set( fullPixelsSum / fullComponentInterval.size() );
+			downsampledVal.setReal( fullPixelsSum / fullComponentInterval.size() );
 		}
 
 		return downsampledComponent;
 	}
 
-	public < T extends RealType< T > & NativeType< T > > RandomAccessible< T > upsample( final RandomAccessibleInterval< T > downsampledImg )
+	public < T extends RealType< T > & NativeType< T > > RandomAccessible< T > upsample( final RandomAccessibleInterval< T > downsampledImg, final int scale )
 	{
 		final RealRandomAccessible< T > interpolatedDownsampledImage = Views.interpolate( Views.extendBorder( downsampledImg ), new NLinearInterpolatorFactory<>() );
 
 		// Preapply the transform with a positive translation in order to align the downsampled image to the upsampled image (in its coordinate space)
 		final double[] translation = downsamplingTransform.getTranslation();
 		for ( int d = 0; d < translation.length; d++ )
-			translation[ d ] = Math.abs( translation[ d ] );
+			translation[ d ] = scale > 0 ? -translation[ d ] : 0;
 		final AffineTransform3D translationTransform = new AffineTransform3D();
 		translationTransform.setTranslation( translation );
 

@@ -2,6 +2,7 @@ package org.janelia.flatfield;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -19,9 +20,8 @@ import mpicbg.models.InvertibleBoundable;
 import mpicbg.models.Model;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
-import net.imglib2.img.array.ArrayImg;
+import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Pair;
@@ -57,11 +57,8 @@ public class FlatfieldCorrectionSolver implements Serializable
 	}
 
 	@SuppressWarnings("unchecked")
-	public <
-		A extends ArrayImg< DoubleType, DoubleArray >,
-		M extends Model< M > & Affine1D< M >,
-		R extends Model< R > & Affine1D< R > & InvertibleBoundable >
-	Pair< A, A > leastSquaresInterpolationFit(
+	public < M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable >
+	Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > leastSquaresInterpolationFit(
 			final JavaPairRDD< Long, long[] > rddHistograms,
 			final long[] referenceHistogram,
 			final HistogramSettings histogramSettings,
@@ -70,6 +67,8 @@ public class FlatfieldCorrectionSolver implements Serializable
 			final ModelType modelType,
 			final RegularizerModelType regularizerModelType )
 	{
+		System.out.println( "Solving for scale " + pixelsMapping.scale + ":  size=" + Arrays.toString( pixelsMapping.getDimensions() ) + ",  model=" + modelType.toString() + ", regularizer=" + regularizerModelType.toString() );
+
 		final Broadcast< RandomAccessiblePairNullable< DoubleType, DoubleType > > broadcastedRegularizer = sparkContext.broadcast( regularizer );
 		final Broadcast< int[] > broadcastedDownsampledPixelToFullPixelsCount = pixelsMapping.broadcastedDownsampledPixelToFullPixelsCount;
 
@@ -171,7 +170,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 
 		broadcastedRegularizer.destroy();
 
-		final Pair< A, A > solution = ( Pair< A, A > ) new ValuePair<>( ArrayImgs.doubles( size ), ArrayImgs.doubles( size ) );
+		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution = new ValuePair<>( ArrayImgs.doubles( size ), ArrayImgs.doubles( size ) );
 		final RandomAccessiblePair< DoubleType, DoubleType >.RandomAccess solutionRandomAccess = new RandomAccessiblePair<>( solution.getA(), solution.getB() ).randomAccess();
 		final long[] position = new long[ size.length ];
 		for ( final Tuple2< Long, Pair< Double, Double > > tuple : solutionPixels )
