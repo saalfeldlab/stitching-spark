@@ -25,7 +25,7 @@ The application requires an input file containing the registered tiles configura
 ]
 ```
 
-Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L23-L66)
+Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L23-L58)
 
 ```bash
 ./flintstone.sh \
@@ -37,7 +37,7 @@ Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](htt
   -r um=0.097,0.097,0.180
 ```
 
-The application checks if a file 'ch0_10z_pairwise.json' exists. If not, it computes pairwise shifts for all tile pairs in approximate 3D six-neighborhood (i.e. diagonal overlaps are typically ignored, this is subject to change and for parameterization, e.g. how much overlap we consider sufficient to calculate pairwise shift vectors).  Shift vectors are stored in the earlier mentioned pairwise file.  Then, it performs global optimization with the parameters specified (or [hardcoded](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/PipelineStitchingStepExecutor.java#L703)).  Output is saved as 'ch0_10z-final.json'
+The application checks if a file 'ch0_10z_pairwise.json' exists. If not, it computes pairwise shifts for all tile pairs in approximate 3D six-neighborhood (i.e. diagonal overlaps are typically ignored, this is subject to change and for parameterization, e.g. how much overlap we consider sufficient to calculate pairwise shift vectors).  Shift vectors are stored in the earlier mentioned pairwise file.  Then, it performs global optimization with the parameters specified (or [hardcoded](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/stitching/GlobalOptimizationPerformer.java#L477)).  Output is saved as 'ch0_10z-final.json'
 
 If the directory of the input json file contains two files `v.tif` and `z.tif`, then they are used as flatfield correction coefficients that are applied to each input tile.  TODO specify this nicely in the configuration, e.g. we have independent and actually pretty different correction fields for each channel.
 
@@ -46,7 +46,7 @@ If you omit the `--stitch` parameter, the job also exports (fuses) the result.
 
 # fusion (export)
 
-Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L23-L66)
+Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L23-L58)
 
 ```bash
 ./flintstone.sh \
@@ -63,13 +63,13 @@ This generates an export of the stitched volume as specified in the json file.  
 As with stitching, if the directory of the input json file contains two files `v.tif` and `z.tif`, then they are used as flatfield correction coefficients that are applied to each input tile.  TODO specify this nicely in the configuration, e.g. we have independent and actually pretty different correction fields fopr each channel.
 
 # flat-field correction
-Run `org.janelia.stitching.IlluminationCorrection` with arguments explained [inline](https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/IlluminationCorrectionArguments.java#L18-L36)
+Run `org.janelia.flatfield.FlatfieldCorrection` with arguments explained [inline](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/flatfield/FlatfieldCorrectionArguments.java#L18-L36)
 
 ```bash
 ./flintstone.sh \
   10 \
   stitching-spark-0.0.1-SNAPSHOT.jar \
-  org.janelia.stitching.IlluminationCorrection \
+  org.janelia.flatfield.FlatfieldCorrection \
   -i '/home/igor/3d-fullsize-ch1/config_filtered_ch1_unique.json' \
   --min 0 \
   --max 10000
@@ -83,6 +83,6 @@ Scale hierarchy including half-pixel shifts (ask if you do not know what that me
 
 Here is what it does, modify pipeline as needed:
 
-[https://github.com/igorpisarev/stitching-spark/blob/master/src/main/java/org/janelia/stitching/IlluminationCorrection.java#L336]
+[https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/flatfield/FlatfieldCorrection.java#L185]
 
 The pipeline generates output in the a subdirectory `/solution` in the input json file directory.
