@@ -85,7 +85,12 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		Utils.workaroundImagePlusNSlices( vImp );
 		Utils.workaroundImagePlusNSlices( zImp );
 
-		return new RandomAccessiblePair< U, U >( ImagePlusImgs.from( vImp ), ImagePlusImgs.from( zImp ) );
+		final ImagePlusImg< U, ? > vImg = ImagePlusImgs.from( vImp );
+		final ImagePlusImg< U, ? > zImg = ImagePlusImgs.from( zImp );
+
+		return new RandomAccessiblePair< >(
+				vImg,
+				zImg.numDimensions() < vImg.numDimensions() ? Views.extendBorder( Views.stack( zImg ) ) : zImg );
 	}
 
 	public static <
