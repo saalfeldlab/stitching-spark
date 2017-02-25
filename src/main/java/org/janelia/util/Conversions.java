@@ -3,6 +3,16 @@ package org.janelia.util;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.imglib2.Cursor;
+import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.img.imageplus.ImagePlusImg;
+import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Intervals;
+import net.imglib2.view.Views;
+
 /**
  * Utility class to convert data types for use across libraries.
  *
@@ -66,5 +76,19 @@ public class Conversions {
 		for ( final int val : arr )
 			list.add( val );
 		return list;
+	}
+
+
+	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< FloatType, ? > convertImageToFloat( final RandomAccessibleInterval< T > src )
+	{
+		final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( src ) );
+
+		final Cursor< T > srcCursor = Views.flatIterable( src ).cursor();
+		final Cursor< FloatType > dstCursor = Views.flatIterable( dst ).cursor();
+
+		while ( srcCursor.hasNext() || dstCursor.hasNext() )
+			dstCursor.next().set( srcCursor.next().getRealFloat() );
+
+		return dst;
 	}
 }

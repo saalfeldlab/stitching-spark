@@ -14,18 +14,16 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.bdv.fusion.CellFileImageMetaData;
-import org.janelia.util.ImageImporter;
+import org.janelia.flatfield.FlatfieldCorrection;
 
-import ij.ImagePlus;
 import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.FinalDimensions;
-import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.imageplus.ImagePlusImg;
-import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
+import net.imglib2.view.RandomAccessiblePair;
 
 /**
  * Fuses a set of tiles within a set of small square cells using linear blending.
@@ -52,13 +50,14 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 	}
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > void runImpl() throws PipelineExecutionException
 	{
-		TileOperations.translateTilesToOriginReal( job.getTiles() );
+		for ( int channel = 0; channel < job.getChannels(); channel++ )
+			TileOperations.translateTilesToOriginReal( job.getTiles( channel ) );
 
-		// TODO: add option for passing separate JSON files as channels
-		final ImagePlus testImp = ImageImporter.openImage( job.getTiles()[ 0 ].getFilePath() );
+		// TODO: add comprehensive support for 4D images where multiple channels are encoded as the 4th dimension
+		/*final ImagePlus testImp = ImageImporter.openImage( job.getTiles()[ 0 ].getFilePath() );
 		Utils.workaroundImagePlusNSlices( testImp );
 		final int channels = testImp.getNChannels();
-		testImp.close();
+		testImp.close();*/
 
 		final VoxelDimensions voxelDimensions = job.getArgs().voxelDimensions();
 		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
@@ -66,16 +65,18 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 
 		final List< CellFileImageMetaData > exports = new ArrayList<>();
 
-		System.out.println( "Broadcasting illumination correction images" );
-		final ImagePlus vImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/v.tif" );
-		final ImagePlus zImp = ImageImporter.openImage( Paths.get( job.getArgs().inputFilePath() ).getParent().toString() + "/z.tif" );
-		if ( vImp != null )
-			Utils.workaroundImagePlusNSlices( vImp );
+		System.out.println( "Broadcasting flatfield correction images" );
+		final List< RandomAccessiblePair< U, U > > flatfieldCorrectionForChannels = new ArrayList<>();
+		for ( final String channelTileConfiguration : job.getArgs().inputTileConfigurations() )
+			flatfieldCorrectionForChannels.add(
+					FlatfieldCorrection.loadCorrectionImages(
+							Paths.get( channelTileConfiguration ).getParent().toString() + "/v.tif",
+							Paths.get( channelTileConfiguration ).getParent().toString() + "/z.tif"
+						)
+				);
+		final Broadcast< List< RandomAccessiblePair< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
 
-		final Broadcast< RandomAccessibleInterval< U > > vBroadcast = sparkContext.broadcast( vImp != null ? ImagePlusImgs.from( vImp ) : null );
-		final Broadcast< RandomAccessibleInterval< U > > zBroadcast = sparkContext.broadcast( zImp != null ? ImagePlusImgs.from( zImp ) : null );
-
-		for ( int ch = 0; ch < channels; ch++ )
+		for ( int ch = 0; ch < job.getChannels(); ch++ )
 		{
 			final int channel = ch;
 
@@ -84,7 +85,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 
 			int level = 0;
 			String lastLevelTmpPath = null;
-			TileInfo[] lastLevelCells = job.getTiles();
+			TileInfo[] lastLevelCells = job.getTiles( channel );
 
 			final TreeMap< Integer, int[] > levelToDownsampleFactors = new TreeMap<>(), levelToCellSize = new TreeMap<>();
 			long minDimension = 0, maxDimension = 0;
@@ -110,7 +111,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 				final int currLevel = level;
 				final String levelFolder = baseOutputFolder + "/" + level;
 
-				final String levelConfigurationOutputPath = job.getBaseFolder() + "/channel" + channel + "/" + Utils.addFilenameSuffix( Paths.get( job.getArgs().inputFilePath() ).getFileName().toString(), "-scale" + level );
+				final String levelConfigurationOutputPath = job.getBaseFolder() + "/channel" + channel + "/" + Utils.addFilenameSuffix( Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getFileName().toString(), "-scale" + level );
 
 				if ( Files.exists( Paths.get( levelConfigurationOutputPath ) ) )
 				{	// load current scale level if exists
@@ -296,8 +297,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 										tilesWithinCell,
 										cellBox,
 										new NLinearInterpolatorFactory(),
-										vBroadcast.value(),
-										zBroadcast.value() );
+										broadcastedFlatfieldCorrectionForChannels.value().get( channel ) );
 							}
 							else
 							{
@@ -365,14 +365,14 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 					//Utils.getImageType( Arrays.asList( job.getTiles() ) ).toString(),
 					// TODO: can't derive from the tiles anymore since we convert the image to FloatType with illumination correction
 					ImageType.GRAY32.toString(),
-					Intervals.dimensionsAsLongArray( TileOperations.getCollectionBoundaries( job.getTiles() ) ),
+					Intervals.dimensionsAsLongArray( TileOperations.getCollectionBoundaries( job.getTiles( channel ) ) ),
 					levelToDownsampleFactors,
 					levelToCellSize,
 					transform,
 					voxelDimensions );
 			try
 			{
-				TileInfoJSONProvider.saveMultiscaledExportMetadata( export, Utils.addFilenameSuffix( job.getArgs().inputFilePath(), "-export-channel" + ch ) );
+				TileInfoJSONProvider.saveMultiscaledExportMetadata( export, Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "-export-channel" + channel ) );
 			}
 			catch ( final IOException e )
 			{
@@ -385,7 +385,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 		System.out.println( "All channels have been exported" );
 		try
 		{
-			TileInfoJSONProvider.saveMultiscaledExportMetadataList( exports, Utils.addFilenameSuffix( job.getArgs().inputFilePath(), "-export" ) );
+			TileInfoJSONProvider.saveMultiscaledExportMetadataList( exports, Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString() +  "/export.json" );
 		}
 		catch ( final IOException e )
 		{

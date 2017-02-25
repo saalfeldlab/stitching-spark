@@ -16,6 +16,7 @@ import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
+import org.janelia.util.ImageImporter;
 import org.kohsuke.args4j.CmdLineException;
 
 import ij.IJ;
@@ -23,7 +24,6 @@ import ij.ImagePlus;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
-import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImg;
@@ -41,6 +41,7 @@ import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.IntervalView;
+import net.imglib2.view.RandomAccessiblePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 import scala.Tuple2;
@@ -74,26 +75,33 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
+	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePair< U, U > loadCorrectionImages( final String vPath, final String zPath )
+	{
+		final ImagePlus vImp = ImageImporter.openImage( vPath );
+		final ImagePlus zImp = ImageImporter.openImage( zPath );
+		if ( vImp == null || zImp == null )
+			return null;
+
+		Utils.workaroundImagePlusNSlices( vImp );
+		Utils.workaroundImagePlusNSlices( zImp );
+
+		return new RandomAccessiblePair< U, U >( ImagePlusImgs.from( vImp ), ImagePlusImgs.from( zImp ) );
+	}
+
 	public static <
 		T extends NativeType< T > & RealType< T >,
 		U extends NativeType< U > & RealType< U > >
-	ImagePlusImg< FloatType, ? > applyCorrection(
-			final RandomAccessibleInterval< T > src,
-			final RandomAccessibleInterval< U > v,
-			final RandomAccessibleInterval< U > z )
+	ImagePlusImg< FloatType, ? > applyCorrection( final RandomAccessibleInterval< T > src, final RandomAccessiblePair< U, U > correction )
 	{
-		final Cursor< T > srcCursor = Views.iterable( src ).localizingCursor();
 		final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( src ) );
-		final RandomAccess< FloatType > dstRandomAccess = Views.translate( dst, Intervals.minAsLongArray( src ) ).randomAccess();
-		final RandomAccess< U > vRandomAccess = v.randomAccess();
-		final RandomAccess< U > zRandomAccess = z.randomAccess();
-		while ( srcCursor.hasNext() )
+		final Cursor< T > srcCursor = Views.flatIterable( src ).localizingCursor();
+		final Cursor< FloatType > dstCursor = Views.flatIterable( Views.translate( dst, Intervals.minAsLongArray( src ) ) ).cursor();
+		final RandomAccessiblePair< U, U >.RandomAccess correctionRandomAccess = correction.randomAccess();
+		while ( srcCursor.hasNext() || dstCursor.hasNext() )
 		{
 			srcCursor.fwd();
-			dstRandomAccess.setPosition( srcCursor );
-			vRandomAccess.setPosition( srcCursor );
-			zRandomAccess.setPosition( srcCursor.getIntPosition(0), 0 ); zRandomAccess.setPosition( srcCursor.getIntPosition(1), 1 );
-			dstRandomAccess.get().setReal( srcCursor.get().getRealDouble() * vRandomAccess.get().getRealDouble() + zRandomAccess.get().getRealDouble() );
+			correctionRandomAccess.setPosition( srcCursor );
+			dstCursor.next().setReal( srcCursor.get().getRealDouble() * correctionRandomAccess.getA().getRealDouble() + correctionRandomAccess.getB().getRealDouble() );
 		}
 		return dst;
 	}

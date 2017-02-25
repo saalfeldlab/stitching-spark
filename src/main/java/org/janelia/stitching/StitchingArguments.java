@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.List;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -21,8 +22,8 @@ public class StitchingArguments implements Serializable {
 	private static final long serialVersionUID = -8996450783846140673L;
 
 	@Option(name = "-i", aliases = { "--input" }, required = true,
-			usage = "Path to a tile configuration JSON file")
-	private String inputFilePath;
+			usage = "Path to a tile configuration JSON file. Multiple configurations can be passed at once.")
+	private List< String > inputTileConfigurations;
 
 	@Option(name = "-t", aliases = { "--threshold" }, required = false,
 			usage = "A threshold value of cross correlation for accepting a shift")
@@ -100,7 +101,7 @@ public class StitchingArguments implements Serializable {
 		return values;
 	}
 
-	public String inputFilePath() { return inputFilePath; }
+	public List< String > inputTileConfigurations() { return inputTileConfigurations; }
 	public double crossCorrelationThreshold() { return crossCorrelationThreshold; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurSigma() { return blurSigma; }

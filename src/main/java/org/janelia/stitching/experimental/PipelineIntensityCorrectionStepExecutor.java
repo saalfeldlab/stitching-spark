@@ -61,6 +61,8 @@ import scala.Tuple2;
  * @author Igor Pisarev
  */
 
+// FIXME: add multichannel support
+
 public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecutor
 {
 	private static final long serialVersionUID = -8516030608688893713L;
@@ -77,7 +79,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	@Override
 	public void run()
 	{
-		final List< TilePair > overlappingShiftedTiles = TileOperations.findOverlappingTiles( job.getTiles() );
+		final List< TilePair > overlappingShiftedTiles = TileOperations.findOverlappingTiles( job.getTiles( 0 ) );
 		try
 		{
 			matchIntensities( overlappingShiftedTiles );
@@ -102,7 +104,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 			for ( final TileInfo tile : tilePair.toArray() )
 				tilesMap.put( tile.getIndex(), tile );
 
-		for ( final Integer key : job.getTilesMap().keySet() )
+		for ( final Integer key : Utils.createTilesMap( job.getTiles( 0 ) ).keySet() )
 			if ( !tilesMap.containsKey( key ) )
 				throw new Exception( "Some subset was chosen instead of the whole configuration (bad tile " + key + ")" );
 
@@ -211,12 +213,13 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 				});
 		final List< TileInfo > resultingTiles = taskTiles.collect();
 
-		final Map< Integer, TileInfo > allTilesMap = job.getTilesMap();
+		final TileInfo[] tiles = job.getTiles( 0 );
+		final Map< Integer, TileInfo > allTilesMap = Utils.createTilesMap( tiles );
 		for ( final TileInfo transformedTile : resultingTiles )
 			allTilesMap.get( transformedTile.getIndex() ).setFilePath( transformedTile.getFilePath() );
 
 		try {
-			TileInfoJSONProvider.saveTilesConfiguration( job.getTiles(), job.getBaseFolder() + "/" + Utils.addFilenameSuffix( job.getDatasetName() + ".json", "_transformed" ) );
+			TileInfoJSONProvider.saveTilesConfiguration( tiles, job.getBaseFolder() + "/" + Utils.addFilenameSuffix( job.getDatasetName() + ".json", "_transformed" ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}
@@ -531,8 +534,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 					}
 				});
 		final List< TileInfo > resultingTiles = taskTiles.collect();
-		final TileInfo[] allTiles = job.getTiles();
-		final Map< Integer, TileInfo > allTilesMap = job.getTilesMap();
+		final TileInfo[] allTiles = job.getTiles( 0 );
+		final Map< Integer, TileInfo > allTilesMap = Utils.createTilesMap( allTiles );
 		for ( final TileInfo transformedTile : resultingTiles )
 			allTilesMap.get( transformedTile.getIndex() ).setFilePath( transformedTile.getFilePath() );
 

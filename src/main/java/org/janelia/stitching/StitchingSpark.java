@@ -1,6 +1,8 @@
 package org.janelia.stitching;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -43,7 +45,11 @@ public class StitchingSpark implements Serializable, AutoCloseable
 	{
 		job = new StitchingJob( args );
 		try {
-			job.setTiles( TileInfoJSONProvider.loadTilesConfiguration( args.inputFilePath() ) );
+			final List< TileInfo[] > tilesMultichannel = new ArrayList<>();
+			for ( int channel = 0; channel < job.getChannels(); channel++ )
+				tilesMultichannel.add( TileInfoJSONProvider.loadTilesConfiguration( args.inputTileConfigurations().get( channel ) ) );
+
+			job.setTilesMultichannel( tilesMultichannel );
 		} catch ( final Exception e ) {
 			System.out.println( "Aborted: " + e.getMessage() );
 			e.printStackTrace();

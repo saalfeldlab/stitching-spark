@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.janelia.flatfield.FlatfieldCorrection;
+import org.janelia.util.Conversions;
 
 import bdv.export.Downsample;
 import ij.IJ;
@@ -35,24 +36,11 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsNullable;
+import net.imglib2.view.RandomAccessiblePair;
 import net.imglib2.view.Views;
 
 public class FusionPerformer
 {
-	private static < T extends RealType< T > & NativeType< T > > ImagePlusImg< FloatType, ? > convertToFloat( final RandomAccessibleInterval< T > src )
-	{
-		final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( src ) );
-
-		final Cursor< T > srcCursor = Views.flatIterable( src ).cursor();
-		final Cursor< FloatType > dstCursor = Views.flatIterable( dst ).cursor();
-
-		while ( srcCursor.hasNext() || dstCursor.hasNext() )
-			dstCursor.next().set( srcCursor.next().getRealFloat() );
-
-		return dst;
-	}
-
-
 	public static <
 		T extends RealType< T > & NativeType< T >,
 		U extends RealType< U > & NativeType< U > >
@@ -61,7 +49,7 @@ public class FusionPerformer
 			final Interval targetInterval,
 			final InterpolatorFactory< FloatType, RandomAccessible< FloatType > > interpolatorFactory ) throws Exception
 	{
-		return fuseTilesWithinCellUsingMaxMinDistance( tilesWithinCell, targetInterval, interpolatorFactory, null, null );
+		return fuseTilesWithinCellUsingMaxMinDistance( tilesWithinCell, targetInterval, interpolatorFactory, null );
 	}
 
 	/**
@@ -73,10 +61,8 @@ public class FusionPerformer
 	 * 			An output fusion cell
 	 * @param interpolatorFactory
 	 * 			An interpolation strategy for tiles with real coordinates
-	 * @param v
-	 * 			Optional multiplicative term for illumination correction (can be null)
-	 * @param z
-	 * 			Optional additive term for illumination correction (can be null)
+	 * @param flatfieldCorrection
+	 * 			Optional flatfield correction coefficients (can be null)
 	 */
 	public static <
 		T extends RealType< T > & NativeType< T >,
@@ -85,8 +71,7 @@ public class FusionPerformer
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
 			final InterpolatorFactory< FloatType, RandomAccessible< FloatType > > interpolatorFactory,
-			final RandomAccessibleInterval< U > v,
-			final RandomAccessibleInterval< U > z ) throws Exception
+			final RandomAccessiblePair< U, U > flatfieldCorrection ) throws Exception
 	{
 		final ImageType imageType = Utils.getImageType( tilesWithinCell );
 		if ( imageType == null )
@@ -125,8 +110,7 @@ public class FusionPerformer
 			final Interval intersectionIntervalInTargetInterval = new FinalInterval( minIntersectionInTargetInterval, maxIntersectionInTargetInterval );
 
 			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
-			final ImagePlusImg< FloatType, ? > correctedTile =
-					( v != null && z != null ) ? FlatfieldCorrection.applyCorrection( rawTile, v, z ) : convertToFloat( rawTile );
+			final ImagePlusImg< FloatType, ? > correctedTile = flatfieldCorrection != null ? FlatfieldCorrection.applyCorrection( rawTile, flatfieldCorrection ) : Conversions.convertImageToFloat( rawTile );
 			final RandomAccessible< FloatType > extendedTile = Views.extendBorder( correctedTile );
 			final RealRandomAccessible< FloatType > interpolatedTile = Views.interpolate( extendedTile, interpolatorFactory );
 			final RandomAccessible< FloatType > rasteredInterpolatedTile = Views.raster( RealViews.affine( interpolatedTile, translation ) );
