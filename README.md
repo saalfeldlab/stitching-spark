@@ -25,7 +25,7 @@ The application requires an input file containing the registered tiles configura
 ]
 ```
 
-Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L23-L58)
+Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L24-L59)
 
 ```bash
 ./flintstone.sh \
@@ -36,6 +36,9 @@ Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](htt
   --stitch \
   -r um=0.097,0.097,0.180
 ```
+
+You can pass multiple tile configurations at once (e.g. channels) in the following way: `-i ch0.json -i ch1.json ...`
+The multichannel data will be averaged on-the-fly before computing pairwise shifts in order to get higher correlations because of denser signal.
 
 The application checks if a file 'ch0_10z_pairwise.json' exists. If not, it computes pairwise shifts for all tile pairs in approximate 3D six-neighborhood (i.e. diagonal overlaps are typically ignored, this is subject to change and for parameterization, e.g. how much overlap we consider sufficient to calculate pairwise shift vectors).  Shift vectors are stored in the earlier mentioned pairwise file.  Then, it performs global optimization with the parameters specified (or [hardcoded](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/stitching/GlobalOptimizationPerformer.java#L477)).  Output is saved as 'ch0_10z-final.json'
 
@@ -58,9 +61,13 @@ Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](htt
   -f 256 \
   -r um=0.097,0.097,0.180
 ```
+
 This generates an export of the stitched volume as specified in the json file.  The export uses '''max-border distance''' as fusion mode, no blending.  It currently exports into the ad-hoc BDV cell file format into the directory of the json input file, e.g. `/home/igor/3d-fullsize-ch1/stitching/ch0-xy/10z/channel0` and generates a json file for the BDV cell file viewer.
 
-As with stitching, if the directory of the input json file contains two files `v.tif` and `z.tif`, then they are used as flatfield correction coefficients that are applied to each input tile.  TODO specify this nicely in the configuration, e.g. we have independent and actually pretty different correction fields fopr each channel.
+You can pass multiple tile configurations at once (e.g. channels) in the following way: `-i ch0.json -i ch1.json ...`
+Each channel will be fused separately, but the resulting json file will contain export configurations for all channels, and the BDV cell file viewer will display all them together.
+
+As with stitching, if the directory of the input json file contains two files `v.tif` and `z.tif`, then they are used as flatfield correction coefficients that are applied to each input tile.  TODO specify this nicely in the configuration, e.g. we have independent and actually pretty different correction fields for each channel.
 
 # flat-field correction
 Run `org.janelia.flatfield.FlatfieldCorrection` with arguments explained [inline](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/flatfield/FlatfieldCorrectionArguments.java#L18-L36)
@@ -75,7 +82,7 @@ Run `org.janelia.flatfield.FlatfieldCorrection` with arguments explained [inline
   --max 10000
 ```
 
-The main method checks if a sub-directory near the input json file exists that contains a histograms directory where historgrams are stored as one file per slice.  If not, histograms are being generated.
+The main method checks if a sub-directory near the input json file exists that contains a histograms directory where histograms are stored as one file per slice.  If not, histograms are being generated.
 
 Histograms are serialized `TreeMap<Short, Integer>` of sorted original integer intensity values without binning at this time (will change later to be more generic).  Binning considering `min`, `max`, and `bins` is performed at loading the treemaps.  If `min` and `max` are not specified, then the min and max of the entire stack is used (which can be terrribly slow and is probably not useful, so specify them).
 
