@@ -158,11 +158,9 @@ public class FusionPerformer
 			final TileInfo cell,
 			final int[] downsampleFactors ) throws Exception
 	{
-//		final ImageType imageType = Utils.getImageType( tiles );
-//		if ( imageType == null )
-//			throw new Exception( "Can't fuse images of different or unknown types" );
-		// TODO: can't derive from the tiles anymore since we convert the image to FloatType with illumination correction
-		final ImageType imageType = ImageType.GRAY32;
+		final ImageType imageType = Utils.getImageType( tiles );
+		if ( imageType == null )
+			throw new Exception( "Can't fuse images of different or unknown types" );
 
 		cell.setType( imageType );
 		final T type = ( T ) imageType.getType();
