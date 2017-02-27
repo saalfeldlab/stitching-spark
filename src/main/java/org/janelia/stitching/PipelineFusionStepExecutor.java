@@ -293,7 +293,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 //										cellBox,
 //										new NLinearInterpolatorFactory(),
 //										channel );
-								outImg = FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
+								outImg = ( ImagePlusImg ) FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
 										tilesWithinCell,
 										cellBox,
 										new NLinearInterpolatorFactory(),
@@ -301,7 +301,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 							}
 							else
 							{
-								outImg = ( ImagePlusImg< T, ? > ) FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, downsampleFactors );
+								outImg = ( ImagePlusImg ) FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, downsampleFactors );
 
 								for ( int d = 0; d < cell.numDimensions(); d++ )
 								{
