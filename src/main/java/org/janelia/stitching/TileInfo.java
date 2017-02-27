@@ -44,12 +44,16 @@ public class TileInfo implements Serializable {
 	public double[] getPosition() {
 		return position;
 	}
-	
+
 	public double[] getMax() {
-		double[] max = new double[ numDimensions() ];
+		final double[] max = new double[ numDimensions() ];
 		for ( int d = 0; d < max.length; d++ )
-			max[ d ] = position[ d ] + size[ d ] - 1;
+			max[ d ] = getMax( d );
 		return max;
+	}
+
+	public double getMax( final int d ) {
+		return position[ d ] + size[ d ] - 1;
 	}
 
 	public void setPosition( final double[] position ) {

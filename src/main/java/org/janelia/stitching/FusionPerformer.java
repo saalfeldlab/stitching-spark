@@ -93,7 +93,7 @@ public class FusionPerformer
 					targetInterval );
 
 			if ( intersection == null )
-				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval" );
+				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval:\n" + "Tile " + tile.getIndex() + " at " + Arrays.toString( tile.getPosition() ) + " of size " + Arrays.toString( tile.getSize() ) + "\n" + "Output cell " + " at " + Arrays.toString( Intervals.minAsIntArray( targetInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsIntArray( targetInterval ) ) );
 
 			final double[] offset = new double[ targetInterval.numDimensions() ];
 			final Translation translation = new Translation( targetInterval.numDimensions() );

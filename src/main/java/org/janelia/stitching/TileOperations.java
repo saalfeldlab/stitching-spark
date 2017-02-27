@@ -90,10 +90,8 @@ public class TileOperations
 	{
 		for ( int d = 0; d < t1.numDimensions(); d++ )
 		{
-			final long p1 = Math.round( t1.getPosition( d ) ), p2 = Math.round( t2.getPosition( d ) );
-			final long s1 = t1.getSize( d ), s2 = t2.getSize( d );
-
-			if ( !( ( p2 >= p1 && p2 < p1 + s1 ) || ( p1 >= p2 && p1 < p2 + s2 ) ) )
+			final double min1 = t1.getPosition( d ), min2 = t2.getPosition( d ), max1 = t1.getMax( d ), max2 = t2.getMax( d );
+			if ( !( ( min2 >= min1 && min2 <= max1 ) || ( min1 >= min2 && min1 <= max2 ) ) )
 				return false;
 		}
 		return true;
@@ -103,10 +101,8 @@ public class TileOperations
 	{
 		for ( int d = 0; d < t1.numDimensions(); d++ )
 		{
-			final double p1 = Math.round( t1.realMin( d ) ), p2 = Math.round( t2.realMin( d ) );
-			final double q1 = t1.realMax( d ), q2 = t2.realMax( d );
-
-			if ( !( ( p2 >= p1 && p2 < q1 ) || ( p1 >= p2 && p1 < q2 ) ) )
+			final double min1 = t1.realMin( d ), min2 = t2.realMin( d ), max1 = t1.realMax( d ), max2 = t2.realMax( d );
+			if ( !( ( min2 >= min1 && min2 <= max1 ) || ( min1 >= min2 && min1 <= max2 ) ) )
 				return false;
 		}
 		return true;
