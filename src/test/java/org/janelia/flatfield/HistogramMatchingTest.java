@@ -2,8 +2,6 @@ package org.janelia.flatfield;
 
 import java.util.List;
 
-import org.janelia.flatfield.FlatfieldCorrectionSolver;
-import org.janelia.flatfield.HistogramSettings;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -12,6 +10,16 @@ import mpicbg.models.PointMatch;
 public class HistogramMatchingTest
 {
 	private HistogramSettings histogramSettings;
+
+	@Test
+	public void testBinValues()
+	{
+		histogramSettings = new HistogramSettings( 10, 19, 5 );
+		Assert.assertEquals( 15, histogramSettings.getBinValue( 2 ), 0.f );
+
+		histogramSettings = new HistogramSettings( 10, 19, 10 );
+		Assert.assertEquals( 12, histogramSettings.getBinValue( 2 ), 0.f );
+	}
 
 	@Test
 	public void testBinning()

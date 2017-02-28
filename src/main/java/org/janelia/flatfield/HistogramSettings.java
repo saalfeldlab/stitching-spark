@@ -38,12 +38,16 @@ public class HistogramSettings implements Serializable
 		return ( int ) ( ( value - minValue ) / getBinWidth( minValue, maxValue, bins ) );
 	}
 
-	public int getBinValue( final int index )
+	public double getBinValue( final int index )
 	{
 		return getBinValue( index, minValue, maxValue, bins );
 	}
-	public static int getBinValue( final int index, final int minValue, final int maxValue, final int bins )
+	public static double getBinValue( final int index, final int minValue, final int maxValue, final int bins )
 	{
-		return ( int ) ( minValue + ( index + 0.5 ) * getBinWidth( minValue, maxValue, bins ) );
+		// special case when binWidth = 1
+		if ( maxValue - minValue + 1 == bins )
+			return ( minValue + index );
+		else
+			return ( minValue + ( index + 0.5 ) * getBinWidth( minValue, maxValue, bins ) );
 	}
 }
