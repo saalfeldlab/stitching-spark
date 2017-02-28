@@ -21,7 +21,8 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.AffineGet;
+import net.imglib2.realtransform.AffineSet;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
@@ -32,20 +33,27 @@ import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import scala.Tuple2;
 
-public class ShiftedDownsampling
+public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 {
 	private final JavaSparkContext sparkContext;
 	private final Interval workingInterval;
-	private final AffineTransform3D downsamplingTransform;
+	private final A downsamplingTransform;
 
 	private final List< long[] > scaleLevelPixelSize;
 	private final List< long[] > scaleLevelOffset;
 	private final List< long[] > scaleLevelDimensions;
 
 	public ShiftedDownsampling(
+			final Interval workingInterval,
+			final A downsamplingTransform )
+	{
+		// The version that doesn't use Spark
+		this( null, workingInterval, downsamplingTransform );
+	}
+	public ShiftedDownsampling(
 			final JavaSparkContext sparkContext,
 			final Interval workingInterval,
-			final AffineTransform3D downsamplingTransform )
+			final A downsamplingTransform )
 	{
 		this.sparkContext = sparkContext;
 		this.workingInterval = workingInterval;
@@ -148,21 +156,49 @@ public class ShiftedDownsampling
 		return downsampledComponent;
 	}
 
-	public < T extends RealType< T > & NativeType< T > > RandomAccessible< T > upsample( final RandomAccessibleInterval< T > downsampledImg, final int scale )
+	public < T extends RealType< T > & NativeType< T > > RandomAccessible< T > upsample( final RandomAccessibleInterval< T > downsampledImg, final int newScale )
 	{
-		final RealRandomAccessible< T > interpolatedDownsampledImage = Views.interpolate( Views.extendBorder( downsampledImg ), new NLinearInterpolatorFactory<>() );
+		// find the scale level of downsampledImg by comparing the dimensions
+		int oldScale = -1;
+		for ( int scale = getNumScales() - 1; scale >= 0; scale-- )
+		{
+			boolean found = true;
+			for ( int d = 0; d < downsampledImg.numDimensions(); d++ )
+				found &= downsampledImg.dimension( d ) == scaleLevelDimensions.get( scale )[ d ];
 
-		// Preapply the transform with a positive translation in order to align the downsampled image to the upsampled image (in its coordinate space)
-		final double[] translation = downsamplingTransform.getTranslation();
-		for ( int d = 0; d < translation.length; d++ )
-			translation[ d ] = scale > 0 ? -translation[ d ] : 0;
-		final AffineTransform3D translationTransform = new AffineTransform3D();
-		translationTransform.setTranslation( translation );
+			if ( found )
+			{
+				oldScale = scale;
+				break;
+			}
+		}
+		if ( oldScale == -1 )
+			throw new IllegalArgumentException( "Cannot identify scale level of the given image" );
 
-		final RealRandomAccessible< T > alignedDownsampledImg = RealViews.affine( interpolatedDownsampledImage, translationTransform );
+		RandomAccessible< T > result = null;
+		for ( int scale = oldScale - 1; scale >= newScale; scale-- )
+		{
+			final RandomAccessibleInterval< T > input = result == null ? downsampledImg : Views.interval( result, new FinalInterval( scaleLevelDimensions.get( scale ) ) );
 
-		// Then, apply the inverse of the downsampling transform in order to map the downsampled image to the upsampled image
-		return RealViews.affine( alignedDownsampledImg, downsamplingTransform.inverse() );
+			final RealRandomAccessible< T > interpolatedDownsampledImage = Views.interpolate( Views.extendBorder( input ), new NLinearInterpolatorFactory<>() );
+
+			// Preapply the shifting transform in order to align the downsampled image to the upsampled image (in its coordinate space)
+			final A translationTransform = ( A ) downsamplingTransform.copy();
+			for ( int d = 0; d < translationTransform.numDimensions(); d++ )
+			{
+				translationTransform.set( 1, d, d );
+				if ( scale == 0 )
+					translationTransform.set( 1.5 * translationTransform.get(
+							d, translationTransform.numDimensions() ),
+							d, translationTransform.numDimensions() );
+			}
+
+			final RealRandomAccessible< T > alignedDownsampledImg = RealViews.affine( interpolatedDownsampledImage, translationTransform );
+
+			// Then, apply the inverse of the downsampling transform in order to map the downsampled image to the upsampled image
+			result = RealViews.affine( alignedDownsampledImg, downsamplingTransform.inverse() );
+		}
+		return result;
 	}
 
 
@@ -272,8 +308,8 @@ public class ShiftedDownsampling
 				downsampledPixelToFullPixelsCount[ ( int ) downsampledPixel ] = ( int ) Intervals.numElements( entry.getValue() );
 			}
 
-			broadcastedFullPixelToDownsampledPixel = sparkContext.broadcast( fullPixelToDownsampledPixel );
-			broadcastedDownsampledPixelToFullPixelsCount = sparkContext.broadcast( downsampledPixelToFullPixelsCount );
+			broadcastedFullPixelToDownsampledPixel = sparkContext != null ? sparkContext.broadcast( fullPixelToDownsampledPixel ) : null;
+			broadcastedDownsampledPixelToFullPixelsCount = sparkContext != null ? sparkContext.broadcast( downsampledPixelToFullPixelsCount ) : null;
 		}
 	}
 }
