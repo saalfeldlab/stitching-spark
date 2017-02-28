@@ -28,7 +28,7 @@ public class PropagateLandmarkChanges
 	 * @param outXfmF the new mapping from S to C (through new I)
 	 * @throws IOException if anything failed
 	 */
-	public void propagateLabels( 
+	public void propagateLandmarks( 
 			String oldIntermXfmF,
 			String newIntermXfmF,
 			String changeXfmF,
@@ -113,7 +113,7 @@ public class PropagateLandmarkChanges
 //		String outXfmF = "/groups/saalfeld/home/bogovicj/projects/igor_illumiation-correction/test_propagation/result.csv";
 
 		PropagateLandmarkChanges propagator = new PropagateLandmarkChanges();
-		propagator.propagateLabels(oldRefXfmF, newRefXfmF, changeXfmF, outXfmF);
+		propagator.propagateLandmarks(oldRefXfmF, newRefXfmF, changeXfmF, outXfmF);
 
 	}
 }
