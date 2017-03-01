@@ -54,22 +54,20 @@ public class ShiftedDownsamplingTest
 		try ( final ShiftedDownsampling.PixelsMapping pixelsMapping = downsampler.new PixelsMapping( lowScale ) )
 		{
 			final RandomAccessibleInterval< T > downsampledImg = downsampler.downsampleSolutionComponent( img, pixelsMapping );
-			final ImagePlus downsampledImp = ImageJFunctions.wrap( downsampledImg, "" );
-			Utils.workaroundImagePlusNSlices( downsampledImp );
-			IJ.saveAsTiff( downsampledImp, Utils.addFilenameSuffix( filepath, "_downsampled_" + (1./(1<<lowScale) ) ) );
 
 			try ( final ShiftedDownsampling.PixelsMapping pixelsMappingRestored = downsampler.new PixelsMapping( restoredScale ) )
 			{
 				final RandomAccessibleInterval< T > referenceImg = downsampler.downsampleSolutionComponent( img, pixelsMappingRestored );
-				final ImagePlus referenceImp = ImageJFunctions.wrap( referenceImg, "" );
-				Utils.workaroundImagePlusNSlices( referenceImp );
-				IJ.saveAsTiff( referenceImp, Utils.addFilenameSuffix( filepath, "_reference_" + (1./(1<<restoredScale) ) ) );
 
 				final RandomAccessible< T > upsampledImg = downsampler.upsample( downsampledImg, restoredScale );
 				final RandomAccessibleInterval< T > restoredImg = Views.interval( upsampledImg, new FinalInterval( pixelsMappingRestored.getDimensions() ) );
-				final ImagePlus restoredImp = ImageJFunctions.wrap( restoredImg, "" );
-				Utils.workaroundImagePlusNSlices( restoredImp );
-				IJ.saveAsTiff( restoredImp, Utils.addFilenameSuffix( filepath, "_restored_" + (1./(1<<restoredScale) ) ) );
+
+				final RandomAccessibleInterval< T > testStackImg = Views.stack( referenceImg, restoredImg );
+				final ImagePlus testStackImp = ImageJFunctions.wrap( testStackImg, "reference/restored" );
+				Utils.workaroundImagePlusNSlices( testStackImp );
+
+				final IJ ij = new IJ();
+				testStackImp.show();
 			}
 		}
 	}
