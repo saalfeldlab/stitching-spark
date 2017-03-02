@@ -3,6 +3,7 @@ package org.janelia.flatfield;
 import org.janelia.stitching.Utils;
 
 import ij.IJ;
+import ij.ImageJ;
 import ij.ImagePlus;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessible;
@@ -66,7 +67,7 @@ public class ShiftedDownsamplingTest
 				final ImagePlus testStackImp = ImageJFunctions.wrap( testStackImg, "reference/restored" );
 				Utils.workaroundImagePlusNSlices( testStackImp );
 
-				final IJ ij = new IJ();
+				new ImageJ();
 				testStackImp.show();
 			}
 		}
