@@ -79,6 +79,29 @@ public class Conversions {
 	}
 
 
+	public static Short[] toBoxedArray( final short[] arr )
+	{
+		final Short[] ret = new Short[ arr.length ];
+		for ( int i = 0; i < ret.length; ++i )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+	public static Integer[] toBoxedArray( final int[] arr )
+	{
+		final Integer[] ret = new Integer[ arr.length ];
+		for ( int i = 0; i < ret.length; ++i )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+	public static Long[] toBoxedArray( final long[] arr )
+	{
+		final Long[] ret = new Long[ arr.length ];
+		for ( int i = 0; i < ret.length; ++i )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+
+
 	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< FloatType, ? > convertImageToFloat( final RandomAccessibleInterval< T > src )
 	{
 		final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( src ) );
