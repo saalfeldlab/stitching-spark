@@ -1,7 +1,5 @@
 package net.imglib2.util;
 
-import net.imglib2.util.ValuePair;
-
 /**
  * Holds an ordered pair of objects of arbitrary type that can be compared with each other.
  * Defines the ascending sorting order by the first element, and by the second if the first elements are equal.

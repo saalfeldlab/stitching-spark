@@ -18,8 +18,8 @@ public class TraceTimestamps
 	public static void main( final String[] args ) throws Exception
 	{
 		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
-		final List< Pair< TileInfo, Long > > timestamps = Utils.getTileTimestamps( tiles );
-		final List< Pair< TileInfo, int[] > > coordinates = Utils.getTileCoordinates( tiles );
+		final List< Pair< TileInfo, Long > > timestamps = Utils.getTilesTimestamps( tiles );
+		final List< Pair< TileInfo, int[] > > coordinates = Utils.getTilesCoordinates( tiles );
 
 		final int[][] coordsMinMax = new int[ 3 ][ 2 ];
 		for ( int d = 0; d < coordsMinMax.length; d++ )

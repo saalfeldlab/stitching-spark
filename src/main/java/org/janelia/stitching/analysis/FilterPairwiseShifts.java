@@ -21,7 +21,7 @@ public class FilterPairwiseShifts
 
 		final TileInfo[] tiles = Utils.createTilesMap( shifts, true ).values().toArray( new TileInfo[ 0 ] );
 		final Map< Integer, int[] > tileIndexToCoordinates = new HashMap<>();
-		for ( final Pair< TileInfo, int[] > tileCoordinates : Utils.getTileCoordinates( tiles ) )
+		for ( final Pair< TileInfo, int[] > tileCoordinates : Utils.getTilesCoordinates( tiles ) )
 			tileIndexToCoordinates.put( tileCoordinates.getA().getIndex(), tileCoordinates.getB() );
 
 		final int sizeBefore = shifts.size();

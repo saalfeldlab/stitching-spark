@@ -200,67 +200,69 @@ public class Utils {
 	}
 
 
-	public static List< Pair< TileInfo, int[] > > getTileCoordinates( final TileInfo[] tiles ) throws Exception
+	public static int[] getTileCoordinates( final TileInfo tile ) throws Exception
 	{
-		final List< Pair< TileInfo, int[] > > tileCoordinates = new ArrayList<>();
 		final String coordsPatternStr = ".*(\\d{3})x_(\\d{3})y_(\\d{3})z.*";
 		final Pattern coordsPattern = Pattern.compile( coordsPatternStr );
-		for ( final TileInfo tile : tiles )
-		{
-			final String filename = Paths.get( tile.getFilePath() ).getFileName().toString();
-			final Matcher matcher = coordsPattern.matcher( filename );
-			if ( !matcher.find() )
-				throw new Exception( "Can't parse coordinates" );
+		final String filename = Paths.get( tile.getFilePath() ).getFileName().toString();
+		final Matcher matcher = coordsPattern.matcher( filename );
+		if ( !matcher.find() )
+			throw new Exception( "Can't parse coordinates" );
 
-			// don't forget to swap X and Y axes
-			final int[] coordinates = new int[]
-					{
-						Integer.parseInt( matcher.group( 2 ) ),
-						Integer.parseInt( matcher.group( 1 ) ),
-						Integer.parseInt( matcher.group( 3 ) )
-					};
-			tileCoordinates.add( new ValuePair<>( tile, coordinates ) );
-		}
+		// don't forget to swap X and Y axes
+		final int[] coordinates = new int[]
+				{
+					Integer.parseInt( matcher.group( 2 ) ),
+					Integer.parseInt( matcher.group( 1 ) ),
+					Integer.parseInt( matcher.group( 3 ) )
+				};
+		return coordinates;
+	}
+	public static List< Pair< TileInfo, int[] > > getTilesCoordinates( final TileInfo[] tiles ) throws Exception
+	{
+		final List< Pair< TileInfo, int[] > > tileCoordinates = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+			tileCoordinates.add( new ValuePair<>( tile, getTileCoordinates( tile ) ) );
 		return tileCoordinates;
 	}
-	public static TreeMap< Integer, int[] > getTileCoordinatesMap( final TileInfo[] tiles ) throws Exception
+	public static TreeMap< Integer, int[] > getTilesCoordinatesMap( final TileInfo[] tiles ) throws Exception
 	{
-		final List< Pair< TileInfo, int[] > > coordinates = getTileCoordinates( tiles );
 		final TreeMap< Integer, int[] > coordinatesMap = new TreeMap<>();
-		for ( final Pair< TileInfo, int[] > pair : coordinates )
-			coordinatesMap.put( pair.getA().getIndex(), pair.getB() );
+		for ( final TileInfo tile : tiles )
+			coordinatesMap.put( tile.getIndex(), getTileCoordinates( tile ) );
 		return coordinatesMap;
 	}
 
-	public static List< Pair< TileInfo, Long > > getTileTimestamps( final TileInfo[] tiles ) throws Exception
+	public static long getTileTimestamp( final TileInfo tile ) throws Exception
 	{
-		final List< Pair< TileInfo, Long > > tileTimestamps = new ArrayList<>();
 		final String timePatternStr = ".*_(\\d*)msecAbs.*";
 		final Pattern timePattern = Pattern.compile( timePatternStr );
-		for ( final TileInfo tile : tiles )
-		{
-			final String filename = Paths.get( tile.getFilePath() ).getFileName().toString();
-			final Matcher matcher = timePattern.matcher( filename );
-			if ( !matcher.find() )
-				throw new Exception( "Can't parse timestamp" );
+		final String filename = Paths.get( tile.getFilePath() ).getFileName().toString();
+		final Matcher matcher = timePattern.matcher( filename );
+		if ( !matcher.find() )
+			throw new Exception( "Can't parse timestamp" );
 
-			final long timestamp = Long.parseLong( matcher.group( 1 ) );
-			tileTimestamps.add( new ValuePair<>( tile, timestamp ) );
-		}
+		final long timestamp = Long.parseLong( matcher.group( 1 ) );
+		return timestamp;
+	}
+	public static List< Pair< TileInfo, Long > > getTilesTimestamps( final TileInfo[] tiles ) throws Exception
+	{
+		final List< Pair< TileInfo, Long > > tileTimestamps = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+			tileTimestamps.add( new ValuePair<>( tile, getTileTimestamp( tile ) ) );
 		return tileTimestamps;
 	}
-	public static TreeMap< Integer, Long > getTileTimestampsMap( final TileInfo[] tiles ) throws Exception
+	public static TreeMap< Integer, Long > getTilesTimestampsMap( final TileInfo[] tiles ) throws Exception
 	{
-		final List< Pair< TileInfo, Long > > timestamps = getTileTimestamps( tiles );
 		final TreeMap< Integer, Long > timestampsMap = new TreeMap<>();
-		for ( final Pair< TileInfo, Long > pair : timestamps )
-			timestampsMap.put( pair.getA().getIndex(), pair.getB() );
+		for ( final TileInfo tile : tiles )
+			timestampsMap.put( tile.getIndex(), getTileTimestamp( tile ) );
 		return timestampsMap;
 	}
 
 	public static List< TileInfo > sortTilesByTimestamp( final TileInfo[] tiles ) throws Exception
 	{
-		final List< Pair< TileInfo, Long > > tileTimestamps = getTileTimestamps( tiles );
+		final List< Pair< TileInfo, Long > > tileTimestamps = getTilesTimestamps( tiles );
 
 		final TreeMap< Long, List< TileInfo > > timestampToTiles = new TreeMap<>();
 		for ( final Pair< TileInfo, Long > tileTimestamp : tileTimestamps )
