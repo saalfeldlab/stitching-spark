@@ -31,13 +31,19 @@ public class FilterTileDuplicates
 		}
 
 		// sort the tile dimensions by the number of tiles
-		final TreeMap< Integer, ComparableTuple< Long > > tilesCountToDimensions = new TreeMap<>();
+		final TreeMap< Integer, List< ComparableTuple< Long > > > tilesCountToDimensions = new TreeMap<>();
 		for ( final Entry< ComparableTuple< Long >, List< TileInfo > > entry : dimensions.entrySet() )
-			tilesCountToDimensions.put( entry.getValue().size(), entry.getKey() );
-
+		{
+			final int key = entry.getValue().size();
+			if ( !tilesCountToDimensions.containsKey( key ) )
+				tilesCountToDimensions.put( key, new ArrayList<>() );
+			tilesCountToDimensions.get( key ).add( entry.getKey() );
+		}
 		System.out.println( "Tiles count to dimensions:" );
-		for ( final Entry< Integer, ComparableTuple< Long > > entry : tilesCountToDimensions.descendingMap().entrySet() )
-			System.out.println( String.format( "  %s: %s", entry.getKey(), entry.getValue() ) );
+		for ( final Entry< Integer, List< ComparableTuple< Long > > > entry : tilesCountToDimensions.descendingMap().entrySet() )
+			for ( final ComparableTuple< Long > dims : entry.getValue() )
+				System.out.println( String.format( "  %s: %s", entry.getKey(), dims ) );
+		System.out.println();
 
 
 		// build a map of tile coordinates to find duplicates
@@ -57,6 +63,11 @@ public class FilterTileDuplicates
 			for ( final TileInfo tile : entry.getValue() )
 				tileToDimensions.put( tile.getIndex(), entry.getKey() );
 
+		// choose the reference dimensions
+		if ( tilesCountToDimensions.lastEntry().getValue().size() > 1 )
+			throw new Exception( "Multiple dimension groups with the same highest number of tiles" );
+		final ComparableTuple< Long > candidateDims = tilesCountToDimensions.lastEntry().getValue().get( 0 );
+
 		// loop over the coordinate groups
 		final Set< TileInfo > retainedTilesSet = new HashSet<>(), removedTilesSet = new HashSet<>();
 		for ( final Entry< ComparableTuple< Integer >, List< TileInfo > > entry : coordinatesToTiles.entrySet() )
@@ -64,13 +75,13 @@ public class FilterTileDuplicates
 			// check if there are any duplicates for the particular stage position
 			if ( entry.getValue().size() > 1 )
 			{
-				System.out.println( String.format( "%d tiles at %s", entry.getValue().size(), entry.getKey() ) );
+				System.out.println( String.format( "Found %d tiles at %s", entry.getValue().size(), entry.getKey() ) );
 
 				// try to find the candidate tile to retain that has 'regular' dimensions
 				TileInfo candidateTile = null;
 				for ( final TileInfo duplicateTile : entry.getValue() )
 				{
-					if ( tileToDimensions.get( duplicateTile.getIndex() ).compareTo( tilesCountToDimensions.lastEntry().getValue() ) == 0 )
+					if ( tileToDimensions.get( duplicateTile.getIndex() ).compareTo( candidateDims ) == 0 )
 					{
 						if ( candidateTile == null )
 							candidateTile = duplicateTile;
@@ -106,7 +117,7 @@ public class FilterTileDuplicates
 		}
 		else
 		{
-			System.out.println( String.format("%d tiles out of %d tiles are retained", retainedTiles.size(), tiles.length ) );
+			System.out.println( String.format("Removed %d duplicated tiles out of %d tiles", tiles.length - retainedTiles.size(), tiles.length ) );
 			TileInfoJSONProvider.saveTilesConfiguration( retainedTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( args[ 0 ], "_retained" ) );
 		}
 
