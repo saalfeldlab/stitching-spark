@@ -3,8 +3,8 @@ package org.janelia.util;
 import java.util.Arrays;
 
 /**
- * Holds an ordered pair of objects that can be compared with each other.
- * Defines the ascending sorting order by the first element, or by the second if the first elements are equal, and so on.
+ * Represents a tuple of objects of the same type that can be compared with each other.
+ * Defines the ascending sorting order by the first element of the tuple, or by the second if the first elements are equal, and so on.
  *
  * @author Igor Pisarev
  */
