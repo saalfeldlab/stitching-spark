@@ -37,6 +37,20 @@ public class Conversions {
 			ret[ i ] = arr[ i ];
 		return ret;
 	}
+	public static double[] toDoubleArray( final int[] arr )
+	{
+		final double[] ret = new double[ arr.length ];
+		for ( int i = 0; i < arr.length; i++ )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+	public static double[] toDoubleArray( final long[] arr )
+	{
+		final double[] ret = new double[ arr.length ];
+		for ( int i = 0; i < arr.length; i++ )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
 
 	public static long[] toLongArray( final int[] arr )
 	{

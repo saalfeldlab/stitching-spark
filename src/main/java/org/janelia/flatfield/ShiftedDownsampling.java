@@ -1,6 +1,5 @@
 package org.janelia.flatfield;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -11,12 +10,12 @@ import java.util.Map.Entry;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.util.Conversions;
 
 import net.imglib2.Cursor;
 import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
-import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImgFactory;
@@ -106,14 +105,16 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 	}
 
 
-	public JavaPairRDD< Long, long[] > downsampleHistograms(
+	public JavaPairRDD< Long, double[] > downsampleHistograms(
 			final JavaPairRDD< Long, long[] > rddHistograms,
 			final PixelsMapping pixelsMapping )
 	{
 		if ( pixelsMapping.scale == 0 )
-			return rddHistograms;
+			return rddHistograms.mapValues( histogram -> Conversions.toDoubleArray( histogram ) );
 
 		final Broadcast< int[] > broadcastedFullPixelToDownsampledPixel = pixelsMapping.broadcastedFullPixelToDownsampledPixel;
+		final Broadcast< int[] > broadcastedDownsampledPixelToFullPixelsCount = pixelsMapping.broadcastedDownsampledPixelToFullPixelsCount;
+
 		return rddHistograms
 				.mapToPair( tuple -> new Tuple2<>( ( long ) broadcastedFullPixelToDownsampledPixel.value()[ tuple._1().intValue() ], tuple._2() ) )
 				.reduceByKey(
@@ -122,10 +123,19 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 							for ( int i = 0; i < ret.length; i++ )
 								ret[ i ] += other[ i ];
 							return ret;
+						} )
+				.mapToPair(
+						tuple ->
+						{
+							final int cnt = broadcastedDownsampledPixelToFullPixelsCount.value()[ tuple._1().intValue() ];
+							final long[] accumulatedHistogram = tuple._2();
+							final double[] ret = new double[ accumulatedHistogram.length ];
+							for ( int i = 0; i < ret.length; ++i )
+								ret[ i ] = ( double ) accumulatedHistogram[ i ] / cnt;
+							return new Tuple2<>( tuple._1(), ret );
 						} );
 	}
 
-	@SuppressWarnings("unchecked")
 	public < T extends NativeType< T > & RealType< T > > RandomAccessibleInterval< T > downsampleSolutionComponent(
 			final RandomAccessibleInterval< T > fullComponent,
 			final PixelsMapping pixelsMapping )
@@ -156,7 +166,8 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 		return downsampledComponent;
 	}
 
-	public < T extends RealType< T > & NativeType< T > > RandomAccessible< T > upsample( final RandomAccessibleInterval< T > downsampledImg, final int newScale )
+	@SuppressWarnings("unchecked")
+	public < T extends RealType< T > & NativeType< T > > RealRandomAccessible< T > upsample( final RandomAccessibleInterval< T > downsampledImg, final int newScale )
 	{
 		// find the scale level of downsampledImg by comparing the dimensions
 		int oldScale = -1;
@@ -175,13 +186,9 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 		if ( oldScale == -1 )
 			throw new IllegalArgumentException( "Cannot identify scale level of the given image" );
 
-		RandomAccessible< T > result = null;
+		RealRandomAccessible< T > img = Views.interpolate( Views.extendBorder( downsampledImg ), new NLinearInterpolatorFactory<>() );
 		for ( int scale = oldScale - 1; scale >= newScale; scale-- )
 		{
-			final RandomAccessibleInterval< T > input = result == null ? downsampledImg : Views.interval( result, new FinalInterval( scaleLevelDimensions.get( scale ) ) );
-
-			final RealRandomAccessible< T > interpolatedDownsampledImage = Views.interpolate( Views.extendBorder( input ), new NLinearInterpolatorFactory<>() );
-
 			// Preapply the shifting transform in order to align the downsampled image to the upsampled image (in its coordinate space)
 			final A translationTransform = ( A ) downsamplingTransform.copy();
 			for ( int d = 0; d < translationTransform.numDimensions(); d++ )
@@ -193,21 +200,20 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 							d, translationTransform.numDimensions() );
 			}
 
-			final RealRandomAccessible< T > alignedDownsampledImg = RealViews.affine( interpolatedDownsampledImage, translationTransform );
+			final RealRandomAccessible< T > alignedDownsampledImg = RealViews.affine( img, translationTransform );
 
 			// Then, apply the inverse of the downsampling transform in order to map the downsampled image to the upsampled image
-			result = RealViews.affine( alignedDownsampledImg, downsamplingTransform.inverse() );
+			img = RealViews.affine( alignedDownsampledImg, downsamplingTransform.inverse() );
 		}
-		return result;
+		return img;
 	}
 
 
-	public class PixelsMapping implements Serializable, AutoCloseable
+	public class PixelsMapping implements AutoCloseable
 	{
-		private static final long serialVersionUID = -4186213887570439705L;
-
 		public final int scale;
 		public final Map< Long, Interval > downsampledPixelToFullPixels;
+
 		public final Broadcast< int[] > broadcastedFullPixelToDownsampledPixel;
 		public final Broadcast< int[] > broadcastedDownsampledPixelToFullPixelsCount;
 

@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -64,7 +65,7 @@ public class HistogramsProvider implements Serializable
 	private HistogramSettings histogramSettings;
 
 	private transient JavaPairRDD< Long, long[] > rddHistograms;
-	private transient long[] referenceHistogram;
+	private transient double[] referenceHistogram;
 
 	public HistogramsProvider(
 			final JavaSparkContext sparkContext,
@@ -219,7 +220,7 @@ public class HistogramsProvider implements Serializable
 			// extract min/max value from the histograms
 			rddTreeMaps.persist( StorageLevel.MEMORY_ONLY_SER() );
 
-			final Tuple2< Integer, Integer > histMinMax = rddTreeMaps
+			/*final Tuple2< Integer, Integer > histMinMax = rddTreeMaps
 					.map( tuple -> tuple._2() )
 					.treeAggregate(
 						new Tuple2<>( Integer.MAX_VALUE, Integer.MIN_VALUE ),
@@ -235,7 +236,51 @@ public class HistogramsProvider implements Serializable
 								return new Tuple2<>( min, max );
 							},
 						( ret, val ) -> new Tuple2<>( Math.min( ret._1(), val._1() ), Math.max( ret._2(), val._2() ) ),
+						getAggregationTreeDepth() );*/
+
+			final int statsCount = 10;
+			final Tuple2< TreeSet< Integer >, TreeSet< Integer > > histMinsMaxs = rddTreeMaps
+					.map( tuple -> tuple._2() )
+					.treeAggregate(
+						new Tuple2<>( new TreeSet<>(), new TreeSet<>() ),
+						( ret, map ) ->
+							{
+								final TreeSet< Integer > mins = ret._1(), maxs = ret._2();
+								for ( final Short key : map.keySet() )
+								{
+									final int unsignedKey = shortToUnsigned( key );
+
+									mins.add( unsignedKey );
+									while ( mins.size() > statsCount )
+										mins.remove( mins.last() );
+
+									maxs.add( unsignedKey );
+									while ( maxs.size() > statsCount )
+										maxs.remove( maxs.first() );
+								}
+								return new Tuple2<>( mins, maxs );
+							},
+						( ret, val ) ->
+							{
+								final TreeSet< Integer > mins = ret._1(), maxs = ret._2();
+
+								mins.addAll( val._1() );
+								while ( mins.size() > statsCount )
+									mins.remove( mins.last() );
+
+								maxs.addAll( val._2() );
+								while ( maxs.size() > statsCount )
+									maxs.remove( maxs.first() );
+
+								return ret;
+							},
 						getAggregationTreeDepth() );
+			System.out.println();
+			System.out.println( "Min " + statsCount + " values: " + histMinsMaxs._1() );
+			System.out.println( "Max " + statsCount + " values: " + histMinsMaxs._2().descendingSet() );
+			System.out.println();
+			final Tuple2< Integer, Integer > histMinMax = new Tuple2<>( histMinsMaxs._1().first(), histMinsMaxs._2().last() );
+
 
 			histogramSettings = new HistogramSettings(
 					histMinMax._1(),
@@ -271,7 +316,7 @@ public class HistogramsProvider implements Serializable
 	}
 
 
-	public long[] getReferenceHistogram()
+	public double[] getReferenceHistogram()
 	{
 		if ( referenceHistogram == null )
 			estimateReferenceHistogram();
@@ -280,7 +325,6 @@ public class HistogramsProvider implements Serializable
 	private void estimateReferenceHistogram()
 	{
 		final long numPixels = Intervals.numElements( workingInterval );
-		final int N = tiles.length;
 
 		int numWindowPoints = ( int ) Math.round( numPixels * REFERENCE_HISTOGRAM_POINTS_PERCENT );
 		final int mStart = ( int ) ( Math.round( numPixels / 2.0 ) - Math.round( numWindowPoints / 2.0 ) ) - 1;
@@ -289,7 +333,7 @@ public class HistogramsProvider implements Serializable
 
 		System.out.println("Estimating Q using mStart="+mStart+", mEnd="+mEnd+" (points="+numWindowPoints+")");
 
-		final long[] referenceVector = rddHistograms
+		final long[] accumulatedHistograms = rddHistograms
 			.mapValues( histogram ->
 				{
 					double pixelMean = 0;
@@ -310,28 +354,19 @@ public class HistogramsProvider implements Serializable
 			.mapToPair( tuple -> tuple._1().swap() )
 			.join( rddHistograms )
 			.map( item -> item._2()._2() )
-			.treeAggregate(
-				new long[ N ],
+			.treeReduce(
 				( ret, histogram ) ->
 				{
-					int counter = 0;
-					for ( int i = 0; i < histogram.length; i++ )
-						for ( int j = 0; j < histogram[ i ]; j++ )
-							ret[ counter++ ] += histogramSettings.getBinValue( i );
-					return ret;
-				},
-				( ret, other ) ->
-				{
-					for ( int i = 0; i < N; i++ )
-						ret[ i ] += other[ i ];
+					for ( int i = 0; i < histogramSettings.bins; ++i )
+						ret[ i ] += histogram[ i ];
 					return ret;
 				},
 				getAggregationTreeDepth()
 			);
 
-		referenceHistogram = new long[ histogramSettings.bins ];
-		for ( final long val : referenceVector )
-			referenceHistogram[ histogramSettings.getBinIndex( ( short ) Math.round( ( double ) val / numWindowPoints ) ) ]++;
+		referenceHistogram = new double[ accumulatedHistograms.length ];
+		for ( int i = 0; i < referenceHistogram.length; ++i )
+			referenceHistogram[ i ] = ( double ) accumulatedHistograms[ i ] / numWindowPoints;
 	}
 
 	private boolean allHistogramsReady()

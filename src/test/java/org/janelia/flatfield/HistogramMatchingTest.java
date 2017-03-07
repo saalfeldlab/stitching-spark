@@ -11,6 +11,8 @@ public class HistogramMatchingTest
 {
 	private HistogramSettings histogramSettings;
 
+	private static final double EPSILON = 1e-6;
+
 	@Test
 	public void testBinValues()
 	{
@@ -49,7 +51,7 @@ public class HistogramMatchingTest
 		final short[] arr1 = new short[] { 0, 1, 4, 4, 4, 5, 5, 9, 9, 14 };
 		final short[] arr2 = new short[] { 1, 2, 3, 4, 5, 5, 6, 8, 9, 13 };
 
-		final long[] hist1 = new long[ histogramSettings.bins ], hist2 = new long[ histogramSettings.bins ];
+		final double[] hist1 = new double[ histogramSettings.bins ], hist2 = new double[ histogramSettings.bins ];
 
 		for ( final short val1 : arr1 )
 			hist1[ histogramSettings.getBinIndex( val1 ) ]++;
@@ -57,10 +59,10 @@ public class HistogramMatchingTest
 		for ( final short val2 : arr2 )
 			hist2[ histogramSettings.getBinIndex( val2 ) ]++;
 
-		Assert.assertArrayEquals( new long[] { 2, 0, 5, 0, 2, 0, 0, 1 }, hist1 );
-		Assert.assertArrayEquals( new long[] { 1, 2, 3, 1, 2, 0, 1, 0 }, hist2 );
+		Assert.assertArrayEquals( new double[] { 2, 0, 5, 0, 2, 0, 0, 1 }, hist1, EPSILON );
+		Assert.assertArrayEquals( new double[] { 1, 2, 3, 1, 2, 0, 1, 0 }, hist2, EPSILON );
 
-		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches( histogramSettings, hist1, hist2, 1 );
+		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches( histogramSettings, hist1, hist2 );
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] { 5, 5, 5, 9 }, arrays[ 0 ] );
 		Assert.assertArrayEquals( new int[] { 3, 5, 7, 9 }, arrays[ 1 ] );
@@ -74,9 +76,8 @@ public class HistogramMatchingTest
 
 		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches(
 				histogramSettings,
-				new long[] { 0, 6, 0, 0 },
-				new long[] { 0, 0, 2, 0 },
-				3 );
+				new double[] { 0, 6, 0, 0 },
+				new double[] { 0, 0, 6, 0 } );
 
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] {  6 }, arrays[ 0 ] );
@@ -91,9 +92,8 @@ public class HistogramMatchingTest
 
 		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches(
 				histogramSettings,
-				new long[] { 0, 1, 1, 1, 0 },
-				new long[] { 0, 0, 0, 1, 0 },
-				3 );
+				new double[] { 0, 1, 1, 1, 0 },
+				new double[] { 0, 0, 0, 3, 0 } );
 
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] {  6, 10, 14 }, arrays[ 0 ] );
@@ -108,9 +108,8 @@ public class HistogramMatchingTest
 
 		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches(
 				histogramSettings,
-				new long[ histogramSettings.bins ],
-				new long[ histogramSettings.bins ],
-				10000000 );
+				new double[ histogramSettings.bins ],
+				new double[ histogramSettings.bins ] );
 
 		Assert.assertTrue( matches.isEmpty() );
 	}
@@ -122,9 +121,8 @@ public class HistogramMatchingTest
 
 		final List< PointMatch > matches = FlatfieldCorrectionSolver.generateHistogramMatches(
 				histogramSettings,
-				new long[] { 8, 0, 0, 0 },
-				new long[] { 0, 0, 0, 2 },
-				4 );
+				new double[] { 7.5, 0, 0, 0 },
+				new double[] { 0, 0, 0, 7.5 } );
 
 		Assert.assertTrue( matches.isEmpty() );
 	}

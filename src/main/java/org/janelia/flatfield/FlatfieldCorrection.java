@@ -2,6 +2,7 @@ package org.janelia.flatfield;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.io.Serializable;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -177,10 +178,19 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		System.out.println( "Loading histograms.." );
 		final JavaPairRDD< Long, long[] > rddFullHistograms = histogramsProvider.getHistograms();
 
-		final long[] referenceHistogram = histogramsProvider.getReferenceHistogram();
+		final double[] referenceHistogram = histogramsProvider.getReferenceHistogram();
 		System.out.println( "Obtained reference histogram of size " + referenceHistogram.length );
 		System.out.println( "Reference histogram:");
 		System.out.println( Arrays.toString( referenceHistogram ) );
+
+		// save the reference histogram to file so one can plot it
+		final String referenceHistogramFilepath = Paths.get( solutionPath ).getParent().toString() + "/referenceHistogram.txt";
+		Paths.get( referenceHistogramFilepath ).getParent().toFile().mkdirs();
+		try ( final PrintWriter writer = new PrintWriter( referenceHistogramFilepath ) )
+		{
+			for ( final double val : referenceHistogram )
+				writer.println( val );
+		}
 
 		final HistogramSettings histogramSettings = histogramsProvider.getHistogramSettings();
 
@@ -192,7 +202,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				0, 0, 0.5, -0.5
 			);
 
-		final ShiftedDownsampling shiftedDownsampling = new ShiftedDownsampling( sparkContext, workingInterval, downsamplingTransform );
+		final ShiftedDownsampling< AffineTransform3D > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, workingInterval, downsamplingTransform );
 		final FlatfieldCorrectionSolver solver = new FlatfieldCorrectionSolver( sparkContext );
 
 		final int iterations = 16;
@@ -216,21 +226,20 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 				regularizerModelType = iter == 0 && scale == shiftedDownsampling.getNumScales() - 1 ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel;
 
-				try ( ShiftedDownsampling.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
+				try ( ShiftedDownsampling< AffineTransform3D >.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
 				{
 					final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer;
 					if ( regularizerModelType == RegularizerModelType.AffineModel )
 					{
-						final RandomAccessible< DoubleType > scalingRegularizer;
-						final RandomAccessible< DoubleType > translationRegularizer;
+						final RandomAccessible< DoubleType > scalingRegularizer, translationRegularizer;
 
 						if ( modelType != ModelType.FixedScalingAffineModel || lastSolution == null )
-							scalingRegularizer = downsampledSolution != null ? shiftedDownsampling.upsample( downsampledSolution.getA(), scale ) : null;
+							scalingRegularizer = downsampledSolution != null ? Views.raster( shiftedDownsampling.upsample( downsampledSolution.getA(), scale ) ) : null;
 						else
 							scalingRegularizer = shiftedDownsampling.downsampleSolutionComponent( lastSolution.getA(), pixelsMapping );
 
 						if ( modelType != ModelType.FixedTranslationAffineModel || lastSolution == null )
-							translationRegularizer = downsampledSolution != null ? shiftedDownsampling.upsample( downsampledSolution.getB(), scale ) : null;
+							translationRegularizer = downsampledSolution != null ? Views.raster( shiftedDownsampling.upsample( downsampledSolution.getB(), scale ) ) : null;
 						else
 							translationRegularizer = shiftedDownsampling.downsampleSolutionComponent( lastSolution.getB(), pixelsMapping );
 
@@ -241,7 +250,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 						regularizer = null;
 					}
 
-					final JavaPairRDD< Long, long[] > rddDownsampledHistograms = shiftedDownsampling.downsampleHistograms(
+					final JavaPairRDD< Long, double[] > rddDownsampledHistograms = shiftedDownsampling.downsampleHistograms(
 							rddFullHistograms,
 							pixelsMapping );
 
@@ -280,7 +289,6 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	@SuppressWarnings("unchecked")
 	private RandomAccessibleInterval< DoubleType > averageSolutionComponent( final RandomAccessibleInterval< DoubleType > solutionComponent )
 	{
 		final RandomAccessibleInterval< DoubleType > dst = ArrayImgs.doubles( new long[] { solutionComponent.dimension( 0 ), solutionComponent.dimension( 1 ) } );

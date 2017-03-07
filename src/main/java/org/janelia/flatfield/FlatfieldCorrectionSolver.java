@@ -49,6 +49,8 @@ public class FlatfieldCorrectionSolver implements Serializable
 	private static final double INTERPOLATION_LAMBDA_V = 0.5;
 	private static final double INTERPOLATION_LAMBDA_Z = 0.0;
 
+	private static final double EPSILON = 1e-6;
+
 	private transient final JavaSparkContext sparkContext;
 
 	public FlatfieldCorrectionSolver( final JavaSparkContext sparkContext )
@@ -59,10 +61,10 @@ public class FlatfieldCorrectionSolver implements Serializable
 	@SuppressWarnings("unchecked")
 	public < M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable >
 	Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > leastSquaresInterpolationFit(
-			final JavaPairRDD< Long, long[] > rddHistograms,
-			final long[] referenceHistogram,
+			final JavaPairRDD< Long, double[] > rddHistograms,
+			final double[] referenceHistogram,
 			final HistogramSettings histogramSettings,
-			final ShiftedDownsampling.PixelsMapping pixelsMapping,
+			final ShiftedDownsampling< ? >.PixelsMapping pixelsMapping,
 			final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer,
 			final ModelType modelType,
 			final RegularizerModelType regularizerModelType )
@@ -70,26 +72,17 @@ public class FlatfieldCorrectionSolver implements Serializable
 		System.out.println( "Solving for scale " + pixelsMapping.scale + ":  size=" + Arrays.toString( pixelsMapping.getDimensions() ) + ",  model=" + modelType.toString() + ", regularizer=" + regularizerModelType.toString() );
 
 		final Broadcast< RandomAccessiblePairNullable< DoubleType, DoubleType > > broadcastedRegularizer = sparkContext.broadcast( regularizer );
-		final Broadcast< int[] > broadcastedDownsampledPixelToFullPixelsCount = pixelsMapping.broadcastedDownsampledPixelToFullPixelsCount;
 
 		final long[] size = pixelsMapping.getDimensions();
 
 		final JavaPairRDD< Long, Pair< Double, Double > > rddSolutionPixels = rddHistograms.mapToPair( tuple ->
 			{
-				final long[] histogram = tuple._2();
+				final double[] histogram = tuple._2();
 
 				final long[] position = new long[ size.length ];
 				IntervalIndexer.indexToPosition( tuple._1(), size, position );
 
-				// accumulated histograms have N*(number of aggregated full-scale pixels) items,
-				// so we need to compensate for that by multuplying reference histogram values by the same amount
-				final int referenceHistogramMultiplier;
-				if ( broadcastedDownsampledPixelToFullPixelsCount != null )
-					referenceHistogramMultiplier = broadcastedDownsampledPixelToFullPixelsCount.value()[ tuple._1().intValue() ];
-				else
-					referenceHistogramMultiplier = 1;
-
-				final List< PointMatch > matches = generateHistogramMatches( histogramSettings, histogram, referenceHistogram, referenceHistogramMultiplier );
+				final List< PointMatch > matches = generateHistogramMatches( histogramSettings, histogram, referenceHistogram );
 
 				final double[] regularizerValues;
 				if ( broadcastedRegularizer.value() != null )
@@ -188,35 +181,21 @@ public class FlatfieldCorrectionSolver implements Serializable
 
 	public static List< PointMatch > generateHistogramMatches(
 			final HistogramSettings histogramSettings,
-			final long[] histogram,
-			final long[] referenceHistogram,
-			final long referenceHistogramMultiplier )
+			final double[] histogram,
+			final double[] referenceHistogram )
 	{
-		if ( referenceHistogramMultiplier <= 0 )
-			throw new IllegalArgumentException( "Incorrect value: referenceHistogramMultiplier="+referenceHistogramMultiplier );
-
-		// number of elements should match in both histograms (accounting for the multiplier)
-		long histogramElements = 0, referenceHistogramElements = 0;
-		for ( int i = 0; i < histogramSettings.bins; i++ )
-		{
-			histogramElements += histogram[ i ];
-			referenceHistogramElements += referenceHistogram[ i ] * referenceHistogramMultiplier;
-		}
-		if ( histogramElements != referenceHistogramElements )
-			throw new IllegalArgumentException( "Number of elements doesn't match: histogramElements="+histogramElements+", referenceHistogramElements="+referenceHistogramElements);
-
 		final List< PointMatch > matches = new ArrayList<>();
-		long histogramValue = 0, referenceHistogramValue = 0;
+		double histogramValue = 0, referenceHistogramValue = 0;
 		for ( int histogramIndex = -1, referenceHistogramIndex = -1; ; )
 		{
-			while ( histogramValue == 0 && histogramIndex < histogramSettings.bins - 1 ) histogramValue = histogram[ ++histogramIndex ];
-			while ( referenceHistogramValue == 0 && referenceHistogramIndex < histogramSettings.bins - 1 ) referenceHistogramValue = referenceHistogram[ ++referenceHistogramIndex ] * referenceHistogramMultiplier;
+			while ( histogramValue < EPSILON && histogramIndex < histogramSettings.bins - 1 ) histogramValue = histogram[ ++histogramIndex ];
+			while ( referenceHistogramValue < EPSILON && referenceHistogramIndex < histogramSettings.bins - 1 ) referenceHistogramValue = referenceHistogram[ ++referenceHistogramIndex ];
 
-			// if at least one of them remains 0, it means that we have reached the boundary
-			if ( histogramValue == 0 || referenceHistogramValue == 0 )
+			// boundary condition
+			if ( ( histogramValue < EPSILON && histogramIndex == histogramSettings.bins - 1 ) || ( referenceHistogramValue < EPSILON && referenceHistogramIndex == histogramSettings.bins - 1 ) )
 				break;
 
-			final long weight = Math.min( histogramValue, referenceHistogramValue );
+			final double weight = Math.min( histogramValue, referenceHistogramValue );
 
 			// ignore the first and the last bin because they presumably contain undersaturated/oversaturated values
 			if ( histogramIndex > 0 && histogramIndex < histogramSettings.bins - 1 && referenceHistogramIndex > 0 && referenceHistogramIndex < histogramSettings.bins - 1 )
