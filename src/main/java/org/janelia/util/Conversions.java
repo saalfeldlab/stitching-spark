@@ -114,6 +114,20 @@ public class Conversions {
 			ret[ i ] = arr[ i ];
 		return ret;
 	}
+	public static Float[] toBoxedArray( final float[] arr )
+	{
+		final Float[] ret = new Float[ arr.length ];
+		for ( int i = 0; i < ret.length; ++i )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+	public static Double[] toBoxedArray( final double[] arr )
+	{
+		final Double[] ret = new Double[ arr.length ];
+		for ( int i = 0; i < ret.length; ++i )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
 
 
 	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< FloatType, ? > convertImageToFloat( final RandomAccessibleInterval< T > src )
