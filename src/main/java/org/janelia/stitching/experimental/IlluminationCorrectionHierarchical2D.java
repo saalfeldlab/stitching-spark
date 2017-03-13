@@ -145,7 +145,7 @@ public class IlluminationCorrectionHierarchical2D implements Serializable
 		if ( sparkContext != null )
 			sparkContext.close();
 		if ( multithreadedExecutor != null )
-			multithreadedExecutor.shutdown();
+			multithreadedExecutor.close();
 	}
 
 

@@ -1662,7 +1662,7 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 			zFinal = z;
 
 			//executorService.shutdown();
-			multithreadedExecutor.shutdown();
+			multithreadedExecutor.close();
 		}
 
 
