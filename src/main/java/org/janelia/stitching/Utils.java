@@ -202,9 +202,12 @@ public class Utils {
 
 	public static int[] getTileCoordinates( final TileInfo tile ) throws Exception
 	{
+		return getTileCoordinates( Paths.get( tile.getFilePath() ).getFileName().toString() );
+	}
+	public static int[] getTileCoordinates( final String filename ) throws Exception
+	{
 		final String coordsPatternStr = ".*(\\d{3})x_(\\d{3})y_(\\d{3})z.*";
 		final Pattern coordsPattern = Pattern.compile( coordsPatternStr );
-		final String filename = Paths.get( tile.getFilePath() ).getFileName().toString();
 		final Matcher matcher = coordsPattern.matcher( filename );
 		if ( !matcher.find() )
 			throw new Exception( "Can't parse coordinates" );
@@ -217,6 +220,19 @@ public class Utils {
 					Integer.parseInt( matcher.group( 3 ) )
 				};
 		return coordinates;
+	}
+	public static String getTileCoordinatesString( final TileInfo tile ) throws Exception
+	{
+		return getTileCoordinatesString( Paths.get( tile.getFilePath() ).getFileName().toString() );
+	}
+	public static String getTileCoordinatesString( final String filename ) throws Exception
+	{
+		final String coordsPatternStr = ".*(\\d{3}x_\\d{3}y_\\d{3}z).*";
+		final Pattern coordsPattern = Pattern.compile( coordsPatternStr );
+		final Matcher matcher = coordsPattern.matcher( filename );
+		if ( !matcher.find() )
+			throw new Exception( "Can't parse coordinates" );
+		return matcher.group( 1 );
 	}
 	public static List< Pair< TileInfo, int[] > > getTilesCoordinates( final TileInfo[] tiles ) throws Exception
 	{
@@ -235,9 +251,12 @@ public class Utils {
 
 	public static long getTileTimestamp( final TileInfo tile ) throws Exception
 	{
+		return getTileTimestamp( Paths.get( tile.getFilePath() ).getFileName().toString() );
+	}
+	public static long getTileTimestamp( final String filename ) throws Exception
+	{
 		final String timePatternStr = ".*_(\\d*)msecAbs.*";
 		final Pattern timePattern = Pattern.compile( timePatternStr );
-		final String filename = Paths.get( tile.getFilePath() ).getFileName().toString();
 		final Matcher matcher = timePattern.matcher( filename );
 		if ( !matcher.find() )
 			throw new Exception( "Can't parse timestamp" );
