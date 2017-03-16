@@ -42,10 +42,19 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 	{
 		try
 		{
+			final List< TileInfo[] > tilesChannelsBackup = new ArrayList<>();
+			for ( int channel = 0; channel < job.getChannels(); ++channel )
+			{
+				final List< TileInfo > tilesBackup = new ArrayList<>();
+				for ( final TileInfo tile : job.getTiles( channel ) )
+					tilesBackup.add( tile.clone() );
+				tilesChannelsBackup.add( tilesBackup.toArray( new TileInfo[ 0 ] ) );
+			}
+
 			final int[] duplicateTilesRemoved = removeDuplicateTiles();
 			final int[] nonExistentTilesRemoved = removeNonExistentTiles();
 			final int[] missingTilesAdded = addMissingTiles();
-			fillSizeAndImageType();
+			final int[] noMetadataTiles = fillSizeAndImageType();
 
 			//TileOperations.translateTilesToOriginReal( job.getTiles() );
 
@@ -56,7 +65,12 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 				System.out.println( "  non-existent tiles removed = " + nonExistentTilesRemoved[ channel ] );
 				System.out.println( "  missing tiles added = " + missingTilesAdded[ channel ] );
 
-				TileInfoJSONProvider.saveTilesConfiguration( job.getTiles( channel ), Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "_full" ) );
+				if ( duplicateTilesRemoved[ channel ] + nonExistentTilesRemoved[ channel ] + missingTilesAdded[ channel ] + noMetadataTiles[ channel ] > 0 )
+				{
+					// something has changed, save the updated configuration and the old one as a backup
+					TileInfoJSONProvider.saveTilesConfiguration( job.getTiles( channel ), job.getArgs().inputTileConfigurations().get( channel ) );
+					TileInfoJSONProvider.saveTilesConfiguration( tilesChannelsBackup.get( channel ), Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "_old" ) );
+				}
 			}
 		}
 		catch ( final Exception e )
@@ -194,8 +208,9 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		return missingTiles;
 	}
 
-	private void fillSizeAndImageType()
+	private int[] fillSizeAndImageType()
 	{
+		final int[] noMetadataTiles = new int[ job.getChannels() ];
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
 			final List< TileInfo > tilesWithoutMetadata = new ArrayList<>();
@@ -203,6 +218,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 				if ( tile.getSize() == null || tile.getType() == null )
 					tilesWithoutMetadata.add( tile );
 
+			noMetadataTiles[ channel ] = tilesWithoutMetadata.size();
 			if ( tilesWithoutMetadata.isEmpty() )
 				continue;
 
@@ -218,5 +234,6 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 				tile.setType( imageType );
 			}
 		}
+		return noMetadataTiles;
 	}
 }
