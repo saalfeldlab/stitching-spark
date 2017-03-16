@@ -18,43 +18,38 @@ import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
 import ij.process.ShortProcessor;
 
-public class TiffSliceLoader 
+public class TiffSliceLoader
 {
 	public static ImagePlus loadSlice( final TileInfo tile, final int slice )
 	{
 		if ( tile.numDimensions() == 2 )
-		{
-			if ( slice == 1 )
-				return IJ.openImage( tile.getFilePath() );
-			else
-				return null;
-		}
-		
+			return slice == 1 ? IJ.openImage( tile.getFilePath() ) : null;
+
 		final FileInfo fileInfo;
-		try 
+		try
 		{
-			fileInfo = new TiffDecoder( 
-					Paths.get( tile.getFilePath() ).getParent().toString(), 
+			fileInfo = new TiffDecoder(
+					Paths.get( tile.getFilePath() ).getParent().toString(),
 					Paths.get( tile.getFilePath() ).getFileName().toString() )
 				.getTiffInfo()[ slice - 1 ];
-		} 
-		catch ( final IOException e ) 
+		}
+		catch ( final IOException e )
 		{
 			e.printStackTrace();
 			return null;
 		}
-		
+
 		try ( final InputStream is = new FileInputStream( tile.getFilePath() ) )
 		{
 			final ImageReader reader = new ImageReader( fileInfo );
 			final Object pixels = reader.readPixels( is, fileInfo.getOffset() );
 			if ( pixels == null )
 				return null;
-			
+
 			final int width = (int) tile.getSize( 0 ), height = (int) tile.getSize( 1 );
 			final ColorModel cm = createColorModel( fileInfo );
 			final ImageProcessor ip;
-			switch ( tile.getType() ) 
+			switch ( tile.getType() )
 			{
 				case GRAY8:
 					ip = new ByteProcessor( width, height, (byte[])pixels, cm);
@@ -69,12 +64,12 @@ public class TiffSliceLoader
 					System.out.println( "Unknown image type" );
 					return null;
 			}
-			
+
 			final ImagePlus imp = new ImagePlus( fileInfo.fileName, ip );
 			imp.setFileInfo( fileInfo );
 			return imp;
 		}
-		catch ( final IOException e ) 
+		catch ( final IOException e )
 		{
 			e.printStackTrace();
 			return null;

@@ -75,8 +75,9 @@ public class TileInfo implements Serializable {
 
 	public void setSize( final long[] size ) {
 		this.size = size;
-		for ( final long s : size )
-			assert s >= 0;
+		if ( size != null )
+			for ( final long s : size )
+				assert s >= 0;
 	}
 
 	public ImageType getType() {
