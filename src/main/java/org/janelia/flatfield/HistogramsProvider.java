@@ -324,21 +324,24 @@ public class HistogramsProvider implements Serializable
 	}
 	private void estimateReferenceHistogram()
 	{
-		final long numPixels = Intervals.numElements( workingInterval );
-
-		int numWindowPoints = ( int ) Math.round( numPixels * REFERENCE_HISTOGRAM_POINTS_PERCENT );
-		final int mStart = ( int ) ( Math.round( numPixels / 2.0 ) - Math.round( numWindowPoints / 2.0 ) ) - 1;
-		final int mEnd   = ( int ) ( Math.round( numPixels / 2.0 ) + Math.round( numWindowPoints / 2.0 ) );
-		numWindowPoints = mEnd - mStart;
-
-		System.out.println("Estimating Q using mStart="+mStart+", mEnd="+mEnd+" (points="+numWindowPoints+")");
+		final Tuple2< long[], Long > accumulatedHistograms = accumulateHistograms( rddHistograms, histogramSettings, REFERENCE_HISTOGRAM_POINTS_PERCENT );
+		referenceHistogram = new double[ accumulatedHistograms._1().length ];
+		for ( int i = 0; i < referenceHistogram.length; ++i )
+			referenceHistogram[ i ] = ( double ) accumulatedHistograms._1()[ i ] / accumulatedHistograms._2();
+	}
+	public static Tuple2< long[], Long > accumulateHistograms( final JavaPairRDD< Long, long[] > rddHistograms, final HistogramSettings histogramSettings, final double medianPointsPercent )
+	{
+		final long numPixels = rddHistograms.count();
+		final long numMedianPoints = Math.round( numPixels * medianPointsPercent );
+		final long mStart = Math.round( numPixels / 2.0 ) - Math.round( numMedianPoints / 2.0 );
+		final long mEnd = mStart + numMedianPoints;
 
 		final long[] accumulatedHistograms = rddHistograms
 			.mapValues( histogram ->
 				{
 					double pixelMean = 0;
 					int count = 0;
-					for ( int i = 0; i < histogram.length; i++ )
+					for ( int i = 0; i < histogramSettings.bins; i++ )
 					{
 						pixelMean += histogram[ i ] * histogramSettings.getBinValue( i );
 						count += histogram[ i ];
@@ -361,12 +364,10 @@ public class HistogramsProvider implements Serializable
 						ret[ i ] += histogram[ i ];
 					return ret;
 				},
-				getAggregationTreeDepth()
+				Integer.MAX_VALUE // max possible aggregation depth
 			);
 
-		referenceHistogram = new double[ accumulatedHistograms.length ];
-		for ( int i = 0; i < referenceHistogram.length; ++i )
-			referenceHistogram[ i ] = ( double ) accumulatedHistograms[ i ] / numWindowPoints;
+		return new Tuple2<>( accumulatedHistograms, numMedianPoints );
 	}
 
 	private boolean allHistogramsReady()
