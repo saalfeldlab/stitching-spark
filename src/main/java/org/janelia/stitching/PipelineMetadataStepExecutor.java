@@ -130,6 +130,23 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			}
 		}
 
+		final Integer[] maxTileIndex = new Integer[ job.getChannels() ];
+		for ( int channel = 0; channel < job.getChannels(); ++channel )
+		{
+			for ( final TileInfo tile : job.getTiles( channel ) )
+			{
+				if ( maxTileIndex[ channel ] != null )
+				{
+					if ( tile.getIndex() != null )
+						maxTileIndex[ channel ] = Math.max( tile.getIndex(), maxTileIndex[ channel ] );
+				}
+				else
+				{
+					maxTileIndex[ channel ] = tile.getIndex();
+				}
+			}
+		}
+
 		final String fileNameChannelPattern = "^.*?_(ch\\d)_.*?\\.tif$";
 		final FilenameFilter fileNameChannelFilter = new FilenameFilter()
 		{
@@ -152,6 +169,9 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 					final TileInfo newTile = new TileInfo();
 					newTile.setPosition( coordinatesToPosition.get( coordinates ).clone() );
 					newTile.setFilePath( imagesBaseDir.getAbsolutePath() + "/" + fileName );
+
+					if ( maxTileIndex[ channel ] != null )
+						newTile.setIndex( ++maxTileIndex[ channel ] );
 
 					final long timestamp = Utils.getTileTimestamp( fileName );
 					if ( !timestampToTiles[ channel ].containsKey( timestamp ) )
