@@ -178,7 +178,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			for ( final String fileName : fileList )
 			{
 				final String coordinates = Utils.getTileCoordinatesString( fileName );
-				if ( !coordinatesToTiles[ channel ].containsKey( coordinates ) )
+				if ( !coordinatesToTiles[ channel ].containsKey( coordinates ) && coordinatesToPosition.containsKey( coordinates ) )
 				{
 					final TileInfo newTile = new TileInfo();
 					newTile.setPosition( coordinatesToPosition.get( coordinates ).clone() );
