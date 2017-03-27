@@ -222,7 +222,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 									Utils.saveTileImageToFile( cell, outImg );
 
 									return cell;
-								});
+								} );
 
 							final ArrayList< TileInfo > output = new ArrayList<>( fused.collect() );
 							output.removeAll( Collections.singleton( null ) );
@@ -292,7 +292,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 //										cellBox,
 //										new NLinearInterpolatorFactory(),
 //										channel );
-								outImg = FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
+								outImg = ( ImagePlusImg ) FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
 										tilesWithinCell,
 										cellBox,
 										new NLinearInterpolatorFactory(),
@@ -312,7 +312,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 							Utils.saveTileImageToFile( cell, outImg );
 
 							return cell;
-						});
+						} );
 
 					final ArrayList< TileInfo > output = new ArrayList<>( fused.collect() );
 					output.removeAll( Collections.singleton( null ) );
