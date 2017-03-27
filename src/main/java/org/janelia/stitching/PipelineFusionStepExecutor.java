@@ -1,6 +1,5 @@
 package org.janelia.stitching;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -17,6 +16,7 @@ import org.janelia.bdv.fusion.CellFileImageMetaData;
 import org.janelia.flatfield.FlatfieldCorrection;
 
 import mpicbg.spim.data.sequence.VoxelDimensions;
+import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
@@ -96,7 +96,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 				final int[] singleCellSize = new int[ job.getDimensionality() ];
 				final int[] cellSize = new int[ job.getDimensionality() ];
 				final int[] upscaledCellSize = new int[ job.getDimensionality() ];
-				for ( int d = 0; d < cellSize.length; d++ )
+				for ( int d = 0; d < job.getDimensionality(); d++ )
 				{
 					final int isotropicScaling = ( int ) Math.round( ( 1 << level ) / normalizedVoxelDimensions[ d ] );
 					singleCellSize[ d ] = ( int ) Math.round( job.getArgs().fusionCellSize() / normalizedVoxelDimensions[ d ] );
@@ -105,6 +105,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 					cellSize[ d ] = singleCellSize[ d ] * ( d == 2 ? ( 1 << level ) / downsampleFactors[ d ] : 1 );
 					upscaledCellSize[ d ] = downsampleFactors[ d ] * cellSize[ d ];
 				}
+
 				System.out.println( "Processing level " + level + ", fullDownsamplingFactors=" + Arrays.toString(fullDownsampleFactors)+", fromTmpStep="+Arrays.toString(downsampleFactors));
 				System.out.println( "cell size set to " + Arrays.toString(cellSize) +",  upscaled target cell size: " + Arrays.toString(upscaledCellSize) );
 
@@ -124,7 +125,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 						throw new PipelineExecutionException( e.getMessage() );
 					}
 
-					if ( downsampleFactors[ 2 ] == 1 )
+					if ( job.getDimensionality() < 3 || downsampleFactors[ 2 ] == 1 )
 						lastLevelTmpPath = levelConfigurationOutputPath;
 					else
 						lastLevelTmpPath = Utils.addFilenameSuffix( levelConfigurationOutputPath, "-xy" );
@@ -138,7 +139,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 					final String currLevelTmpPath;
 					final TileInfo[] smallerCells;
 
-					if ( downsampleFactors[ 2 ] == 1 || job.getDimensionality() < 3 )
+					if ( job.getDimensionality() < 3 || downsampleFactors[ 2 ] == 1 )
 					{	// use previous scale level as downsampled in XY if zFactor is still 1
 						currLevelTmpPath = levelConfigurationOutputPath;
 						smallerCells = lastLevelCells;
@@ -205,13 +206,12 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 									final long[] cellIndices = new long[ downscaledCellPos.length ];
 									for ( int d = 0; d < downscaledCellPos.length; d++ )
 										cellIndices[ d ] = downscaledCellPos[ d ] / lastLevelTmpCellSize[ d ];
-									final String innerFolder = ( cell.numDimensions() > 2 ? cellIndices[ 2 ] + "/" : "" ) + cellIndices[ 1 ];
-									final String outFilename = cellIndices[ 0 ] + ".tif";
 
-									new File( levelTmpFolder + "/" + innerFolder ).mkdirs();
-									cell.setFilePath( levelTmpFolder + "/" + innerFolder + "/" + outFilename );
+									final String outFilepath = String.format( "%s/%d/%d/%d.tif", levelTmpFolder, cellIndices.length > 2 ? cellIndices[ 2 ] : 0, cellIndices[ 1 ], cellIndices[ 0 ] );
+									Paths.get( outFilepath ).getParent().toFile().mkdirs();
+									cell.setFilePath( outFilepath );
 
-									final ImagePlusImg< T, ? > outImg = ( ImagePlusImg< T, ? > ) FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, tmpDownsampleFactors );
+									final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, tmpDownsampleFactors );
 
 									for ( int d = 0; d < cell.numDimensions(); d++ )
 									{
@@ -253,7 +253,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 					System.out.println( "New (tmp downsampled in XY) space is " + Arrays.toString( Intervals.dimensionsAsLongArray( space ) ) );
 					System.out.println( "Using tmp output to produce downsampled result with factors=" + Arrays.toString(downsampleFactors) + ", upscaledCellSize="+Arrays.toString(upscaledCellSize) );
 
-					final ArrayList< TileInfo > newLevelCells = TileOperations.divideSpace( space, new FinalDimensions( upscaledCellSize ) );
+					final List< TileInfo > newLevelCells = TileOperations.divideSpace( space, new FinalDimensions( upscaledCellSize ) );
 					System.out.println( "There are " + newLevelCells.size() + " cells on the current scale level");
 
 					final JavaRDD< TileInfo > rdd = sparkContext.parallelize( newLevelCells );
@@ -278,11 +278,10 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 							final long[] cellIndices = new long[ downscaledCellPos.length ];
 							for ( int d = 0; d < downscaledCellPos.length; d++ )
 								cellIndices[ d ] = downscaledCellPos[ d ] / cellSize[ d ];
-							final String innerFolder = ( cell.numDimensions() > 2 ? cellIndices[ 2 ] + "/" : "" ) + cellIndices[ 1 ];
-							final String outFilename = cellIndices[ 0 ] + ".tif";
 
-							new File( levelFolder + "/" + innerFolder ).mkdirs();
-							cell.setFilePath( levelFolder + "/" + innerFolder + "/" + outFilename );
+							final String outFilepath = String.format( "%s/%d/%d/%d.tif", levelFolder, cellIndices.length > 2 ? cellIndices[ 2 ] : 0, cellIndices[ 1 ], cellIndices[ 0 ] );
+							Paths.get( outFilepath ).getParent().toFile().mkdirs();
+							cell.setFilePath( outFilepath );
 
 							final ImagePlusImg< T, ? > outImg;
 							if ( currLevel == 0 )
@@ -293,7 +292,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 //										cellBox,
 //										new NLinearInterpolatorFactory(),
 //										channel );
-								outImg = ( ImagePlusImg ) FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
+								outImg = FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
 										tilesWithinCell,
 										cellBox,
 										new NLinearInterpolatorFactory(),
@@ -301,7 +300,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 							}
 							else
 							{
-								outImg = ( ImagePlusImg ) FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, downsampleFactors );
+								outImg = FusionPerformer.fuseTilesWithinCellSimpleWithDownsampling( tilesWithinCell, cell, downsampleFactors );
 
 								for ( int d = 0; d < cell.numDimensions(); d++ )
 								{
@@ -349,8 +348,8 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 					maxDimension = Math.max( lastLevelSpace.dimension( d ), maxDimension );
 				}
 
-				levelToDownsampleFactors.put( level, fullDownsampleFactors );
-				levelToCellSize.put( level, cellSize );
+				levelToDownsampleFactors.put( level, fullDownsampleFactors.length == 3 ? fullDownsampleFactors : new int[] { fullDownsampleFactors[ 0 ], fullDownsampleFactors[ 1 ], 1 } );
+				levelToCellSize.put( level, cellSize.length == 3 ? cellSize : new int[] { cellSize[ 0 ], cellSize[ 1 ], 1 } );
 
 				System.out.println( "Processed level " + level + " of size " + Arrays.toString( lastLevelSpace.getDimensions() ) );
 
@@ -360,12 +359,21 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 
 			final double[][] transform = null;	// TODO: can specify transform if needed
 
+			final Dimensions imageDimensions;
+			{
+				final Dimensions imageDimensionsTemp = TileOperations.getCollectionBoundaries( job.getTiles( channel ) );
+				if ( job.getDimensionality() < 3 )
+					imageDimensions = new FinalDimensions( imageDimensionsTemp.dimension( 0 ), imageDimensionsTemp.dimension( 1 ), 1 );
+				else
+					imageDimensions = imageDimensionsTemp;
+			}
+
 			final CellFileImageMetaData export = new CellFileImageMetaData(
 					baseOutputFolder + "/%1$d/%4$d/%3$d/%2$d.tif",
 					//Utils.getImageType( Arrays.asList( job.getTiles() ) ).toString(),
 					// TODO: can't derive from the tiles anymore since we convert the image to FloatType with illumination correction
 					ImageType.GRAY32.toString(),
-					Intervals.dimensionsAsLongArray( TileOperations.getCollectionBoundaries( job.getTiles( channel ) ) ),
+					Intervals.dimensionsAsLongArray( imageDimensions ),
 					levelToDownsampleFactors,
 					levelToCellSize,
 					transform,
