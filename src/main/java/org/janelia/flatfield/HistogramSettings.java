@@ -2,6 +2,8 @@ package org.janelia.flatfield;
 
 import java.io.Serializable;
 
+@Deprecated
+// TODO: remove. Use new class in org.janelia.histogram instead
 public class HistogramSettings implements Serializable
 {
 	private static final long serialVersionUID = -3256954929451071880L;
