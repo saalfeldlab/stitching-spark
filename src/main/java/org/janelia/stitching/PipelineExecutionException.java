@@ -23,4 +23,9 @@ public class PipelineExecutionException extends Exception
     {
         super( cause );
     }
+
+    public PipelineExecutionException( final Exception exception )
+    {
+    	this( exception.getMessage(), exception.getCause() );
+    }
 }

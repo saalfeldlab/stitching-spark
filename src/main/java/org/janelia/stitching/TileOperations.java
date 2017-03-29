@@ -49,6 +49,28 @@ public class TileOperations
 		return new Boundaries( paddedMin, paddedMax );
 	}
 
+	public static Interval floorCeilRealInterval( final RealInterval realInterval )
+	{
+		final long[] min = new long[ realInterval.numDimensions() ], max = new long[ realInterval.numDimensions() ];
+		for ( int d = 0; d < realInterval.numDimensions(); ++d )
+		{
+			min[ d ] = ( long ) Math.floor( realInterval.realMin( d ) );
+			max[ d ] = ( long ) Math.ceil( realInterval.realMax( d ) );
+		}
+		return new FinalInterval( min, max );
+	}
+
+	public static Interval roundRealInterval( final RealInterval realInterval )
+	{
+		final long[] min = new long[ realInterval.numDimensions() ], max = new long[ realInterval.numDimensions() ];
+		for ( int d = 0; d < realInterval.numDimensions(); ++d )
+		{
+			min[ d ] = Math.round( realInterval.realMin( d ) );
+			max[ d ] = Math.round( realInterval.realMax( d ) );
+		}
+		return new FinalInterval( min, max );
+	}
+
 	/**
 	 * @return a list of overlapping pairs
 	 */
@@ -81,6 +103,26 @@ public class TileOperations
 		}
 		assert r.validate();
 		return r;
+	}
+
+	/**
+	 * @return an overlap as a RealInterval with relative coordinates of the first tile
+	 */
+	public static RealInterval getOverlappingRegionReal( final TileInfo t1, final TileInfo t2 )
+	{
+		final double[] min = new double[ t1.numDimensions() ], max = new double[ t1.numDimensions() ];
+		for ( int d = 0; d < t1.numDimensions(); d++ )
+		{
+			final double p1 = t1.getPosition( d ), p2 = t2.getPosition( d );
+			final long s1 = t1.getSize( d ), s2 = t2.getSize( d );
+
+			if ( !( ( p2 >= p1 && p2 < p1 + s1 ) || ( p1 >= p2 && p1 < p2 + s2 ) ) )
+				return null;
+
+			min[ d ] = Math.max( 0, p2 - p1 );
+			max[ d ] = Math.min( s1 - 1, p2 + s2 - p1 - 1 );
+		}
+		return new FinalRealInterval( min, max );
 	}
 
 	/**
@@ -156,7 +198,7 @@ public class TileOperations
 	{
 		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
-			if ( TileOperations.overlap( new FinalRealInterval( tile.getPosition(), tile.getMax() ), subregion ) )
+			if ( TileOperations.overlap( tile, subregion ) )
 				tilesWithinSubregion.add( tile );
 		return tilesWithinSubregion;
 	}

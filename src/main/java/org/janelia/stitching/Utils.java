@@ -329,22 +329,4 @@ public class Utils {
 			groups.add( group );
 		return groups;
 	}
-
-
-	public static long[] concatArrays( final long[]... arrays )
-	{
-		int totalLength = 0;
-		for ( int i = 0; i < arrays.length; i++ )
-			totalLength += arrays[ i ].length;
-
-		final long[] ret = new long[ totalLength ];
-		int usedLength = 0;
-		for ( int i = 0; i < arrays.length; i++ )
-		{
-			System.arraycopy( arrays[ i ], 0, ret, usedLength, arrays[ i ].length );
-			usedLength += arrays[ i ].length;
-		}
-
-		return ret;
-	}
 }

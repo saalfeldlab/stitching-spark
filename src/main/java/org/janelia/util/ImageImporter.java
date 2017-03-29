@@ -19,7 +19,8 @@ public class ImageImporter
 		if ( path.endsWith( ".tif" ) || path.endsWith( ".tiff" ) )
 		{
 			final ImagePlus imp = IJ.openImage( path );
-			Utils.workaroundImagePlusNSlices( imp );
+			if ( imp != null )
+				Utils.workaroundImagePlusNSlices( imp );
 			return imp;
 		}
 		else

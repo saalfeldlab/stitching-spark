@@ -44,8 +44,6 @@ public class StitchingJob implements Serializable {
 	private String datasetName;
 
 	private List< TileInfo[] > tilesMultichannel;
-	private Integer tilesCount = null;
-	private Integer dimensionality = null;
 
 
 	public StitchingJob( final StitchingArguments args )
@@ -70,6 +68,8 @@ public class StitchingJob implements Serializable {
 	private EnumSet< PipelineStep > setUpPipeline( final StitchingArguments args )
 	{
 		final List< PipelineStep > pipelineStepsList = new ArrayList<>();
+
+		// mandatory step that validates tile configurations and tries to add some missing tiles, etc.
 		pipelineStepsList.add( PipelineStep.Metadata );
 
 		if ( !args.fuseOnly() )
@@ -90,10 +90,6 @@ public class StitchingJob implements Serializable {
 
 	public int getChannels() {
 		return args.inputTileConfigurations().size();
-	}
-
-	public int getTilesCount() {
-		return tilesCount;
 	}
 
 	public TileInfo[] getTiles( final int channel ) {
@@ -117,10 +113,11 @@ public class StitchingJob implements Serializable {
 
 	public String getDatasetName() { return datasetName; }
 
-	public int getDimensionality() { return dimensionality; }
+	public int getDimensionality() { return tilesMultichannel.get( 0 )[ 0 ].numDimensions(); }
 
 	public void validateTiles() throws IllegalArgumentException
 	{
+		final int dimensionality = getDimensionality();
 		for ( final TileInfo[] tiles : tilesMultichannel )
 		{
 			if ( tiles.length < 2 )
@@ -134,15 +131,8 @@ public class StitchingJob implements Serializable {
 				if ( tiles[ i ].numDimensions() != tiles[ i - 1 ].numDimensions() )
 					throw new IllegalArgumentException( "Incorrect dimensionality" );
 
-			if ( dimensionality == null )
-				dimensionality = tiles[ 0 ].numDimensions();
-			else if ( dimensionality != tiles[ 0 ].numDimensions() )
+			if ( dimensionality != tiles[ 0 ].numDimensions() )
 				throw new IllegalArgumentException( "Channels have different dimensionality" );
-
-			if ( tilesCount == null )
-				tilesCount = tiles.length;
-			else if ( tilesCount != tiles.length )
-				throw new IllegalArgumentException( "Channels have different number of tiles" );
 		}
 
 		if ( params != null )

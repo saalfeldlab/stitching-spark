@@ -18,12 +18,12 @@ public class ComparableTuple< T extends Comparable< ? super T > > implements Com
 		this.values = values;
 	}
 
-	public final T[] getValues()
+	public T[] getValues()
 	{
 		return values;
 	}
 
-	public final T getValue( final int index )
+	public T getValue( final int index )
 	{
 		return values[ index ];
 	}

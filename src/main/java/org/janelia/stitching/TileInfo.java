@@ -2,13 +2,16 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 
+import net.imglib2.RealInterval;
+import net.imglib2.RealPositionable;
+
 /**
  * Represents tile image metadata.
  *
  * @author Igor Pisarev
  */
 
-public class TileInfo implements Serializable {
+public class TileInfo implements Serializable, RealInterval {
 
 	private static final long serialVersionUID = -3986869827110711078L;
 
@@ -96,6 +99,7 @@ public class TileInfo implements Serializable {
 		this.index = index;
 	}
 
+	@Override
 	public int numDimensions() {
 		return position.length;
 	}
@@ -118,5 +122,45 @@ public class TileInfo implements Serializable {
 		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );
 		return newTile;
+	}
+
+	@Override
+	public double realMin( final int d )
+	{
+		return position[ d ];
+	}
+
+	@Override
+	public void realMin( final double[] min )
+	{
+		for ( int d = 0; d < min.length; ++d )
+			min[ d ] = realMin( d );
+	}
+
+	@Override
+	public void realMin( final RealPositionable min )
+	{
+		for ( int d = 0; d < min.numDimensions(); ++d )
+			min.setPosition( realMin( d ), d );
+	}
+
+	@Override
+	public double realMax( final int d )
+	{
+		return position[ d ] + size[ d ] - 1;
+	}
+
+	@Override
+	public void realMax( final double[] max )
+	{
+		for ( int d = 0; d < max.length; ++d )
+			max[ d ] = realMax( d );
+	}
+
+	@Override
+	public void realMax( final RealPositionable max )
+	{
+		for ( int d = 0; d < max.numDimensions(); ++d )
+			max.setPosition( realMax( d ), d );
 	}
 }
