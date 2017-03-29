@@ -16,7 +16,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.histogram.Histogram;
 import org.janelia.histogram.HistogramsMatching;
 import org.janelia.intensity.LinearIntensityMap;
-import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.Conversions;
 import org.janelia.util.ImageImporter;
 
@@ -79,11 +78,14 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 {
 	private static final long serialVersionUID = -8516030608688893713L;
 
-	private static final int NUM_COEFFICIENTS = 2;
-	private static final int DOWNSAMPLING_FACTOR = 16;
+	private static final int NUM_COEFFICIENTS = 4;
+	private static final int DOWNSAMPLING_FACTOR = 8;
 	private static final int OPTIMIZER_ITERATIONS = 2000;
-	private static final int HISTOGRAM_BINS = 128;
+	private static final int HISTOGRAM_BINS = 256;
 
+	private static final double SCALE_LAMBDA = 0.01;
+	private static final double TRANSLATION_LAMBDA = 0.01;
+	private static final double NEIGHBOR_WEIGHT = 0.1;
 
 
 	public PipelineIntensityCorrectionStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
@@ -96,14 +98,13 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	{
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
-			final List< TilePair > overlappingShiftedTiles = TileOperations.findOverlappingTiles( job.getTiles( channel ) );
-			final List< TilePair > adjacentPairs = FilterAdjacentShifts.filterAdjacentPairs( overlappingShiftedTiles );
+			final List< TilePair > overlappingPairs = TileOperations.findOverlappingTiles( job.getTiles( channel ) );
 			matchIntensities(
-					adjacentPairs,
+					overlappingPairs,
 					new InterpolatedAffineModel1D<>(
 							new InterpolatedAffineModel1D<>(
-									new AffineModel1D(), new TranslationModel1D(), 0.01 ),
-							new IdentityModel(), 0.01 ) );
+									new AffineModel1D(), new TranslationModel1D(), TRANSLATION_LAMBDA ),
+							new IdentityModel(), SCALE_LAMBDA ) );
 		}
 	}
 
@@ -499,15 +500,14 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 				if ( posNext[ d ] < dim[ d ] )
 				{
 					final int indNext = IntervalIndexer.positionToIndex( posNext, dim );
-					connectCoeffPairWithinTile( coeffList.get( ind ), coeffList.get( indNext ), minmax );
+					connectCoeffPairWithinTile( coeffList.get( ind ), coeffList.get( indNext ), minmax, NEIGHBOR_WEIGHT );
 				}
 			}
 		}
 	}
 
-	private void connectCoeffPairWithinTile( final Tile< ? > t1, final Tile< ? > t2, final double[] minmax )
+	private void connectCoeffPairWithinTile( final Tile< ? > t1, final Tile< ? > t2, final double[] minmax, final double weight )
 	{
-		final double weight = 1;
 		final List< PointMatch > matches = new ArrayList<>();
 		matches.add( new PointMatch( new Point( new double[] { minmax[ 0 ] } ), new Point( new double[] { minmax[ 0 ] } ), weight ) );
 		matches.add( new PointMatch( new Point( new double[] { Math.max( minmax[ 0 ] + 1, minmax[ 1 ] ) } ), new Point( new double[] { Math.max( minmax[ 0 ] + 1, minmax[ 1 ] ) } ), weight ) );
