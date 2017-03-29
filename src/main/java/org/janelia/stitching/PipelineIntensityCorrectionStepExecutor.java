@@ -78,8 +78,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 {
 	private static final long serialVersionUID = -8516030608688893713L;
 
-	private static final int NUM_COEFFICIENTS = 4;
-	private static final int DOWNSAMPLING_FACTOR = 8;
+	private static final int COEFFICIENT_DIM = 100;
+	private static final int DOWNSAMPLING_FACTOR = 16;
 	private static final int OPTIMIZER_ITERATIONS = 2000;
 	private static final int HISTOGRAM_BINS = 256;
 
@@ -87,6 +87,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	private static final double TRANSLATION_LAMBDA = 0.01;
 	private static final double NEIGHBOR_WEIGHT = 0.1;
 
+	private int[] coeffPerTileDimensions;
+	private int coeffPerTileCount;
 
 	public PipelineIntensityCorrectionStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
@@ -124,6 +126,17 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		for ( final Integer key : Utils.createTilesMap( job.getTiles( 0 ) ).keySet() )
 			if ( !tilesMap.containsKey( key ) )
 				throw new PipelineExecutionException( "Some subset was chosen instead of the whole configuration (bad tile " + key + ")" );
+
+		// set coeff dimensions
+		final long[] tileSize = getMinTileSize( tilesMap.values().toArray( new TileInfo[ 0 ] ) );
+		for ( final TileInfo tile : tilesMap.values() )
+			for ( int d = 0; d < tile.numDimensions(); d++ )
+				if ( tile.getSize(d) != tileSize[ d ] )
+					throw new PipelineExecutionException( "Assumption failed: not all the tiles are of the same size" );
+		coeffPerTileDimensions = new int[ tileSize.length ];
+		for ( int d = 0; d < tileSize.length; ++d )
+			coeffPerTileDimensions[ d ] = ( int ) ( tileSize[ d ] / COEFFICIENT_DIM );
+		coeffPerTileCount = ( int ) Intervals.numElements( new FinalDimensions( coeffPerTileDimensions ) );
 
 		// construct a set of coefficients for every tile
 		final Map< Integer, List< Tile< ? extends M > > > coefficients = new TreeMap<>();
@@ -204,16 +217,15 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 
 				System.out.println( "Applying transformation for tile " + tile.getIndex() );
 
-				final int[] coeffsDim = coeffsDimPerTile();
-				final int[] unrolledCoeffsDim = new int[ coeffsDim.length + 1 ];
-				System.arraycopy( coeffsDim, 0, unrolledCoeffsDim, 0, coeffsDim.length );
+				final int[] unrolledCoeffsDim = new int[ coeffPerTileDimensions.length + 1 ];
+				System.arraycopy( coeffPerTileDimensions, 0, unrolledCoeffsDim, 0, coeffPerTileDimensions.length );
 				unrolledCoeffsDim[ unrolledCoeffsDim.length - 1 ] = 2;
 
 				final int[] unrolledCoeffPos = new int[ unrolledCoeffsDim.length ];
 				final double[] unrolledCoeffs = new double[ ( int ) Intervals.numElements( unrolledCoeffsDim ) ];
 				for ( int ind = 0; ind < coeffs.size(); ++ind )
 				{
-					IntervalIndexer.indexToPosition( ind, coeffsDim, unrolledCoeffPos );
+					IntervalIndexer.indexToPosition( ind, coeffPerTileDimensions, unrolledCoeffPos );
 					for ( int i = 0; i < unrolledCoeffsDim[ unrolledCoeffsDim.length - 1 ]; ++i )
 					{
 						unrolledCoeffPos[ unrolledCoeffPos.length - 1 ] = i;
@@ -293,7 +305,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 				final Cursor< IntType > coeffCursor = Views.flatIterable( coefficientsMap ).cursor();
 
 				final List< double[] > coeffsMinMax = new ArrayList<>();
-				for ( int i = 0; i < numCoeffsPerTile(); ++i )
+				for ( int i = 0; i < coeffPerTileCount; ++i )
 					coeffsMinMax.add( new double[] { Double.MAX_VALUE, -Double.MAX_VALUE } );
 
 				while ( imgCursor.hasNext() || coeffCursor.hasNext() )
@@ -489,17 +501,17 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	private void connectCoeffsWithinTile( final List< ? extends Tile< ? > > coeffList, final double[] minmax )
 	{
 		final double weight = 1;
-		final int[] dim = coeffsDimPerTile(), pos = new int[ dim.length ];
+		final int[] pos = new int[ coeffPerTileDimensions.length ];
 		for ( int ind = 0; ind < coeffList.size(); ind++ )
 		{
-			IntervalIndexer.indexToPosition( ind, dim, pos );
+			IntervalIndexer.indexToPosition( ind, coeffPerTileDimensions, pos );
 			for ( int d = 0; d < pos.length; d++ )
 			{
 				final int[] posNext = pos.clone();
 				posNext[ d ]++;
-				if ( posNext[ d ] < dim[ d ] )
+				if ( posNext[ d ] < coeffPerTileDimensions[ d ] )
 				{
-					final int indNext = IntervalIndexer.positionToIndex( posNext, dim );
+					final int indNext = IntervalIndexer.positionToIndex( posNext, coeffPerTileDimensions );
 					connectCoeffPairWithinTile( coeffList.get( ind ), coeffList.get( indNext ), minmax, NEIGHBOR_WEIGHT );
 				}
 			}
@@ -517,7 +529,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 
 	private RandomAccessibleInterval< IntType > createCoefficientsIndexingMap( final Dimensions dimensions )
 	{
-		return createCoefficientsIndexingMap( dimensions, coeffsDimPerTile() );
+		return createCoefficientsIndexingMap( dimensions, coeffPerTileDimensions );
 	}
 	public static RandomAccessibleInterval< IntType > createCoefficientsIndexingMap( final Dimensions dimensions, final int[] coeffsDim )
 	{
@@ -544,19 +556,19 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	private < M extends Model< M > & Affine1D< M > > List< Tile< ? extends M > > createCoefficientsTiles( final M templateModel )
 	{
 		final ArrayList< Tile< ? extends M > > coeffTiles = new ArrayList<>();
-		for ( int i = 0; i < numCoeffsPerTile(); i++ )
+		for ( int i = 0; i < coeffPerTileCount; i++ )
 			coeffTiles.add( new Tile<>( templateModel.copy() ) );
 		return coeffTiles;
 	}
 
-	private int numCoeffsPerTile()
+
+	private static long[] getMinTileSize( final TileInfo[] tiles )
 	{
-		return ( int ) Math.pow( NUM_COEFFICIENTS, job.getDimensionality() );
-	}
-	private int[] coeffsDimPerTile()
-	{
-		final int[] tileCoeffDim = new int[ job.getDimensionality() ];
-		Arrays.fill( tileCoeffDim, NUM_COEFFICIENTS );
-		return tileCoeffDim;
+		final long[] minSize = tiles[ 0 ].getSize().clone();
+		for ( final TileInfo tile : tiles )
+			for ( int d = 0; d < minSize.length; d++ )
+				if (minSize[ d ] > tile.getSize( d ))
+					minSize[ d ] = tile.getSize( d );
+		return minSize;
 	}
 }
