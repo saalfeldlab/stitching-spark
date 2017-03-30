@@ -1,13 +1,14 @@
 package org.janelia.flatfield;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.histogram.Histogram;
+import org.janelia.histogram.HistogramsMatching;
 
 import mpicbg.models.Affine1D;
 import mpicbg.models.AffineModel1D;
@@ -18,7 +19,6 @@ import mpicbg.models.IdentityModel;
 import mpicbg.models.InterpolatedAffineModel1D;
 import mpicbg.models.InvertibleBoundable;
 import mpicbg.models.Model;
-import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgs;
@@ -49,8 +49,6 @@ public class FlatfieldCorrectionSolver implements Serializable
 	private static final double INTERPOLATION_LAMBDA_V = 0.5;
 	private static final double INTERPOLATION_LAMBDA_Z = 0.0;
 
-	private static final double EPSILON = 1e-6;
-
 	private transient final JavaSparkContext sparkContext;
 
 	public FlatfieldCorrectionSolver( final JavaSparkContext sparkContext )
@@ -61,9 +59,8 @@ public class FlatfieldCorrectionSolver implements Serializable
 	@SuppressWarnings("unchecked")
 	public < M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable >
 	Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > leastSquaresInterpolationFit(
-			final JavaPairRDD< Long, double[] > rddHistograms,
-			final double[] referenceHistogram,
-			final HistogramSettings histogramSettings,
+			final JavaPairRDD< Long, Histogram > rddHistograms,
+			final Histogram referenceHistogram,
 			final ShiftedDownsampling< ? >.PixelsMapping pixelsMapping,
 			final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer,
 			final ModelType modelType,
@@ -77,12 +74,10 @@ public class FlatfieldCorrectionSolver implements Serializable
 
 		final JavaPairRDD< Long, Pair< Double, Double > > rddSolutionPixels = rddHistograms.mapToPair( tuple ->
 			{
-				final double[] histogram = tuple._2();
-
 				final long[] position = new long[ size.length ];
 				IntervalIndexer.indexToPosition( tuple._1(), size, position );
 
-				final List< PointMatch > matches = generateHistogramMatches( histogramSettings, histogram, referenceHistogram );
+				final List< PointMatch > matches = HistogramsMatching.generateHistogramMatches( tuple._2(), referenceHistogram );
 
 				final double[] regularizerValues;
 				if ( broadcastedRegularizer.value() != null )
@@ -176,39 +171,5 @@ public class FlatfieldCorrectionSolver implements Serializable
 		}
 
 		return solution;
-	}
-
-
-	public static List< PointMatch > generateHistogramMatches(
-			final HistogramSettings histogramSettings,
-			final double[] histogram,
-			final double[] referenceHistogram )
-	{
-		final List< PointMatch > matches = new ArrayList<>();
-		double histogramValue = 0, referenceHistogramValue = 0;
-		for ( int histogramIndex = -1, referenceHistogramIndex = -1; ; )
-		{
-			while ( histogramValue < EPSILON && histogramIndex < histogramSettings.bins - 1 ) histogramValue = histogram[ ++histogramIndex ];
-			while ( referenceHistogramValue < EPSILON && referenceHistogramIndex < histogramSettings.bins - 1 ) referenceHistogramValue = referenceHistogram[ ++referenceHistogramIndex ];
-
-			// boundary condition
-			if ( ( histogramValue < EPSILON && histogramIndex == histogramSettings.bins - 1 ) || ( referenceHistogramValue < EPSILON && referenceHistogramIndex == histogramSettings.bins - 1 ) )
-				break;
-
-			final double weight = Math.min( histogramValue, referenceHistogramValue );
-
-			// ignore the first and the last bin because they presumably contain undersaturated/oversaturated values
-			if ( histogramIndex > 0 && histogramIndex < histogramSettings.bins - 1 && referenceHistogramIndex > 0 && referenceHistogramIndex < histogramSettings.bins - 1 )
-				matches.add(
-						new PointMatch(
-								new Point( new double[] { histogramSettings.getBinValue( histogramIndex ) } ),
-								new Point( new double[] { histogramSettings.getBinValue( referenceHistogramIndex ) } ),
-								weight )
-						);
-
-			histogramValue -= weight;
-			referenceHistogramValue -= weight;
-		}
-		return matches;
 	}
 }

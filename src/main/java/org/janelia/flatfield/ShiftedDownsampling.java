@@ -10,7 +10,7 @@ import java.util.Map.Entry;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
-import org.janelia.util.Conversions;
+import org.janelia.histogram.Histogram;
 
 import net.imglib2.Cursor;
 import net.imglib2.FinalDimensions;
@@ -105,12 +105,12 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 	}
 
 
-	public JavaPairRDD< Long, double[] > downsampleHistograms(
-			final JavaPairRDD< Long, long[] > rddHistograms,
+	public JavaPairRDD< Long, Histogram > downsampleHistograms(
+			final JavaPairRDD< Long, Histogram > rddHistograms,
 			final PixelsMapping pixelsMapping )
 	{
 		if ( pixelsMapping.scale == 0 )
-			return rddHistograms.mapValues( histogram -> Conversions.toDoubleArray( histogram ) );
+			return rddHistograms;
 
 		final Broadcast< int[] > broadcastedFullPixelToDownsampledPixel = pixelsMapping.broadcastedFullPixelToDownsampledPixel;
 		final Broadcast< int[] > broadcastedDownsampledPixelToFullPixelsCount = pixelsMapping.broadcastedDownsampledPixelToFullPixelsCount;
@@ -120,19 +120,18 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 				.reduceByKey(
 						( ret, other ) ->
 						{
-							for ( int i = 0; i < ret.length; i++ )
-								ret[ i ] += other[ i ];
+							for ( int i = 0; i < ret.getNumBins(); i++ )
+								ret.set( i, ret.get( i ) + other.get( i ) );
 							return ret;
 						} )
 				.mapToPair(
 						tuple ->
 						{
 							final int cnt = broadcastedDownsampledPixelToFullPixelsCount.value()[ tuple._1().intValue() ];
-							final long[] accumulatedHistogram = tuple._2();
-							final double[] ret = new double[ accumulatedHistogram.length ];
-							for ( int i = 0; i < ret.length; ++i )
-								ret[ i ] = ( double ) accumulatedHistogram[ i ] / cnt;
-							return new Tuple2<>( tuple._1(), ret );
+							final Histogram accumulatedHistogram = tuple._2();
+							for ( int i = 0; i < accumulatedHistogram.getNumBins(); ++i )
+								accumulatedHistogram.set( i, accumulatedHistogram.get( i ) / cnt );
+							return new Tuple2<>( tuple._1(), accumulatedHistogram );
 						} );
 	}
 

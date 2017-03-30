@@ -26,6 +26,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
+import org.janelia.histogram.Histogram;
 import org.janelia.stitching.TiffSliceLoader;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.Utils;
@@ -62,10 +63,12 @@ public class HistogramsProvider implements Serializable
 	private final Interval workingInterval;
 	private final String histogramsPath;
 	private final long[] fullTileSize;
-	private HistogramSettings histogramSettings;
 
-	private transient JavaPairRDD< Long, long[] > rddHistograms;
-	private transient double[] referenceHistogram;
+	private Double histMinValue, histMaxValue;
+	private final int bins;
+
+	private transient JavaPairRDD< Long, Histogram > rddHistograms;
+	private transient Histogram referenceHistogram;
 
 	public HistogramsProvider(
 			final JavaSparkContext sparkContext,
@@ -73,7 +76,7 @@ public class HistogramsProvider implements Serializable
 			final String histogramsPath,
 			final TileInfo[] tiles,
 			final long[] fullTileSize,
-			final Integer histMinValue, final Integer histMaxValue, final int bins ) throws FileNotFoundException
+			final Double histMinValue, final Double histMaxValue, final int bins ) throws FileNotFoundException
 	{
 		this.sparkContext = sparkContext;
 		this.workingInterval = workingInterval;
@@ -81,25 +84,19 @@ public class HistogramsProvider implements Serializable
 		this.tiles = tiles;
 		this.fullTileSize = fullTileSize;
 
-		histogramSettings = new HistogramSettings(
-				histMinValue != null ? histMinValue : Integer.MAX_VALUE,
-				histMaxValue != null ? histMaxValue : Integer.MIN_VALUE,
-				bins );
+		this.histMinValue = histMinValue;
+		this.histMaxValue = histMaxValue;
+		this.bins = bins;
 
 		if ( !allHistogramsReady() )
 			populateHistograms();
-	}
-
-	public HistogramSettings getHistogramSettings()
-	{
-		return histogramSettings;
 	}
 
 	// TreeMap
 	@SuppressWarnings("unchecked")
 	private <
 		T extends NativeType< T > & RealType< T >,
-		V extends TreeMap< Short, Integer > >
+		V extends TreeMap< Integer, Integer > >
 	void populateHistograms() throws FileNotFoundException
 	{
 		final JavaRDD< TileInfo > rddTiles = sparkContext.parallelize( Arrays.asList( tiles ) );
@@ -109,6 +106,8 @@ public class HistogramsProvider implements Serializable
 		for ( int slice = 1; slice <= getNumSlices(); slice++ )
 			if ( !Files.exists( Paths.get( generateSliceHistogramsPath( 0, slice ) ) ) )
 				remainingSlices.add( slice );
+
+		System.out.println( " Remaining slices count = " + remainingSlices.size() );
 
 		for ( final int currentSlice : remainingSlices )
 		{
@@ -135,9 +134,9 @@ public class HistogramsProvider implements Serializable
 					}
 					else
 					{
-						ret = ( V[] ) new TreeMap[ (int) img.size() ];
+						ret = ( V[] ) new TreeMap[ ( int ) img.size() ];
 						for ( int i = 0; i < ret.length; i++ )
-							ret[ i ] = ( V ) new TreeMap< Short, Integer >();
+							ret[ i ] = ( V ) new TreeMap< Integer, Integer >();
 					}
 
 					while ( cursor.hasNext() )
@@ -145,7 +144,7 @@ public class HistogramsProvider implements Serializable
 						cursor.fwd();
 						cursor.localize( position );
 						final int pixel = IntervalIndexer.positionToIndex( position, dimensions );
-						final short key = ( short ) cursor.get().getRealDouble();
+						final int key = ( int ) cursor.get().getRealDouble();
 						ret[ pixel ].put( key, ret[ pixel ].getOrDefault( key, 0 ) + 1 );
 					}
 
@@ -162,12 +161,12 @@ public class HistogramsProvider implements Serializable
 						return a;
 
 					for ( int pixel = 0; pixel < b.length; pixel++ )
-						for ( final Entry< Short, Integer > entry : b[ pixel ].entrySet() )
+						for ( final Entry< Integer, Integer > entry : b[ pixel ].entrySet() )
 							a[ pixel ].put( entry.getKey(), a[ pixel ].getOrDefault( entry.getKey(), 0 ) + entry.getValue() );
 					return a;
 				},
 
-				getAggregationTreeDepth() );
+				Integer.MAX_VALUE ); // max possible aggregation depth
 
 			System.out.println( "Obtained result for slice " + currentSlice + ", saving..");
 
@@ -175,18 +174,19 @@ public class HistogramsProvider implements Serializable
 		}
 	}
 
-	public JavaPairRDD< Long, long[] > getHistograms()
+	public JavaPairRDD< Long, Histogram > getHistograms()
 	{
 		if ( rddHistograms == null )
 			loadHistograms();
 		return rddHistograms;
 	}
-	private < V extends TreeMap< Short, Integer > > void loadHistograms()
+	private < V extends TreeMap< Integer, Integer > > void loadHistograms()
 	{
 		final List< Integer > slices = new ArrayList<>();
 		for ( int slice = ( int ) workingInterval.min( 2 ) + 1; slice <= ( int ) workingInterval.max( 2 ) + 1; slice++ )
 			slices.add( slice );
 
+		System.out.println( "Opening " + slices.size() + " slice histogram files" );
 		final JavaRDD< Integer > rddSlices = sparkContext.parallelize( slices );
 
 		final JavaPairRDD< Long, V > rddTreeMaps = rddSlices
@@ -215,29 +215,31 @@ public class HistogramsProvider implements Serializable
 						return ret.iterator();
 					} );
 
-		if ( histogramSettings.minValue == Integer.MAX_VALUE || histogramSettings.maxValue == Integer.MIN_VALUE )
+		if ( histMinValue == null || histMaxValue == null )
 		{
-			// extract min/max value from the histograms
 			rddTreeMaps.persist( StorageLevel.MEMORY_ONLY_SER() );
 
-			/*final Tuple2< Integer, Integer > histMinMax = rddTreeMaps
-					.map( tuple -> tuple._2() )
-					.treeAggregate(
-						new Tuple2<>( Integer.MAX_VALUE, Integer.MIN_VALUE ),
-						( ret, map ) ->
-							{
-								int min = ret._1(), max = ret._2();
-								for ( final Short key : map.keySet() )
-								{
-									final int unsignedKey = shortToUnsigned( key );
-									min = Math.min( unsignedKey, min );
-									max = Math.max( unsignedKey, max );
-								}
-								return new Tuple2<>( min, max );
-							},
-						( ret, val ) -> new Tuple2<>( Math.min( ret._1(), val._1() ), Math.max( ret._2(), val._2() ) ),
-						getAggregationTreeDepth() );*/
+			// extract value statistics accumulating all histograms together
+			final TreeMap< Integer, Long > valueStats = rddTreeMaps.map( tuple ->
+				{
+					final TreeMap< Integer, Long > ret = new TreeMap<>();
+					for ( final Entry< Integer, Integer > entry : tuple._2().entrySet() )
+						ret.put( entry.getKey(), entry.getValue().longValue() );
+					return ret;
+				} )
+			.treeReduce( ( ret, other ) ->
+				{
+					for ( final Entry< Integer, Long > entry : other.entrySet() )
+						ret.put( entry.getKey(), ret.getOrDefault( entry.getKey(), 0l ) + entry.getValue() );
+					return ret;
+				} );
+			System.out.println();
+			System.out.println( "Value stats:" );
+			for ( final Entry< Integer, Long > entry : valueStats.entrySet() )
+				System.out.println( entry.getKey() + ": " + entry.getValue() );
+			System.out.println();
 
+			// extract 10 min/max values from the histograms
 			final int statsCount = 10;
 			final Tuple2< TreeSet< Integer >, TreeSet< Integer > > histMinsMaxs = rddTreeMaps
 					.map( tuple -> tuple._2() )
@@ -246,15 +248,13 @@ public class HistogramsProvider implements Serializable
 						( ret, map ) ->
 							{
 								final TreeSet< Integer > mins = ret._1(), maxs = ret._2();
-								for ( final Short key : map.keySet() )
+								for ( final Integer key : map.keySet() )
 								{
-									final int unsignedKey = shortToUnsigned( key );
-
-									mins.add( unsignedKey );
+									mins.add( key );
 									while ( mins.size() > statsCount )
 										mins.remove( mins.last() );
 
-									maxs.add( unsignedKey );
+									maxs.add( key );
 									while ( maxs.size() > statsCount )
 										maxs.remove( maxs.first() );
 								}
@@ -274,7 +274,7 @@ public class HistogramsProvider implements Serializable
 
 								return ret;
 							},
-						getAggregationTreeDepth() );
+							Integer.MAX_VALUE ); // max possible aggregation depth
 			System.out.println();
 			System.out.println( "Min " + statsCount + " values: " + histMinsMaxs._1() );
 			System.out.println( "Max " + statsCount + " values: " + histMinsMaxs._2().descendingSet() );
@@ -282,72 +282,48 @@ public class HistogramsProvider implements Serializable
 			final Tuple2< Integer, Integer > histMinMax = new Tuple2<>( histMinsMaxs._1().first(), histMinsMaxs._2().last() );
 
 
-			histogramSettings = new HistogramSettings(
-					histMinMax._1(),
-					histMinMax._2(),
-					histogramSettings.bins );
+			histMinValue = new Double( histMinMax._1() );
+			histMaxValue = new Double( histMinMax._2() );
 		}
 
-		System.out.println( "Histograms min=" + histogramSettings.minValue + ", max=" + histogramSettings.maxValue );
+		System.out.println( "Histograms min=" + histMinValue + ", max=" + histMaxValue );
 
 		rddHistograms = rddTreeMaps
-				.mapValues( histogram ->
+				.mapValues( map ->
 					{
-						final long[] array = new long[ histogramSettings.bins ];
-						for ( final Entry< Short, Integer > entry : histogram.entrySet() )
-							array[ histogramSettings.getBinIndex( shortToUnsigned( entry.getKey() ) ) ] += entry.getValue();
-						return array;
+						final Histogram histogram = new Histogram( histMinValue, histMaxValue, bins );
+						for ( final Entry< Integer, Integer > entry : map.entrySet() )
+							histogram.put( entry.getKey(), entry.getValue() );
+						return histogram;
 					} );
 
 		// enforce the computation so we can unpersist the parent RDD after that
 		System.out.println( "Total histograms (pixels) count = " + rddHistograms.persist( StorageLevel.MEMORY_ONLY_SER() ).count() );
 
 		rddTreeMaps.unpersist();
-
-		// for testing purposes
-		final Tuple2< Long, Long > testing = rddHistograms
-			.map( tuple -> new Tuple2<>( tuple._2()[ 0 ], tuple._2()[ tuple._2().length - 1 ] ) )
-			.reduce( ( a, b ) -> new Tuple2<>( Math.max( a._1(), b._1() ), Math.max( a._2(), b._2() ) ) );
-		System.out.println();
-		System.out.println( "Max at 0: " + testing._1() );
-		System.out.println( "Max at " + ( histogramSettings.bins - 1 ) +": " + testing._2() );
-		System.out.println( "out of " + tiles.length + " elements" );
-		System.out.println();
 	}
 
 
-	public double[] getReferenceHistogram()
+	public Histogram getReferenceHistogram()
 	{
 		if ( referenceHistogram == null )
-			estimateReferenceHistogram();
+			referenceHistogram = estimateReferenceHistogram( rddHistograms, REFERENCE_HISTOGRAM_POINTS_PERCENT );
 		return referenceHistogram;
 	}
-	private void estimateReferenceHistogram()
-	{
-		final Tuple2< long[], Long > accumulatedHistograms = accumulateHistograms( rddHistograms, histogramSettings, REFERENCE_HISTOGRAM_POINTS_PERCENT );
-		referenceHistogram = new double[ accumulatedHistograms._1().length ];
-		for ( int i = 0; i < referenceHistogram.length; ++i )
-			referenceHistogram[ i ] = ( double ) accumulatedHistograms._1()[ i ] / accumulatedHistograms._2();
-	}
-	public static Tuple2< long[], Long > accumulateHistograms( final JavaPairRDD< Long, long[] > rddHistograms, final HistogramSettings histogramSettings, final double medianPointsPercent )
+	public static Histogram estimateReferenceHistogram( final JavaPairRDD< Long, Histogram > rddHistograms, final double medianPointsPercent )
 	{
 		final long numPixels = rddHistograms.count();
 		final long numMedianPoints = Math.round( numPixels * medianPointsPercent );
 		final long mStart = Math.round( numPixels / 2.0 ) - Math.round( numMedianPoints / 2.0 );
 		final long mEnd = mStart + numMedianPoints;
 
-		final long[] accumulatedHistograms = rddHistograms
+		final Histogram accumulatedHistograms = rddHistograms
 			.mapValues( histogram ->
 				{
-					double pixelMean = 0;
-					int count = 0;
-					for ( int i = 0; i < histogramSettings.bins; i++ )
-					{
-						pixelMean += histogram[ i ] * histogramSettings.getBinValue( i );
-						count += histogram[ i ];
-					}
-					pixelMean /= count;
-					return pixelMean;
+					double sum = 0;
+					for ( int i = 0; i < histogram.getNumBins(); i++ )
+						sum += histogram.get( i ) * histogram.getBinValue( i );
+					return sum / histogram.getQuantityTotal();
 				}
 			)
 			.mapToPair( pair -> pair.swap() )
@@ -360,14 +336,17 @@ public class HistogramsProvider implements Serializable
 			.treeReduce(
 				( ret, histogram ) ->
 				{
-					for ( int i = 0; i < histogramSettings.bins; ++i )
-						ret[ i ] += histogram[ i ];
+					for ( int i = 0; i < histogram.getNumBins(); ++i )
+						ret.set( i, ret.get( i ) + histogram.get( i ) );
 					return ret;
 				},
 				Integer.MAX_VALUE // max possible aggregation depth
 			);
 
-		return new Tuple2<>( accumulatedHistograms, numMedianPoints );
+		for ( int i = 0; i < accumulatedHistograms.getNumBins(); ++i )
+			accumulatedHistograms.set( i, accumulatedHistograms.get( i ) / numMedianPoints );
+
+		return accumulatedHistograms;
 	}
 
 	private boolean allHistogramsReady()
@@ -388,7 +367,7 @@ public class HistogramsProvider implements Serializable
 		return ( int ) ( workingInterval.numDimensions() == 3 ? workingInterval.dimension( 2 ) : 1 );
 	}
 
-	private < V extends TreeMap< Short, Integer > > void saveSliceHistogramsToDisk( final int scale, final int slice, final V[] hist ) throws FileNotFoundException
+	private < V extends TreeMap< Integer, Integer > > void saveSliceHistogramsToDisk( final int scale, final int slice, final V[] hist ) throws FileNotFoundException
 	{
 		final String path = generateSliceHistogramsPath( scale, slice );
 
@@ -404,7 +383,7 @@ public class HistogramsProvider implements Serializable
 		final Kryo kryo = new Kryo();
 		final MapSerializer serializer = new MapSerializer();
 		serializer.setKeysCanBeNull( false );
-		serializer.setKeyClass( Short.class, kryo.getSerializer( Short.class ) );
+		serializer.setKeyClass( Integer.class, kryo.getSerializer( Integer.class ) );
 		serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
 		kryo.register( TreeMap.class, serializer );
 
@@ -417,12 +396,12 @@ public class HistogramsProvider implements Serializable
 		}
 	}
 
-	private < V extends TreeMap< Short, Integer > > ListImg< V > readSliceHistogramsFromDisk( final int slice )
+	private < V extends TreeMap< Integer, Integer > > ListImg< V > readSliceHistogramsFromDisk( final int slice )
 	{
 		return new ListImg<>( Arrays.asList( readSliceHistogramsArrayFromDisk( 0, slice ) ), new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } );
 	}
 	@SuppressWarnings("unchecked")
-	private < V extends TreeMap< Short, Integer > > V[] readSliceHistogramsArrayFromDisk( final int scale, final int slice )
+	private < V extends TreeMap< Integer, Integer > > V[] readSliceHistogramsArrayFromDisk( final int scale, final int slice )
 	{
 		System.out.println( "Loading slice " + slice );
 		final String path = generateSliceHistogramsPath( scale, slice );
@@ -443,7 +422,7 @@ public class HistogramsProvider implements Serializable
 
 			final MapSerializer serializer = new MapSerializer();
 			serializer.setKeysCanBeNull( false );
-			serializer.setKeyClass( Short.class, kryo.getSerializer( Short.class ) );
+			serializer.setKeyClass( Integer.class, kryo.getSerializer( Integer.class ) );
 			serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
 			kryo.register( TreeMap.class, serializer );
 
@@ -458,18 +437,6 @@ public class HistogramsProvider implements Serializable
 			return null;
 		}
 	}
-
-
-	private int getAggregationTreeDepth()
-	{
-		return ( int ) Math.ceil( Math.log( sparkContext.defaultParallelism() ) / Math.log( 2 ) );
-	}
-
-	private static int shortToUnsigned( final short value )
-	{
-		return value + ( value >= 0 ? 0 : ( ( 1 << Short.SIZE ) ) );
-	}
-
 
 
 

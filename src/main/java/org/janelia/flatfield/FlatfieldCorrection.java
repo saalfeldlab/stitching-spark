@@ -14,6 +14,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.ModelType;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
+import org.janelia.histogram.Histogram;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -148,6 +149,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				.set( "spark.rdd.compress", "true" )
 				//.set( "spark.executor.heartbeatInterval", "10000000" )
 				//.set( "spark.network.timeout", "10000000" )
+				//.set( "spark.locality.wait", "0" )
 			);
 	}
 
@@ -164,6 +166,9 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	{
 		long elapsed = System.nanoTime();
 
+		System.out.println( "Working with stack of size " + tiles.length );
+		System.out.println( "Output directory: " + solutionPath );
+
 		final HistogramsProvider histogramsProvider = new HistogramsProvider(
 				sparkContext,
 				workingInterval,
@@ -172,27 +177,26 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				fullTileSize,
 				args.histMinValue(), args.histMaxValue(), args.bins() );
 
-		System.out.println( "Working with stack of size " + tiles.length );
-		System.out.println( "Output directory: " + solutionPath );
-
 		System.out.println( "Loading histograms.." );
-		final JavaPairRDD< Long, long[] > rddFullHistograms = histogramsProvider.getHistograms();
+		final JavaPairRDD< Long, Histogram > rddFullHistograms = histogramsProvider.getHistograms();
 
-		final double[] referenceHistogram = histogramsProvider.getReferenceHistogram();
-		System.out.println( "Obtained reference histogram of size " + referenceHistogram.length );
+		final Histogram referenceHistogram = histogramsProvider.getReferenceHistogram();
+		System.out.println( "Obtained reference histogram of size " + referenceHistogram.getNumBins() );
+		final double[] referenceHistogramArray = new double[ referenceHistogram.getNumBins() ];
+		for ( int i = 0; i < referenceHistogram.getNumBins(); ++i )
+			referenceHistogramArray[ i ] = referenceHistogram.get( i );
 		System.out.println( "Reference histogram:");
-		System.out.println( Arrays.toString( referenceHistogram ) );
+		System.out.println( Arrays.toString( referenceHistogramArray ) );
+		System.out.println();
 
 		// save the reference histogram to file so one can plot it
 		final String referenceHistogramFilepath = Paths.get( solutionPath ).getParent().toString() + "/referenceHistogram.txt";
 		Paths.get( referenceHistogramFilepath ).getParent().toFile().mkdirs();
 		try ( final PrintWriter writer = new PrintWriter( referenceHistogramFilepath ) )
 		{
-			for ( final double val : referenceHistogram )
-				writer.println( val );
+			for ( int i = 0; i < referenceHistogram.getNumBins(); ++i )
+				writer.println( referenceHistogram.get( i ) );
 		}
-
-		final HistogramSettings histogramSettings = histogramsProvider.getHistogramSettings();
 
 		// Define the transform and calculate the image size on each scale level
 		final AffineTransform3D downsamplingTransform = new AffineTransform3D();
@@ -250,14 +254,13 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 						regularizer = null;
 					}
 
-					final JavaPairRDD< Long, double[] > rddDownsampledHistograms = shiftedDownsampling.downsampleHistograms(
+					final JavaPairRDD< Long, Histogram > rddDownsampledHistograms = shiftedDownsampling.downsampleHistograms(
 							rddFullHistograms,
 							pixelsMapping );
 
 					solution = solver.leastSquaresInterpolationFit(
 							rddDownsampledHistograms,
 							referenceHistogram,
-							histogramSettings,
 							pixelsMapping,
 							regularizer,
 							modelType,

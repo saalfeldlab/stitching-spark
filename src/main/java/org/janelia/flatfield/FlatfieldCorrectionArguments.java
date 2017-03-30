@@ -29,11 +29,11 @@ public class FlatfieldCorrectionArguments
 
 	@Option(name = "--min", required = false,
 			usage = "Min value of a histogram")
-	private Integer histMinValue = null;
+	private Double histMinValue = null;
 
 	@Option(name = "--max", required = false,
 			usage = "Max value of a histogram")
-	private Integer histMaxValue = null;
+	private Double histMaxValue = null;
 
 
 	private boolean parsedSuccessfully = false;
@@ -57,8 +57,8 @@ public class FlatfieldCorrectionArguments
 
 	public String inputFilePath() { return inputFilePath; }
 	public int bins() { return bins; }
-	public Integer histMinValue() { return histMinValue; }
-	public Integer histMaxValue() { return histMaxValue; }
+	public Double histMinValue() { return histMinValue; }
+	public Double histMaxValue() { return histMaxValue; }
 	public String cropMinMaxIntervalStr() { return cropMinMaxInterval; };
 
 	public Interval cropMinMaxInterval( final long[] fullTileSize )
