@@ -46,6 +46,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 		IdentityModel
 	}
 
+	private static final double INTERPOLATION_LAMBDA_IDENTITY = 0.1;
 	private static final double INTERPOLATION_LAMBDA_V = 0.5;
 	private static final double INTERPOLATION_LAMBDA_Z = 0.0;
 
@@ -141,15 +142,20 @@ public class FlatfieldCorrectionSolver implements Serializable
 					e.printStackTrace();
 				}
 
-				final Affine1D< ? > interpolatedModel = modelFound ?
-						new InterpolatedAffineModel1D<>(
+				final R interpolatedModel = modelFound ?
+						( R ) new InterpolatedAffineModel1D<>(
 								model,
 								new ConstantAffineModel1D<>( regularizerModel ),
 								modelType == ModelType.FixedTranslationAffineModel ? INTERPOLATION_LAMBDA_V : INTERPOLATION_LAMBDA_Z ) :
 						regularizerModel;
 
+				final Affine1D< ? > identityInterpolatedModel = new InterpolatedAffineModel1D<>(
+								interpolatedModel,
+								new ConstantAffineModel1D<>( new IdentityModel() ),
+								INTERPOLATION_LAMBDA_IDENTITY );
+
 				final double[] estimatedModelValues = new double[ 2 ];
-				interpolatedModel.toArray( estimatedModelValues );
+				identityInterpolatedModel.toArray( estimatedModelValues );
 
 				return new Tuple2<>( tuple._1(), new ValuePair<>( estimatedModelValues[ 0 ], estimatedModelValues[ 1 ] ) );
 			} );
