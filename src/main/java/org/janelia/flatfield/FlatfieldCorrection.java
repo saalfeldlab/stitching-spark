@@ -24,6 +24,7 @@ import org.kohsuke.args4j.CmdLineException;
 import ij.IJ;
 import ij.ImagePlus;
 import net.imglib2.Cursor;
+import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
@@ -52,6 +53,8 @@ import scala.Tuple2;
 public class FlatfieldCorrection implements Serializable, AutoCloseable
 {
 	private static final long serialVersionUID = -8987192045944606043L;
+
+	private static final int SCALE_LEVEL_MIN_PIXELS = 100;
 
 	private final String histogramsPath, solutionPath;
 
@@ -210,13 +213,14 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final FlatfieldCorrectionSolver solver = new FlatfieldCorrectionSolver( sparkContext );
 
 		final int iterations = 16;
+		final int startScale = findStartingScale( shiftedDownsampling ), endScale = 0;
 		Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > lastSolution = null;
 		for ( int iter = 0; iter < iterations; iter++ )
 		{
 			Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > downsampledSolution = null;
 
 			// solve in a bottom-up fashion (starting from the smallest scale level)
-			for ( int scale = shiftedDownsampling.getNumScales() - 1; scale >= 0; scale-- )
+			for ( int scale = startScale; scale >= endScale; scale-- )
 			{
 				final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution;
 
@@ -224,11 +228,11 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				final RegularizerModelType regularizerModelType;
 
 				if ( iter == 0 )
-					modelType = scale >= shiftedDownsampling.getNumScales() / 2 ? ModelType.FixedTranslationAffineModel : ModelType.FixedScalingAffineModel;
+					modelType = scale >= Math.round( ( double ) ( startScale + endScale ) / 2 ) ? ModelType.FixedTranslationAffineModel : ModelType.FixedScalingAffineModel;
 				else
 					modelType = iter % 2 == 1 ? ModelType.FixedTranslationAffineModel : ModelType.FixedScalingAffineModel;
 
-				regularizerModelType = iter == 0 && scale == shiftedDownsampling.getNumScales() - 1 ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel;
+				regularizerModelType = iter == 0 && scale == startScale ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel;
 
 				try ( ShiftedDownsampling< AffineTransform3D >.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
 				{
@@ -289,6 +293,15 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		elapsed = System.nanoTime() - elapsed;
 		System.out.println( "----------" );
 		System.out.println( String.format( "Took %f mins", elapsed / 1e9 / 60 ) );
+	}
+
+
+	private int findStartingScale( final ShiftedDownsampling< ? > shiftedDownsampling )
+	{
+		for ( int scale = shiftedDownsampling.getNumScales() - 1; scale >= 0; --scale )
+			if ( Intervals.numElements( new FinalDimensions( shiftedDownsampling.getDimensionsAtScale( scale ) ) ) >= SCALE_LEVEL_MIN_PIXELS )
+				return scale;
+		return -1;
 	}
 
 

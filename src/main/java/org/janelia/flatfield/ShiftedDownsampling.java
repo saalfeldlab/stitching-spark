@@ -104,6 +104,11 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 		return scaleLevelDimensions.size();
 	}
 
+	public long[] getDimensionsAtScale( final int scale )
+	{
+		return scaleLevelDimensions.get( scale );
+	}
+
 
 	public JavaPairRDD< Long, Histogram > downsampleHistograms(
 			final JavaPairRDD< Long, Histogram > rddHistograms,
