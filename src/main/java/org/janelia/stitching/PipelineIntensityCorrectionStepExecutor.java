@@ -100,13 +100,26 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	{
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
-			final List< TilePair > overlappingPairs = TileOperations.findOverlappingTiles( job.getTiles( channel ) );
-			matchIntensities(
-					overlappingPairs,
+			final TileInfo[] transformedTiles = matchIntensities(
+					job.getTiles( channel ),
 					new InterpolatedAffineModel1D<>(
 							new InterpolatedAffineModel1D<>(
 									new AffineModel1D(), new TranslationModel1D(), TRANSLATION_LAMBDA ),
 							new IdentityModel(), SCALE_LAMBDA ) );
+
+			try
+			{
+				job.setTiles( transformedTiles, channel );
+				TileInfoJSONProvider.saveTilesConfiguration( transformedTiles, Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "_transformed" ) );
+			}
+			catch ( final IOException e )
+			{
+				e.printStackTrace();
+			}
+			catch ( final Exception e )
+			{
+				throw new PipelineExecutionException( e );
+			}
 		}
 	}
 
@@ -115,17 +128,10 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	 *
 	 * @param tilePairs A list of pairs of overlapping tiles
 	 */
-	public < M extends Model< M > & Affine1D< M >, T extends RealType< T > & NativeType< T > > void matchIntensities( final List< TilePair > tilePairs, final M templateModel ) throws PipelineExecutionException
+	public < M extends Model< M > & Affine1D< M >, T extends RealType< T > & NativeType< T > > TileInfo[] matchIntensities( final TileInfo[] tiles, final M templateModel ) throws PipelineExecutionException
 	{
-		// construct tiles lookup structure
-		final Map< Integer, TileInfo > tilesMap = new TreeMap<>();
-		for ( final TilePair tilePair : tilePairs )
-			for ( final TileInfo tile : tilePair.toArray() )
-				tilesMap.put( tile.getIndex(), tile );
-
-		for ( final Integer key : Utils.createTilesMap( job.getTiles( 0 ) ).keySet() )
-			if ( !tilesMap.containsKey( key ) )
-				throw new PipelineExecutionException( "Some subset was chosen instead of the whole configuration (bad tile " + key + ")" );
+		final List< TilePair > overlappingPairs = TileOperations.findOverlappingTiles( tiles );
+		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 
 		// set coeff dimensions
 		final long[] tileSize = getMinTileSize( tilesMap.values().toArray( new TileInfo[ 0 ] ) );
@@ -155,7 +161,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 
 		// generate coefficient matches across pairs of tiles
 		System.out.println( "Generate pixel matches" );
-		final Map< TilePair, Map< Integer, Map< Integer, List< PointMatch > > > > pairwiseCoeffs = sparkContext.parallelize( tilePairs ).mapToPair(
+		final Map< TilePair, Map< Integer, Map< Integer, List< PointMatch > > > > pairwiseCoeffs = sparkContext.parallelize( overlappingPairs ).mapToPair(
 				tilePair -> new Tuple2<>( tilePair, generatePairwiseHistogramsMatches( tilePair, new ValuePair<>( minmaxGlobal[ 0 ], minmaxGlobal[ 1 ] ) ) )
 			).collectAsMap();
 
@@ -248,16 +254,10 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 
 		System.out.println( "*** Transformation applied ***" );
 
-		final TileInfo[] tiles = job.getTiles( 0 );
-		final Map< Integer, TileInfo > allTilesMap = Utils.createTilesMap( tiles );
 		for ( final TileInfo transformedTile : resultingTiles )
-			allTilesMap.get( transformedTile.getIndex() ).setFilePath( transformedTile.getFilePath() );
+			tilesMap.get( transformedTile.getIndex() ).setFilePath( transformedTile.getFilePath() );
 
-		try {
-			TileInfoJSONProvider.saveTilesConfiguration( tiles, job.getBaseFolder() + "/" + Utils.addFilenameSuffix( job.getDatasetName() + ".json", "_transformed" ) );
-		} catch ( final IOException e ) {
-			e.printStackTrace();
-		}
+		return tiles;
 	}
 
 
