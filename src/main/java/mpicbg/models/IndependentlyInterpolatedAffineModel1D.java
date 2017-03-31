@@ -2,31 +2,25 @@ package mpicbg.models;
 
 import java.util.Collection;
 
-import mpicbg.models.Affine1D;
-import mpicbg.models.AffineModel1D;
-import mpicbg.models.IllDefinedDataPointsException;
-import mpicbg.models.InvertibleBoundable;
-import mpicbg.models.InvertibleInterpolatedModel;
-import mpicbg.models.Model;
-import mpicbg.models.NoninvertibleModelException;
-import mpicbg.models.NotEnoughDataPointsException;
-import mpicbg.models.PointMatch;
-
-final public class MismatchedInterpolatedAffineModel1D<
+/**
+*
+* @author Igor Pisarev &lt;pisarevi@janelia.hhmi.org&gt;
+*/
+final public class IndependentlyInterpolatedAffineModel1D<
 		A extends Model< A > & Affine1D< A >,
 		B extends Model< B > & Affine1D< B > >
-	extends InvertibleInterpolatedModel< A, B, MismatchedInterpolatedAffineModel1D< A, B > >
-	implements Affine1D< MismatchedInterpolatedAffineModel1D< A, B > >, InvertibleBoundable
+	extends InvertibleIndependentlyInterpolatedModel< A, B, IndependentlyInterpolatedAffineModel1D< A, B > >
+	implements Affine1D< IndependentlyInterpolatedAffineModel1D< A, B > >, InvertibleBoundable
 {
-	private static final long serialVersionUID = 2662227348414849267L;
+	private static final long serialVersionUID = -215895155784384320L;
 
 	final protected AffineModel1D affine = new AffineModel1D();
 	final protected double[] afs = new double[ 2 ];
 	final protected double[] bfs = new double[ 2 ];
 
-	public MismatchedInterpolatedAffineModel1D( final A model, final B regularizer, final double lambda )
+	public IndependentlyInterpolatedAffineModel1D( final A model, final B regularizer, final double... lambdas )
 	{
-		super( model, regularizer, lambda );
+		super( model, regularizer, lambdas );
 		interpolate();
 	}
 
@@ -36,8 +30,8 @@ final public class MismatchedInterpolatedAffineModel1D<
 		b.toArray( bfs );
 
 		affine.set(
-				afs[ 0 ] * lambda + bfs[ 0 ] * l1,
-				afs[ 1 ] * l1     + bfs[ 1 ] * lambda );
+				afs[ 0 ] * ( 1.0 - lambdas[ 0 ] ) + bfs[ 0 ] * lambdas[ 0 ],
+				afs[ 1 ] * ( 1.0 - lambdas[ 1 ] ) + bfs[ 1 ] * lambdas[ 1 ] );
 	}
 
 	@Override
@@ -48,17 +42,17 @@ final public class MismatchedInterpolatedAffineModel1D<
 	}
 
 	@Override
-	public void set( final MismatchedInterpolatedAffineModel1D< A, B > m )
+	public void set( final IndependentlyInterpolatedAffineModel1D< A, B > m )
 	{
 		super.set( m );
-		if ( MismatchedInterpolatedAffineModel1D.class.isInstance( m ) )
-			affine.set( ( ( MismatchedInterpolatedAffineModel1D< A, B > ) m ).affine );
+		if ( InterpolatedAffineModel1D.class.isInstance( m ) )
+			affine.set( m.affine );
 	}
 
 	@Override
-	public MismatchedInterpolatedAffineModel1D< A, B > copy()
+	public IndependentlyInterpolatedAffineModel1D< A, B > copy()
 	{
-		final MismatchedInterpolatedAffineModel1D< A, B > copy = new MismatchedInterpolatedAffineModel1D< A, B >( a.copy(), b.copy(), lambda );
+		final IndependentlyInterpolatedAffineModel1D< A, B > copy = new IndependentlyInterpolatedAffineModel1D< >( a.copy(), b.copy(), lambdas.clone() );
 		copy.cost = cost;
 		return copy;
 	}
@@ -92,9 +86,9 @@ final public class MismatchedInterpolatedAffineModel1D<
 	}
 
 	@Override
-	public MismatchedInterpolatedAffineModel1D< A, B > createInverse()
+	public IndependentlyInterpolatedAffineModel1D< A, B > createInverse()
 	{
-		final MismatchedInterpolatedAffineModel1D< A, B > inverse = new MismatchedInterpolatedAffineModel1D< A, B >( a.createInverse(), b.createInverse(), lambda );
+		final IndependentlyInterpolatedAffineModel1D< A, B > inverse = new IndependentlyInterpolatedAffineModel1D< >( a.createInverse(), b.createInverse(), lambdas.clone() );
 		inverse.cost = cost;
 		return inverse;
 	}
@@ -105,7 +99,7 @@ final public class MismatchedInterpolatedAffineModel1D<
 	}
 
 	@Override
-	public void preConcatenate( final MismatchedInterpolatedAffineModel1D< A, B > affine1d )
+	public void preConcatenate( final IndependentlyInterpolatedAffineModel1D< A, B > affine1d )
 	{
 		affine.preConcatenate( affine1d.affine );
 	}
@@ -121,7 +115,7 @@ final public class MismatchedInterpolatedAffineModel1D<
 	}
 
 	@Override
-	public void concatenate( final MismatchedInterpolatedAffineModel1D< A, B > affine1d )
+	public void concatenate( final IndependentlyInterpolatedAffineModel1D< A, B > affine1d )
 	{
 		affine.concatenate( affine1d.affine );
 	}

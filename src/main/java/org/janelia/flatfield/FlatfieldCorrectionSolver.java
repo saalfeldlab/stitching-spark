@@ -16,6 +16,7 @@ import mpicbg.models.ConstantAffineModel1D;
 import mpicbg.models.FixedScalingAffineModel1D;
 import mpicbg.models.FixedTranslationAffineModel1D;
 import mpicbg.models.IdentityModel;
+import mpicbg.models.IndependentlyInterpolatedAffineModel1D;
 import mpicbg.models.InterpolatedAffineModel1D;
 import mpicbg.models.InvertibleBoundable;
 import mpicbg.models.Model;
@@ -47,8 +48,8 @@ public class FlatfieldCorrectionSolver implements Serializable
 	}
 
 	private static final double INTERPOLATION_LAMBDA_IDENTITY = 0.1;
-	private static final double INTERPOLATION_LAMBDA_V = 0.5;
-	private static final double INTERPOLATION_LAMBDA_Z = 0.0;
+	private static final double INTERPOLATION_LAMBDA_SCALING = 0.5;
+	private static final double INTERPOLATION_LAMBDA_TRANSLATION = 0.0;
 
 	private transient final JavaSparkContext sparkContext;
 
@@ -100,6 +101,9 @@ public class FlatfieldCorrectionSolver implements Serializable
 				final M model;
 				switch ( modelType )
 				{
+				case AffineModel:
+					model = ( M ) new AffineModel1D();
+					break;
 				case FixedTranslationAffineModel:
 					model = ( M ) new FixedTranslationAffineModel1D( regularizerValues == null ? 0 : regularizerValues[ 1 ] );
 					break;
@@ -143,10 +147,11 @@ public class FlatfieldCorrectionSolver implements Serializable
 				}
 
 				final R interpolatedModel = modelFound ?
-						( R ) new InterpolatedAffineModel1D<>(
+						( R ) new IndependentlyInterpolatedAffineModel1D<>(
 								model,
 								new ConstantAffineModel1D<>( regularizerModel ),
-								modelType == ModelType.FixedTranslationAffineModel ? INTERPOLATION_LAMBDA_V : INTERPOLATION_LAMBDA_Z ) :
+								INTERPOLATION_LAMBDA_SCALING,
+								INTERPOLATION_LAMBDA_TRANSLATION ) :
 						regularizerModel;
 
 				final Affine1D< ? > identityInterpolatedModel = new InterpolatedAffineModel1D<>(
