@@ -17,9 +17,9 @@ public class ReferenceHistogramTest
 	private static final double REFERENCE_HISTOGRAM_POINTS_PERCENT = 0.5;
 	private static final double EPSILON = 1e-10;
 
-	private JavaSparkContext sparkContext;
+	private transient JavaSparkContext sparkContext;
 
-	private final int histMinValue = 0, histMaxValue = 99;
+	private final int histMinValue = 0, histMaxValue = 100;
 
 	@Before
 	public void setUp()

@@ -75,7 +75,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 				pixelSize[ d ] = ( long ) ( scale == 0 ? 1 : scaleLevelPixelSize.get( scale - 1 )[ d ] / downsamplingTransform.get( d, d ) );
 
 				// how many original pixels form the leftmost pixel on this scale level (which could be different from pixelSize[d] because of the translation component)
-				offset[ d ] = ( long ) ( scale == 0 ? 0 : Math.min( pixelSize[ d ] * downsamplingTransform.get( d, 4 ) + pixelSize[ d ], workingInterval.dimension( d ) ) );
+				offset[ d ] = ( long ) ( scale == 0 ? 0 : Math.min( pixelSize[ d ] * downsamplingTransform.get( d, downsamplingTransform.numDimensions() ) + pixelSize[ d ], workingInterval.dimension( d ) ) );
 
 				// how many original pixels form the rightmost pixel on this scale level
 				final long remaining = workingInterval.dimension( d ) - offset[ d ];
