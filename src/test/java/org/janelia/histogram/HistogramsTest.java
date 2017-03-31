@@ -26,6 +26,26 @@ public class HistogramsTest
 	}
 
 	@Test
+	public void testPutSet()
+	{
+		final Histogram histogram = new Histogram( 10, 20, 5 );
+		histogram.put( 15.5, 5 );
+		histogram.put( 8.1, 2.5 );
+		histogram.put( 25.7, 0.2 );
+		histogram.put( 11.2 );
+		Assert.assertEquals( 8.7, histogram.getQuantityTotal(), EPSILON );
+		Assert.assertEquals( 2.5, histogram.getQuantityLessThanMin(), EPSILON );
+		Assert.assertEquals( 0.2, histogram.getQuantityGreaterThanMax(), EPSILON );
+
+		histogram.set( 2, 2.5 );
+		histogram.set( 4, 0.1 );
+		histogram.set( 3, 0.25 );
+		Assert.assertEquals( 6.35, histogram.getQuantityTotal(), EPSILON );
+		Assert.assertEquals( 2.5, histogram.getQuantityLessThanMin(), EPSILON );
+		Assert.assertEquals( 0, histogram.getQuantityGreaterThanMax(), EPSILON );
+	}
+
+	@Test
 	public void testBinningAndMatching()
 	{
 		final Histogram[] histograms = new Histogram[] { new Histogram( 0, 16, 8 ), new Histogram( 0, 16, 8 ) };
@@ -37,10 +57,10 @@ public class HistogramsTest
 			for ( final int value : values[ i ] )
 				histograms[ i ].put( value );
 
-		Assert.assertArrayEquals( new double[] { 2, 0, 5, 0, 2, 0, 0, 1 }, histograms[ 0 ].getHistogram(), EPSILON );
-		Assert.assertArrayEquals( new double[] { 1, 2, 3, 1, 2, 0, 1, 0 }, histograms[ 1 ].getHistogram(), EPSILON );
+		Assert.assertArrayEquals( new double[] { 2, 0, 5, 0, 2, 0, 0, 1 }, getHistogramArray( histograms[ 0 ] ), EPSILON );
+		Assert.assertArrayEquals( new double[] { 1, 2, 3, 1, 2, 0, 1, 0 }, getHistogramArray( histograms[ 1 ] ), EPSILON );
 
-		final List< PointMatch > matches = HistogramsMatching.generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
+		final List< PointMatch > matches = generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] { 0, 0, 4, 4, 4, 8, 14 }, arrays[ 0 ] );
 		Assert.assertArrayEquals( new int[] { 0, 2, 2, 4, 6, 8, 12 }, arrays[ 1 ] );
@@ -59,7 +79,7 @@ public class HistogramsTest
 			for ( final int value : values[ i ] )
 				histograms[ i ].put( value );
 
-		final List< PointMatch > matches = HistogramsMatching.generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
+		final List< PointMatch > matches = generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] {  0 }, arrays[ 0 ] );
 		Assert.assertArrayEquals( new int[] { 12 }, arrays[ 1 ] );
@@ -78,7 +98,7 @@ public class HistogramsTest
 			for ( final int value : values[ i ] )
 				histograms[ i ].put( value );
 
-		final List< PointMatch > matches = HistogramsMatching.generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
+		final List< PointMatch > matches = generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] {  0,  4,  8, 12 }, arrays[ 0 ] );
 		Assert.assertArrayEquals( new int[] { 16, 16, 16, 16 }, arrays[ 1 ] );
@@ -89,7 +109,7 @@ public class HistogramsTest
 	public void testMatchingEmptyHistograms()
 	{
 		final Histogram[] histograms = new Histogram[] { new Histogram( 0, 16, 4 ), new Histogram( 0, 16, 4 ) };
-		final List< PointMatch > matches = HistogramsMatching.generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
+		final List< PointMatch > matches = generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
 		Assert.assertTrue( matches.isEmpty() );
 	}
 
@@ -105,7 +125,7 @@ public class HistogramsTest
 			for ( final int value : values[ i ] )
 				histograms[ i ].put( value );
 
-		final List< PointMatch > matches = HistogramsMatching.generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
+		final List< PointMatch > matches = generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
 		Assert.assertTrue( matches.isEmpty() );
 	}
 
@@ -121,7 +141,7 @@ public class HistogramsTest
 			for ( final int value : values[ i ] )
 				histograms[ i ].put( value );
 
-		final List< PointMatch > matches = HistogramsMatching.generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
+		final List< PointMatch > matches = generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
 
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] { 2, 4,  6 }, arrays[ 0 ] );
@@ -141,12 +161,18 @@ public class HistogramsTest
 			for ( final int value : values[ i ] )
 				histograms[ i ].put( value );
 
-		final List< PointMatch > matches = HistogramsMatching.generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
+		final List< PointMatch > matches = generateHistogramMatches( histograms[ 0 ], histograms[ 1 ] );
 
 		final int[][] arrays = matchesToArrays( matches );
 		Assert.assertArrayEquals( new int[] { 6 }, arrays[ 0 ] );
 		Assert.assertArrayEquals( new int[] { 8 }, arrays[ 1 ] );
 		Assert.assertArrayEquals( new int[] { 1 }, arrays[ 2 ] );
+	}
+
+	private List< PointMatch > generateHistogramMatches( final Histogram hist1, final Histogram hist2 )
+	{
+		Assert.assertTrue( Math.abs( hist1.getQuantityTotal() - hist2.getQuantityTotal() ) < EPSILON );
+		return HistogramsMatching.generateHistogramMatches( hist1, hist2 );
 	}
 
 	private int[][] matchesToArrays( final List< PointMatch > matches )
@@ -161,5 +187,13 @@ public class HistogramsTest
 			w[ i ] = ( int ) matches.get( i ).getWeight();
 		}
 		return new int[][] { p, q, w };
+	}
+
+	private double[] getHistogramArray( final Histogram histogram )
+	{
+		final double[] array = new double[ histogram.getNumBins() ];
+		for ( int i = 0; i < array.length; ++i )
+			array[ i ] = histogram.get( i );
+		return array;
 	}
 }

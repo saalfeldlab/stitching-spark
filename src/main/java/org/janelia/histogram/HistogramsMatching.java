@@ -8,13 +8,8 @@ import mpicbg.models.PointMatch;
 
 public class HistogramsMatching
 {
-	private static final double EPSILON = 1e-10;
-
 	public static List< PointMatch > generateHistogramMatches( final Histogram hist1, final Histogram hist2 )
 	{
-		if ( Math.abs( hist1.getQuantityTotal() - hist2.getQuantityTotal() ) >= EPSILON )
-			throw new IllegalArgumentException( "Different total quantity" );
-
 		final double quantityTotal = ( hist1.getQuantityTotal() + hist2.getQuantityTotal() ) / 2;
 		final double quantitySkipLeft = Math.max( hist1.getQuantityLessThanMin(), hist2.getQuantityLessThanMin() );
 		final double quantitySkipRight = Math.max( hist1.getQuantityGreaterThanMax(), hist2.getQuantityGreaterThanMax() );
@@ -29,11 +24,11 @@ public class HistogramsMatching
 		{
 			for ( int i = 0; i < 2; ++i )
 			{
-				while ( quantity[ i ] < EPSILON && index[ i ] < histograms[ i ].getNumBins() - 1 )
+				while ( quantity[ i ] <= 0 && index[ i ] < histograms[ i ].getNumBins() - 1 )
 					quantity[ i ] = histograms[ i ].get( ++index[ i ] );
 
 				// boundary condition
-				if ( quantity[ i ] < EPSILON && index[ i ] == histograms[ i ].getNumBins() - 1 )
+				if ( quantity[ i ] <= 0 && index[ i ] == histograms[ i ].getNumBins() - 1 )
 					return matches;
 			}
 
@@ -46,7 +41,7 @@ public class HistogramsMatching
 				final double weightRight = Math.min( quantityTotal - quantitySkipRight - quantityProcessed, quantityMin );
 				final double weightInner = quantityTotal - quantitySkipRight - quantitySkipLeft;
 				final double weight = Math.min( Math.min( weightLeft, weightRight ), weightInner );
-				if ( weight >= EPSILON )
+				if ( weight > 0 )
 					matches.add(
 							new PointMatch(
 									new Point( new double[] { histograms[ 0 ].getBinValue( index[ 0 ] ) } ),
