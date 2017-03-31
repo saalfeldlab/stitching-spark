@@ -37,6 +37,12 @@ public class Histogram implements Serializable
 	{
 		quantityTotal += quantity - histogram[ bin ];
 		histogram[ bin ] = quantity;
+
+		if ( bin <= 0 )
+			quantityLessThanMin = 0;
+
+		if ( bin >= histogram.length - 1 )
+			quantityGreaterThanMax = 0;
 	}
 
 	public void put( final double value )
