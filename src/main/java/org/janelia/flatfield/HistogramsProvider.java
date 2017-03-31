@@ -183,7 +183,7 @@ public class HistogramsProvider implements Serializable
 	private < V extends TreeMap< Integer, Integer > > void loadHistograms()
 	{
 		final List< Integer > slices = new ArrayList<>();
-		for ( int slice = ( int ) workingInterval.min( 2 ) + 1; slice <= ( int ) workingInterval.max( 2 ) + 1; slice++ )
+		for ( int slice = ( workingInterval.numDimensions() > 2 ? ( int ) workingInterval.min( 2 ) + 1 : 1 ); slice <= ( workingInterval.numDimensions() > 2 ? ( int ) workingInterval.max( 2 ) + 1 : 1 ); slice++ )
 			slices.add( slice );
 
 		System.out.println( "Opening " + slices.size() + " slice histogram files" );
@@ -208,7 +208,7 @@ public class HistogramsProvider implements Serializable
 							dstRandomAccess.setPosition( srcCursor );
 							dstRandomAccess.set( new Tuple2<>(
 									IntervalIndexer.positionToIndex(
-											new long[] { srcCursor.getLongPosition( 0 ), srcCursor.getLongPosition( 1 ), slice - 1 - workingInterval.min( 2 ) },
+											new long[] { srcCursor.getLongPosition( 0 ), srcCursor.getLongPosition( 1 ), slice - 1 - ( workingInterval.numDimensions() > 2 ? workingInterval.min( 2 ) : 0 ) },
 											workingDimensions ),
 									srcCursor.get() ) );
 						}

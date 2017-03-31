@@ -35,6 +35,9 @@ import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.realtransform.AffineGet;
+import net.imglib2.realtransform.AffineSet;
+import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
@@ -43,7 +46,6 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.RandomAccessiblePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
@@ -55,6 +57,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	private static final long serialVersionUID = -8987192045944606043L;
 
 	private static final int SCALE_LEVEL_MIN_PIXELS = 100;
+	private static final int AVERAGE_SKIP_SLICES = 5;
 
 	private final String histogramsPath, solutionPath;
 
@@ -144,7 +147,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 
 		sparkContext = new JavaSparkContext( new SparkConf()
-				.setAppName( "IlluminationCorrection3D" )
+				.setAppName( "FlatfieldCorrection" )
 				//.set( "spark.driver.maxResultSize", "8g" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 				//.set( "spark.kryoserializer.buffer.max", "2047m" )
@@ -164,7 +167,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	public < T extends NativeType< T > & RealType< T >, V extends TreeMap< Short, Integer > >
+	public < A extends AffineGet & AffineSet, T extends NativeType< T > & RealType< T >, V extends TreeMap< Short, Integer > >
 	void run() throws FileNotFoundException
 	{
 		long elapsed = System.nanoTime();
@@ -202,14 +205,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		}
 
 		// Define the transform and calculate the image size on each scale level
-		final AffineTransform3D downsamplingTransform = new AffineTransform3D();
-		downsamplingTransform.set(
-				0.5, 0, 0, -0.5,
-				0, 0.5, 0, -0.5,
-				0, 0, 0.5, -0.5
-			);
-
-		final ShiftedDownsampling< AffineTransform3D > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, workingInterval, downsamplingTransform );
+		final A downsamplingTransform = createDownsamplingTransform( workingInterval.numDimensions() );
+		final ShiftedDownsampling< A > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, workingInterval, downsamplingTransform );
 		final FlatfieldCorrectionSolver solver = new FlatfieldCorrectionSolver( sparkContext );
 
 		final int iterations = 16;
@@ -234,7 +231,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 				regularizerModelType = iter == 0 && scale == startScale ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel;
 
-				try ( ShiftedDownsampling< AffineTransform3D >.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
+				try ( ShiftedDownsampling< A >.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
 				{
 					final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer;
 					if ( regularizerModelType == RegularizerModelType.AffineModel )
@@ -277,7 +274,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 			lastSolution = downsampledSolution;
 
-			if ( iter % 2 == 0 )
+			if ( iter % 2 == 0 && lastSolution.getB().numDimensions() > 2 )
 			{
 				final RandomAccessibleInterval< DoubleType > averageTranslationalComponent = averageSolutionComponent( lastSolution.getB() );
 				saveSolutionComponent( iter, 0, averageTranslationalComponent, "z_avg" );
@@ -285,8 +282,6 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				lastSolution = new ValuePair<>(
 						lastSolution.getA(),
 						Views.interval( Views.extendBorder( Views.stack( averageTranslationalComponent ) ), lastSolution.getA() ) );
-
-				//saveSolutionComponent( iter, 0, lastSolution.getB(), "z_avg_extended-test" );
 			}
 		}
 
@@ -295,6 +290,17 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		System.out.println( String.format( "Took %f mins", elapsed / 1e9 / 60 ) );
 	}
 
+
+	private < A extends AffineGet & AffineSet > A createDownsamplingTransform( final int numDimensions )
+	{
+		final A downsamplingTransform = ( A ) ( numDimensions == 2 ? new AffineTransform2D() : new AffineTransform3D() );
+		for ( int d = 0; d < numDimensions; ++d )
+		{
+			downsamplingTransform.set( 0.5, d, d );
+			downsamplingTransform.set( -0.5, d, numDimensions );
+		}
+		return downsamplingTransform;
+	}
 
 	private int findStartingScale( final ShiftedDownsampling< ? > shiftedDownsampling )
 	{
@@ -309,9 +315,9 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	{
 		final RandomAccessibleInterval< DoubleType > dst = ArrayImgs.doubles( new long[] { solutionComponent.dimension( 0 ), solutionComponent.dimension( 1 ) } );
 
-		final IntervalView< DoubleType > src = Views.interval( solutionComponent, new FinalInterval(
-				new long[] { dst.min( 0 ), dst.min( 1 ), solutionComponent.min( 2 ) + 3 },
-				new long[] { dst.max( 0 ), dst.max( 1 ), solutionComponent.max( 2 ) - 3 } ) );
+		final RandomAccessibleInterval< DoubleType > src = Views.interval( solutionComponent, new FinalInterval(
+				new long[] { dst.min( 0 ), dst.min( 1 ), solutionComponent.min( 2 ) + AVERAGE_SKIP_SLICES },
+				new long[] { dst.max( 0 ), dst.max( 1 ), solutionComponent.max( 2 ) - AVERAGE_SKIP_SLICES } ) );
 
 		for ( long slice = src.min( 2 ); slice <= src.max( 2 ); slice++ )
 		{

@@ -64,7 +64,11 @@ public class FlatfieldCorrectionArguments
 	public Interval cropMinMaxInterval( final long[] fullTileSize )
 	{
 		if ( cropMinMaxInterval == null )
-			return SerializableFinalInterval.createMinSize( 0,0,0, fullTileSize[0],fullTileSize[1],fullTileSize[2] );
+		{
+			final long[] minSize = new long[ fullTileSize.length * 2 ];
+			System.arraycopy( fullTileSize, 0, minSize, fullTileSize.length, fullTileSize.length );
+			return SerializableFinalInterval.createMinSize( minSize );
+		}
 
 		final String[] intervalStrSplit = cropMinMaxInterval.trim().split(",");
 		final long[] intervalMinMax = new long[ intervalStrSplit.length ];
