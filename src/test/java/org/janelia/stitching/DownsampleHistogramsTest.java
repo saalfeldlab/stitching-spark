@@ -64,7 +64,7 @@ public class DownsampleHistogramsTest
 		try ( ShiftedDownsampling< AffineTransform3D >.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
 		{
 			final long[] downsampledDimensions = new long[] { 3, 2, 2 };
-			Assert.assertArrayEquals( pixelsMapping.getDimensions(), downsampledDimensions );
+			Assert.assertArrayEquals( downsampledDimensions, pixelsMapping.getDimensions() );
 
 			final Map< Long, Histogram > downsampledHistograms = shiftedDownsampling.downsampleHistograms( rddHistograms, pixelsMapping ).collectAsMap();
 			Assert.assertEquals( 12, downsampledHistograms.size() );
