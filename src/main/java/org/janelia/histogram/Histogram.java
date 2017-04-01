@@ -72,6 +72,6 @@ public class Histogram implements Serializable
 
 	public double getBinValue( final int bin )
 	{
-		return minValue + bin * binWidth;
+		return minValue + ( bin + 0.5 ) * binWidth - 0.5;
 	}
 }
