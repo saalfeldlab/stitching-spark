@@ -8,7 +8,7 @@ public class Histogram implements Serializable
 
 	private final double[] histogram;
 	private final double minValue, maxValue, binWidth;
-	private double quantityLessThanMin, quantityGreaterThanMax, quantityTotal;
+	private double quantityTotal, quantityLessThanMin, quantityGreaterThanMax;
 
 	public Histogram( final double minValue, final double maxValue, final int bins )
 	{
@@ -19,30 +19,28 @@ public class Histogram implements Serializable
 		this.binWidth = ( maxValue - minValue ) / bins;
 	}
 
-	public double[] getHistogram() { return histogram; }
+	protected Histogram()
+	{
+		histogram = null;
+		minValue = maxValue = binWidth = 0;
+	}
+
 	public int getNumBins() { return histogram.length; }
 	public double getMinValue() { return minValue; }
 	public double getMaxValue() { return maxValue; }
 	public double getBinWidth() { return binWidth; }
+	public double getQuantityTotal() { return quantityTotal; }
 	public double getQuantityLessThanMin() { return quantityLessThanMin; }
 	public double getQuantityGreaterThanMax() { return quantityGreaterThanMax; }
-	public double getQuantityTotal() { return quantityTotal; }
 
 	public double get( final int bin )
 	{
 		return histogram[ bin ];
 	}
 
-	public void set( final int bin, final double quantity )
+	public double getBinValue( final int bin )
 	{
-		quantityTotal += quantity - histogram[ bin ];
-		histogram[ bin ] = quantity;
-
-		if ( bin <= 0 )
-			quantityLessThanMin = 0;
-
-		if ( bin >= histogram.length - 1 )
-			quantityGreaterThanMax = 0;
+		return minValue + ( bin + 0.5 ) * binWidth - 0.5;
 	}
 
 	public void put( final double value )
@@ -70,8 +68,23 @@ public class Histogram implements Serializable
 		quantityTotal += quantity;
 	}
 
-	public double getBinValue( final int bin )
+	public void add( final Histogram other )
 	{
-		return minValue + ( bin + 0.5 ) * binWidth - 0.5;
+		for ( int bin = 0; bin < getNumBins(); ++bin )
+			histogram[ bin ] += other.get( bin );
+
+		quantityTotal += other.getQuantityTotal();
+		quantityLessThanMin += other.getQuantityLessThanMin();
+		quantityGreaterThanMax += other.getQuantityGreaterThanMax();
+	}
+
+	public void average( final long numHistograms )
+	{
+		for ( int bin = 0; bin < getNumBins(); ++bin )
+			histogram[ bin ] /= numHistograms;
+
+		quantityTotal /= numHistograms;
+		quantityLessThanMin /= numHistograms;
+		quantityGreaterThanMax /= numHistograms;
 	}
 }

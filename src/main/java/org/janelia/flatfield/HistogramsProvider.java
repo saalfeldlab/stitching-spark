@@ -334,17 +334,15 @@ public class HistogramsProvider implements Serializable
 			.join( rddHistograms )
 			.map( item -> item._2()._2() )
 			.treeReduce(
-				( ret, histogram ) ->
+				( ret, other ) ->
 				{
-					for ( int i = 0; i < histogram.getNumBins(); ++i )
-						ret.set( i, ret.get( i ) + histogram.get( i ) );
+					ret.add( other );
 					return ret;
 				},
 				Integer.MAX_VALUE // max possible aggregation depth
 			);
 
-		for ( int i = 0; i < accumulatedHistograms.getNumBins(); ++i )
-			accumulatedHistograms.set( i, accumulatedHistograms.get( i ) / numMedianPoints );
+		accumulatedHistograms.average( numMedianPoints );
 
 		return accumulatedHistograms;
 	}

@@ -118,7 +118,7 @@ public class DownsampleHistogramsTest
 	{
 		final Histogram histogram = new Histogram( histMinValue, histMaxValue, binElements.length );
 		for ( int i = 0; i < binElements.length; ++i )
-			histogram.set( i, binElements[ i ] );
+			histogram.put( histogram.getBinValue( i ), binElements[ i ] );
 		return histogram;
 	}
 

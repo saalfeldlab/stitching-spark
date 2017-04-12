@@ -26,23 +26,30 @@ public class HistogramsTest
 	}
 
 	@Test
-	public void testPutSet()
+	public void testPutAddAverage()
 	{
-		final Histogram histogram = new Histogram( 10, 20, 5 );
-		histogram.put( 15.5, 5 );
-		histogram.put( 8.1, 2.5 );
-		histogram.put( 25.7, 0.2 );
-		histogram.put( 11.2 );
-		Assert.assertEquals( 8.7, histogram.getQuantityTotal(), EPSILON );
-		Assert.assertEquals( 2.5, histogram.getQuantityLessThanMin(), EPSILON );
-		Assert.assertEquals( 0.2, histogram.getQuantityGreaterThanMax(), EPSILON );
+		final Histogram hist1 = new Histogram( 10, 20, 5 );
+		hist1.put( 6, 2 );
+		hist1.put( 15, 1.75 );
+		hist1.put( 17, 1 );
+		hist1.put( 22, 1.5 );
 
-		histogram.set( 2, 2.5 );
-		histogram.set( 4, 0.1 );
-		histogram.set( 3, 0.25 );
-		Assert.assertEquals( 6.35, histogram.getQuantityTotal(), EPSILON );
-		Assert.assertEquals( 2.5, histogram.getQuantityLessThanMin(), EPSILON );
-		Assert.assertEquals( 0, histogram.getQuantityGreaterThanMax(), EPSILON );
+		final Histogram hist2 = new Histogram( 10, 20, 5 );
+		hist2.put( 8, 0.5 );
+		hist2.put( 12, 0.4 );
+		hist2.put( 14.5, 0.25 );
+		hist2.put( 18, 2.5 );
+		hist2.put( 30, 2.6 );
+
+		Assert.assertEquals( 6.25, hist1.getQuantityTotal(), EPSILON );
+		Assert.assertEquals( 6.25, hist2.getQuantityTotal(), EPSILON );
+
+		hist1.add( hist2 );
+		hist1.average( 2 );
+		Assert.assertEquals( 6.25, hist1.getQuantityTotal(), EPSILON );
+		Assert.assertEquals( 1.25, hist1.getQuantityLessThanMin(), EPSILON );
+		Assert.assertEquals( 2.05, hist1.getQuantityGreaterThanMax(), EPSILON );
+		Assert.assertArrayEquals( new double[] { 1.25, 0.2, 1, 0.5, 3.3 }, getHistogramArray( hist1 ), EPSILON );
 	}
 
 	@Test

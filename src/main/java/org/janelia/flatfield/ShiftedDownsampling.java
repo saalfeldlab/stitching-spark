@@ -125,8 +125,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 				.reduceByKey(
 						( ret, other ) ->
 						{
-							for ( int i = 0; i < ret.getNumBins(); i++ )
-								ret.set( i, ret.get( i ) + other.get( i ) );
+							ret.add( other );
 							return ret;
 						} )
 				.mapToPair(
@@ -134,8 +133,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 						{
 							final int cnt = broadcastedDownsampledPixelToFullPixelsCount.value()[ tuple._1().intValue() ];
 							final Histogram accumulatedHistogram = tuple._2();
-							for ( int i = 0; i < accumulatedHistogram.getNumBins(); ++i )
-								accumulatedHistogram.set( i, accumulatedHistogram.get( i ) / cnt );
+							accumulatedHistogram.average( cnt );
 							return new Tuple2<>( tuple._1(), accumulatedHistogram );
 						} );
 	}
