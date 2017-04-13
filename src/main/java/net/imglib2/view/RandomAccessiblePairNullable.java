@@ -46,7 +46,7 @@ import net.imglib2.util.Pair;
  * @author Stephan Saalfeld
  * @author Tobias Pietzsch
  */
-public class RandomAccessiblePairNullable< A, B > implements RandomAccessible< Pair< A, B > >
+public class RandomAccessiblePairNullable< A, B > implements RandomAccessible< Pair< A, B > >, Pair< RandomAccessible< A >, RandomAccessible< B > >
 {
 	final protected RandomAccessible< A > sourceA;
 	final protected RandomAccessible< B > sourceB;
@@ -260,5 +260,17 @@ public class RandomAccessiblePairNullable< A, B > implements RandomAccessible< P
 	public RandomAccess randomAccess( final Interval interval )
 	{
 		return new RandomAccess();
+	}
+
+	@Override
+	public RandomAccessible< A > getA()
+	{
+		return sourceA;
+	}
+
+	@Override
+	public RandomAccessible< B > getB()
+	{
+		return sourceB;
 	}
 }

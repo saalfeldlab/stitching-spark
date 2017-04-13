@@ -40,7 +40,7 @@ import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
-import net.imglib2.view.RandomAccessiblePair;
+import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
 /**
@@ -181,7 +181,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 
 		System.out.println( "Broadcasting flatfield correction images" );
-		final List< RandomAccessiblePair< U, U > > flatfieldCorrectionForChannels = new ArrayList<>();
+		final List< RandomAccessiblePairNullable< U, U > > flatfieldCorrectionForChannels = new ArrayList<>();
 		for ( final String channelTileConfiguration : job.getArgs().inputTileConfigurations() )
 			flatfieldCorrectionForChannels.add(
 					FlatfieldCorrection.loadCorrectionImages(
@@ -189,7 +189,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							Paths.get( channelTileConfiguration ).getParent().toString() + "/z.tif"
 						)
 				);
-		final Broadcast< List< RandomAccessiblePair< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
+		final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
 
 		System.out.println( "Processing " + overlappingTiles.size() + " pairs..." );
 
@@ -279,7 +279,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							final RandomAccessibleInterval< T > imgCrop = Views.interval( img, overlaps[ j ] );
 
 							final ImagePlusImg< FloatType, ? > imgCorrected;
-							final RandomAccessiblePair< U, U > flatfieldCorrection = broadcastedFlatfieldCorrectionForChannels.value().get( channel );
+							final RandomAccessiblePairNullable< U, U > flatfieldCorrection = broadcastedFlatfieldCorrectionForChannels.value().get( channel );
 							if ( flatfieldCorrection != null )
 							{
 								System.out.println( "  Correcting ch" + channel );

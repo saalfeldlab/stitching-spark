@@ -19,11 +19,10 @@ import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.img.imageplus.ImagePlusImg;
-import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
-import net.imglib2.view.RandomAccessiblePair;
+import net.imglib2.view.RandomAccessiblePairNullable;
 
 /**
  * Fuses a set of tiles within a set of small square cells using linear blending.
@@ -66,7 +65,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 		final List< CellFileImageMetaData > exports = new ArrayList<>();
 
 		System.out.println( "Broadcasting flatfield correction images" );
-		final List< RandomAccessiblePair< U, U > > flatfieldCorrectionForChannels = new ArrayList<>();
+		final List< RandomAccessiblePairNullable< U, U > > flatfieldCorrectionForChannels = new ArrayList<>();
 		for ( final String channelTileConfiguration : job.getArgs().inputTileConfigurations() )
 			flatfieldCorrectionForChannels.add(
 					FlatfieldCorrection.loadCorrectionImages(
@@ -74,7 +73,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 							Paths.get( channelTileConfiguration ).getParent().toString() + "/z.tif"
 						)
 				);
-		final Broadcast< List< RandomAccessiblePair< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
+		final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
 
 		for ( int ch = 0; ch < job.getChannels(); ch++ )
 		{
@@ -295,7 +294,6 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 								outImg = ( ImagePlusImg ) FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
 										tilesWithinCell,
 										cellBox,
-										new NLinearInterpolatorFactory(),
 										broadcastedFlatfieldCorrectionForChannels.value().get( channel ) );
 							}
 							else

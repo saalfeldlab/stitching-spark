@@ -84,7 +84,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePair< U, U > loadCorrectionImages( final String vPath, final String zPath )
+	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePairNullable< U, U > loadCorrectionImages( final String vPath, final String zPath )
 	{
 		final ImagePlus vImp = ImageImporter.openImage( vPath );
 		final ImagePlus zImp = ImageImporter.openImage( zPath );
@@ -97,7 +97,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final ImagePlusImg< U, ? > vImg = ImagePlusImgs.from( vImp );
 		final ImagePlusImg< U, ? > zImg = ImagePlusImgs.from( zImp );
 
-		return new RandomAccessiblePair< >(
+		return new RandomAccessiblePairNullable<>(
 				vImg,
 				zImg.numDimensions() < vImg.numDimensions() ? Views.extendBorder( Views.stack( zImg ) ) : zImg );
 	}
@@ -105,12 +105,12 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	public static <
 		T extends NativeType< T > & RealType< T >,
 		U extends NativeType< U > & RealType< U > >
-	ImagePlusImg< FloatType, ? > applyCorrection( final RandomAccessibleInterval< T > src, final RandomAccessiblePair< U, U > correction )
+	ImagePlusImg< FloatType, ? > applyCorrection( final RandomAccessibleInterval< T > src, final RandomAccessiblePairNullable< U, U > correction )
 	{
 		final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( src ) );
 		final Cursor< T > srcCursor = Views.flatIterable( src ).localizingCursor();
 		final Cursor< FloatType > dstCursor = Views.flatIterable( Views.translate( dst, Intervals.minAsLongArray( src ) ) ).cursor();
-		final RandomAccessiblePair< U, U >.RandomAccess correctionRandomAccess = correction.randomAccess();
+		final RandomAccessiblePairNullable< U, U >.RandomAccess correctionRandomAccess = correction.randomAccess();
 		while ( srcCursor.hasNext() || dstCursor.hasNext() )
 		{
 			srcCursor.fwd();
