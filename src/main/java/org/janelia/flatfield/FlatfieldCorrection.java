@@ -12,6 +12,7 @@ import java.util.TreeMap;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldSolution;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.ModelType;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
 import org.janelia.histogram.Histogram;
@@ -209,9 +210,10 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final ShiftedDownsampling< A > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, workingInterval, downsamplingTransform );
 		final FlatfieldCorrectionSolver solver = new FlatfieldCorrectionSolver( sparkContext );
 
-		final int iterations = 16;
+		final int iterations = 1;
 		final int startScale = findStartingScale( shiftedDownsampling ), endScale = 0;
 		Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > lastSolution = null;
+		RandomAccessibleInterval< DoubleType > offsets = null;
 		for ( int iter = 0; iter < iterations; iter++ )
 		{
 			Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > downsampledSolution = null;
@@ -224,11 +226,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				final ModelType modelType;
 				final RegularizerModelType regularizerModelType;
 
-				if ( iter == 0 )
-					modelType = scale >= Math.round( ( double ) ( startScale + endScale ) / 2 ) ? ModelType.FixedTranslationAffineModel : ModelType.FixedScalingAffineModel;
-				else
-					modelType = iter % 2 == 1 ? ModelType.FixedTranslationAffineModel : ModelType.FixedScalingAffineModel;
-
+				modelType = scale >= Math.round( ( double ) ( startScale + endScale ) / 2 ) ? ModelType.AffineModel : ModelType.FixedScalingAffineModel;
 				regularizerModelType = iter == 0 && scale == startScale ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel;
 
 				try ( ShiftedDownsampling< A >.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
@@ -259,16 +257,39 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 							rddFullHistograms,
 							pixelsMapping );
 
-					solution = solver.leastSquaresInterpolationFit(
+					final FlatfieldSolution solutionAndOffsets = solver.leastSquaresInterpolationFit(
 							rddDownsampledHistograms,
 							referenceHistogram,
 							pixelsMapping,
 							regularizer,
 							modelType,
 							regularizerModelType );
+
+					solution = solutionAndOffsets.correctionFields;
+					offsets = solutionAndOffsets.pivotValues;
 				}
 
-				downsampledSolution = solution;
+				// keep older scale of the fixed-component solution to avoid unnecessary chain of upscaling operations which reduces contrast
+				if ( scale != endScale )
+				{
+					switch ( modelType )
+					{
+					case FixedScalingAffineModel:
+						downsampledSolution = new ValuePair<>( downsampledSolution.getA(), solution.getB() );
+						break;
+					case FixedTranslationAffineModel:
+						downsampledSolution = new ValuePair<>( solution.getA(), downsampledSolution.getB() );
+						break;
+					default:
+						downsampledSolution = solution;
+						break;
+					}
+				}
+				else
+				{
+					downsampledSolution = solution;
+				}
+
 				saveSolution( iter, scale, solution );
 			}
 
@@ -285,12 +306,20 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 			}
 		}
 
+		// account for the pivot point in the final solution
+		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > unpivotedSolution = FlatfieldCorrectionSolver.unpivotSolution(
+				new FlatfieldSolution( lastSolution, offsets ) );
+
+		saveSolutionComponent( iterations - 1, 0, unpivotedSolution.getA(), "v_offset" );
+		saveSolutionComponent( iterations - 1, 0, unpivotedSolution.getB(), "z_offset" );
+
 		elapsed = System.nanoTime() - elapsed;
 		System.out.println( "----------" );
 		System.out.println( String.format( "Took %f mins", elapsed / 1e9 / 60 ) );
 	}
 
 
+	@SuppressWarnings("unchecked")
 	private < A extends AffineGet & AffineSet > A createDownsamplingTransform( final int numDimensions )
 	{
 		final A downsamplingTransform = ( A ) ( numDimensions == 2 ? new AffineTransform2D() : new AffineTransform3D() );
