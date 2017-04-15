@@ -16,6 +16,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.flatfield.FlatfieldCorrection;
+import org.janelia.stitching.analysis.CheckConnectedGraphs;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.stitching.analysis.ThresholdEstimation;
 import org.janelia.util.Conversions;
@@ -69,8 +70,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 //			for ( int d = 0; d < tile.numDimensions(); d++ )
 //				tile.setPosition( d, tile.getPosition( d ) / voxelDimensions.dimension( d ) );
 
-		System.out.println( "Tiles count = " + job.getTilesCount() + " (" + ( job.getDimensionality() == 2 ?"2D" : "3D") + ")");
-		final ArrayList< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles( 0 ) );
+		final List< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles( 0 ) );
 		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
 
 		// Remove pairs with small overlap area if only adjacent pairs are requested
@@ -82,10 +82,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			System.out.println( "Retaining only " + overlappingTiles.size() + " adjacent pairs of them" );
 		}
 
-		// TODO: fails with StackOverflowError on the cluster. Pass -Xss to the JVM
-//		final List< Integer > connectedComponentsSize = CheckConnectedGraphs.connectedComponentsSize( overlappingTiles );
-//		if ( connectedComponentsSize.size() > 1 )
-//			throw new PipelineExecutionException( "Overlapping pairs form more than one connected component: " + connectedComponentsSize );
+		// NOTE: may fail with StackOverflowError. Pass -Xss to the JVM
+		final List< Integer > connectedComponentsSize = CheckConnectedGraphs.connectedComponentsSize( overlappingTiles );
+		if ( connectedComponentsSize.size() > 1 )
+			throw new PipelineExecutionException( "Overlapping pairs form more than one connected component: " + connectedComponentsSize );
 
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = preparePairwiseShifts( overlappingTiles );
 
@@ -100,7 +100,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	/**
 	 * Tries to load precalculated pairwise shifts from disk to save computational time.
 	 */
-	private List< SerializablePairWiseStitchingResult > preparePairwiseShifts( final ArrayList< TilePair > overlappingTiles )
+	private List< SerializablePairWiseStitchingResult > preparePairwiseShifts( final List< TilePair > overlappingTiles )
 	{
 		// Try to load precalculated shifts for some pairs of tiles
 		final String pairwiseResultsFile = Utils.addFilenameSuffix( Utils.removeFilenameSuffix( job.getArgs().inputTileConfigurations().get( 0 ), "_full" ), "_pairwise" );
@@ -167,7 +167,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 * Computes the best possible pairwise shifts between every pair of tiles on a Spark cluster.
 	 * It uses phase correlation for measuring similarity between two images.
 	 */
-	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< SerializablePairWiseStitchingResult[] > computePairwiseShifts( final ArrayList< TilePair > overlappingTiles )
+	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< SerializablePairWiseStitchingResult[] > computePairwiseShifts( final List< TilePair > overlappingTiles )
 	{
 		/*if ( !job.getArgs().noRoi() )
 			System.out.println( "*** Use ROIs as usual ***" );
@@ -190,6 +190,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 						)
 				);
 		final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
+
+		// extract padding from arguments which should be applied to the overlap area
+		final long[] overlapPadding = job.getArgs().padding();
 
 		System.out.println( "Processing " + overlappingTiles.size() + " pairs..." );
 
@@ -215,11 +218,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 					//overlaps[ j ] = TileOperations.getOverlappingRegion( pair[ j ], pair[ ( j + 1 ) % pair.length ] );
 
-					// TODO: Add flexibility. Currently hardcoded padding for Z
 					overlaps[ j ] = TileOperations.padInterval(
 							TileOperations.getOverlappingRegion( pair[ j ], pair[ ( j + 1 ) % pair.length ] ),
 							new FinalDimensions( pair[ j ].getSize() ),
-							new long[] { 0, 0, 200 }
+							overlapPadding
 						);
 
 					// Check if overlap area exists as a separate file
@@ -738,11 +740,42 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			System.out.println( "Channel #"+channel+" tiles: " + tilesMap.size() );
 //			System.out.println( "Channel #1 tiles: " + anotherChannelTiles.size() );
 
+
+			// save final tiles configuration
 			try
 			{
 				final TileInfo[] tilesToSave = tilesMap.values().toArray( new TileInfo[ 0 ] );
 				TileOperations.translateTilesToOriginReal( tilesToSave );
 				TileInfoJSONProvider.saveTilesConfiguration( tilesToSave, Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "-final" ) );
+
+				/*if ( !anotherChannelTiles.isEmpty() )
+				{
+					final TileInfo[] anotherChannelTilesToSave = anotherChannelTiles.values().toArray( new TileInfo[ 0 ] );
+					TileOperations.translateTilesToOriginReal( anotherChannelTilesToSave );
+					TileInfoJSONProvider.saveTilesConfiguration( anotherChannelTilesToSave, job.getBaseFolder() + "/ch1-final.json" );
+				}*/
+			}
+			catch ( final IOException e )
+			{
+				e.printStackTrace();
+			}
+
+
+			// save final pairwise shifts configuration (pairs that have been used on the final step of the optimization routine)
+			try
+			{
+				final List< SerializablePairWiseStitchingResult > finalPairwiseShifts = new ArrayList<>();
+				for ( final ComparePair finalPair : comparePairs )
+				{
+					final TilePair tilePair = new TilePair( tilesMap.get( finalPair.getTile1().getImpId() ), tilesMap.get( finalPair.getTile2().getImpId() ) );
+					if ( tilePair.getA() != null && tilePair.getB() != null )
+					{
+						final SerializablePairWiseStitchingResult finalShift = new SerializablePairWiseStitchingResult( tilePair, finalPair.getRelativeShift(), finalPair.getCrossCorrelation() );
+						finalShift.setIsValidOverlap( finalPair.getIsValidOverlap() );
+						finalPairwiseShifts.add( finalShift );
+					}
+				}
+				TileInfoJSONProvider.savePairwiseShifts( finalPairwiseShifts, Utils.addFilenameSuffix( Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "-final" ), "_pairwise"	) );
 
 				/*if ( !anotherChannelTiles.isEmpty() )
 				{

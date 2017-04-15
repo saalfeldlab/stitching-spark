@@ -8,10 +8,15 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 
 	private TilePair tilePair;
 	private float[] offset;
-	private float crossCorrelation, phaseCorrelation;
+	private float crossCorrelation;
+	private Float phaseCorrelation;
 	private boolean isValidOverlap = true;
 
-	public SerializablePairWiseStitchingResult( final TilePair tilePair, final float[] offset, final float crossCorrelation, final float phaseCorrelation ) {
+	public SerializablePairWiseStitchingResult( final TilePair tilePair, final float[] offset, final float crossCorrelation ) {
+		this( tilePair, offset, crossCorrelation, null );
+	}
+
+	public SerializablePairWiseStitchingResult( final TilePair tilePair, final float[] offset, final float crossCorrelation, final Float phaseCorrelation ) {
 		this.tilePair = tilePair;
 		this.offset = offset;
 		this.crossCorrelation = crossCorrelation;
@@ -34,7 +39,7 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 	public float[] getOffset() { return offset; }
 	public float getOffset( final int dim ) { return offset[ dim ]; }
 	public float getCrossCorrelation() { return crossCorrelation; }
-	public float getPhaseCorrelation() { return phaseCorrelation; }
+	public Float getPhaseCorrelation() { return phaseCorrelation; }
 
 	public boolean getIsValidOverlap() { return isValidOverlap; }
 	public void setIsValidOverlap( final boolean isValidOverlap ) { this.isValidOverlap = isValidOverlap; }

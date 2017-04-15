@@ -6,7 +6,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -63,24 +67,60 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
 
 		final List< CellFileImageMetaData > exports = new ArrayList<>();
-
-		System.out.println( "Broadcasting flatfield correction images" );
-		final List< RandomAccessiblePairNullable< U, U > > flatfieldCorrectionForChannels = new ArrayList<>();
-		for ( final String channelTileConfiguration : job.getArgs().inputTileConfigurations() )
-			flatfieldCorrectionForChannels.add(
-					FlatfieldCorrection.loadCorrectionImages(
-							Paths.get( channelTileConfiguration ).getParent().toString() + "/v.tif",
-							Paths.get( channelTileConfiguration ).getParent().toString() + "/z.tif"
-						)
-				);
-		final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
+		final String overlapsPathSuffix = job.getArgs().exportOverlaps() ? "-overlaps" : "";
 
 		for ( int ch = 0; ch < job.getChannels(); ch++ )
 		{
 			final int channel = ch;
 
+			// special mode which allows to export only overlaps of tile pairs that have been used for final stitching
+			final Map< Integer, Set< Integer > > pairwiseConnectionsMap;
+			if ( job.getArgs().exportOverlaps() )
+			{
+				pairwiseConnectionsMap = new HashMap<>();
+				try
+				{
+					final List< SerializablePairWiseStitchingResult > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShifts( Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "_pairwise" ) );
+					for ( final SerializablePairWiseStitchingResult pairwiseShift : pairwiseShifts )
+					{
+						if ( pairwiseShift.getIsValidOverlap() )
+						{
+							final TileInfo[] pairArr = pairwiseShift.getTilePair().toArray();
+							for ( int i = 0; i < 2; ++i )
+							{
+								if ( !pairwiseConnectionsMap.containsKey( pairArr[ i ].getIndex() ) )
+									pairwiseConnectionsMap.put( pairArr[ i ].getIndex(), new HashSet<>() );
+								pairwiseConnectionsMap.get( pairArr[ i ].getIndex() ).add( pairArr[ ( i + 1 ) % 2 ].getIndex() );
+							}
+						}
+					}
+				}
+				catch ( final IOException e )
+				{
+					throw new PipelineExecutionException( "--overlaps mode is requested but the pairwise shifts file is not available", e );
+				}
+			}
+			else
+			{
+				 pairwiseConnectionsMap = null;
+			}
+			if ( pairwiseConnectionsMap != null )
+				System.out.println( "[Export overlaps mode] Broadcasting pairwise connections map" );
+			final Broadcast< Map< Integer, Set< Integer > > > broadcastedPairwiseConnectionsMap = sparkContext.broadcast( pairwiseConnectionsMap );
+
+			// prepare flatfield correction images
+			final String flatfieldCorrectionBasePath = Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getParent().toString();
+			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
+					flatfieldCorrectionBasePath + "/v.tif",
+					flatfieldCorrectionBasePath + "/z.tif"
+				);
+			if ( flatfieldCorrection != null )
+				System.out.println( "[Flatfield correction] Broadcasting flatfield correction images" );
+			final Broadcast< RandomAccessiblePairNullable< U, U > > broadcastedFlatfieldCorrection = sparkContext.broadcast( flatfieldCorrection );
+
 			System.out.println( "Processing channel #" + channel );
-			final String baseOutputFolder = job.getBaseFolder() + "/channel" + channel + "/fused";
+			final String baseOutputFolder = job.getBaseFolder() + "/channel" + channel + overlapsPathSuffix;
+			final String exportFolder = baseOutputFolder + "/fused";
 
 			int level = 0;
 			String lastLevelTmpPath = null;
@@ -109,9 +149,9 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 				System.out.println( "cell size set to " + Arrays.toString(cellSize) +",  upscaled target cell size: " + Arrays.toString(upscaledCellSize) );
 
 				final int currLevel = level;
-				final String levelFolder = baseOutputFolder + "/" + level;
+				final String levelFolder = exportFolder + "/" + level;
 
-				final String levelConfigurationOutputPath = job.getBaseFolder() + "/channel" + channel + "/" + Utils.addFilenameSuffix( Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getFileName().toString(), "-scale" + level );
+				final String levelConfigurationOutputPath = baseOutputFolder + "/" + Utils.addFilenameSuffix( Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getFileName().toString(), "-scale" + level );
 
 				if ( Files.exists( Paths.get( levelConfigurationOutputPath ) ) )
 				{	// load current scale level if exists
@@ -195,7 +235,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 										if ( cell.getSize( d ) / tmpDownsampleFactors[ d ] <= 0 )
 											return null;
 
-									System.out.println( "There are " + tilesWithinCell.size() + " tiles within the cell #"+cell.getIndex() );
+									//System.out.println( "There are " + tilesWithinCell.size() + " tiles within the cell #"+cell.getIndex() );
 
 									final Boundaries cellBox = cell.getBoundaries();
 									final long[] downscaledCellPos = new long[ cellBox.numDimensions() ];
@@ -267,7 +307,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 								if ( cell.getSize( d ) / downsampleFactors[ d ] <= 0 )
 									return null;
 
-							System.out.println( "There are " + tilesWithinCell.size() + " tiles within the cell #"+cell.getIndex() );
+							//System.out.println( "There are " + tilesWithinCell.size() + " tiles within the cell #"+cell.getIndex() );
 
 							final Boundaries cellBox = cell.getBoundaries();
 							final long[] downscaledCellPos = new long[ cellBox.numDimensions() ];
@@ -294,7 +334,8 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 								outImg = ( ImagePlusImg ) FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
 										tilesWithinCell,
 										cellBox,
-										broadcastedFlatfieldCorrectionForChannels.value().get( channel ) );
+										broadcastedFlatfieldCorrection.value(),
+										broadcastedPairwiseConnectionsMap.value() );
 							}
 							else
 							{
@@ -367,7 +408,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 			}
 
 			final CellFileImageMetaData export = new CellFileImageMetaData(
-					baseOutputFolder + "/%1$d/%4$d/%3$d/%2$d.tif",
+					exportFolder + "/%1$d/%4$d/%3$d/%2$d.tif",
 					//Utils.getImageType( Arrays.asList( job.getTiles() ) ).toString(),
 					// TODO: can't derive from the tiles anymore since we convert the image to FloatType with illumination correction
 					ImageType.GRAY32.toString(),
@@ -378,7 +419,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 					voxelDimensions );
 			try
 			{
-				TileInfoJSONProvider.saveMultiscaledExportMetadata( export, Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "-export-channel" + channel ) );
+				TileInfoJSONProvider.saveMultiscaledExportMetadata( export, Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "-export-channel" + channel + overlapsPathSuffix ) );
 			}
 			catch ( final IOException e )
 			{
@@ -386,12 +427,15 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 			}
 
 			exports.add( export );
+
+			broadcastedPairwiseConnectionsMap.destroy();
+			broadcastedFlatfieldCorrection.destroy();
 		}
 
 		System.out.println( "All channels have been exported" );
 		try
 		{
-			TileInfoJSONProvider.saveMultiscaledExportMetadataList( exports, Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString() +  "/export.json" );
+			TileInfoJSONProvider.saveMultiscaledExportMetadataList( exports, Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString() +  "/export" + overlapsPathSuffix +".json" );
 		}
 		catch ( final IOException e )
 		{

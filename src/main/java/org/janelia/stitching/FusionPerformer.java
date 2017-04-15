@@ -1,7 +1,11 @@
 package org.janelia.stitching;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 
@@ -18,12 +22,11 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealFloatConverter;
-import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgFactory;
 import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.img.list.ListImg;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.AbstractTranslation;
 import net.imglib2.realtransform.RealViews;
@@ -42,14 +45,23 @@ import net.imglib2.view.Views;
 
 public class FusionPerformer
 {
+	public static < T extends RealType< T > & NativeType< T > >
+	ImagePlusImg< FloatType, ? > fuseTilesWithinCellUsingMaxMinDistance(
+			final List< TileInfo > tilesWithinCell,
+			final Interval targetInterval ) throws Exception
+	{
+		return fuseTilesWithinCellUsingMaxMinDistance( tilesWithinCell, targetInterval, null, null );
+	}
+
 	public static <
 		T extends RealType< T > & NativeType< T >,
 		U extends RealType< U > & NativeType< U > >
 	ImagePlusImg< FloatType, ? > fuseTilesWithinCellUsingMaxMinDistance(
 			final List< TileInfo > tilesWithinCell,
-			final Interval targetInterval ) throws Exception
+			final Interval targetInterval,
+			final RandomAccessiblePairNullable< U, U > flatfield ) throws Exception
 	{
-		return fuseTilesWithinCellUsingMaxMinDistance( tilesWithinCell, targetInterval, null );
+		return fuseTilesWithinCellUsingMaxMinDistance( tilesWithinCell, targetInterval, flatfield, null );
 	}
 
 	/**
@@ -70,15 +82,33 @@ public class FusionPerformer
 	ImagePlusImg< FloatType, ? > fuseTilesWithinCellUsingMaxMinDistance(
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
-			final RandomAccessiblePairNullable< U, U > flatfield ) throws Exception
+			final RandomAccessiblePairNullable< U, U > flatfield,
+			final Map< Integer, Set< Integer > > pairwiseConnectionsMap ) throws Exception
 	{
 		final ImageType imageType = Utils.getImageType( tilesWithinCell );
 		if ( imageType == null )
 			throw new Exception( "Can't fuse images of different or unknown types" );
 
+		// initialize output image
 		final ImagePlusImg< FloatType, ? > out = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
-		final ArrayImg< DoubleType, DoubleArray > maxMinDistances = ArrayImgs.doubles(
+
+		// initialize helper image for hard-cut fusion strategy
+		final RandomAccessibleInterval< DoubleType > maxMinDistances = ArrayImgs.doubles(
 				Intervals.dimensionsAsLongArray( targetInterval ) );
+
+		// initialize helper image for tile connections when exporting only overlaps
+		final RandomAccessibleInterval< Set< Integer > > tileIndexes;
+		if ( pairwiseConnectionsMap != null )
+		{
+			final List< Set< Integer > > tileIndexesList = new ArrayList<>( ( int ) out.size() );
+			for ( int i = 0; i < out.size(); ++i )
+				tileIndexesList.add( new HashSet<>() );
+			tileIndexes = new ListImg<>( tileIndexesList, Intervals.dimensionsAsLongArray( targetInterval ) );
+		}
+		else
+		{
+			tileIndexes = null;
+		}
 
 		for ( final TileInfo tile : tilesWithinCell )
 		{
@@ -138,12 +168,14 @@ public class FusionPerformer
 			}
 			final RandomAccessibleInterval< FloatType > outInterval = Views.interval( out, intersectionIntervalInTargetInterval ) ;
 			final RandomAccessibleInterval< DoubleType > maxMinDistanceInterval = Views.interval( maxMinDistances, intersectionIntervalInTargetInterval ) ;
+			final RandomAccessibleInterval< Set< Integer > > tileIndexesInterval = tileIndexes != null ? Views.interval( tileIndexes, intersectionIntervalInTargetInterval ) : null;
 
 			final Cursor< FloatType > sourceCursor = Views.flatIterable( sourceInterval ).localizingCursor();
 			final Cursor< FloatType > outCursor = Views.flatIterable( outInterval ).cursor();
 			final Cursor< DoubleType > maxMinDistanceCursor = Views.flatIterable( maxMinDistanceInterval ).cursor();
+			final Cursor< Set< Integer > > tileIndexesCursor = tileIndexesInterval != null ? Views.flatIterable( tileIndexesInterval ).cursor() : null;
 
-			while ( sourceCursor.hasNext() || outCursor.hasNext() || maxMinDistanceCursor.hasNext() )
+			while ( sourceCursor.hasNext() || outCursor.hasNext() || maxMinDistanceCursor.hasNext() || ( tileIndexesCursor != null && tileIndexesCursor.hasNext() ) )
 			{
 				sourceCursor.fwd();
 				outCursor.fwd();
@@ -162,6 +194,42 @@ public class FusionPerformer
 					maxMinDistance.set( minDistance );
 					outCursor.get().set( sourceCursor.get() );
 				}
+
+				if ( tileIndexesCursor != null )
+					tileIndexesCursor.next().add( tile.getIndex() );
+			}
+		}
+
+		// retain only requested content within overlaps that corresponds to pairwise connections map
+		if ( tileIndexes != null )
+		{
+			final Cursor< FloatType > outCursor = Views.flatIterable( out ).cursor();
+			final Cursor< Set< Integer > > tileIndexesCursor = Views.flatIterable( tileIndexes ).cursor();
+			while ( outCursor.hasNext() || tileIndexesCursor.hasNext() )
+			{
+				final Set< Integer > tilesAtPoint = tileIndexesCursor.next();
+				boolean retainPixel = false;
+				for ( final Integer testTileIndex : tilesAtPoint )
+				{
+					final Set< Integer > connectedTileIndexes = pairwiseConnectionsMap.get( testTileIndex );
+					if ( connectedTileIndexes != null )
+					{
+						for ( final Integer connectedTileIndex : tilesAtPoint )
+						{
+							if ( connectedTileIndexes.contains( connectedTileIndex ) )
+							{
+								retainPixel = true;
+								break;
+							}
+						}
+					}
+					if ( retainPixel )
+						break;
+				}
+
+				outCursor.fwd();
+				if ( !retainPixel )
+					outCursor.get().setZero();
 			}
 		}
 

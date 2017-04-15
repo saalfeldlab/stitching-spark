@@ -49,6 +49,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Compute pairwise shifts only between adjacent pairs of tiles")
 	private boolean adjacent = true;
 
+	@Option(name = "--overlaps", required = false,
+			usage = "Export overlaps channel based on which connections between tiles have been used for final stitching")
+	private boolean exportOverlaps = false;
+
 	/**
 	 * Toggle pipeline stages. By default all stages are executed.
 	 */
@@ -106,6 +110,7 @@ public class StitchingArguments implements Serializable {
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurSigma() { return blurSigma; }
 	public boolean adjacent() { return adjacent; }
+	public boolean exportOverlaps() { return exportOverlaps; }
 
 	public boolean stitchOnly() { return stitchOnly; }
 	public boolean fuseOnly() { return fuseOnly; }
