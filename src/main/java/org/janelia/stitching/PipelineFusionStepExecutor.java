@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -126,6 +127,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 			String lastLevelTmpPath = null;
 			TileInfo[] lastLevelCells = job.getTiles( channel );
 
+			final Map< String, String > tmpExportsToRemove = new HashMap<>();
 			final TreeMap< Integer, int[] > levelToDownsampleFactors = new TreeMap<>(), levelToCellSize = new TreeMap<>();
 			long minDimension = 0, maxDimension = 0;
 			do
@@ -187,6 +189,8 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 					{	// otherwise load last precomputed tmp level
 						currLevelTmpPath = Utils.addFilenameSuffix( levelConfigurationOutputPath, "-xy" );
 						final String levelTmpFolder = levelFolder + "-xy";
+
+						tmpExportsToRemove.put( currLevelTmpPath, levelTmpFolder );
 
 						final TileInfo[] lastLevelTmpCells;
 						if ( Files.exists( Paths.get( currLevelTmpPath ) ) )
@@ -430,6 +434,21 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 
 			broadcastedPairwiseConnectionsMap.destroy();
 			broadcastedFlatfieldCorrection.destroy();
+
+			System.out.println( "Channel " + channel + " done, removing tmp exports if any..." );
+			try
+			{
+				// remove redundant '-xy' exports that were needed only to generate lower scale levels
+				for ( final Entry< String, String > entry : tmpExportsToRemove.entrySet() )
+				{
+					Files.delete( Paths.get( entry.getKey() ) );
+					Utils.deleteFolder( Paths.get( entry.getValue() ) );
+				}
+			}
+			catch ( final IOException e )
+			{
+				throw new PipelineExecutionException( "Can't remove '-xy' tmp exports after fusing", e );
+			}
 		}
 
 		System.out.println( "All channels have been exported" );
