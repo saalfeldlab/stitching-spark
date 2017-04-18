@@ -15,11 +15,11 @@ import java.util.Vector;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.stitching.analysis.CheckConnectedGraphs;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.stitching.analysis.ThresholdEstimation;
-import org.janelia.util.Conversions;
 import org.janelia.util.ImageImporter;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
@@ -33,6 +33,8 @@ import net.imglib2.FinalDimensions;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
+import net.imglib2.converter.Converters;
+import net.imglib2.converter.RealFloatConverter;
 import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
@@ -41,6 +43,7 @@ import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
+import net.imglib2.view.RandomAccessiblePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
@@ -183,12 +186,14 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		System.out.println( "Broadcasting flatfield correction images" );
 		final List< RandomAccessiblePairNullable< U, U > > flatfieldCorrectionForChannels = new ArrayList<>();
 		for ( final String channelTileConfiguration : job.getArgs().inputTileConfigurations() )
+		{
 			flatfieldCorrectionForChannels.add(
 					FlatfieldCorrection.loadCorrectionImages(
 							Paths.get( channelTileConfiguration ).getParent().toString() + "/v.tif",
 							Paths.get( channelTileConfiguration ).getParent().toString() + "/z.tif"
 						)
 				);
+		}
 		final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
 
 		// extract padding from arguments which should be applied to the overlap area
@@ -214,7 +219,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 				for ( int j = 0; j < pair.length; j++ )
 				{
-					System.out.println( "Prepairing #" + (j+1) + " of a pair" );
+					System.out.println( "Prepairing #" + (j+1) + " of a pair,  padding ROI by " + Arrays.toString( overlapPadding ) );
 
 					//overlaps[ j ] = TileOperations.getOverlappingRegion( pair[ j ], pair[ ( j + 1 ) % pair.length ] );
 
@@ -280,31 +285,34 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
 							final RandomAccessibleInterval< T > imgCrop = Views.interval( img, overlaps[ j ] );
 
-							final ImagePlusImg< FloatType, ? > imgCorrected;
-							final RandomAccessiblePairNullable< U, U > flatfieldCorrection = broadcastedFlatfieldCorrectionForChannels.value().get( channel );
-							if ( flatfieldCorrection != null )
+							final RandomAccessibleInterval< FloatType > sourceInterval;
+							final RandomAccessiblePairNullable< U, U > flatfield = broadcastedFlatfieldCorrectionForChannels.value().get( channel );
+							if ( flatfield != null )
 							{
 								System.out.println( "  Correcting ch" + channel );
-								imgCorrected = FlatfieldCorrection.applyCorrection( imgCrop, flatfieldCorrection );
+								final RandomAccessiblePair< FloatType, FloatType > flatfieldFloat = new RandomAccessiblePair<>(
+										Converters.convert( flatfield.getA(), new RealFloatConverter<>(), new FloatType() ),
+										Converters.convert( flatfield.getB(), new RealFloatConverter<>(), new FloatType() ) );
+								final FlatfieldCorrectedRandomAccessible< T, FloatType > flatfieldCorrected = new FlatfieldCorrectedRandomAccessible<>( imgCrop, flatfieldFloat );
+								sourceInterval = Views.interval( flatfieldCorrected, imgCrop );
 							}
 							else
 							{
-								imgCorrected = Conversions.convertImageToFloat( imgCrop );
+								sourceInterval = Converters.convert( imgCrop, new RealFloatConverter<>(), new FloatType() );
 							}
-							imp.close();
 
+							final Cursor< FloatType > srcCursor = Views.flatIterable( sourceInterval ).cursor();
 							final Cursor< FloatType > dstCursor = Views.flatIterable( dst ).cursor();
-							final Cursor< FloatType > imgCorrectedCursor = Views.flatIterable( imgCorrected ).cursor();
-							while ( dstCursor.hasNext() || imgCorrectedCursor.hasNext() )
-								dstCursor.next().add( imgCorrectedCursor.next() );
+							while ( dstCursor.hasNext() || srcCursor.hasNext() )
+								dstCursor.next().add( srcCursor.next() );
+
+							imp.close();
 						}
 
+						final FloatType denom = new FloatType( job.getChannels() );
 						final Cursor< FloatType > dstCursor = Views.iterable( dst ).cursor();
 						while ( dstCursor.hasNext() )
-						{
-							dstCursor.fwd();
-							dstCursor.get().set( dstCursor.get().get() / job.getChannels() );
-						}
+							dstCursor.next().div( denom );
 
 						if ( blurSigma > 0 )
 						{
@@ -346,7 +354,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					result[ i ].setTilePair( pairOfTiles );
 				return result;
 			} );
-		return pairwiseStitching.collect();
+
+		final List< SerializablePairWiseStitchingResult[] > stitchingResults = pairwiseStitching.collect();
+		broadcastedFlatfieldCorrectionForChannels.destroy();
+		return stitchingResults;
 	}
 
 
