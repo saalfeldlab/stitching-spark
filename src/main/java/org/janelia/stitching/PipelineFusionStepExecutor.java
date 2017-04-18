@@ -110,17 +110,17 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 			final Broadcast< Map< Integer, Set< Integer > > > broadcastedPairwiseConnectionsMap = sparkContext.broadcast( pairwiseConnectionsMap );
 
 			// prepare flatfield correction images
-			final String flatfieldCorrectionBasePath = Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getParent().toString();
+			final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getParent().toString();
 			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
-					flatfieldCorrectionBasePath + "/v.tif",
-					flatfieldCorrectionBasePath + "/z.tif"
+					basePath + "/v.tif",
+					basePath + "/z.tif"
 				);
 			if ( flatfieldCorrection != null )
 				System.out.println( "[Flatfield correction] Broadcasting flatfield correction images" );
 			final Broadcast< RandomAccessiblePairNullable< U, U > > broadcastedFlatfieldCorrection = sparkContext.broadcast( flatfieldCorrection );
 
 			System.out.println( "Processing channel #" + channel );
-			final String baseOutputFolder = job.getBaseFolder() + "/channel" + channel + overlapsPathSuffix;
+			final String baseOutputFolder = basePath + "/channel" + channel + overlapsPathSuffix;
 			final String exportFolder = baseOutputFolder + "/fused";
 
 			int level = 0;
@@ -454,7 +454,23 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 		System.out.println( "All channels have been exported" );
 		try
 		{
-			TileInfoJSONProvider.saveMultiscaledExportMetadataList( exports, Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString() +  "/export" + overlapsPathSuffix +".json" );
+			// determine best location for multichannel export config file
+			String baseExportPath = null;
+			for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+			{
+				final String inputFolderPath = Paths.get( inputFilePath ).getParent().toString();
+				if ( baseExportPath == null )
+				{
+					baseExportPath = inputFolderPath;
+				}
+				else if ( !baseExportPath.equals( inputFolderPath ) )
+				{
+					// go one level upper since channels are stored in individual subfolders
+					baseExportPath = Paths.get( inputFolderPath ).getParent().toString();
+					break;
+				}
+			}
+			TileInfoJSONProvider.saveMultiscaledExportMetadataList( exports, baseExportPath +  "/export" + overlapsPathSuffix + ".json" );
 		}
 		catch ( final IOException e )
 		{
