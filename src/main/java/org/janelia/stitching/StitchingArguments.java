@@ -31,7 +31,7 @@ public class StitchingArguments implements Serializable {
 
 	@Option(name = "-f", aliases = { "--fusioncell" }, required = false,
 			usage = "Size of an individual tile when fusing")
-	private int fusionCellSize = 64;
+	private int fusionCellSize = 256;
 
 	@Option(name = "-b", aliases = { "--blursigma" }, required = false,
 			usage = "Sigma value of the gaussian blur preapplied to the images before stitching")
@@ -45,9 +45,9 @@ public class StitchingArguments implements Serializable {
 			usage = "Padding for the overlap regions")
 	private String padding = "0,0,0";
 
-	@Option(name = "--adjacent", required = false,
-			usage = "Compute pairwise shifts only between adjacent pairs of tiles")
-	private boolean adjacent = true;
+	@Option(name = "--allpairs", required = false,
+			usage = "Compute pairwise shifts between all pairs (by default only adjacent pairs are used)")
+	private boolean allPairs = false;
 
 	@Option(name = "--overlaps", required = false,
 			usage = "Export overlaps channel based on which connections between tiles have been used for final stitching")
@@ -109,7 +109,7 @@ public class StitchingArguments implements Serializable {
 	public double crossCorrelationThreshold() { return crossCorrelationThreshold; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurSigma() { return blurSigma; }
-	public boolean adjacent() { return adjacent; }
+	public boolean useAllPairs() { return allPairs; }
 	public boolean exportOverlaps() { return exportOverlaps; }
 
 	public boolean stitchOnly() { return stitchOnly; }

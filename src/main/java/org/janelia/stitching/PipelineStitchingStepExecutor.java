@@ -74,7 +74,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
 
 		// Remove pairs with small overlap area if only adjacent pairs are requested
-		if ( job.getArgs().adjacent() )
+		if ( !job.getArgs().useAllPairs() )
 		{
 			final List< TilePair > adjacentOverlappingTiles = FilterAdjacentShifts.filterAdjacentPairs( overlappingTiles );
 			overlappingTiles.clear();
