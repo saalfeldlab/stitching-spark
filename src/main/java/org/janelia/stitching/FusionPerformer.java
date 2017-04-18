@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -146,21 +147,19 @@ public class FusionPerformer
 			final RandomAccessibleInterval< FloatType > sourceInterval;
 			if ( flatfield != null )
 			{
-				final RandomAccessible< U >[] flatfieldComponents = new RandomAccessible[] { flatfield.getA(), flatfield.getB() };
-				final RandomAccessible< FloatType >[] adjustedFlatfieldComponents = new RandomAccessible[ flatfieldComponents.length ];
+				final RandomAccessible< U >[] flatfieldComponents = new RandomAccessible[] { flatfield.getA(), flatfield.getB() }, adjustedFlatfieldComponents = new RandomAccessible[ 2 ];
 				for ( int i = 0; i < flatfieldComponents.length; ++i )
 				{
-					final RandomAccessible< U > flatfieldComponent = flatfieldComponents[ i ];
-					final RandomAccessibleInterval< U > rawFlatfieldComponent = Views.interval( flatfieldComponent, new FinalInterval( tile.getSize() ) );
-					final RandomAccessibleInterval< FloatType > floatFlatfieldComponent = Converters.convert( rawFlatfieldComponent, new RealFloatConverter<>(), new FloatType() );
-					final RandomAccessible< FloatType > extendedFlatfieldComponent = Views.extendBorder( floatFlatfieldComponent );
-					final RealRandomAccessible< FloatType > interpolatedFlatfieldComponent = Views.interpolate( extendedFlatfieldComponent, new NLinearInterpolatorFactory<>() );
-					final RandomAccessible< FloatType > rasteredInterpolatedFlatfieldComponent = Views.raster( RealViews.affine( interpolatedFlatfieldComponent, translation ) );
+					final RandomAccessibleInterval< U > flatfieldComponentInterval = Views.interval( flatfieldComponents[ i ], new FinalInterval( tile.getSize() ) );
+					final RandomAccessible< U > extendedFlatfieldComponent = Views.extendBorder( flatfieldComponentInterval );
+					final RealRandomAccessible< U > interpolatedFlatfieldComponent = Views.interpolate( extendedFlatfieldComponent, new NLinearInterpolatorFactory<>() );
+					final RandomAccessible< U > rasteredInterpolatedFlatfieldComponent = Views.raster( RealViews.affine( interpolatedFlatfieldComponent, translation ) );
 					adjustedFlatfieldComponents[ i ] = Views.interval( rasteredInterpolatedFlatfieldComponent, intersectionIntervalInTargetInterval );
 				}
-				final RandomAccessiblePair< FloatType, FloatType > adjustedFlatfield =  new RandomAccessiblePair<>( adjustedFlatfieldComponents[ 0 ], adjustedFlatfieldComponents[ 1 ] );
-				final FlatfieldCorrectedRandomAccessible< FloatType, FloatType > flatfieldCorrectedTile = new FlatfieldCorrectedRandomAccessible<>( interpolatedTileInterval, adjustedFlatfield );
-				sourceInterval = Views.interval( flatfieldCorrectedTile, intersectionIntervalInTargetInterval );
+				final RandomAccessiblePair< U, U > adjustedFlatfield = new RandomAccessiblePair<>( adjustedFlatfieldComponents[ 0 ], adjustedFlatfieldComponents[ 1 ] );
+				final FlatfieldCorrectedRandomAccessible< FloatType, U > flatfieldCorrectedTile = new FlatfieldCorrectedRandomAccessible<>( interpolatedTileInterval, adjustedFlatfield );
+				final RandomAccessibleInterval< U > flatfieldCorrectedInterval = Views.interval( flatfieldCorrectedTile, intersectionIntervalInTargetInterval );
+				sourceInterval = Converters.convert( flatfieldCorrectedInterval, new RealFloatConverter<>(), new FloatType() );
 			}
 			else
 			{
@@ -207,24 +206,16 @@ public class FusionPerformer
 			final Cursor< Set< Integer > > tileIndexesCursor = Views.flatIterable( tileIndexes ).cursor();
 			while ( outCursor.hasNext() || tileIndexesCursor.hasNext() )
 			{
-				final Set< Integer > tilesAtPoint = tileIndexesCursor.next();
 				boolean retainPixel = false;
+				final Set< Integer > tilesAtPoint = tileIndexesCursor.next();
 				for ( final Integer testTileIndex : tilesAtPoint )
 				{
 					final Set< Integer > connectedTileIndexes = pairwiseConnectionsMap.get( testTileIndex );
-					if ( connectedTileIndexes != null )
+					if ( connectedTileIndexes != null && !Collections.disjoint( tilesAtPoint, connectedTileIndexes ) )
 					{
-						for ( final Integer connectedTileIndex : tilesAtPoint )
-						{
-							if ( connectedTileIndexes.contains( connectedTileIndex ) )
-							{
-								retainPixel = true;
-								break;
-							}
-						}
-					}
-					if ( retainPixel )
+						retainPixel = true;
 						break;
+					}
 				}
 
 				outCursor.fwd();

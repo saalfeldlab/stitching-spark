@@ -43,7 +43,6 @@ import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
-import net.imglib2.view.RandomAccessiblePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
@@ -221,8 +220,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				{
 					System.out.println( "Prepairing #" + (j+1) + " of a pair,  padding ROI by " + Arrays.toString( overlapPadding ) );
 
-					//overlaps[ j ] = TileOperations.getOverlappingRegion( pair[ j ], pair[ ( j + 1 ) % pair.length ] );
-
 					overlaps[ j ] = TileOperations.padInterval(
 							TileOperations.getOverlappingRegion( pair[ j ], pair[ ( j + 1 ) % pair.length ] ),
 							new FinalDimensions( pair[ j ].getSize() ),
@@ -289,12 +286,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							final RandomAccessiblePairNullable< U, U > flatfield = broadcastedFlatfieldCorrectionForChannels.value().get( channel );
 							if ( flatfield != null )
 							{
-								System.out.println( "  Correcting ch" + channel );
-								final RandomAccessiblePair< FloatType, FloatType > flatfieldFloat = new RandomAccessiblePair<>(
-										Converters.convert( flatfield.getA(), new RealFloatConverter<>(), new FloatType() ),
-										Converters.convert( flatfield.getB(), new RealFloatConverter<>(), new FloatType() ) );
-								final FlatfieldCorrectedRandomAccessible< T, FloatType > flatfieldCorrected = new FlatfieldCorrectedRandomAccessible<>( imgCrop, flatfieldFloat );
-								sourceInterval = Views.interval( flatfieldCorrected, imgCrop );
+								final FlatfieldCorrectedRandomAccessible< T, U > flatfieldCorrected = new FlatfieldCorrectedRandomAccessible<>( imgCrop, flatfield.toRandomAccessiblePair() );
+								final RandomAccessibleInterval< U > correctedImg = Views.interval( flatfieldCorrected, imgCrop );
+								sourceInterval = Converters.convert( correctedImg, new RealFloatConverter<>(), new FloatType() );
 							}
 							else
 							{

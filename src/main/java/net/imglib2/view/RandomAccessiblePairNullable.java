@@ -244,6 +244,11 @@ public class RandomAccessiblePairNullable< A, B > implements RandomAccessible< P
 		this.sourceB = sourceB;
 	}
 
+	public RandomAccessiblePair< A, B > toRandomAccessiblePair()
+	{
+		return new RandomAccessiblePair<>( sourceA, sourceB );
+	}
+
 	@Override
 	public int numDimensions()
 	{
