@@ -33,10 +33,10 @@ import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.serializer.KryoSerializer;
 import org.janelia.stitching.ImageType;
-import org.janelia.stitching.TiffSliceLoader;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
+import org.janelia.util.TiffSliceReader;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -681,7 +681,7 @@ public class IlluminationCorrectionSpark implements Serializable
 					@Override
 					public TreeMap<Short,Integer>[] call( final TreeMap<Short,Integer>[] intermediateHist, final TileInfo tile ) throws Exception
 					{
-						final ImagePlus imp = TiffSliceLoader.loadSlice( tile, currentSlice );
+						final ImagePlus imp = TiffSliceReader.readSlice( tile.getFilePath(), currentSlice );
 						final Img< T > img = ImagePlusImgs.from( imp );
 						final Cursor< T > cursor = Views.iterable( img ).localizingCursor();
 

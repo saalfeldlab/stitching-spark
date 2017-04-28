@@ -27,10 +27,10 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
-import org.janelia.stitching.TiffSliceLoader;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
+import org.janelia.util.TiffSliceReader;
 import org.janelia.util.concurrent.MultithreadedExecutor;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -850,7 +850,7 @@ public class IlluminationCorrectionSliceParallel implements Serializable
 		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( Arrays.asList( tiles ) );
 		rdd.foreach( tile ->
 				{
-					final ImagePlus imp = TiffSliceLoader.loadSlice(tile, slice);
+					final ImagePlus imp = TiffSliceReader.readSlice(tile.getFilePath(), slice);
 					Utils.workaroundImagePlusNSlices( imp );
 					final Img< ? extends RealType > img = ImagePlusImgs.from( imp );
 					final Cursor< ? extends RealType > imgCursor = Views.flatIterable( img ).cursor();

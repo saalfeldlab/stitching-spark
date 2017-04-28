@@ -8,10 +8,10 @@ import java.util.Arrays;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.stitching.TiffSliceLoader;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
+import org.janelia.util.TiffSliceReader;
 
 import ij.IJ;
 
@@ -32,7 +32,7 @@ public class ExtractSlice
 			final TileInfo[] sliceTiles = rdd.map( tile ->
 				{
 					final String outPath = outFolder + String.format( "/Slice%d_", slice ) + Paths.get( tile.getFilePath() ).getFileName().toString();
-					IJ.saveAsTiff( TiffSliceLoader.loadSlice( tile, slice ), outPath );
+					IJ.saveAsTiff( TiffSliceReader.readSlice( tile.getFilePath(), slice ), outPath );
 
 					final TileInfo sliceTile = new TileInfo( tile.numDimensions() - 1 );
 					sliceTile.setIndex( tile.getIndex() );

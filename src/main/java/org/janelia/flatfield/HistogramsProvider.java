@@ -27,9 +27,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
 import org.janelia.histogram.Histogram;
-import org.janelia.stitching.TiffSliceLoader;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.Utils;
+import org.janelia.util.TiffSliceReader;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -119,7 +119,7 @@ public class HistogramsProvider implements Serializable
 				// generator
 				( intermediateHist, tile ) ->
 				{
-					final ImagePlus imp = TiffSliceLoader.loadSlice( tile, currentSlice );
+					final ImagePlus imp = TiffSliceReader.readSlice( tile.getFilePath(), currentSlice );
 					Utils.workaroundImagePlusNSlices( imp );
 
 					final Img< T > img = ImagePlusImgs.from( imp );
