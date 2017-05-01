@@ -14,7 +14,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.bdv.fusion.CellFileImageMetaData;
@@ -227,8 +226,8 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 
 							System.out.println( " --- Precomputing cells downsampled in XY with factors=" + Arrays.toString(tmpDownsampleFactors) );
 
-							final JavaRDD< TileInfo > rdd = sparkContext.parallelize( tmpNewCells );
-							final JavaRDD< TileInfo > fused = rdd.map( cell ->
+							// filter out empty output cells to balance load on worker nodes (otherwise in introduces some skew in task distribution)
+							final List< TileInfo > nonEmptyCells = new ArrayList<>( sparkContext.parallelize( tmpNewCells ).map( cell ->
 								{
 									final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( lastLevelTmpCells, cell );
 									if ( tilesWithinCell.isEmpty() )
@@ -239,6 +238,14 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 										if ( cell.getSize( d ) / tmpDownsampleFactors[ d ] <= 0 )
 											return null;
 
+									return cell;
+								}
+							).collect() );
+							nonEmptyCells.removeAll( Collections.singleton( null ) );
+
+							final List< TileInfo > output = sparkContext.parallelize( nonEmptyCells ).map( cell ->
+								{
+									final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( lastLevelTmpCells, cell );
 									//System.out.println( "There are " + tilesWithinCell.size() + " tiles within the cell #"+cell.getIndex() );
 
 									final Boundaries cellBox = cell.getBoundaries();
@@ -265,10 +272,8 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 									Utils.saveTileImageToFile( cell, outImg );
 
 									return cell;
-								} );
-
-							final ArrayList< TileInfo > output = new ArrayList<>( fused.collect() );
-							output.removeAll( Collections.singleton( null ) );
+								}
+							).collect();
 
 							System.out.println( "Obtained " + output.size() + " tmp output cells (downsampled in XY)" );
 							smallerCells = output.toArray( new TileInfo[ 0 ] );
@@ -299,8 +304,8 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 					final List< TileInfo > newLevelCells = TileOperations.divideSpace( space, new FinalDimensions( upscaledCellSize ) );
 					System.out.println( "There are " + newLevelCells.size() + " cells on the current scale level");
 
-					final JavaRDD< TileInfo > rdd = sparkContext.parallelize( newLevelCells );
-					final JavaRDD< TileInfo > fused = rdd.map( cell ->
+					// filter out empty output cells to balance load on worker nodes (otherwise in introduces some skew in task distribution)
+					final List< TileInfo > nonEmptyCells = new ArrayList<>( sparkContext.parallelize( newLevelCells ).map( cell ->
 						{
 							final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( smallerCells, cell );
 							if ( tilesWithinCell.isEmpty() )
@@ -311,6 +316,14 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 								if ( cell.getSize( d ) / downsampleFactors[ d ] <= 0 )
 									return null;
 
+							return cell;
+						}
+					).collect() );
+					nonEmptyCells.removeAll( Collections.singleton( null ) );
+
+					final List< TileInfo > output = sparkContext.parallelize( nonEmptyCells ).map( cell ->
+						{
+							final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( smallerCells, cell );
 							//System.out.println( "There are " + tilesWithinCell.size() + " tiles within the cell #"+cell.getIndex() );
 
 							final Boundaries cellBox = cell.getBoundaries();
@@ -355,10 +368,8 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 							Utils.saveTileImageToFile( cell, outImg );
 
 							return cell;
-						} );
-
-					final ArrayList< TileInfo > output = new ArrayList<>( fused.collect() );
-					output.removeAll( Collections.singleton( null ) );
+						}
+					).collect();
 
 					if ( output.isEmpty() )
 					{
