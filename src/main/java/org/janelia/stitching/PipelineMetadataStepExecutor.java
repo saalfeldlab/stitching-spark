@@ -5,14 +5,18 @@ import java.io.FilenameFilter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.util.ComparableTuple;
 import org.janelia.util.Conversions;
 import org.janelia.util.ImageImporter;
 
@@ -51,30 +55,57 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 				tilesChannelsBackup.add( tilesBackup.toArray( new TileInfo[ 0 ] ) );
 			}
 
-			final int[] duplicateTilesRemoved = removeDuplicateTiles();
-			final int[] nonExistentTilesRemoved = removeNonExistentTiles();
+			System.out.println( "Trying to add missing tiles..." );
 			final int[] missingTilesAdded = addMissingTiles();
+
+			System.out.println( "Removing duplicating tiles..." );
+			final int[] duplicateTilesRemoved = removeDuplicateTiles();
+
+			System.out.println( "Removing non-existent tiles..." );
+			final int[] nonExistentTilesRemoved = removeNonExistentTiles();
+
+			System.out.println( "Filling metadata..." );
 			final int[] noMetadataTiles = fillSizeAndImageType();
 
-			//TileOperations.translateTilesToOriginReal( job.getTiles() );
+			System.out.println( "Intersecting tile sets across channels..." );
+			final int[] nonIntersectingTilesRemoved = makeIndexesConsistentAcrossChannels();
+
+			if ( !checkIndexesConsistency() )
+				throw new PipelineExecutionException( "Some tiles with the same index have different stage coordinates, cannot do index-based matching" );
+
+			if ( !checkSortedTimestampOrder() )
+				throw new PipelineExecutionException( "Some tiles are not sorted by their timestamp" );
 
 			for ( int channel = 0; channel < job.getChannels(); ++channel )
 			{
-				System.out.println( "Channel " + channel + ":" );
+				System.out.println( "Channel " + channel + " (" + job.getTiles( channel ).length + " tiles):"  );
+				System.out.println( "  missing tiles added = " + missingTilesAdded[ channel ] );
 				System.out.println( "  duplicated tiles removed = " + duplicateTilesRemoved[ channel ] );
 				System.out.println( "  non-existent tiles removed = " + nonExistentTilesRemoved[ channel ] );
-				System.out.println( "  missing tiles added = " + missingTilesAdded[ channel ] );
+				System.out.println( "  non-intersecting tiles removed = " + nonIntersectingTilesRemoved[ channel ] );
 
-				if ( duplicateTilesRemoved[ channel ] + nonExistentTilesRemoved[ channel ] + missingTilesAdded[ channel ] + noMetadataTiles[ channel ] > 0 )
+				if ( duplicateTilesRemoved[ channel ] + nonExistentTilesRemoved[ channel ] + missingTilesAdded[ channel ] + noMetadataTiles[ channel ] + nonIntersectingTilesRemoved[ channel ] > 0 )
 				{
 					// something has changed, save the updated configuration and the old one as a backup
 					TileInfoJSONProvider.saveTilesConfiguration( job.getTiles( channel ), job.getArgs().inputTileConfigurations().get( channel ) );
 					TileInfoJSONProvider.saveTilesConfiguration( tilesChannelsBackup.get( channel ), Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "_old" ) );
 				}
+
+				// test that all tiles have the same size
+				System.out.println( "----- check tile size for channel " + channel + " -----" );
+				ComparableTuple< Long > tileSize = null;
+				for ( final TileInfo tile : job.getTiles( channel ) )
+					if ( tileSize == null )
+						tileSize = new ComparableTuple<>( Conversions.toBoxedArray( tile.getSize() ) );
+					else if ( tileSize.compareTo( new ComparableTuple<>( Conversions.toBoxedArray( tile.getSize() ) ) ) != 0 )
+						throw new PipelineExecutionException( "Different tile size:  channel=" + channel + ", tile=" + tile.getIndex() + ", size=" + Arrays.toString( tile.getSize() ) + ",  should be " + tileSize );
+//						System.out.println( "Different tile size" );
+				System.out.println( "----- check tile size DONE: " + tileSize + " -----" );
 			}
 		}
 		catch ( final Exception e )
 		{
+			e.printStackTrace();
 			throw new PipelineExecutionException( e.getMessage(), e.getCause() );
 		}
 
@@ -235,5 +266,77 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			}
 		}
 		return noMetadataTiles;
+	}
+
+	private int[] makeIndexesConsistentAcrossChannels() throws Exception
+	{
+		// Match the smallest channel by removing non-intersecting tiles from the other channel sets.
+		// Then index them to ensure that tiles at the same stage position have the same index.
+		final Set< String > coordsIntersection = new HashSet<>();
+		for ( int channel = 0; channel < job.getChannels(); ++channel )
+		{
+			final Set< String > channelCoords = new HashSet<>();
+			for ( final TileInfo tile : job.getTiles( channel ) )
+				channelCoords.add( Utils.getTileCoordinatesString( tile ) );
+
+			if ( channel == 0)
+				coordsIntersection.addAll( channelCoords );
+			else
+				coordsIntersection.retainAll( channelCoords );
+		}
+
+		final int[] tilesRemoved = new int[ job.getChannels() ];
+		for ( int channel = 0; channel < job.getChannels(); ++channel )
+		{
+			final List< TileInfo > retained = new ArrayList<>();
+			for ( final TileInfo tile : job.getTiles( channel ) )
+				if ( coordsIntersection.contains( Utils.getTileCoordinatesString( tile ) ) )
+					retained.add( tile );
+
+			for ( int i = 0; i < retained.size(); ++i )
+				retained.get( i ).setIndex( i );
+
+			tilesRemoved[ channel ] = job.getTiles( channel ).length - retained.size();
+			job.setTiles( retained.toArray( new TileInfo[ 0 ] ), channel );
+		}
+		return tilesRemoved;
+	}
+
+	private boolean checkIndexesConsistency() throws Exception
+	{
+		Integer tilesCount = null;
+		for ( int channel = 0; channel < job.getChannels(); ++channel )
+			if ( tilesCount == null )
+				tilesCount = job.getTiles( channel ).length;
+			else if ( tilesCount != job.getTiles( channel ).length )
+				return false;
+
+		for ( int i = 0; i < tilesCount; ++i )
+		{
+			String coordinates = null;
+			for ( int channel = 0; channel < job.getChannels(); ++channel )
+				if ( coordinates == null )
+					coordinates = Utils.getTileCoordinatesString( job.getTiles( channel )[ i ] );
+				else if ( !coordinates.equals( Utils.getTileCoordinatesString( job.getTiles( channel )[ i ] ) ) )
+					return false;
+		}
+
+		return true;
+	}
+
+	private boolean checkSortedTimestampOrder() throws Exception
+	{
+		for ( int channel = 0; channel < job.getChannels(); ++channel )
+		{
+			long lastTimestamp = Long.MIN_VALUE;
+			for ( final TileInfo tile : job.getTiles( channel ) )
+			{
+				final long timestamp = Utils.getTileTimestamp( tile );
+				if ( timestamp < lastTimestamp )
+					return false;
+				lastTimestamp = timestamp;
+			}
+		}
+		return true;
 	}
 }
