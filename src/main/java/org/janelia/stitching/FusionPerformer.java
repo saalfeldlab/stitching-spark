@@ -46,8 +46,7 @@ import net.imglib2.view.Views;
 
 public class FusionPerformer
 {
-	public static < T extends RealType< T > & NativeType< T > >
-	ImagePlusImg< FloatType, ? > fuseTilesWithinCellUsingMaxMinDistance(
+	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseTilesWithinCellUsingMaxMinDistance(
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval ) throws Exception
 	{
@@ -57,7 +56,7 @@ public class FusionPerformer
 	public static <
 		T extends RealType< T > & NativeType< T >,
 		U extends RealType< U > & NativeType< U > >
-	ImagePlusImg< FloatType, ? > fuseTilesWithinCellUsingMaxMinDistance(
+	ImagePlusImg< T, ? > fuseTilesWithinCellUsingMaxMinDistance(
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
 			final RandomAccessiblePairNullable< U, U > flatfield ) throws Exception
@@ -79,8 +78,9 @@ public class FusionPerformer
 	 */
 	public static <
 		T extends RealType< T > & NativeType< T >,
-		U extends RealType< U > & NativeType< U > >
-	ImagePlusImg< FloatType, ? > fuseTilesWithinCellUsingMaxMinDistance(
+		U extends RealType< U > & NativeType< U >,
+		R extends RealType< R > & NativeType< R > >
+	ImagePlusImg< T, ? > fuseTilesWithinCellUsingMaxMinDistance(
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
 			final RandomAccessiblePairNullable< U, U > flatfield,
@@ -91,7 +91,7 @@ public class FusionPerformer
 			throw new Exception( "Can't fuse images of different or unknown types" );
 
 		// initialize output image
-		final ImagePlusImg< FloatType, ? > out = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
+		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), ( T ) imageType.getType().createVariable() );
 
 		// initialize helper image for hard-cut fusion strategy
 		final RandomAccessibleInterval< DoubleType > maxMinDistances = ArrayImgs.doubles(
@@ -138,13 +138,13 @@ public class FusionPerformer
 			final Translation translation = new Translation( offset );
 
 			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
-			final RandomAccessibleInterval< FloatType > floatTile = Converters.convert( rawTile, new RealFloatConverter<>(), new FloatType() );
-			final RandomAccessible< FloatType > extendedTile = Views.extendBorder( floatTile );
-			final RealRandomAccessible< FloatType > interpolatedTile = Views.interpolate( extendedTile, new NLinearInterpolatorFactory<>() );
-			final RandomAccessible< FloatType > rasteredInterpolatedTile = Views.raster( RealViews.affine( interpolatedTile, translation ) );
-			final RandomAccessibleInterval< FloatType > interpolatedTileInterval = Views.interval( rasteredInterpolatedTile, intersectionIntervalInTargetInterval );
+			final RandomAccessibleInterval< R > convertedTile = ( RandomAccessibleInterval ) Converters.convert( rawTile, new RealFloatConverter<>(), new FloatType() );
+			final RandomAccessible< R > extendedTile = Views.extendBorder( convertedTile );
+			final RealRandomAccessible< R > interpolatedTile = Views.interpolate( extendedTile, new NLinearInterpolatorFactory<>() );
+			final RandomAccessible< R > rasteredInterpolatedTile = Views.raster( RealViews.affine( interpolatedTile, translation ) );
+			final RandomAccessibleInterval< R > interpolatedTileInterval = Views.interval( rasteredInterpolatedTile, intersectionIntervalInTargetInterval );
 
-			final RandomAccessibleInterval< FloatType > sourceInterval;
+			final RandomAccessibleInterval< R > sourceInterval;
 			if ( flatfield != null )
 			{
 				final RandomAccessible< U >[] flatfieldComponents = new RandomAccessible[] { flatfield.getA(), flatfield.getB() }, adjustedFlatfieldComponents = new RandomAccessible[ 2 ];
@@ -157,20 +157,21 @@ public class FusionPerformer
 					adjustedFlatfieldComponents[ i ] = Views.interval( rasteredInterpolatedFlatfieldComponent, intersectionIntervalInTargetInterval );
 				}
 				final RandomAccessiblePair< U, U > adjustedFlatfield = new RandomAccessiblePair<>( adjustedFlatfieldComponents[ 0 ], adjustedFlatfieldComponents[ 1 ] );
-				final FlatfieldCorrectedRandomAccessible< FloatType, U > flatfieldCorrectedTile = new FlatfieldCorrectedRandomAccessible<>( interpolatedTileInterval, adjustedFlatfield );
+				final FlatfieldCorrectedRandomAccessible< R, U > flatfieldCorrectedTile = new FlatfieldCorrectedRandomAccessible<>( interpolatedTileInterval, adjustedFlatfield );
 				final RandomAccessibleInterval< U > flatfieldCorrectedInterval = Views.interval( flatfieldCorrectedTile, intersectionIntervalInTargetInterval );
-				sourceInterval = Converters.convert( flatfieldCorrectedInterval, new RealFloatConverter<>(), new FloatType() );
+				sourceInterval = ( RandomAccessibleInterval ) Converters.convert( flatfieldCorrectedInterval, new RealFloatConverter<>(), new FloatType() );
 			}
 			else
 			{
 				sourceInterval = interpolatedTileInterval;
 			}
-			final RandomAccessibleInterval< FloatType > outInterval = Views.interval( out, intersectionIntervalInTargetInterval ) ;
+
+			final RandomAccessibleInterval< T > outInterval = Views.interval( out, intersectionIntervalInTargetInterval ) ;
 			final RandomAccessibleInterval< DoubleType > maxMinDistanceInterval = Views.interval( maxMinDistances, intersectionIntervalInTargetInterval ) ;
 			final RandomAccessibleInterval< Set< Integer > > tileIndexesInterval = tileIndexes != null ? Views.interval( tileIndexes, intersectionIntervalInTargetInterval ) : null;
 
-			final Cursor< FloatType > sourceCursor = Views.flatIterable( sourceInterval ).localizingCursor();
-			final Cursor< FloatType > outCursor = Views.flatIterable( outInterval ).cursor();
+			final Cursor< R > sourceCursor = Views.flatIterable( sourceInterval ).localizingCursor();
+			final Cursor< T > outCursor = Views.flatIterable( outInterval ).cursor();
 			final Cursor< DoubleType > maxMinDistanceCursor = Views.flatIterable( maxMinDistanceInterval ).cursor();
 			final Cursor< Set< Integer > > tileIndexesCursor = tileIndexesInterval != null ? Views.flatIterable( tileIndexesInterval ).cursor() : null;
 
@@ -191,7 +192,7 @@ public class FusionPerformer
 				if ( minDistance >= maxMinDistance.get() )
 				{
 					maxMinDistance.set( minDistance );
-					outCursor.get().set( sourceCursor.get() );
+					outCursor.get().setReal( sourceCursor.get().getRealDouble() );
 				}
 
 				if ( tileIndexesCursor != null )
@@ -202,7 +203,7 @@ public class FusionPerformer
 		// retain only requested content within overlaps that corresponds to pairwise connections map
 		if ( tileIndexes != null )
 		{
-			final Cursor< FloatType > outCursor = Views.flatIterable( out ).cursor();
+			final Cursor< T > outCursor = Views.flatIterable( out ).cursor();
 			final Cursor< Set< Integer > > tileIndexesCursor = Views.flatIterable( tileIndexes ).cursor();
 			while ( outCursor.hasNext() || tileIndexesCursor.hasNext() )
 			{

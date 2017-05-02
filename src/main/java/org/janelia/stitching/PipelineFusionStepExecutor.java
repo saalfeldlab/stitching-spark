@@ -51,7 +51,10 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 	{
 		runImpl();
 	}
-	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > void runImpl() throws PipelineExecutionException
+	private <
+		T extends NativeType< T > & RealType< T >,
+		U extends NativeType< U > & RealType< U > >
+	void runImpl() throws PipelineExecutionException
 	{
 		for ( int channel = 0; channel < job.getChannels(); channel++ )
 			TileOperations.translateTilesToOriginReal( job.getTiles( channel ) );
@@ -348,7 +351,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 //										cellBox,
 //										new NLinearInterpolatorFactory(),
 //										channel );
-								outImg = ( ImagePlusImg ) FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
+								outImg = FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
 										tilesWithinCell,
 										cellBox,
 										broadcastedFlatfieldCorrection.value(),
@@ -424,9 +427,7 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 
 			final CellFileImageMetaData export = new CellFileImageMetaData(
 					exportFolder + "/%1$d/%4$d/%3$d/%2$d.tif",
-					//Utils.getImageType( Arrays.asList( job.getTiles() ) ).toString(),
-					// TODO: can't derive from the tiles anymore since we convert the image to FloatType with illumination correction
-					ImageType.GRAY32.toString(),
+					lastLevelCells[ 0 ].getType().toString(),
 					Intervals.dimensionsAsLongArray( imageDimensions ),
 					levelToDownsampleFactors,
 					levelToCellSize,
