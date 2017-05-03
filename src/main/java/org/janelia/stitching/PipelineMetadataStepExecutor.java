@@ -67,8 +67,20 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			System.out.println( "Filling metadata..." );
 			final int[] noMetadataTiles = fillSizeAndImageType();
 
-			System.out.println( "Intersecting tile sets across channels..." );
-			final int[] nonIntersectingTilesRemoved = makeIndexesConsistentAcrossChannels();
+			boolean somethingChanged = false;
+			for ( int channel = 0; channel < job.getChannels(); ++channel )
+				if ( duplicateTilesRemoved[ channel ] + nonExistentTilesRemoved[ channel ] + missingTilesAdded[ channel ] + noMetadataTiles[ channel ] > 0 )
+					somethingChanged = true;
+			final int[] nonIntersectingTilesRemoved;
+			if ( somethingChanged )
+			{
+				System.out.println( "Tile configuration has changed, intersecting tile sets across channels..." );
+				nonIntersectingTilesRemoved = makeIndexesConsistentAcrossChannels();
+			}
+			else
+			{
+				nonIntersectingTilesRemoved = new int[ job.getChannels() ];
+			}
 
 			if ( !checkIndexesConsistency() )
 				throw new PipelineExecutionException( "Some tiles with the same index have different stage coordinates, cannot do index-based matching" );
