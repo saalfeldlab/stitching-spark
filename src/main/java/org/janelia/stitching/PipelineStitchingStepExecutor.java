@@ -278,6 +278,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							final TileInfo tileInfo = Utils.createTilesMap( job.getTiles( channel ) ).get( pair[ j ].getIndex() );
 							final ImagePlus imp = ImageImporter.openImage( tileInfo.getFilePath() );
 							Utils.workaroundImagePlusNSlices( imp );
+							// warn if image type and/or size do not match metadata
+							if ( !ImageType.valueOf( imp.getType() ).equals( tileInfo.getType() ) )
+								throw new PipelineExecutionException( String.format( "Image type %s does not match the value from metadata %s", ImageType.valueOf( imp.getType() ), tileInfo.getType() ) );
+							if ( !Arrays.equals( Conversions.toLongArray( Utils.getImagePlusDimensions( imp ) ), tileInfo.getSize() ) )
+								throw new PipelineExecutionException( String.format( "Image size %s does not match the value from metadata %s", Arrays.toString( Utils.getImagePlusDimensions( imp ) ), Arrays.toString( tileInfo.getSize() ) ) );
 
 							final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
 							final RandomAccessibleInterval< T > imgCrop = Views.interval( img, overlaps[ j ] );
