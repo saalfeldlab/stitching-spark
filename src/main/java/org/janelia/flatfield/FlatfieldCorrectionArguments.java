@@ -27,6 +27,10 @@ public class FlatfieldCorrectionArguments
 			usage = "Number of bins to use")
 	private int bins = 256;
 
+	@Option(name = "-p", aliases = { "--pivot" }, required = false,
+			usage = "Pivot value which is to subtract from all histograms (usually the background intensity value)")
+	private double pivotValue = 101;
+
 	@Option(name = "--min", required = false,
 			usage = "Min value of a histogram")
 	private Double histMinValue = null;
@@ -57,6 +61,7 @@ public class FlatfieldCorrectionArguments
 
 	public String inputFilePath() { return inputFilePath; }
 	public int bins() { return bins; }
+	public double pivotValue() { return pivotValue; }
 	public Double histMinValue() { return histMinValue; }
 	public Double histMaxValue() { return histMaxValue; }
 	public String cropMinMaxIntervalStr() { return cropMinMaxInterval; };

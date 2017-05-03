@@ -263,7 +263,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 							pixelsMapping,
 							regularizer,
 							modelType,
-							regularizerModelType );
+							regularizerModelType,
+							args.pivotValue() );
 
 					solution = solutionAndOffsets.correctionFields;
 					offsets = solutionAndOffsets.pivotValues;

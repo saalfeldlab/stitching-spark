@@ -85,7 +85,8 @@ public class FlatfieldCorrectionSolver implements Serializable
 			final ShiftedDownsampling< ? >.PixelsMapping pixelsMapping,
 			final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer,
 			final ModelType modelType,
-			final RegularizerModelType regularizerModelType )
+			final RegularizerModelType regularizerModelType,
+			final double pivotValue )
 	{
 		System.out.println( "Solving for scale " + pixelsMapping.scale + ":  size=" + Arrays.toString( pixelsMapping.getDimensions() ) + ",  model=" + modelType.toString() + ", regularizer=" + regularizerModelType.toString() );
 
@@ -93,7 +94,8 @@ public class FlatfieldCorrectionSolver implements Serializable
 
 		final long[] size = pixelsMapping.getDimensions();
 
-		final double referenceHistogramOffset = getMedianValue( referenceHistogram );
+//		final double referenceHistogramOffset = getMedianValue( referenceHistogram );
+		final double referenceHistogramOffset = pivotValue;
 
 		final JavaPairRDD< Long, Pair< Pair< Double, Double >, Double > > rddSolutionPixels = rddHistograms.mapToPair( tuple ->
 			{
@@ -103,8 +105,8 @@ public class FlatfieldCorrectionSolver implements Serializable
 				final List< PointMatch > matches = HistogramsMatching.generateHistogramMatches( tuple._2(), referenceHistogram );
 
 				// apply the offsets to the pointmatch values
-				final double[] offset = new double[] { getMedianValue( tuple._2() ), referenceHistogramOffset };
-//				final double[] offset = new double[] { referenceHistogramOffset, referenceHistogramOffset };
+//				final double[] offset = new double[] { getMedianValue( tuple._2() ), referenceHistogramOffset };
+				final double[] offset = new double[] { pivotValue, referenceHistogramOffset };
 				for ( final PointMatch match : matches )
 				{
 					final Point[] points = new Point[] { match.getP1(), match.getP2() };
