@@ -25,6 +25,16 @@ import com.google.gson.GsonBuilder;
 
 public class TileInfoJSONProvider
 {
+	public static boolean isTilesConfiguration( final String input )
+	{
+		try ( final FileReader reader = new FileReader( new File( input ) ) ) {
+			final TileInfo[] tiles = new Gson().fromJson( reader, TileInfo[].class );
+			return ( tiles != null && tiles.length > 0 && !tiles[ 0 ].isNull() );
+		} catch ( final IOException e ) {
+			return false;
+		}
+	}
+
 	public static TileInfo[] loadTilesConfiguration( final String input ) throws IOException
 	{
 		System.out.println( "Loading tiles configuration from " + input );
@@ -41,6 +51,16 @@ public class TileInfoJSONProvider
 		System.out.println( "Saving updated tiles configuration to " + output );
 		try ( final FileWriter writer = new FileWriter( output ) ) {
 			writer.write( new Gson().toJson( tiles ) );
+		}
+	}
+
+	public static boolean isPairwiseConfiguration( final String input )
+	{
+		try ( final FileReader reader = new FileReader( new File( input ) ) ) {
+			final List< SerializablePairWiseStitchingResult > pairwiseShifts = Arrays.asList( new Gson().fromJson( reader, SerializablePairWiseStitchingResult[].class ) );
+			return ( pairwiseShifts != null && !pairwiseShifts.isEmpty() && !pairwiseShifts.get( 0 ).isNull() );
+		} catch ( final IOException e ) {
+			return false;
 		}
 	}
 

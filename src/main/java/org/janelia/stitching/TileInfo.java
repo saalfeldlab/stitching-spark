@@ -99,6 +99,10 @@ public class TileInfo implements Serializable, RealInterval {
 		this.index = index;
 	}
 
+	public boolean isNull() {
+		return file == null;
+	}
+
 	@Override
 	public int numDimensions() {
 		return position.length;

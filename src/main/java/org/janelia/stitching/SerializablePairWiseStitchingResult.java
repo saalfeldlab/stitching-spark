@@ -50,4 +50,9 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 		for ( int d = 0; d < offset.length; d++ )
 			offset[ d ] *= -1;
 	}
+
+	public boolean isNull()
+	{
+		return tilePair == null;
+	}
 }
