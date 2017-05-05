@@ -204,19 +204,21 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			}
 		}
 
-		final String fileNameChannelPattern = "^.*?_(ch\\d)_.*?\\.tif$";
-		final FilenameFilter fileNameChannelFilter = new FilenameFilter()
-		{
-			@Override
-			public boolean accept( final File dir, final String name )
-			{
-				return name.matches( fileNameChannelPattern );
-			}
-		};
 
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
 			final File imagesBaseDir = Paths.get( job.getTiles( channel )[ 0 ].getFilePath() ).getParent().toFile();
+
+			final String fileNameChannelPattern = String.format( "^.*?_ch%d_.*?\\.tif$", channel );
+			final FilenameFilter fileNameChannelFilter = new FilenameFilter()
+			{
+				@Override
+				public boolean accept( final File dir, final String name )
+				{
+					return name.matches( fileNameChannelPattern );
+				}
+			};
+
 			final String[] fileList = imagesBaseDir.list( fileNameChannelFilter );
 			for ( final String fileName : fileList )
 			{
