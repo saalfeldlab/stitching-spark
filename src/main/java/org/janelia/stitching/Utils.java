@@ -20,7 +20,6 @@ import org.janelia.util.Conversions;
 
 import ij.IJ;
 import ij.ImagePlus;
-import mpicbg.spim.data.sequence.VoxelDimensions;
 import mpicbg.stitching.ImageCollectionElement;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.img.Img;
@@ -305,14 +304,14 @@ public class Utils {
 	}
 
 
-	public static double[] normalizeVoxelDimensions( final VoxelDimensions voxelDimensions )
+	public static double[] normalizeVoxelDimensions( final double[] voxelDimensions )
 	{
-		final double[] normalizedVoxelDimensions = new double[ voxelDimensions.numDimensions() ];
+		final double[] normalizedVoxelDimensions = new double[ voxelDimensions.length ];
 		double voxelDimensionsMinValue = Double.MAX_VALUE;
 		for ( int d = 0; d < normalizedVoxelDimensions.length; d++ )
-			voxelDimensionsMinValue = Math.min( voxelDimensions.dimension( d ), voxelDimensionsMinValue );
+			voxelDimensionsMinValue = Math.min( voxelDimensions[ d ], voxelDimensionsMinValue );
 		for ( int d = 0; d < normalizedVoxelDimensions.length; d++ )
-			normalizedVoxelDimensions[ d ] = voxelDimensions.dimension( d ) / voxelDimensionsMinValue;
+			normalizedVoxelDimensions[ d ] = voxelDimensions[ d ] / voxelDimensionsMinValue;
 		return normalizedVoxelDimensions;
 	}
 

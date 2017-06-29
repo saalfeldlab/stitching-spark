@@ -41,6 +41,8 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 
 	final TreeMap< Integer, long[] > levelToImageDimensions = new TreeMap<>(), levelToCellSize = new TreeMap<>();
 
+	double[] normalizedVoxelDimensions;
+
 	public PipelineFusionStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
 		super( job, sparkContext );
@@ -65,13 +67,15 @@ public class PipelineFusionStepExecutor extends PipelineStepExecutor
 		final int channels = testImp.getNChannels();
 		testImp.close();*/
 
-		final VoxelDimensions voxelDimensions = job.getArgs().voxelDimensions();
-		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
-		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
 
 		final List< CellFileImageMetaData > exports = new ArrayList<>();
 		final String overlapsPathSuffix = job.getArgs().exportOverlaps() ? "-overlaps" : "";
 
+		final double[] voxelDimensions = job.getPixelResolution();
+		normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
+		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
+
+		// loop over channels
 		for ( int ch = 0; ch < job.getChannels(); ch++ )
 		{
 			final int channel = ch;

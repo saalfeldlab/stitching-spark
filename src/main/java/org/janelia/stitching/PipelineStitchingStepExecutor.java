@@ -209,7 +209,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				final Boundaries[] overlaps = new Boundaries[ pair.length ];
 				final ImagePlus[] imps = new ImagePlus[ pair.length ];
 
-				final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( job.getArgs().voxelDimensions() );
+				final TileInfo fixedTile = pair[ 0 ], movingTile = pair[ 1 ];
+				final double[] voxelDimensions = fixedTile.getPixelResolution();
+				final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
 				System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
 				final double blurSigma = job.getArgs().blurSigma();
 				final double[] blurSigmas = new  double[ normalizedVoxelDimensions.length ];
