@@ -20,10 +20,12 @@ public class TileInfo implements Serializable, RealInterval {
 	private String file;
 	private double[] position;
 	private long[] size;
+	private double[] pixelResolution;
 
 	public TileInfo( final int dim ) {
 		position = new double[ dim ];
 		size = new long[ dim ];
+		pixelResolution = new double[ dim ];
 	}
 
 	protected TileInfo() { }
@@ -61,6 +63,18 @@ public class TileInfo implements Serializable, RealInterval {
 
 	public void setPosition( final double[] position ) {
 		this.position = position;
+	}
+
+	public double[] getPixelResolution() {
+		return pixelResolution;
+	}
+
+	public double getPixelResolution( final int d ) {
+		return pixelResolution[ d ];
+	}
+
+	public void setPixelResolution( final double[] pixelResolution ) {
+		this.pixelResolution = pixelResolution;
 	}
 
 	public long getSize( final int d ) {
@@ -125,6 +139,7 @@ public class TileInfo implements Serializable, RealInterval {
 		newTile.setFilePath( file );
 		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );
+		newTile.setPixelResolution( pixelResolution == null ? null : pixelResolution.clone() );
 		return newTile;
 	}
 

@@ -114,10 +114,15 @@ public class StitchingJob implements Serializable {
 	public String getDatasetName() { return datasetName; }
 
 	public int getDimensionality() { return tilesMultichannel.get( 0 )[ 0 ].numDimensions(); }
+	public double[] getPixelResolution() { return tilesMultichannel.get( 0 )[ 0 ].getPixelResolution(); }
 
 	public void validateTiles() throws IllegalArgumentException
 	{
 		final int dimensionality = getDimensionality();
+
+		double[] pixelResolution = getPixelResolution();
+		if ( pixelResolution == null )
+			pixelResolution = new double[] { 0.097, 0.097, 0.18 };
 		for ( final TileInfo[] tiles : tilesMultichannel )
 		{
 			if ( tiles.length < 2 )
@@ -130,6 +135,10 @@ public class StitchingJob implements Serializable {
 			for ( int i = 1; i < tiles.length; i++ )
 				if ( tiles[ i ].numDimensions() != tiles[ i - 1 ].numDimensions() )
 					throw new IllegalArgumentException( "Incorrect dimensionality" );
+
+			for ( final TileInfo tile : tiles )
+				if ( tile.getPixelResolution() == null )
+					tile.setPixelResolution( pixelResolution.clone() );
 
 			if ( dimensionality != tiles[ 0 ].numDimensions() )
 				throw new IllegalArgumentException( "Channels have different dimensionality" );
