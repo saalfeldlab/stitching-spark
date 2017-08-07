@@ -53,6 +53,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Export overlaps channel based on which connections between tiles have been used for final stitching")
 	private boolean exportOverlaps = false;
 
+	@Option(name = "--blending", required = false,
+			usage = "Export the dataset using blending strategy instead of hardcut (max.min.distance)")
+	private boolean blending = false;
+
 	/**
 	 * Toggle pipeline stages. By default all stages are executed.
 	 */
@@ -111,6 +115,7 @@ public class StitchingArguments implements Serializable {
 	public double blurSigma() { return blurSigma; }
 	public boolean useAllPairs() { return allPairs; }
 	public boolean exportOverlaps() { return exportOverlaps; }
+	public boolean blending() { return blending; }
 
 	public boolean stitchOnly() { return stitchOnly; }
 	public boolean fuseOnly() { return fuseOnly; }

@@ -191,7 +191,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				final CellGrid cellGrid = new CellGrid( dimensions, cellSize );
 				cellGrid.getCellPosition( biggerCellOffsetCoordinates, biggerCellGridPosition );
 
-				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCellUsingMaxMinDistance(
+				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
+							job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
 							tilesWithinCell,
 							biggerCellBox,
 							broadcastedFlatfieldCorrection.value(),
