@@ -18,9 +18,10 @@ import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
-import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata.DisplayRange;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5DownsamplingSpark;
+import org.janelia.stitching.FusionPerformer.FusionMode;
+import org.janelia.util.Conversions;
 
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalDimensions;
@@ -60,6 +61,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		try {
 			runImpl();
 		} catch (final IOException e) {
+			e.printStackTrace();
 			throw new PipelineExecutionException( e.getMessage(), e.getCause() );
 		}
 	}
@@ -89,11 +91,17 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			}
 		}
 
+		baseExportPath = Paths.get( baseExportPath, "export.n5" ).toString();
+
+		// FIXME: allow it for now
+//		if ( Files.exists( Paths.get( baseExportPath ) ) )
+//			throw new PipelineExecutionException( "Export path already exists: " + baseExportPath );
+
 		final N5Writer n5 = N5.openFSWriter( baseExportPath );
 		if ( !overlapsPathSuffix.isEmpty() )
 			n5.createGroup( overlapsPathSuffix );
 
-		double[][] downsamplingFactors = null;
+		int[][] downsamplingFactors = null;
 
 		final double[] voxelDimensions = job.getPixelResolution();
 		normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
@@ -127,12 +135,17 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				System.out.println( "[Flatfield correction] Broadcasting flatfield correction images" );
 			broadcastedFlatfieldCorrection = sparkContext.broadcast( flatfieldCorrection );
 
+			final String fullScaleOutputPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, 0 );
+
 			// Generate export of the first scale level
-			fuse( baseExportPath, channelGroupPath, job.getTiles( channel ) );
+			// FIXME: remove. But it saves time for now
+			if ( !n5.datasetExists( fullScaleOutputPath ) )
+				fuse( baseExportPath, fullScaleOutputPath, job.getTiles( channel ) );
 
 			// Generate lower scale levels
-			final N5DownsamplingSpark< T > n5Downsampler = new N5DownsamplingSpark<>( sparkContext );
-			downsamplingFactors = n5Downsampler.downsampleIsotropic( baseExportPath, channelGroupPath, new FinalVoxelDimensions( "um", voxelDimensions ) );
+			// FIXME: remove. But it saves time for now
+			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
+				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic( sparkContext, baseExportPath, fullScaleOutputPath, new FinalVoxelDimensions( "um", voxelDimensions ) );
 
 			broadcastedPairwiseConnectionsMap.destroy();
 			broadcastedFlatfieldCorrection.destroy();
@@ -140,10 +153,12 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		System.out.println( "All channels have been exported" );
 
+		final double[][] scalesDouble = new double[ downsamplingFactors.length ][];
+		for ( int s = 0; s < downsamplingFactors.length; ++s )
+			scalesDouble[ s ] = Conversions.toDoubleArray( downsamplingFactors[ s ] );
 		final N5ExportMetadata exportMetadata = new N5ExportMetadata( baseExportPath );
-		exportMetadata.setDefaultScales( downsamplingFactors );
-		exportMetadata.setDefaultPixelResolution( new FinalVoxelDimensions( "um", job.getPixelResolution() ) );
-		exportMetadata.setDefaultDisplayRange( new DisplayRange( 50, 1000 ) ); // TODO: extract display range from the data
+		exportMetadata.setDefaultScales( scalesDouble );
+		exportMetadata.setDefaultPixelResolution( new FinalVoxelDimensions( "um", voxelDimensions ) );
 	}
 
 
@@ -155,7 +170,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		return cellSize;
 	}
 
-	private void fuse( final String baseExportPath, final String channelPath, final TileInfo[] tiles ) throws IOException
+	private void fuse( final String baseExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
 	{
 		final int[] cellSize = getOptimalCellSize();
 
@@ -175,10 +190,10 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		System.out.println( "Adjusted intermediate cell size to " + Arrays.toString( biggerCellSize ) + " (for faster processing)" );
 
 		final List< TileInfo > biggerCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );
-		final String scaleLevelPath = channelPath + "/s0";
-		N5.openFSWriter( baseExportPath ).createDataset( scaleLevelPath, Intervals.dimensionsAsLongArray( boundingBox ), cellSize, getN5DataType( tiles[ 0 ].getType() ), CompressionType.GZIP );
 
-		sparkContext.parallelize( biggerCells ).foreach( biggerCell ->
+		N5.openFSWriter( baseExportPath ).createDataset( fullScaleOutputPath, Intervals.dimensionsAsLongArray( boundingBox ), cellSize, getN5DataType( tiles[ 0 ].getType() ), CompressionType.GZIP );
+
+		sparkContext.parallelize( biggerCells, biggerCells.size() ).foreach( biggerCell ->
 			{
 				final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( tiles, biggerCell );
 				if ( tilesWithinCell.isEmpty() )
@@ -201,7 +216,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 							broadcastedPairwiseConnectionsMap.value() );
 
 				final N5Writer n5Local = N5.openFSWriter( baseExportPath );
-				N5Utils.saveBlock( outImg, n5Local, scaleLevelPath, biggerCellGridPosition );
+				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridPosition );
 			}
 		);
 	}
