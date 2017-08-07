@@ -49,6 +49,7 @@ public class TileOperations
 		return new Boundaries( paddedMin, paddedMax );
 	}
 
+	// TODO: remove as it duplicates Intervals.smallestContainingInterval() functionality
 	public static Interval floorCeilRealInterval( final RealInterval realInterval )
 	{
 		final long[] min = new long[ realInterval.numDimensions() ], max = new long[ realInterval.numDimensions() ];
@@ -171,7 +172,7 @@ public class TileOperations
 	/**
 	 * @return a list of tiles lying within specified subregion (overlapping with it)
 	 */
-	public static List< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final long[] min, final int[] dimensions )
+	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final long[] min, final int[] dimensions )
 	{
 		assert min.length == dimensions.length;
 		final TileInfo subregion = new TileInfo( min.length );
@@ -185,9 +186,9 @@ public class TileOperations
 	/**
 	 * @return a list of tiles lying within specified subregion (overlapping with it)
 	 */
-	public static List< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final TileInfo subregion )
+	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final TileInfo subregion )
 	{
-		final List< TileInfo > tilesWithinSubregion = new ArrayList<>();
+		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			if ( TileOperations.overlap( tile, subregion ) )
 				tilesWithinSubregion.add( tile );
@@ -339,12 +340,23 @@ public class TileOperations
 	 */
 	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int subregionsCountPerDim )
 	{
+		final int[] subregionsCountPerDimArr = new int[ space.numDimensions() ];
+		Arrays.fill( subregionsCountPerDimArr, subregionsCountPerDim );
+		return divideSpaceByCount( space, subregionsCountPerDimArr );
+	}
+
+	/**
+	 * Cuts given region into a set of non-overlapping tiles with exactly {@code subregionsCountPerDim} tiles specified for each dimension separately.
+	 * @return a list of non-overlapping tiles that form a given region of space.
+	 */
+	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int[] subregionsCountPerDim )
+	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
 		final int[] sizePlusOneCount = new int[ space.numDimensions() ];
 		for ( int d = 0; d < subregionDimsArr.length; d++ )
 		{
-			subregionDimsArr[ d ] = space.dimension( d ) / subregionsCountPerDim;
-			sizePlusOneCount[ d ] = ( int ) ( space.dimension( d ) - subregionsCountPerDim * subregionDimsArr[ d ] );
+			subregionDimsArr[ d ] = space.dimension( d ) / subregionsCountPerDim[ d ];
+			sizePlusOneCount[ d ] = ( int ) ( space.dimension( d ) - subregionsCountPerDim[ d ] * subregionDimsArr[ d ] );
 		}
 		return divideSpace( space, new FinalDimensions( subregionDimsArr ), sizePlusOneCount );
 	}
@@ -366,7 +378,7 @@ public class TileOperations
 			subregions.get( i ).setIndex( i );
 		return subregions;
 	}
-	private static void divideSpaceRecursive( final Boundaries space, final Dimensions subregionDims, final int[] sizePlusOneCount, final ArrayList< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
+	private static void divideSpaceRecursive( final Boundaries space, final Dimensions subregionDims, final int[] sizePlusOneCount, final List< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
 	{
 		if ( currDim == space.numDimensions() )
 		{
