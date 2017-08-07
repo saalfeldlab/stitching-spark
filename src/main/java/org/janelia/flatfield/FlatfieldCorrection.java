@@ -47,7 +47,6 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
-import net.imglib2.view.RandomAccessiblePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 import scala.Tuple2;
@@ -57,10 +56,10 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 {
 	private static final long serialVersionUID = -8987192045944606043L;
 
-	private static final int SCALE_LEVEL_MIN_PIXELS = 100;
+	private static final int SCALE_LEVEL_MIN_PIXELS = 1;
 	private static final int AVERAGE_SKIP_SLICES = 5;
 
-	private final String histogramsPath, solutionPath;
+	private final String basePath, histogramsPath, solutionPath;
 
 	private transient final JavaSparkContext sparkContext;
 	private transient final TileInfo[] tiles;
@@ -84,22 +83,24 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePairNullable< U, U > loadCorrectionImages( final String vPath, final String zPath )
+	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePairNullable< U, U > loadCorrectionImages( final String sPath, final String tPath, final int dimensionality )
 	{
-		final ImagePlus vImp = ImageImporter.openImage( vPath );
-		final ImagePlus zImp = ImageImporter.openImage( zPath );
-		if ( vImp == null || zImp == null )
+		System.out.println( "Loading flat-field components:" );
+		System.out.println( "  " + sPath );
+		System.out.println( "  " + tPath );
+
+		final ImagePlus sImp = ImageImporter.openImage( sPath );
+		final ImagePlus tImp = ImageImporter.openImage( tPath );
+		if ( sImp == null || tImp == null )
 			return null;
 
-		Utils.workaroundImagePlusNSlices( vImp );
-		Utils.workaroundImagePlusNSlices( zImp );
+		final RandomAccessibleInterval< U > sImg = ImagePlusImgs.from( sImp );
+		final RandomAccessibleInterval< U > tImg = ImagePlusImgs.from( tImp );
 
-		final ImagePlusImg< U, ? > vImg = ImagePlusImgs.from( vImp );
-		final ImagePlusImg< U, ? > zImg = ImagePlusImgs.from( zImp );
+		final RandomAccessible< U > sImgExtended = ( sImg.numDimensions() < dimensionality ? Views.extendBorder( Views.stack( sImg ) ) : sImg );
+		final RandomAccessible< U > tImgExtended = ( tImg.numDimensions() < dimensionality ? Views.extendBorder( Views.stack( tImg ) ) : tImg );
 
-		return new RandomAccessiblePairNullable<>(
-				vImg,
-				zImg.numDimensions() < vImg.numDimensions() ? Views.extendBorder( Views.stack( zImg ) ) : zImg );
+		return new RandomAccessiblePairNullable<>( sImgExtended, tImgExtended );
 	}
 
 	public static <
@@ -132,7 +133,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 		System.out.println( "Working interval is at " + Arrays.toString( Intervals.minAsLongArray( workingInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsLongArray( workingInterval ) ) );
 
-		final String basePath = args.inputFilePath().substring( 0, args.inputFilePath().lastIndexOf( "." ) );
+		basePath = args.inputFilePath().substring( 0, args.inputFilePath().lastIndexOf( "." ) ) + "-flatfield";
 		final String outputPath = basePath + "/" + ( args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr() );
 		histogramsPath = basePath + "/" + "histograms";
 		solutionPath = outputPath + "/" + "solution";
@@ -152,7 +153,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				//.set( "spark.driver.maxResultSize", "8g" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 				//.set( "spark.kryoserializer.buffer.max", "2047m" )
-				.registerKryoClasses( new Class[] { Short.class, Integer.class, Long.class, Double.class, TreeMap.class, TreeMap[].class, long[].class, short[][].class, double[].class, List.class, Tuple2.class, Interval.class, FinalInterval.class, ArrayImg.class, DoubleType.class, DoubleArray.class } )
+				.registerKryoClasses( new Class[] { Integer.class, Long.class, float[].class, Short.class, Double.class, TreeMap.class, TreeMap[].class, long[].class, short[][].class, double[].class, List.class, Tuple2.class, Interval.class, FinalInterval.class, ArrayImg.class, DoubleType.class, DoubleArray.class } )
 				.set( "spark.rdd.compress", "true" )
 				//.set( "spark.executor.heartbeatInterval", "10000000" )
 				//.set( "spark.network.timeout", "10000000" )
@@ -168,6 +169,50 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
+
+
+	private < T extends NativeType< T > & RealType< T > > Tuple2< Double, Double > getStackMinMax( final TileInfo[] tiles )
+	{
+		return sparkContext.parallelize( Arrays.asList( tiles ) ).map( tile ->
+			{
+				final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
+				final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
+				final Cursor< T > cursor = Views.iterable( img ).cursor();
+				double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
+				while ( cursor.hasNext() )
+				{
+					final double val = cursor.next().getRealDouble();
+					min = Math.min( val, min );
+					max = Math.max( val, max );
+				}
+				return new Tuple2<>( min, max );
+			} )
+		.reduce( ( a, b ) -> new Tuple2<>( Math.min( a._1(), b._1() ), Math.max( a._2(), b._2() ) ) );
+	}
+
+	private < T extends NativeType< T > & RealType< T > > Histogram binStack( final TileInfo[] tiles, final double histMinValue, final double histMaxValue, final int bins )
+	{
+		return sparkContext.parallelize( Arrays.asList( tiles ) ).map( tile ->
+			{
+				final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
+				final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
+				final Cursor< T > cursor = Views.iterable( img ).cursor();
+				final Histogram histogram = new Histogram( histMinValue, histMaxValue, bins );
+				while ( cursor.hasNext() )
+					histogram.put( cursor.next().getRealDouble() );
+				return histogram;
+			} )
+		.treeReduce( ( a, b ) ->
+			{
+				a.add( b );
+				return a;
+			},
+			Integer.MAX_VALUE );
+	}
+
+
+
+
 	public < A extends AffineGet & AffineSet, T extends NativeType< T > & RealType< T >, V extends TreeMap< Short, Integer > >
 	void run() throws FileNotFoundException
 	{
@@ -176,6 +221,30 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		System.out.println( "Working with stack of size " + tiles.length );
 		System.out.println( "Output directory: " + solutionPath );
 
+
+//		final Tuple2< Double, Double > stackMinMax = getStackMinMax( tiles );
+//		System.out.println( "Stack values: min = " + stackMinMax._1() + ", max = " + stackMinMax._2() );
+//		if ( stackMinMax != null )
+//		{
+//			final Histogram stackHistogram = binStack( tiles, stackMinMax._1(), stackMinMax._2(), 10000 );
+//			final String stackHistogramFilepath = Paths.get( solutionPath ).getParent().toString() + "/stackHistogram.txt";
+//			Paths.get( stackHistogramFilepath ).getParent().toFile().mkdirs();
+//			try ( final PrintWriter writer = new PrintWriter( stackHistogramFilepath ) )
+//			{
+//				for ( int i = 0; i < stackHistogram.getNumBins(); ++i )
+//					writer.println( stackHistogram.get( i ) );
+//			}
+//			System.out.println( "--------------" );
+//			System.out.println( "Saved stack histogram" );
+//			System.out.println( "quantityTotal = " + stackHistogram.getQuantityTotal() + ", lessThanMin = " + stackHistogram.getQuantityLessThanMin() + ", greaterThanMax = " + stackHistogram.getQuantityGreaterThanMax() );
+//			System.out.println( "--------------" );
+//			return;
+//		}
+
+
+		// FIXME: unify treemap and array histogram collectors
+//		final HistogramsProvider histogramsProvider = new HistogramsProvider(
+//		final boolean exit = !Files.exists( Paths.get( histogramsPath ) );
 		final HistogramsProvider histogramsProvider = new HistogramsProvider(
 				sparkContext,
 				workingInterval,
@@ -183,8 +252,14 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				tiles,
 				fullTileSize,
 				args.histMinValue(), args.histMaxValue(), args.bins() );
+//		if ( exit )
+//		{
+//			System.out.println( "Done" );
+//			return;
+//		}
 
 		System.out.println( "Loading histograms.." );
+		System.out.println( "Specified intensity range: min=" + args.histMinValue() + ", max=" + args.histMaxValue() );
 		final JavaPairRDD< Long, Histogram > rddFullHistograms = histogramsProvider.getHistograms();
 
 		final Histogram referenceHistogram = histogramsProvider.getReferenceHistogram();
@@ -197,12 +272,13 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		System.out.println();
 
 		// save the reference histogram to file so one can plot it
-		final String referenceHistogramFilepath = Paths.get( solutionPath ).getParent().toString() + "/referenceHistogram.txt";
+		final String referenceHistogramFilepath = basePath + "/referenceHistogram-min_" + ( int ) Math.round( args.histMinValue().doubleValue() ) + ",max_" + ( int ) Math.round( args.histMaxValue().doubleValue() ) + ".txt";
 		Paths.get( referenceHistogramFilepath ).getParent().toFile().mkdirs();
 		try ( final PrintWriter writer = new PrintWriter( referenceHistogramFilepath ) )
 		{
+			// (x)BinValue (y)Frequency
 			for ( int i = 0; i < referenceHistogram.getNumBins(); ++i )
-				writer.println( referenceHistogram.get( i ) );
+				writer.println( referenceHistogram.getBinValue( i ) + " " + referenceHistogram.get( i ) );
 		}
 
 		// Define the transform and calculate the image size on each scale level
@@ -299,7 +375,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 			if ( iter % 2 == 0 && lastSolution.getB().numDimensions() > 2 )
 			{
 				final RandomAccessibleInterval< DoubleType > averageTranslationalComponent = averageSolutionComponent( lastSolution.getB() );
-				saveSolutionComponent( iter, 0, averageTranslationalComponent, "z_avg" );
+				saveSolutionComponent( iter, 0, averageTranslationalComponent, "T_avg" );
 
 				lastSolution = new ValuePair<>(
 						lastSolution.getA(),
@@ -311,8 +387,35 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > unpivotedSolution = FlatfieldCorrectionSolver.unpivotSolution(
 				new FlatfieldSolution( lastSolution, offsets ) );
 
-		saveSolutionComponent( iterations - 1, 0, unpivotedSolution.getA(), "v_offset" );
-		saveSolutionComponent( iterations - 1, 0, unpivotedSolution.getB(), "z_offset" );
+		saveSolutionComponent( iterations - 1, 0, unpivotedSolution.getA(), "S_offset" );
+		saveSolutionComponent( iterations - 1, 0, unpivotedSolution.getB(), "T_offset" );
+
+		// save final solution to the main folder for this channel
+		{
+			final ImagePlus sImp = ImageJFunctions.wrap( unpivotedSolution.getA(), "S" );
+			Utils.workaroundImagePlusNSlices( sImp );
+			IJ.saveAsTiff( sImp, basePath + "/" + sImp.getTitle() + ".tif" );
+		}
+
+		{
+			final ImagePlus tImp = ImageJFunctions.wrap( unpivotedSolution.getB(), "T" );
+			Utils.workaroundImagePlusNSlices( tImp );
+			IJ.saveAsTiff( tImp, basePath + "/" + tImp.getTitle() + ".tif" );
+		}
+
+
+		// cleanup the 'fullsize' directory
+		// TODO: add cmd switch to disable this behavior if needed to inspect individual steps
+		try
+		{
+			System.out.println( "Cleaning up temporary files..." );
+			Utils.deleteFolder( Paths.get( solutionPath ).getParent() );
+		}
+		catch ( final IOException e )
+		{
+			System.out.println( "Failed to clean up temporary files:" );
+			e.printStackTrace();
+		}
 
 		elapsed = System.nanoTime() - elapsed;
 		System.out.println( "----------" );
@@ -372,10 +475,10 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	private void saveSolution( final int iteration, final int scale, final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution )
 	{
 		if ( solution.getA() != null )
-			saveSolutionComponent( iteration, scale, solution.getA(), "v" );
+			saveSolutionComponent( iteration, scale, solution.getA(), "S" );
 
 		if ( solution.getB() != null )
-			saveSolutionComponent( iteration, scale, solution.getB(), "z" );
+			saveSolutionComponent( iteration, scale, solution.getB(), "T" );
 	}
 
 	private void saveSolutionComponent( final int iteration, final int scale, final RandomAccessibleInterval< DoubleType > solutionComponent, final String title )
@@ -396,7 +499,10 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < minSize.length; d++ )
 				if (minSize[ d ] > tile.getSize( d ))
+				{
 					minSize[ d ] = tile.getSize( d );
+					System.out.println("  Tile min size: " + Arrays.toString( tile.getSize() ) + ", tile: " + tile.getFilePath() );
+				}
 		return minSize;
 	}
 }

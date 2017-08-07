@@ -372,8 +372,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			// use it as a folder with the input file's name
 			flatfieldCorrectionForChannels.add(
 					FlatfieldCorrection.loadCorrectionImages(
-							channelPathNoExt + "-v.tif",
-							channelPathNoExt + "-z.tif"
+							channelPathNoExt + "-flatfield/S.tif",
+							channelPathNoExt + "-flatfield/T.tif",
+							job.getDimensionality()
 						)
 				);
 		}

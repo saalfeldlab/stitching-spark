@@ -128,8 +128,9 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// prepare flatfield correction images
 			// use it as a folder with the input file's name
 			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
-					channelPathNoExt + "/v.tif",
-					channelPathNoExt + "/z.tif"
+					absoluteChannelPathNoExt + "-flatfield/S.tif",
+					absoluteChannelPathNoExt + "-flatfield/T.tif",
+					job.getDimensionality()
 				);
 			if ( flatfieldCorrection != null )
 				System.out.println( "[Flatfield correction] Broadcasting flatfield correction images" );
@@ -156,6 +157,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final double[][] scalesDouble = new double[ downsamplingFactors.length ][];
 		for ( int s = 0; s < downsamplingFactors.length; ++s )
 			scalesDouble[ s ] = Conversions.toDoubleArray( downsamplingFactors[ s ] );
+
 		final N5ExportMetadata exportMetadata = new N5ExportMetadata( baseExportPath );
 		exportMetadata.setDefaultScales( scalesDouble );
 		exportMetadata.setDefaultPixelResolution( new FinalVoxelDimensions( "um", voxelDimensions ) );

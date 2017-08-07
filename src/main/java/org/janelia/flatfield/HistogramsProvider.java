@@ -15,12 +15,9 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -28,7 +25,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
 import org.janelia.histogram.Histogram;
 import org.janelia.stitching.TileInfo;
-import org.janelia.stitching.Utils;
 import org.janelia.util.TiffSliceReader;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -40,7 +36,7 @@ import ij.ImagePlus;
 import net.imglib2.Cursor;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.img.Img;
+import net.imglib2.SerializableFinalInterval;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.img.list.ListRandomAccess;
@@ -59,13 +55,13 @@ public class HistogramsProvider implements Serializable
 	private static final double REFERENCE_HISTOGRAM_POINTS_PERCENT = 0.25;
 
 	private transient final JavaSparkContext sparkContext;
-	private transient final TileInfo[] tiles;
+	private final TileInfo[] tiles;
 	private final Interval workingInterval;
 	private final String histogramsPath;
 	private final long[] fullTileSize;
 
-	private Double histMinValue, histMaxValue;
-	private final int bins;
+	final Double histMinValue, histMaxValue;
+	final int bins;
 
 	private transient JavaPairRDD< Long, Histogram > rddHistograms;
 	private transient Histogram referenceHistogram;
@@ -88,91 +84,158 @@ public class HistogramsProvider implements Serializable
 		this.histMaxValue = histMaxValue;
 		this.bins = bins;
 
+		// TODO: smarter handling with try/catch
+//		if ( !Files.exists( Paths.get( histogramsPath ) ) )
 		if ( !allHistogramsReady() )
 			populateHistograms();
 	}
 
-	// TreeMap
+	// parallelizing over slices + cache-friendly image loading order
 	@SuppressWarnings("unchecked")
-	private <
-		T extends NativeType< T > & RealType< T >,
-		V extends TreeMap< Integer, Integer > >
-	void populateHistograms() throws FileNotFoundException
+	private < T extends NativeType< T > & RealType< T > > void populateHistograms() throws FileNotFoundException
 	{
-		final JavaRDD< TileInfo > rddTiles = sparkContext.parallelize( Arrays.asList( tiles ) );
-
 		// Check for existing histograms
-		final Set< Integer > remainingSlices = new HashSet<>();
-		for ( int slice = 1; slice <= getNumSlices(); slice++ )
+		final List< Integer > remainingSlices = new ArrayList<>();
+		final int minSlice = ( int ) ( workingInterval.numDimensions() == 3 ? workingInterval.min( 2 ) + 1 : 1 );
+		final int maxSlice = ( int ) ( workingInterval.numDimensions() == 3 ? workingInterval.max( 2 ) + 1 : 1 );
+		for ( int slice = minSlice; slice <= maxSlice; slice++ )
 			if ( !Files.exists( Paths.get( generateSliceHistogramsPath( 0, slice ) ) ) )
 				remainingSlices.add( slice );
 
-		System.out.println( " Remaining slices count = " + remainingSlices.size() );
+		final Interval workingSliceInterval = new SerializableFinalInterval(
+				new long[] { workingInterval.min( 0 ), workingInterval.min( 1 ) },
+				new long[] { workingInterval.max( 0 ), workingInterval.max( 1 ) } );
 
-		for ( final int currentSlice : remainingSlices )
+		System.out.println( "Populating histograms using hash maps..." );
+
+		sparkContext.parallelize( remainingSlices ).zipWithIndex().foreach( tuple ->
+			{
+				final List< TileInfo > tilesList = Arrays.asList( tiles );
+				final int slice = tuple._1(), index = tuple._2().intValue();
+				System.out.println( "  Processing slice " + slice );
+
+				final int slicePixels = ( int ) Intervals.numElements( workingSliceInterval );
+				final List< HashMap< Integer, Integer > > histogramsList = new ArrayList<>( slicePixels );
+				for ( int i = 0; i < slicePixels; ++i )
+					histogramsList.add( new HashMap<>() );
+				final ListImg< HashMap< Integer, Integer > > histogramsImg = new ListImg<>( histogramsList, Intervals.dimensionsAsLongArray( workingSliceInterval ) );
+				final Cursor< HashMap< Integer, Integer > > histogramsImgCursor = Views.flatIterable( histogramsImg ).cursor();
+
+				int done = 0;
+				final int groupSize = remainingSlices.size();
+				for ( int i = 0; i < tilesList.size(); i += groupSize )
+				{
+					final List< TileInfo > tilesGroup = new ArrayList<>( tilesList.subList( i, Math.min( i + groupSize, tilesList.size() ) ) );
+					if ( index < tilesGroup.size() )
+						tilesGroup.add( 0, tilesGroup.remove( index ) );
+					System.out.println( "Processing group of size " + tilesGroup.size() + " with order-index = " + index );
+					for ( final TileInfo tile : tilesGroup )
+					{
+						final ImagePlus imp = TiffSliceReader.readSlice( tile.getFilePath(), slice );
+						final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
+						final Cursor< T > cursor = Views.flatIterable( Views.offsetInterval( img, workingSliceInterval ) ).cursor();
+						while ( cursor.hasNext() || histogramsImgCursor.hasNext() )
+						{
+							final int key = ( int ) cursor.next().getRealDouble();
+							final HashMap< Integer, Integer > histogram = histogramsImgCursor.next();
+							histogram.put( key, histogram.getOrDefault( key, 0 ) + 1 );
+						}
+						imp.close();
+						histogramsImgCursor.reset();
+
+						++done;
+						if ( done % 20 == 0 )
+							System.out.println( "Slice " + slice + ": processed " + done + " images" );
+					}
+				}
+
+				System.out.println( "Obtained result for slice " + slice );
+
+				final List< Tuple2< Long, HashMap< Integer, Integer > > > ret = new ArrayList<>();
+				final long[] position = new long[ workingInterval.numDimensions() ], dimensions = fullTileSize;
+				final RandomAccessibleInterval< HashMap< Integer, Integer > > histogramsGlobal = position.length > 2 ? Views.translate( Views.stack( histogramsImg ), new long[] { 0, 0, slice - 1 } ) : histogramsImg;
+				final Cursor< HashMap< Integer, Integer > > histogramsGlobalCursor = Views.iterable( histogramsGlobal ).localizingCursor();
+				while ( histogramsGlobalCursor.hasNext() )
+				{
+					histogramsGlobalCursor.fwd();
+					histogramsGlobalCursor.localize( position );
+					final long pixelGlobal = IntervalIndexer.positionToIndex( position, dimensions );
+					ret.add( new Tuple2<>( pixelGlobal, histogramsGlobalCursor.get() ) );
+				}
+
+				saveSliceHistogramsToDisk( 0, slice, histogramsList.toArray( new HashMap[ 0 ] ) );
+			} );
+	}
+
+	private void saveSliceHistogramsToDisk( final int scale, final int slice, final HashMap[] hist ) throws FileNotFoundException
+	{
+		final String path = generateSliceHistogramsPath( scale, slice );
+
+		Paths.get( path ).getParent().toFile().mkdirs();
+
+		final OutputStream os = new DataOutputStream(
+				new BufferedOutputStream(
+						new FileOutputStream( path )
+						)
+				);
+
+//		final Kryo kryo = kryoSerializer.newKryo();
+		final Kryo kryo = new Kryo();
+		final MapSerializer serializer = new MapSerializer();
+		serializer.setKeysCanBeNull( false );
+		serializer.setKeyClass( Integer.class, kryo.getSerializer( Integer.class ) );
+		serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
+		kryo.register( HashMap.class, serializer );
+
+		//try ( final Output output = kryoSerializer.newKryoOutput() )
+		//{
+		//	output.setOutputStream( os );
+		try ( final Output output = new Output( os ) )
 		{
-			System.out.println( "  Processing slice " + currentSlice );
-
-			final V[] histograms = rddTiles.treeAggregate(
-				null, // zero value
-
-				// generator
-				( intermediateHist, tile ) ->
-				{
-					final ImagePlus imp = TiffSliceReader.readSlice( tile.getFilePath(), currentSlice );
-					Utils.workaroundImagePlusNSlices( imp );
-
-					final Img< T > img = ImagePlusImgs.from( imp );
-					final Cursor< T > cursor = Views.iterable( img ).localizingCursor();
-					final int[] dimensions = Intervals.dimensionsAsIntArray( img );
-					final int[] position = new int[ dimensions.length ];
-
-					final V[] ret;
-					if ( intermediateHist != null )
-					{
-						ret = intermediateHist;
-					}
-					else
-					{
-						ret = ( V[] ) new TreeMap[ ( int ) img.size() ];
-						for ( int i = 0; i < ret.length; i++ )
-							ret[ i ] = ( V ) new TreeMap< Integer, Integer >();
-					}
-
-					while ( cursor.hasNext() )
-					{
-						cursor.fwd();
-						cursor.localize( position );
-						final int pixel = IntervalIndexer.positionToIndex( position, dimensions );
-						final int key = ( int ) cursor.get().getRealDouble();
-						ret[ pixel ].put( key, ret[ pixel ].getOrDefault( key, 0 ) + 1 );
-					}
-
-					imp.close();
-					return ret;
-				},
-
-				// reducer
-				( a, b ) ->
-				{
-					if ( a == null )
-						return b;
-					else if ( b == null )
-						return a;
-
-					for ( int pixel = 0; pixel < b.length; pixel++ )
-						for ( final Entry< Integer, Integer > entry : b[ pixel ].entrySet() )
-							a[ pixel ].put( entry.getKey(), a[ pixel ].getOrDefault( entry.getKey(), 0 ) + entry.getValue() );
-					return a;
-				},
-
-				Integer.MAX_VALUE ); // max possible aggregation depth
-
-			System.out.println( "Obtained result for slice " + currentSlice + ", saving..");
-
-			saveSliceHistogramsToDisk( 0, currentSlice, histograms );
+			kryo.writeObject( output, hist );
 		}
 	}
+	private ListImg< HashMap< Integer, Integer > > readSliceHistogramsFromDisk( final int slice )
+	{
+		return new ListImg<>( Arrays.asList( readSliceHistogramsArrayFromDisk( 0, slice ) ), new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } );
+	}
+	private HashMap[] readSliceHistogramsArrayFromDisk( final int scale, final int slice )
+	{
+		System.out.println( "Loading slice " + slice );
+		final String path = generateSliceHistogramsPath( scale, slice );
+
+		if ( !Files.exists(Paths.get(path)) )
+			return null;
+
+		try
+		{
+			final InputStream is = new DataInputStream(
+					new BufferedInputStream(
+							new FileInputStream( path )
+							)
+					);
+
+//			final Kryo kryo = kryoSerializer.newKryo();
+			final Kryo kryo = new Kryo();
+
+			final MapSerializer serializer = new MapSerializer();
+			serializer.setKeysCanBeNull( false );
+			serializer.setKeyClass( Integer.class, kryo.getSerializer( Integer.class ) );
+			serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
+			kryo.register( HashMap.class, serializer );
+
+			try ( final Input input = new Input( is ) )
+			{
+				return kryo.readObject( input, HashMap[].class );
+			}
+		}
+		catch ( final IOException e )
+		{
+			e.printStackTrace();
+			return null;
+		}
+	}
+
 
 	public JavaPairRDD< Long, Histogram > getHistograms()
 	{
@@ -180,7 +243,8 @@ public class HistogramsProvider implements Serializable
 			loadHistograms();
 		return rddHistograms;
 	}
-	private < V extends TreeMap< Integer, Integer > > void loadHistograms()
+
+	private void loadHistograms()
 	{
 		final List< Integer > slices = new ArrayList<>();
 		for ( int slice = ( workingInterval.numDimensions() > 2 ? ( int ) workingInterval.min( 2 ) + 1 : 1 ); slice <= ( workingInterval.numDimensions() > 2 ? ( int ) workingInterval.max( 2 ) + 1 : 1 ); slice++ )
@@ -189,16 +253,16 @@ public class HistogramsProvider implements Serializable
 		System.out.println( "Opening " + slices.size() + " slice histogram files" );
 		final JavaRDD< Integer > rddSlices = sparkContext.parallelize( slices );
 
-		final JavaPairRDD< Long, V > rddTreeMaps = rddSlices
+		rddHistograms = rddSlices
 				.flatMapToPair( slice ->
 					{
-						final RandomAccessibleInterval< V > sliceHistograms = readSliceHistogramsFromDisk( slice );
+						final RandomAccessibleInterval< HashMap< Integer, Integer > > sliceHistograms = readSliceHistogramsFromDisk( slice );
 						final Interval sliceInterval = Intervals.createMinMax( workingInterval.min( 0 ), workingInterval.min( 1 ), workingInterval.max( 0 ), workingInterval.max( 1 ) );
-						final IntervalView< V > sliceHistogramsInterval = Views.offsetInterval( sliceHistograms, sliceInterval );
-						final ListImg< Tuple2< Long, V > > ret = new ListImg<>( Intervals.dimensionsAsLongArray( sliceHistogramsInterval ), null );
+						final IntervalView< HashMap< Integer, Integer > > sliceHistogramsInterval = Views.offsetInterval( sliceHistograms, sliceInterval );
+						final ListImg< Tuple2< Long, HashMap< Integer, Integer > > > ret = new ListImg<>( Intervals.dimensionsAsLongArray( sliceHistogramsInterval ), null );
 
-						final Cursor< V > srcCursor = Views.iterable( sliceHistogramsInterval ).localizingCursor();
-						final ListRandomAccess< Tuple2< Long, V > > dstRandomAccess = ret.randomAccess();
+						final Cursor< HashMap< Integer, Integer > > srcCursor = Views.iterable( sliceHistogramsInterval ).localizingCursor();
+						final ListRandomAccess< Tuple2< Long, HashMap< Integer, Integer > > > dstRandomAccess = ret.randomAccess();
 
 						final long[] workingDimensions = Intervals.dimensionsAsLongArray( workingInterval );
 
@@ -213,94 +277,15 @@ public class HistogramsProvider implements Serializable
 									srcCursor.get() ) );
 						}
 						return ret.iterator();
-					} );
-
-		if ( histMinValue == null || histMaxValue == null )
-		{
-			rddTreeMaps.persist( StorageLevel.MEMORY_ONLY_SER() );
-
-			// extract value statistics accumulating all histograms together
-			final TreeMap< Integer, Long > valueStats = rddTreeMaps.map( tuple ->
-				{
-					final TreeMap< Integer, Long > ret = new TreeMap<>();
-					for ( final Entry< Integer, Integer > entry : tuple._2().entrySet() )
-						ret.put( entry.getKey(), entry.getValue().longValue() );
-					return ret;
-				} )
-			.treeReduce( ( ret, other ) ->
-				{
-					for ( final Entry< Integer, Long > entry : other.entrySet() )
-						ret.put( entry.getKey(), ret.getOrDefault( entry.getKey(), 0l ) + entry.getValue() );
-					return ret;
-				} );
-			System.out.println();
-			System.out.println( "Value stats:" );
-			for ( final Entry< Integer, Long > entry : valueStats.entrySet() )
-				System.out.println( entry.getKey() + ": " + entry.getValue() );
-			System.out.println();
-
-			// extract 10 min/max values from the histograms
-			final int statsCount = 10;
-			final Tuple2< TreeSet< Integer >, TreeSet< Integer > > histMinsMaxs = rddTreeMaps
-					.map( tuple -> tuple._2() )
-					.treeAggregate(
-						new Tuple2<>( new TreeSet<>(), new TreeSet<>() ),
-						( ret, map ) ->
-							{
-								final TreeSet< Integer > mins = ret._1(), maxs = ret._2();
-								for ( final Integer key : map.keySet() )
-								{
-									mins.add( key );
-									while ( mins.size() > statsCount )
-										mins.remove( mins.last() );
-
-									maxs.add( key );
-									while ( maxs.size() > statsCount )
-										maxs.remove( maxs.first() );
-								}
-								return new Tuple2<>( mins, maxs );
-							},
-						( ret, val ) ->
-							{
-								final TreeSet< Integer > mins = ret._1(), maxs = ret._2();
-
-								mins.addAll( val._1() );
-								while ( mins.size() > statsCount )
-									mins.remove( mins.last() );
-
-								maxs.addAll( val._2() );
-								while ( maxs.size() > statsCount )
-									maxs.remove( maxs.first() );
-
-								return ret;
-							},
-							Integer.MAX_VALUE ); // max possible aggregation depth
-			System.out.println();
-			System.out.println( "Min " + statsCount + " values: " + histMinsMaxs._1() );
-			System.out.println( "Max " + statsCount + " values: " + histMinsMaxs._2().descendingSet() );
-			System.out.println();
-			final Tuple2< Integer, Integer > histMinMax = new Tuple2<>( histMinsMaxs._1().first(), histMinsMaxs._2().last() );
-
-
-			histMinValue = new Double( histMinMax._1() );
-			histMaxValue = new Double( histMinMax._2() );
-		}
-
-		System.out.println( "Histograms min=" + histMinValue + ", max=" + histMaxValue );
-
-		rddHistograms = rddTreeMaps
+					} )
 				.mapValues( map ->
 					{
 						final Histogram histogram = new Histogram( histMinValue, histMaxValue, bins );
 						for ( final Entry< Integer, Integer > entry : map.entrySet() )
 							histogram.put( entry.getKey(), entry.getValue() );
 						return histogram;
-					} );
-
-		// enforce the computation so we can unpersist the parent RDD after that
-		System.out.println( "Total histograms (pixels) count = " + rddHistograms.persist( StorageLevel.MEMORY_ONLY_SER() ).count() );
-
-		rddTreeMaps.unpersist();
+					} )
+				.persist( StorageLevel.MEMORY_ONLY_SER() );
 	}
 
 
@@ -334,9 +319,9 @@ public class HistogramsProvider implements Serializable
 			.join( rddHistograms )
 			.map( item -> item._2()._2() )
 			.treeReduce(
-				( ret, other ) ->
+				( ret, histogram ) ->
 				{
-					ret.add( other );
+					ret.add( histogram );
 					return ret;
 				},
 				Integer.MAX_VALUE // max possible aggregation depth
@@ -346,6 +331,7 @@ public class HistogramsProvider implements Serializable
 
 		return accumulatedHistograms;
 	}
+
 
 	private boolean allHistogramsReady()
 	{
@@ -364,138 +350,4 @@ public class HistogramsProvider implements Serializable
 	{
 		return ( int ) ( workingInterval.numDimensions() == 3 ? workingInterval.dimension( 2 ) : 1 );
 	}
-
-	private < V extends TreeMap< Integer, Integer > > void saveSliceHistogramsToDisk( final int scale, final int slice, final V[] hist ) throws FileNotFoundException
-	{
-		final String path = generateSliceHistogramsPath( scale, slice );
-
-		Paths.get( path ).getParent().toFile().mkdirs();
-
-		final OutputStream os = new DataOutputStream(
-				new BufferedOutputStream(
-						new FileOutputStream( path )
-						)
-				);
-
-//		final Kryo kryo = kryoSerializer.newKryo();
-		final Kryo kryo = new Kryo();
-		final MapSerializer serializer = new MapSerializer();
-		serializer.setKeysCanBeNull( false );
-		serializer.setKeyClass( Integer.class, kryo.getSerializer( Integer.class ) );
-		serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
-		kryo.register( TreeMap.class, serializer );
-
-		//try ( final Output output = kryoSerializer.newKryoOutput() )
-		//{
-		//	output.setOutputStream( os );
-		try ( final Output output = new Output( os ) )
-		{
-			kryo.writeClassAndObject( output, hist );
-		}
-	}
-
-	private < V extends TreeMap< Integer, Integer > > ListImg< V > readSliceHistogramsFromDisk( final int slice )
-	{
-		return new ListImg<>( Arrays.asList( readSliceHistogramsArrayFromDisk( 0, slice ) ), new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } );
-	}
-	@SuppressWarnings("unchecked")
-	private < V extends TreeMap< Integer, Integer > > V[] readSliceHistogramsArrayFromDisk( final int scale, final int slice )
-	{
-		System.out.println( "Loading slice " + slice );
-		final String path = generateSliceHistogramsPath( scale, slice );
-
-		if ( !Files.exists(Paths.get(path)) )
-			return null;
-
-		try
-		{
-			final InputStream is = new DataInputStream(
-					new BufferedInputStream(
-							new FileInputStream( path )
-							)
-					);
-
-//			final Kryo kryo = kryoSerializer.newKryo();
-			final Kryo kryo = new Kryo();
-
-			final MapSerializer serializer = new MapSerializer();
-			serializer.setKeysCanBeNull( false );
-			serializer.setKeyClass( Integer.class, kryo.getSerializer( Integer.class ) );
-			serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
-			kryo.register( TreeMap.class, serializer );
-
-			try ( final Input input = new Input( is ) )
-			{
-				return ( V[] ) kryo.readClassAndObject( input );
-			}
-		}
-		catch ( final IOException e )
-		{
-			e.printStackTrace();
-			return null;
-		}
-	}
-
-
-
-	// Arrays, slow??
-	/*private < T extends NativeType< T > & RealType< T > > void populateHistograms() throws Exception
-	{
-		final JavaRDD< TileInfo > rddTiles = sparkContext.parallelize( Arrays.asList( tiles ) );
-
-		// Check for existing histograms
-		final Set< Integer > remainingSlices = new HashSet<>();
-		for ( int slice = 1; slice <= getNumSlices(); slice++ )
-			if ( !Files.exists( Paths.get( generateSliceHistogramsPath( 0, slice ) ) ) )
-				remainingSlices.add( slice );
-
-		final int slicePixelsCount = ( int ) ( workingInterval.dimension( 0 ) * workingInterval.dimension( 1 ) );
-
-		for ( final int currentSlice : remainingSlices )
-		{
-			System.out.println( "  Processing slice " + currentSlice );
-
-			final short[][] histograms = rddTiles.treeAggregate(
-				new short[ slicePixelsCount ][ bins ],	// zero value
-
-				// generator
-				( intermediateHist, tile ) ->
-				{
-					final ImagePlus imp = TiffSliceLoader.loadSlice( tile, currentSlice );
-					Utils.workaroundImagePlusNSlices( imp );
-
-					final Img< T > img = ImagePlusImgs.from( imp );
-					final Cursor< T > cursor = Views.iterable( img ).localizingCursor();
-					final int[] dimensions = Intervals.dimensionsAsIntArray( img );
-					final int[] position = new int[ dimensions.length ];
-
-					while ( cursor.hasNext() )
-					{
-						cursor.fwd();
-						cursor.localize( position );
-						final int pixel = IntervalIndexer.positionToIndex( position, dimensions );
-						final short val = ( short ) cursor.get().getRealDouble();
-						intermediateHist[ pixel ][ getBinIndex( val ) ]++;
-					}
-
-					imp.close();
-					return intermediateHist;
-				},
-
-				// reducer
-				( a, b ) ->
-				{
-					for ( int pixel = 0; pixel < a.length; pixel++ )
-						for ( int i = 0; i < bins; i++ )
-						a[ pixel ][ i ] += b[ pixel ][ i ];
-					return a;
-				},
-
-				getAggregationTreeDepth() );
-
-			System.out.println( "Obtained result for slice " + currentSlice + ", saving..");
-
-			saveSliceArrayHistogramsToDisk( 0, currentSlice, histograms );
-		}
-	}*/
 }
