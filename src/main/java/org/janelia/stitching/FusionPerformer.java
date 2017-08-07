@@ -37,7 +37,6 @@ import net.imglib2.realtransform.Translation2D;
 import net.imglib2.realtransform.Translation3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
-import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsNullable;
@@ -317,7 +316,7 @@ public class FusionPerformer
 		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), ( T ) imageType.getType().createVariable() );
 
 		// initialize helper image for hard-cut fusion strategy
-		final RandomAccessibleInterval< DoubleType > maxMinDistances = ArrayImgs.doubles(
+		final RandomAccessibleInterval< FloatType > maxMinDistances = ArrayImgs.floats(
 				Intervals.dimensionsAsLongArray( targetInterval ) );
 
 		// initialize helper image for tile connections when exporting only overlaps
@@ -390,19 +389,19 @@ public class FusionPerformer
 			}
 
 			final RandomAccessibleInterval< T > outInterval = Views.interval( out, intersectionIntervalInTargetInterval ) ;
-			final RandomAccessibleInterval< DoubleType > maxMinDistanceInterval = Views.interval( maxMinDistances, intersectionIntervalInTargetInterval ) ;
+			final RandomAccessibleInterval< FloatType > maxMinDistanceInterval = Views.interval( maxMinDistances, intersectionIntervalInTargetInterval ) ;
 			final RandomAccessibleInterval< Set< Integer > > tileIndexesInterval = tileIndexes != null ? Views.interval( tileIndexes, intersectionIntervalInTargetInterval ) : null;
 
 			final Cursor< R > sourceCursor = Views.flatIterable( sourceInterval ).localizingCursor();
 			final Cursor< T > outCursor = Views.flatIterable( outInterval ).cursor();
-			final Cursor< DoubleType > maxMinDistanceCursor = Views.flatIterable( maxMinDistanceInterval ).cursor();
+			final Cursor< FloatType > maxMinDistanceCursor = Views.flatIterable( maxMinDistanceInterval ).cursor();
 			final Cursor< Set< Integer > > tileIndexesCursor = tileIndexesInterval != null ? Views.flatIterable( tileIndexesInterval ).cursor() : null;
 
 			while ( sourceCursor.hasNext() || outCursor.hasNext() || maxMinDistanceCursor.hasNext() || ( tileIndexesCursor != null && tileIndexesCursor.hasNext() ) )
 			{
 				sourceCursor.fwd();
 				outCursor.fwd();
-				final DoubleType maxMinDistance = maxMinDistanceCursor.next();
+				final FloatType maxMinDistance = maxMinDistanceCursor.next();
 				double minDistance = Double.MAX_VALUE;
 				for ( int d = 0; d < offset.length; ++d )
 				{
@@ -414,7 +413,7 @@ public class FusionPerformer
 				}
 				if ( minDistance >= maxMinDistance.get() )
 				{
-					maxMinDistance.set( minDistance );
+					maxMinDistance.setReal( minDistance );
 					outCursor.get().setReal( sourceCursor.get().getRealDouble() );
 				}
 
