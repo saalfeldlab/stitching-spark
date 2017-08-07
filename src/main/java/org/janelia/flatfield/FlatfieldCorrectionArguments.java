@@ -33,11 +33,11 @@ public class FlatfieldCorrectionArguments
 
 	@Option(name = "--min", required = false,
 			usage = "Min value of a histogram")
-	private Double histMinValue = null;
+	private double histMinValue = 80;
 
 	@Option(name = "--max", required = false,
 			usage = "Max value of a histogram")
-	private Double histMaxValue = null;
+	private double histMaxValue = 500;
 
 
 	private boolean parsedSuccessfully = false;
