@@ -168,9 +168,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final long[] offset = Intervals.minAsLongArray( boundingBox );
 		final long[] dimensions = Intervals.dimensionsAsLongArray( boundingBox );
 
+		// use the size of the tile as a bigger cell to minimize the number of loads for each image
 		final int[] biggerCellSize = new int[ cellSize.length ];
 		for ( int d = 0; d < biggerCellSize.length; ++d )
-			biggerCellSize[ d ] = cellSize[ d ] * 4;
+			biggerCellSize[ d ] = cellSize[ d ] * ( int ) Math.ceil( ( double ) tiles[ 0 ].getSize( d ) / cellSize[ d ] );
+		System.out.println( "Adjusted intermediate cell size to " + Arrays.toString( biggerCellSize ) + " (for faster processing)" );
 
 		final List< TileInfo > biggerCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );
 		final String scaleLevelPath = channelPath + "/s0";
