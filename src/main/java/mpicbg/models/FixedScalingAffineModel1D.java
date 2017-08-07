@@ -2,16 +2,10 @@ package mpicbg.models;
 
 import java.util.Collection;
 
-import mpicbg.models.AbstractAffineModel1D;
-import mpicbg.models.InvertibleBoundable;
-import mpicbg.models.NoninvertibleModelException;
-import mpicbg.models.NotEnoughDataPointsException;
-import mpicbg.models.PointMatch;
-
 /**
- *
- * @author Igor Pisarev &lt;pisarevi@janelia.hhmi.org&gt;
- */
+*
+* @author Igor Pisarev &lt;pisarevi@janelia.hhmi.org&gt;
+*/
 public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScalingAffineModel1D > implements InvertibleBoundable
 {
 	private static final long serialVersionUID = 7192480772943234240L;

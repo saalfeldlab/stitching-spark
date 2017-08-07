@@ -45,7 +45,6 @@ public class StitchingJob implements Serializable {
 
 	private List< TileInfo[] > tilesMultichannel;
 
-
 	public StitchingJob( final StitchingArguments args )
 	{
 		this.args = args;
@@ -123,6 +122,7 @@ public class StitchingJob implements Serializable {
 		double[] pixelResolution = getPixelResolution();
 		if ( pixelResolution == null )
 			pixelResolution = new double[] { 0.097, 0.097, 0.18 };
+
 		for ( final TileInfo[] tiles : tilesMultichannel )
 		{
 			if ( tiles.length < 2 )

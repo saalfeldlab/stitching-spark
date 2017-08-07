@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.janelia.stitching.Utils;
+import org.janelia.util.ImageImporter;
 
-import ij.IJ;
 import ij.ImageJ;
 import ij.ImagePlus;
 import net.imglib2.FinalInterval;
@@ -28,8 +28,7 @@ public class ShiftedDownsamplingTest
 	{
 		final String filepath = args[ 0 ];
 
-		final ImagePlus imp = IJ.openImage( filepath );
-		Utils.workaroundImagePlusNSlices( imp );
+		final ImagePlus imp = ImageImporter.openImage( filepath );
 		final RandomAccessibleInterval< T > img = ( RandomAccessibleInterval< T > ) ImagePlusImgs.from( imp );
 
 		final A downsamplingTransform;

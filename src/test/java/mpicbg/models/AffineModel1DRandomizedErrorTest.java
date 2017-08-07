@@ -1,15 +1,18 @@
 package mpicbg.models;
 
+import static org.junit.Assert.fail;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-import org.junit.Assert;
 import org.junit.Test;
 
 public class AffineModel1DRandomizedErrorTest
 {
+	private static final double EPSILON = 1e-4;
+
 	private final Random rnd = new Random();
 
 	@Test
@@ -40,17 +43,10 @@ public class AffineModel1DRandomizedErrorTest
 				testError += Point.squareDistance( match.getP1(), match.getP2() ) * match.getWeight();
 			}
 
-			try
-			{
-				Assert.assertTrue( testError >= error );
-			}
-			catch ( final AssertionError e )
-			{
-				System.out.println( String.format( "[FixedScalingModelTest] Assertion error!\nEstimated model = %s,  error = %f\nTest model = %s,  test error = %f\n",
+			if ( testError < error - EPSILON )
+				fail( String.format( "[FixedScalingModelTest] Assertion error!\nEstimated model = %s,  error = %f\nTest model = %s,  test error = %f\n",
 						Arrays.toString( model.getMatrix( null ) ), error,
 						Arrays.toString( testModel.getMatrix( null ) ), testError ) );
-				throw e;
-			}
 		}
 	}
 
@@ -68,7 +64,6 @@ public class AffineModel1DRandomizedErrorTest
 			match.apply( model );
 			error += Point.squareDistance( match.getP1(), match.getP2() ) * match.getWeight();
 		}
-		System.out.println( "Estimated FixedTranslationModel = " + Arrays.toString( model.getMatrix( null ) ) + ",  error = " + error );
 
 		for ( int iters = 0; iters < 500000; ++iters )
 		{
@@ -83,17 +78,10 @@ public class AffineModel1DRandomizedErrorTest
 				testError += Point.squareDistance( match.getP1(), match.getP2() ) * match.getWeight();
 			}
 
-			try
-			{
-				Assert.assertTrue( testError >= error );
-			}
-			catch ( final AssertionError e )
-			{
-				System.out.println( String.format( "[FixedTranslationModelTest] Assertion error!\nEstimated model = %s,  error = %f\nTest model = %s,  test error = %f\n",
+			if ( testError < error - EPSILON )
+				fail( String.format( "[FixedTranslationModelTest] Assertion error!\nEstimated model = %s,  error = %f\nTest model = %s,  test error = %f\n",
 						Arrays.toString( model.getMatrix( null ) ), error,
 						Arrays.toString( testModel.getMatrix( null ) ), testError ) );
-				throw e;
-			}
 		}
 	}
 

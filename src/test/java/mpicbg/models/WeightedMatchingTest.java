@@ -10,16 +10,9 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import mpicbg.models.AbstractAffineModel1D;
-import mpicbg.models.AffineModel1D;
-import mpicbg.models.IllDefinedDataPointsException;
-import mpicbg.models.NotEnoughDataPointsException;
-import mpicbg.models.Point;
-import mpicbg.models.PointMatch;
-
 public class WeightedMatchingTest
 {
-private static final double DELTA = 1e-9;
+	private static final double DELTA = 1e-9;
 
 	private double[] p, q, w;
 	private double[] expectedModel;

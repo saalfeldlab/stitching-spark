@@ -59,7 +59,7 @@ public class StitchingSpark implements Serializable, AutoCloseable
 		final StitchingParameters params = new StitchingParameters();
 		params.channel1 = 1;
 		params.channel2 = 1;
-		params.checkPeaks = 100;
+		params.checkPeaks = 10;
 		params.computeOverlap = true;
 		params.subpixelAccuracy = true;
 		params.virtual = false;

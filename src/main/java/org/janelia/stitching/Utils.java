@@ -123,7 +123,6 @@ public class Utils {
 		final ImagePlus imp = ( img instanceof ImagePlusImg ? ((ImagePlusImg)img).getImagePlus() : ImageJFunctions.wrap( img, "" ) );
 		Utils.workaroundImagePlusNSlices( imp );
 		tile.setType( ImageType.valueOf( imp.getType() ) );
-		System.out.println( "Saving the resulting file for cell " + tile.getIndex() );
 		IJ.saveAsTiff( imp, tile.getFilePath() );
 		imp.close();
 	}

@@ -21,12 +21,9 @@ public class FindTilesAtPoint
 	public static void main( final String[] args ) throws FileNotFoundException, IOException
 	{
 		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
-		TileOperations.translateTilesToOrigin( tiles );
+		TileOperations.translateTilesToOriginReal( tiles );
 
 		final double[] point = Conversions.parseDoubleArray( args[ 1 ].split( "," ) );
-
-		for ( final TileInfo tile : tiles )
-			System.out.println( "  " + tile.getIndex() + ":   " + Arrays.toString( tile.getPosition() ) );
 
 		final TileInfo subregion = new TileInfo( point.length );
 		subregion.setPosition( point );

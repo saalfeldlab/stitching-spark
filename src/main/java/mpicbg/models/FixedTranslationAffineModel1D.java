@@ -2,13 +2,6 @@ package mpicbg.models;
 
 import java.util.Collection;
 
-import mpicbg.models.AbstractAffineModel1D;
-import mpicbg.models.IllDefinedDataPointsException;
-import mpicbg.models.InvertibleBoundable;
-import mpicbg.models.NoninvertibleModelException;
-import mpicbg.models.NotEnoughDataPointsException;
-import mpicbg.models.PointMatch;
-
 /**
 *
 * @author Igor Pisarev &lt;pisarevi@janelia.hhmi.org&gt;
@@ -116,7 +109,7 @@ public class FixedTranslationAffineModel1D extends AbstractAffineModel1D< FixedT
 
 		final double[] pX = p[ 0 ];
 		final double[] qX = q[ 0 ];
-		
+
 		double a = 0;
 		double b = 0;
 		for ( int i = 0; i < l; ++i )
@@ -165,7 +158,7 @@ public class FixedTranslationAffineModel1D extends AbstractAffineModel1D< FixedT
 
 		final float[] pX = p[ 0 ];
 		final float[] qX = q[ 0 ];
-		
+
 		double a = 0;
 		double b = 0;
 		for ( int i = 0; i < l; ++i )
@@ -200,12 +193,12 @@ public class FixedTranslationAffineModel1D extends AbstractAffineModel1D< FixedT
 
 		double a = 0;
 		double b = 0;
-		
+
 		for ( final P m : matches )
 		{
 			final double[] p = m.getP1().getL();
 			final double[] q = m.getP2().getW();
-		
+
 			final double px = p[ 0 ];
 			final double qx = q[ 0 ] - m01;
 			final double wwpx = m.getWeight() * px;

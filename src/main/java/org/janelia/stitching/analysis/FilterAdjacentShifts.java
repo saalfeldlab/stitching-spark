@@ -143,7 +143,7 @@ public class FilterAdjacentShifts
 				}
 			}
 
-			// just for Sample9
+			// only for Sample9
 			shift.setIsValidOverlap( true );
 			adjacentShifts.add( shift );
 		}
@@ -195,8 +195,16 @@ public class FilterAdjacentShifts
 					shortEdgeDims.add( d );
 			}
 
-			if ( shortEdgeDims.size() == 1 && ( dim == null || dim.equals( shortEdgeDims.get( 0 ) ) ) )
-				adjacentPairs.add( pair );
+			if ( dim == null )
+			{
+				if ( shortEdgeDims.size() <= 1 )
+					adjacentPairs.add( pair );
+			}
+			else
+			{
+				if ( shortEdgeDims.size() == 1 && dim.equals( shortEdgeDims.get( 0 ) ) )
+					adjacentPairs.add( pair );
+			}
 		}
 		return adjacentPairs;
 	}
