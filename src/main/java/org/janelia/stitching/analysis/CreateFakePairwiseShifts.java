@@ -46,7 +46,7 @@ public class CreateFakePairwiseShifts
 					)
 			{
 				// non-adjacent shift doesn't need to be computed, replace it with a fake
-				final SerializablePairWiseStitchingResult shift = new SerializablePairWiseStitchingResult( pair, new float[pair.getA().numDimensions()], 0,  0 );
+				final SerializablePairWiseStitchingResult shift = new SerializablePairWiseStitchingResult( pair, new float[pair.getA().numDimensions()], 0.f, 0.f );
 				shift.setIsValidOverlap( false );
 				nonAdjacentShifts.add( shift );
 			}
