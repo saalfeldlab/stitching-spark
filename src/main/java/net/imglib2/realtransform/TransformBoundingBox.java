@@ -44,15 +44,12 @@ public class TransformBoundingBox
 			Boundaries boundary = ti.getBoundaries();
 			FinalInterval newbbox = boundingBoxCorners( boundary, invxfm );
 			
-			TileInfo bboxTile = new TileInfo( ti.numDimensions() );
+			final TileInfo bboxTile = ti.clone();
+
 			// set bbox relevant stuff
 			bboxTile.setPosition( Intervals.minAsDoubleArray( newbbox ) );
 			bboxTile.setSize( Intervals.dimensionsAsLongArray(newbbox) );
 
-			// copy everything else from the old tile info
-			bboxTile.setIndex( ti.getIndex() );
-			bboxTile.setFilePath( ti.getFilePath() );
-			bboxTile.setType( ti.getType() );
 			
 			out[ i++ ] = bboxTile;
 		}
