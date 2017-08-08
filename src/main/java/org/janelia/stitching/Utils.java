@@ -1,7 +1,13 @@
 package org.janelia.stitching;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -14,7 +20,6 @@ import org.janelia.util.Conversions;
 
 import ij.IJ;
 import ij.ImagePlus;
-import mpicbg.spim.data.sequence.VoxelDimensions;
 import mpicbg.stitching.ImageCollectionElement;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.img.Img;
@@ -118,7 +123,6 @@ public class Utils {
 		final ImagePlus imp = ( img instanceof ImagePlusImg ? ((ImagePlusImg)img).getImagePlus() : ImageJFunctions.wrap( img, "" ) );
 		Utils.workaroundImagePlusNSlices( imp );
 		tile.setType( ImageType.valueOf( imp.getType() ) );
-		System.out.println( "Saving the resulting file for cell " + tile.getIndex() );
 		IJ.saveAsTiff( imp, tile.getFilePath() );
 		imp.close();
 	}
@@ -200,67 +204,88 @@ public class Utils {
 	}
 
 
-	public static List< Pair< TileInfo, int[] > > getTileCoordinates( final TileInfo[] tiles ) throws Exception
+	public static int[] getTileCoordinates( final TileInfo tile ) throws Exception
 	{
-		final List< Pair< TileInfo, int[] > > tileCoordinates = new ArrayList<>();
+		return getTileCoordinates( Paths.get( tile.getFilePath() ).getFileName().toString() );
+	}
+	public static int[] getTileCoordinates( final String filename ) throws Exception
+	{
 		final String coordsPatternStr = ".*(\\d{3})x_(\\d{3})y_(\\d{3})z.*";
 		final Pattern coordsPattern = Pattern.compile( coordsPatternStr );
-		for ( final TileInfo tile : tiles )
-		{
-			final String filename = Paths.get( tile.getFilePath() ).getFileName().toString();
-			final Matcher matcher = coordsPattern.matcher( filename );
-			if ( !matcher.find() )
-				throw new Exception( "Can't parse coordinates" );
+		final Matcher matcher = coordsPattern.matcher( filename );
+		if ( !matcher.find() )
+			throw new Exception( "Can't parse coordinates" );
 
-			// don't forget to swap X and Y axes
-			final int[] coordinates = new int[]
-					{
-						Integer.parseInt( matcher.group( 2 ) ),
-						Integer.parseInt( matcher.group( 1 ) ),
-						Integer.parseInt( matcher.group( 3 ) )
-					};
-			tileCoordinates.add( new ValuePair<>( tile, coordinates ) );
-		}
+		// don't forget to swap X and Y axes
+		final int[] coordinates = new int[]
+				{
+					Integer.parseInt( matcher.group( 2 ) ),
+					Integer.parseInt( matcher.group( 1 ) ),
+					Integer.parseInt( matcher.group( 3 ) )
+				};
+		return coordinates;
+	}
+	public static String getTileCoordinatesString( final TileInfo tile ) throws Exception
+	{
+		return getTileCoordinatesString( Paths.get( tile.getFilePath() ).getFileName().toString() );
+	}
+	public static String getTileCoordinatesString( final String filename ) throws Exception
+	{
+		final String coordsPatternStr = ".*(\\d{3}x_\\d{3}y_\\d{3}z).*";
+		final Pattern coordsPattern = Pattern.compile( coordsPatternStr );
+		final Matcher matcher = coordsPattern.matcher( filename );
+		if ( !matcher.find() )
+			throw new Exception( "Can't parse coordinates" );
+		return matcher.group( 1 );
+	}
+	public static List< Pair< TileInfo, int[] > > getTilesCoordinates( final TileInfo[] tiles ) throws Exception
+	{
+		final List< Pair< TileInfo, int[] > > tileCoordinates = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+			tileCoordinates.add( new ValuePair<>( tile, getTileCoordinates( tile ) ) );
 		return tileCoordinates;
 	}
-	public static TreeMap< Integer, int[] > getTileCoordinatesMap( final TileInfo[] tiles ) throws Exception
+	public static TreeMap< Integer, int[] > getTilesCoordinatesMap( final TileInfo[] tiles ) throws Exception
 	{
-		final List< Pair< TileInfo, int[] > > coordinates = getTileCoordinates( tiles );
 		final TreeMap< Integer, int[] > coordinatesMap = new TreeMap<>();
-		for ( final Pair< TileInfo, int[] > pair : coordinates )
-			coordinatesMap.put( pair.getA().getIndex(), pair.getB() );
+		for ( final TileInfo tile : tiles )
+			coordinatesMap.put( tile.getIndex(), getTileCoordinates( tile ) );
 		return coordinatesMap;
 	}
 
-	public static List< Pair< TileInfo, Long > > getTileTimestamps( final TileInfo[] tiles ) throws Exception
+	public static long getTileTimestamp( final TileInfo tile ) throws Exception
 	{
-		final List< Pair< TileInfo, Long > > tileTimestamps = new ArrayList<>();
+		return getTileTimestamp( Paths.get( tile.getFilePath() ).getFileName().toString() );
+	}
+	public static long getTileTimestamp( final String filename ) throws Exception
+	{
 		final String timePatternStr = ".*_(\\d*)msecAbs.*";
 		final Pattern timePattern = Pattern.compile( timePatternStr );
-		for ( final TileInfo tile : tiles )
-		{
-			final String filename = Paths.get( tile.getFilePath() ).getFileName().toString();
-			final Matcher matcher = timePattern.matcher( filename );
-			if ( !matcher.find() )
-				throw new Exception( "Can't parse timestamp" );
+		final Matcher matcher = timePattern.matcher( filename );
+		if ( !matcher.find() )
+			throw new Exception( "Can't parse timestamp" );
 
-			final long timestamp = Long.parseLong( matcher.group( 1 ) );
-			tileTimestamps.add( new ValuePair<>( tile, timestamp ) );
-		}
+		final long timestamp = Long.parseLong( matcher.group( 1 ) );
+		return timestamp;
+	}
+	public static List< Pair< TileInfo, Long > > getTilesTimestamps( final TileInfo[] tiles ) throws Exception
+	{
+		final List< Pair< TileInfo, Long > > tileTimestamps = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+			tileTimestamps.add( new ValuePair<>( tile, getTileTimestamp( tile ) ) );
 		return tileTimestamps;
 	}
-	public static TreeMap< Integer, Long > getTileTimestampsMap( final TileInfo[] tiles ) throws Exception
+	public static TreeMap< Integer, Long > getTilesTimestampsMap( final TileInfo[] tiles ) throws Exception
 	{
-		final List< Pair< TileInfo, Long > > timestamps = getTileTimestamps( tiles );
 		final TreeMap< Integer, Long > timestampsMap = new TreeMap<>();
-		for ( final Pair< TileInfo, Long > pair : timestamps )
-			timestampsMap.put( pair.getA().getIndex(), pair.getB() );
+		for ( final TileInfo tile : tiles )
+			timestampsMap.put( tile.getIndex(), getTileTimestamp( tile ) );
 		return timestampsMap;
 	}
 
 	public static List< TileInfo > sortTilesByTimestamp( final TileInfo[] tiles ) throws Exception
 	{
-		final List< Pair< TileInfo, Long > > tileTimestamps = getTileTimestamps( tiles );
+		final List< Pair< TileInfo, Long > > tileTimestamps = getTilesTimestamps( tiles );
 
 		final TreeMap< Long, List< TileInfo > > timestampToTiles = new TreeMap<>();
 		for ( final Pair< TileInfo, Long > tileTimestamp : tileTimestamps )
@@ -278,14 +303,14 @@ public class Utils {
 	}
 
 
-	public static double[] normalizeVoxelDimensions( final VoxelDimensions voxelDimensions )
+	public static double[] normalizeVoxelDimensions( final double[] voxelDimensions )
 	{
-		final double[] normalizedVoxelDimensions = new double[ voxelDimensions.numDimensions() ];
+		final double[] normalizedVoxelDimensions = new double[ voxelDimensions.length ];
 		double voxelDimensionsMinValue = Double.MAX_VALUE;
 		for ( int d = 0; d < normalizedVoxelDimensions.length; d++ )
-			voxelDimensionsMinValue = Math.min( voxelDimensions.dimension( d ), voxelDimensionsMinValue );
+			voxelDimensionsMinValue = Math.min( voxelDimensions[ d ], voxelDimensionsMinValue );
 		for ( int d = 0; d < normalizedVoxelDimensions.length; d++ )
-			normalizedVoxelDimensions[ d ] = voxelDimensions.dimension( d ) / voxelDimensionsMinValue;
+			normalizedVoxelDimensions[ d ] = voxelDimensions[ d ] / voxelDimensionsMinValue;
 		return normalizedVoxelDimensions;
 	}
 
@@ -309,21 +334,24 @@ public class Utils {
 		return groups;
 	}
 
-
-	public static long[] concatArrays( final long[]... arrays )
+	public static void deleteFolder( final Path folderPath ) throws IOException
 	{
-		int totalLength = 0;
-		for ( int i = 0; i < arrays.length; i++ )
-			totalLength += arrays[ i ].length;
+		Files.walkFileTree( folderPath, new SimpleFileVisitor< Path >()
+			{
+			   @Override
+			   public FileVisitResult visitFile( final Path file, final BasicFileAttributes attrs ) throws IOException
+			   {
+			       Files.delete( file );
+			       return FileVisitResult.CONTINUE;
+			   }
 
-		final long[] ret = new long[ totalLength ];
-		int usedLength = 0;
-		for ( int i = 0; i < arrays.length; i++ )
-		{
-			System.arraycopy( arrays[ i ], 0, ret, usedLength, arrays[ i ].length );
-			usedLength += arrays[ i ].length;
-		}
-
-		return ret;
+			   @Override
+			   public FileVisitResult postVisitDirectory( final Path dir, final IOException exc ) throws IOException
+			   {
+			       Files.delete( dir );
+			       return FileVisitResult.CONTINUE;
+			   }
+			}
+		);
 	}
 }

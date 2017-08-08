@@ -50,8 +50,8 @@ public class MultithreadedExecutorTest
 	}
 
 	@After
-	public void tearDown()
+	public void tearDown() throws Exception
 	{
-		multithreadedExecutor.shutdown();
+		multithreadedExecutor.close();
 	}
 }

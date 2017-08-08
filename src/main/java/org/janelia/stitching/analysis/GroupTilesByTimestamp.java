@@ -20,7 +20,7 @@ public class GroupTilesByTimestamp
 			if ( tiles[ i - 1].getIndex().intValue() + 1 != tiles[ i ].getIndex().intValue() )
 				throw new Exception( "Tiles are not sorted by index" );
 
-		final Map< Integer, Long > timestamps = Utils.getTileTimestampsMap( tiles );
+		final Map< Integer, Long > timestamps = Utils.getTilesTimestampsMap( tiles );
 		final List< List< TileInfo > > tileGroups = new ArrayList<>();
 		for ( int i = 0; i < tiles.length; i++ )
 		{

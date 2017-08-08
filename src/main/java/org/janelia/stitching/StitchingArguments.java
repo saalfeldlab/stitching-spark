@@ -1,14 +1,11 @@
 package org.janelia.stitching;
 
 import java.io.Serializable;
-import java.util.Arrays;
+import java.util.List;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
-
-import mpicbg.spim.data.sequence.FinalVoxelDimensions;
-import mpicbg.spim.data.sequence.VoxelDimensions;
 
 /**
  * Command line arguments parser for a stitching job.
@@ -18,35 +15,63 @@ import mpicbg.spim.data.sequence.VoxelDimensions;
 
 public class StitchingArguments implements Serializable {
 
+	public static enum RestitchingMode implements Serializable
+	{
+		FULL,
+		INCREMENTAL
+	}
+
 	private static final long serialVersionUID = -8996450783846140673L;
 
 	@Option(name = "-i", aliases = { "--input" }, required = true,
-			usage = "Path to a tile configuration JSON file")
-	private String inputFilePath;
+			usage = "Path to a tile configuration JSON file. Multiple configurations can be passed at once.")
+	private List< String > inputTileConfigurations;
 
-	@Option(name = "-t", aliases = { "--threshold" }, required = false,
-			usage = "A threshold value of cross correlation for accepting a shift")
-	private double crossCorrelationThreshold = -1.0;
+	@Option(name = "-n", aliases = { "--neighbors" }, required = false,
+			usage = "Min neighborhood for estimating confidence intervals using offset statistics")
+	private int minStatsNeighborhood = 5;
+
+	@Option(name = "-w", aliases = { "--searchwindow" }, required = false,
+			usage = "Search window size for local offset statistics in terms of number of tiles")
+	private String statsWindowSizeTiles = "3,3,3";
 
 	@Option(name = "-f", aliases = { "--fusioncell" }, required = false,
 			usage = "Size of an individual tile when fusing")
-	private int fusionCellSize = 64;
+	private int fusionCellSize = 128;
 
 	@Option(name = "-b", aliases = { "--blursigma" }, required = false,
 			usage = "Sigma value of the gaussian blur preapplied to the images before stitching")
-	private double blurSigma = 1.0;
-
-	@Option(name = "-r", aliases = { "--voxelsize" }, required = false,
-			usage = "Voxel type and dimensions")
-	private String voxelDimensions = "um=1.0,1.0,1.0";
+	private double blurSigma = 2.0;
 
 	@Option(name = "-p", aliases = { "--padding" }, required = false,
 			usage = "Padding for the overlap regions")
 	private String padding = "0,0,0";
 
-	@Option(name = "--adjacent", required = false,
-			usage = "Compute pairwise shifts only between adjacent pairs of tiles")
-	private boolean adjacent = true;
+	@Option(name = "--min", required = false,
+			usage = "Min coordinate for exporting")
+	private String minCoord = null;
+
+	@Option(name = "--max", required = false,
+			usage = "Max coordinate for exporting")
+	private String maxCoord = null;
+
+	@Option(name = "--allpairs", required = false,
+			usage = "Compute pairwise shifts between all pairs (by default only adjacent pairs are used)")
+	private boolean allPairs = false;
+
+	@Option(name = "-m", aliases = { "--mode" }, required = false,
+			usage = "Mode for restitching ('restitching-full' or 'restitching-incremental')")
+	private String restitchingModeStr = "";
+
+	private RestitchingMode restitchingMode = null;
+
+	@Option(name = "--overlaps", required = false,
+			usage = "Export overlaps channel based on which connections between tiles have been used for final stitching")
+	private boolean exportOverlaps = false;
+
+	@Option(name = "--blending", required = false,
+			usage = "Export the dataset using blending strategy instead of hardcut (max.min.distance)")
+	private boolean blending = false;
 
 	/**
 	 * Toggle pipeline stages. By default all stages are executed.
@@ -71,41 +96,63 @@ public class StitchingArguments implements Serializable {
 			parser.printUsage( System.err );
 		}
 
+		if ( !stitchOnly && !fuseOnly )
+			throw new IllegalArgumentException( "Please specify mode: --stitch / --fuse" );
+
 		if ( stitchOnly && fuseOnly )
-			throw new IllegalArgumentException( "Contradicting arguments: stitchOnly && fuseOnly" );
+			throw new IllegalArgumentException( "Please specify one mode at a time: --stitch / --fuse" );
+
+		if ( !fuseOnly )
+		{
+			if ( restitchingModeStr.equalsIgnoreCase( "restitching-full" ) )
+				restitchingMode = RestitchingMode.FULL;
+			else if ( restitchingModeStr.equalsIgnoreCase( "restitching-incremental" ) )
+				restitchingMode = RestitchingMode.INCREMENTAL;
+			else
+				throw new IllegalArgumentException( "Invalid restitching mode. Possible values are: 'restitching-full' or 'restitching-incremental'" );
+		}
 	}
 
 	protected StitchingArguments() { }
 
 	public boolean parsedSuccessfully() { return parsedSuccessfully; }
 
-	public VoxelDimensions voxelDimensions()
-	{
-		final int delim = voxelDimensions.indexOf( "=" );
-		final String unit = voxelDimensions.substring( 0, delim );
-		final String[] tokens = voxelDimensions.substring( delim + 1 ).trim().split( "," );
-		final double[] values = new double[ tokens.length ];
-		for ( int i = 0; i < values.length; i++ )
-			values[ i ] = Double.parseDouble( tokens[ i ] );
-		System.out.println( String.format( "Voxel dimensions = %s (%s)", Arrays.toString( values ), unit ) );
-		return new FinalVoxelDimensions( unit, values );
-	}
-
 	public long[] padding()
 	{
-		final String[] tokens = padding.split( "," );
+		return parseArray( padding );
+	}
+
+	public long[] minCoord()
+	{
+		return parseArray( minCoord );
+	}
+	public long[] maxCoord()
+	{
+		return parseArray( maxCoord );
+	}
+
+	public List< String > inputTileConfigurations() { return inputTileConfigurations; }
+	public int minStatsNeighborhood() { return minStatsNeighborhood; }
+	public int fusionCellSize() { return fusionCellSize; }
+	public double blurSigma() { return blurSigma; }
+	public boolean useAllPairs() { return allPairs; }
+	public boolean exportOverlaps() { return exportOverlaps; }
+	public boolean blending() { return blending; }
+
+	public boolean stitchOnly() { return stitchOnly; }
+	public boolean fuseOnly() { return fuseOnly; }
+
+	public RestitchingMode restitchingMode() { return restitchingMode; }
+
+	private long[] parseArray( final String str )
+	{
+		if ( str == null )
+			return null;
+
+		final String[] tokens = str.split( "," );
 		final long[] values = new long[ tokens.length ];
 		for ( int i = 0; i < values.length; i++ )
 			values[ i ] = Long.parseLong( tokens[ i ] );
 		return values;
 	}
-
-	public String inputFilePath() { return inputFilePath; }
-	public double crossCorrelationThreshold() { return crossCorrelationThreshold; }
-	public int fusionCellSize() { return fusionCellSize; }
-	public double blurSigma() { return blurSigma; }
-	public boolean adjacent() { return adjacent; }
-
-	public boolean stitchOnly() { return stitchOnly; }
-	public boolean fuseOnly() { return fuseOnly; }
 }

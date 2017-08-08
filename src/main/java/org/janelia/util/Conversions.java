@@ -3,6 +3,16 @@ package org.janelia.util;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.imglib2.Cursor;
+import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.img.imageplus.ImagePlusImg;
+import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Intervals;
+import net.imglib2.view.Views;
+
 /**
  * Utility class to convert data types for use across libraries.
  *
@@ -21,6 +31,20 @@ public class Conversions {
 		return ret;
 	}
 	public static double[] toDoubleArray( final float[] arr )
+	{
+		final double[] ret = new double[ arr.length ];
+		for ( int i = 0; i < arr.length; i++ )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+	public static double[] toDoubleArray( final int[] arr )
+	{
+		final double[] ret = new double[ arr.length ];
+		for ( int i = 0; i < arr.length; i++ )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+	public static double[] toDoubleArray( final long[] arr )
 	{
 		final double[] ret = new double[ arr.length ];
 		for ( int i = 0; i < arr.length; i++ )
@@ -66,5 +90,56 @@ public class Conversions {
 		for ( final int val : arr )
 			list.add( val );
 		return list;
+	}
+
+
+	public static Short[] toBoxedArray( final short[] arr )
+	{
+		final Short[] ret = new Short[ arr.length ];
+		for ( int i = 0; i < ret.length; ++i )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+	public static Integer[] toBoxedArray( final int[] arr )
+	{
+		final Integer[] ret = new Integer[ arr.length ];
+		for ( int i = 0; i < ret.length; ++i )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+	public static Long[] toBoxedArray( final long[] arr )
+	{
+		final Long[] ret = new Long[ arr.length ];
+		for ( int i = 0; i < ret.length; ++i )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+	public static Float[] toBoxedArray( final float[] arr )
+	{
+		final Float[] ret = new Float[ arr.length ];
+		for ( int i = 0; i < ret.length; ++i )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+	public static Double[] toBoxedArray( final double[] arr )
+	{
+		final Double[] ret = new Double[ arr.length ];
+		for ( int i = 0; i < ret.length; ++i )
+			ret[ i ] = arr[ i ];
+		return ret;
+	}
+
+
+	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< FloatType, ? > convertImageToFloat( final RandomAccessibleInterval< T > src )
+	{
+		final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( src ) );
+
+		final Cursor< T > srcCursor = Views.flatIterable( src ).cursor();
+		final Cursor< FloatType > dstCursor = Views.flatIterable( dst ).cursor();
+
+		while ( srcCursor.hasNext() || dstCursor.hasNext() )
+			dstCursor.next().set( srcCursor.next().getRealFloat() );
+
+		return dst;
 	}
 }

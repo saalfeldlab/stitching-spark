@@ -20,7 +20,7 @@ public class FilterStageCoordinates
 	{
 		final int d = 2;
 		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
-		final List< Pair< TileInfo, int[] > > tileCoords = Utils.getTileCoordinates( Utils.createTilesMap( shifts, true ).values().toArray( new TileInfo[ 0 ] ) );
+		final List< Pair< TileInfo, int[] > > tileCoords = Utils.getTilesCoordinates( Utils.createTilesMap( shifts, true ).values().toArray( new TileInfo[ 0 ] ) );
 		System.out.println("There are "+tileCoords.size()+" tiles and " + shifts.size() + " pairwise shifts");
 
 		int zMin = Integer.MAX_VALUE, zMax = Integer.MIN_VALUE;

@@ -1,12 +1,20 @@
 package org.janelia.stitching;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 
 import bdv.export.Downsample;
 import ij.IJ;
 import ij.ImagePlus;
 import net.imglib2.Cursor;
+import net.imglib2.Dimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
@@ -14,13 +22,13 @@ import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
-import net.imglib2.img.array.ArrayImg;
+import net.imglib2.converter.Converters;
+import net.imglib2.converter.RealFloatConverter;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgFactory;
 import net.imglib2.img.imageplus.ImagePlusImgs;
-import net.imglib2.interpolation.InterpolatorFactory;
+import net.imglib2.img.list.ListImg;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.AbstractTranslation;
 import net.imglib2.realtransform.RealViews;
@@ -29,38 +37,254 @@ import net.imglib2.realtransform.Translation2D;
 import net.imglib2.realtransform.Translation3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
-import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
-import net.imglib2.util.RealIntervals;
+import net.imglib2.util.IntervalsNullable;
+import net.imglib2.view.RandomAccessiblePair;
+import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
 public class FusionPerformer
 {
-	private static < T extends RealType< T > & NativeType< T > > ImagePlusImg< FloatType, ? > convertToFloat( final RandomAccessibleInterval< T > src )
+	public static enum FusionMode
 	{
-		final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( src ) );
+		MAX_MIN_DISTANCE,
+		BLENDING
+	}
 
-		final Cursor< T > srcCursor = Views.flatIterable( src ).cursor();
-		final Cursor< FloatType > dstCursor = Views.flatIterable( dst ).cursor();
+	private final static double FRACTION_BLENDED = 0.2;
 
-		while ( srcCursor.hasNext() || dstCursor.hasNext() )
-			dstCursor.next().set( srcCursor.next().getRealFloat() );
+	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseTilesWithinCell(
+			final FusionMode mode,
+			final List< TileInfo > tilesWithinCell,
+			final Interval targetInterval ) throws Exception
+	{
+		return fuseTilesWithinCell( mode, tilesWithinCell, targetInterval, null );
+	}
 
-		return dst;
+	public static <
+		T extends RealType< T > & NativeType< T >,
+		U extends RealType< U > & NativeType< U > >
+	ImagePlusImg< T, ? > fuseTilesWithinCell(
+			final FusionMode mode,
+			final List< TileInfo > tilesWithinCell,
+			final Interval targetInterval,
+			final RandomAccessiblePairNullable< U, U > flatfield ) throws Exception
+	{
+		return fuseTilesWithinCell( mode, tilesWithinCell, targetInterval, flatfield, null );
+	}
+
+	public static <
+		T extends RealType< T > & NativeType< T >,
+		U extends RealType< U > & NativeType< U >,
+		R extends RealType< R > & NativeType< R > >
+	ImagePlusImg< T, ? > fuseTilesWithinCell(
+			final FusionMode mode,
+			final List< TileInfo > tilesWithinCell,
+			final Interval targetInterval,
+			final RandomAccessiblePairNullable< U, U > flatfield,
+			final Map< Integer, Set< Integer > > pairwiseConnectionsMap ) throws Exception
+	{
+		switch ( mode )
+		{
+		case MAX_MIN_DISTANCE:
+			return fuseTilesWithinCellUsingMaxMinDistance( tilesWithinCell, targetInterval, flatfield, pairwiseConnectionsMap );
+		case BLENDING:
+			return fuseTilesWithinCellUsingBlending( tilesWithinCell, targetInterval, flatfield, pairwiseConnectionsMap );
+		default:
+			throw new RuntimeException( "Unknown fusion mode" );
+		}
 	}
 
 
 	public static <
 		T extends RealType< T > & NativeType< T >,
-		U extends RealType< U > & NativeType< U > >
-	ImagePlusImg< FloatType, ? > fuseTilesWithinCellUsingMaxMinDistance(
+		U extends RealType< U > & NativeType< U >,
+		R extends RealType< R > & NativeType< R > >
+	ImagePlusImg< T, ? > fuseTilesWithinCellUsingBlending(
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
-			final InterpolatorFactory< FloatType, RandomAccessible< FloatType > > interpolatorFactory ) throws Exception
+			final RandomAccessiblePairNullable< U, U > flatfield,
+			final Map< Integer, Set< Integer > > pairwiseConnectionsMap ) throws Exception
 	{
-		return fuseTilesWithinCellUsingMaxMinDistance( tilesWithinCell, targetInterval, interpolatorFactory, null, null );
+		final ImageType imageType = Utils.getImageType( tilesWithinCell );
+		if ( imageType == null )
+			throw new Exception( "Can't fuse images of different or unknown types" );
+
+		// initialize helper images for blending fusion strategy
+		final RandomAccessibleInterval< FloatType > weights = ArrayImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
+		final RandomAccessibleInterval< FloatType > values = ArrayImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
+
+		// initialize helper image for tile connections when exporting only overlaps
+		final RandomAccessibleInterval< Set< Integer > > tileIndexes;
+		if ( pairwiseConnectionsMap != null )
+		{
+			final int numElements = ( int ) Intervals.numElements( targetInterval );
+			final List< Set< Integer > > tileIndexesList = new ArrayList<>( numElements );
+			for ( int i = 0; i < numElements; ++i )
+				tileIndexesList.add( new HashSet<>() );
+			tileIndexes = new ListImg<>( tileIndexesList, Intervals.dimensionsAsLongArray( targetInterval ) );
+		}
+		else
+		{
+			tileIndexes = null;
+		}
+
+		for ( final TileInfo tile : tilesWithinCell )
+		{
+			System.out.println( "Loading tile image " + tile.getFilePath() );
+			final Dimensions tileDimensions = tile.getBoundaries();
+
+			final ImagePlus imp = IJ.openImage( tile.getFilePath() );
+			Utils.workaroundImagePlusNSlices( imp );
+
+			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
+					new FinalRealInterval( tile.getPosition(), tile.getMax() ),
+					targetInterval );
+
+			if ( intersection == null )
+				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval:\n" + "Tile " + tile.getIndex() + " at " + Arrays.toString( tile.getPosition() ) + " of size " + Arrays.toString( tile.getSize() ) + "\n" + "Output cell " + " at " + Arrays.toString( Intervals.minAsIntArray( targetInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsIntArray( targetInterval ) ) );
+
+			final double[] offset = new double[ targetInterval.numDimensions() ];
+			final long[] minIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
+			final long[] maxIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
+			for ( int d = 0; d < minIntersectionInTargetInterval.length; ++d )
+			{
+				offset[ d ] = tile.getPosition( d ) - targetInterval.min( d );
+				minIntersectionInTargetInterval[ d ] = ( long ) Math.floor( intersection.realMin( d ) ) - targetInterval.min( d );
+				maxIntersectionInTargetInterval[ d ] = ( long ) Math.ceil ( intersection.realMax( d ) ) - targetInterval.min( d );
+			}
+			final Interval intersectionIntervalInTargetInterval = new FinalInterval( minIntersectionInTargetInterval, maxIntersectionInTargetInterval );
+			final Translation translation = new Translation( offset );
+
+			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
+			final RandomAccessibleInterval< R > convertedTile = ( RandomAccessibleInterval ) Converters.convert( rawTile, new RealFloatConverter<>(), new FloatType() );
+			final RandomAccessible< R > extendedTile = Views.extendBorder( convertedTile );
+			final RealRandomAccessible< R > interpolatedTile = Views.interpolate( extendedTile, new NLinearInterpolatorFactory<>() );
+			final RandomAccessible< R > rasteredInterpolatedTile = Views.raster( RealViews.affine( interpolatedTile, translation ) );
+			final RandomAccessibleInterval< R > interpolatedTileInterval = Views.interval( rasteredInterpolatedTile, intersectionIntervalInTargetInterval );
+
+			final RandomAccessibleInterval< R > sourceInterval;
+			if ( flatfield != null )
+			{
+				final RandomAccessible< U >[] flatfieldComponents = new RandomAccessible[] { flatfield.getA(), flatfield.getB() }, adjustedFlatfieldComponents = new RandomAccessible[ 2 ];
+				for ( int i = 0; i < flatfieldComponents.length; ++i )
+				{
+					final RandomAccessibleInterval< U > flatfieldComponentInterval = Views.interval( flatfieldComponents[ i ], new FinalInterval( tile.getSize() ) );
+					final RandomAccessible< U > extendedFlatfieldComponent = Views.extendBorder( flatfieldComponentInterval );
+					final RealRandomAccessible< U > interpolatedFlatfieldComponent = Views.interpolate( extendedFlatfieldComponent, new NLinearInterpolatorFactory<>() );
+					final RandomAccessible< U > rasteredInterpolatedFlatfieldComponent = Views.raster( RealViews.affine( interpolatedFlatfieldComponent, translation ) );
+					adjustedFlatfieldComponents[ i ] = Views.interval( rasteredInterpolatedFlatfieldComponent, intersectionIntervalInTargetInterval );
+				}
+				final RandomAccessiblePair< U, U > adjustedFlatfield = new RandomAccessiblePair<>( adjustedFlatfieldComponents[ 0 ], adjustedFlatfieldComponents[ 1 ] );
+				final FlatfieldCorrectedRandomAccessible< R, U > flatfieldCorrectedTile = new FlatfieldCorrectedRandomAccessible<>( interpolatedTileInterval, adjustedFlatfield );
+				final RandomAccessibleInterval< U > flatfieldCorrectedInterval = Views.interval( flatfieldCorrectedTile, intersectionIntervalInTargetInterval );
+				sourceInterval = ( RandomAccessibleInterval ) Converters.convert( flatfieldCorrectedInterval, new RealFloatConverter<>(), new FloatType() );
+			}
+			else
+			{
+				sourceInterval = interpolatedTileInterval;
+			}
+
+			final RandomAccessibleInterval< FloatType > weightsInterval = Views.interval( weights, intersectionIntervalInTargetInterval ) ;
+			final RandomAccessibleInterval< FloatType > valuesInterval = Views.interval( values, intersectionIntervalInTargetInterval ) ;
+			final RandomAccessibleInterval< Set< Integer > > tileIndexesInterval = tileIndexes != null ? Views.interval( tileIndexes, intersectionIntervalInTargetInterval ) : null;
+
+			final Cursor< R > sourceCursor = Views.flatIterable( sourceInterval ).localizingCursor();
+			final Cursor< FloatType > weightsCursor = Views.flatIterable( weightsInterval ).cursor();
+			final Cursor< FloatType > valuesCursor = Views.flatIterable( valuesInterval ).cursor();
+			final Cursor< Set< Integer > > tileIndexesCursor = tileIndexesInterval != null ? Views.flatIterable( tileIndexesInterval ).cursor() : null;
+
+			final double[] position = new double[ sourceCursor.numDimensions() ];
+			while ( sourceCursor.hasNext() || weightsCursor.hasNext() || valuesCursor.hasNext() || ( tileIndexesCursor != null && tileIndexesCursor.hasNext() ) )
+			{
+				final double value = sourceCursor.next().getRealDouble();
+
+				sourceCursor.localize( position );
+				for ( int d = 0; d < position.length; ++d )
+					position[ d ] -= offset[ d ];
+				final double weight = getBlendingWeight( position, tileDimensions, FRACTION_BLENDED );
+
+				final FloatType weightAccum = weightsCursor.next();
+				final FloatType valueAccum = valuesCursor.next();
+				weightAccum.setReal( weightAccum.getRealDouble() + weight );
+				valueAccum.setReal( valueAccum.getRealDouble() + value * weight );
+
+				if ( tileIndexesCursor != null )
+					tileIndexesCursor.next().add( tile.getIndex() );
+			}
+		}
+
+		// initialize output image
+		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), ( T ) imageType.getType().createVariable() );
+		final Cursor< FloatType > weightsCursor = Views.flatIterable( weights ).cursor();
+		final Cursor< FloatType > valuesCursor = Views.flatIterable( values ).cursor();
+		final Cursor< T > outCursor = Views.flatIterable( out ).cursor();
+		while ( outCursor.hasNext() || weightsCursor.hasNext() || valuesCursor.hasNext() )
+		{
+			final double weight = weightsCursor.next().getRealDouble();
+			final double value = valuesCursor.next().getRealDouble();
+			outCursor.next().setReal( weight == 0 ? 0 : value / weight );
+		}
+
+		// retain only requested content within overlaps that corresponds to pairwise connections map
+		if ( tileIndexes != null )
+		{
+			outCursor.reset();
+			final Cursor< Set< Integer > > tileIndexesCursor = Views.flatIterable( tileIndexes ).cursor();
+			while ( outCursor.hasNext() || tileIndexesCursor.hasNext() )
+			{
+				boolean retainPixel = false;
+				final Set< Integer > tilesAtPoint = tileIndexesCursor.next();
+				for ( final Integer testTileIndex : tilesAtPoint )
+				{
+					final Set< Integer > connectedTileIndexes = pairwiseConnectionsMap.get( testTileIndex );
+					if ( connectedTileIndexes != null && !Collections.disjoint( tilesAtPoint, connectedTileIndexes ) )
+					{
+						retainPixel = true;
+						break;
+					}
+				}
+
+				outCursor.fwd();
+				if ( !retainPixel )
+					outCursor.get().setZero();
+			}
+		}
+
+		return out;
 	}
+	private static double getBlendingWeight( final double[] location, final Dimensions dimensions, final double percentScaling )
+	{
+		// compute multiplicative distance to the respective borders [0...1]
+		double minDistance = 1;
+
+		for ( int dim = 0; dim < location.length; ++dim )
+		{
+			// the position in the image
+			final double localImgPos = location[ dim ];
+
+			// the distance to the border that is closer
+			double value = Math.max( 1, Math.min( localImgPos, dimensions.dimension( dim ) - 1 - localImgPos ) );
+
+			final float imgAreaBlend = Math.round( percentScaling * 0.5f * ( dimensions.dimension( dim ) - 1 ) );
+
+			if ( value < imgAreaBlend )
+				value = value / imgAreaBlend;
+			else
+				value = 1;
+
+			minDistance *= value;
+		}
+
+		if ( minDistance == 1 )
+			return 1;
+		else if ( minDistance <= 0 )
+			return 0.0000001;
+		else
+			return ( Math.cos( (1 - minDistance) * Math.PI ) + 1 ) / 2;
+	}
+
 
 	/**
 	 * Fuses a collection of {@link TileInfo} objects within the given target interval using hard-cut strategy in overlaps.
@@ -71,28 +295,43 @@ public class FusionPerformer
 	 * 			An output fusion cell
 	 * @param interpolatorFactory
 	 * 			An interpolation strategy for tiles with real coordinates
-	 * @param v
-	 * 			Optional multiplicative term for illumination correction (can be null)
-	 * @param z
-	 * 			Optional additive term for illumination correction (can be null)
+	 * @param flatfieldCorrection
+	 * 			Optional flatfield correction coefficients (can be null)
 	 */
 	public static <
 		T extends RealType< T > & NativeType< T >,
-		U extends RealType< U > & NativeType< U > >
-	ImagePlusImg< FloatType, ? > fuseTilesWithinCellUsingMaxMinDistance(
+		U extends RealType< U > & NativeType< U >,
+		R extends RealType< R > & NativeType< R > >
+	ImagePlusImg< T, ? > fuseTilesWithinCellUsingMaxMinDistance(
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
-			final InterpolatorFactory< FloatType, RandomAccessible< FloatType > > interpolatorFactory,
-			final RandomAccessibleInterval< U > v,
-			final RandomAccessibleInterval< U > z ) throws Exception
+			final RandomAccessiblePairNullable< U, U > flatfield,
+			final Map< Integer, Set< Integer > > pairwiseConnectionsMap ) throws Exception
 	{
 		final ImageType imageType = Utils.getImageType( tilesWithinCell );
 		if ( imageType == null )
 			throw new Exception( "Can't fuse images of different or unknown types" );
 
-		final ImagePlusImg< FloatType, ? > out = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
-		final ArrayImg< DoubleType, DoubleArray > maxMinDistances = ArrayImgs.doubles(
+		// initialize output image
+		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), ( T ) imageType.getType().createVariable() );
+
+		// initialize helper image for hard-cut fusion strategy
+		final RandomAccessibleInterval< FloatType > maxMinDistances = ArrayImgs.floats(
 				Intervals.dimensionsAsLongArray( targetInterval ) );
+
+		// initialize helper image for tile connections when exporting only overlaps
+		final RandomAccessibleInterval< Set< Integer > > tileIndexes;
+		if ( pairwiseConnectionsMap != null )
+		{
+			final List< Set< Integer > > tileIndexesList = new ArrayList<>( ( int ) out.size() );
+			for ( int i = 0; i < out.size(); ++i )
+				tileIndexesList.add( new HashSet<>() );
+			tileIndexes = new ListImg<>( tileIndexesList, Intervals.dimensionsAsLongArray( targetInterval ) );
+		}
+		else
+		{
+			tileIndexes = null;
+		}
 
 		for ( final TileInfo tile : tilesWithinCell )
 		{
@@ -101,44 +340,68 @@ public class FusionPerformer
 			final ImagePlus imp = IJ.openImage( tile.getFilePath() );
 			Utils.workaroundImagePlusNSlices( imp );
 
-			final FinalRealInterval intersection = RealIntervals.intersectReal(
+			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
 					new FinalRealInterval( tile.getPosition(), tile.getMax() ),
 					targetInterval );
 
+			if ( intersection == null )
+				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval:\n" + "Tile " + tile.getIndex() + " at " + Arrays.toString( tile.getPosition() ) + " of size " + Arrays.toString( tile.getSize() ) + "\n" + "Output cell " + " at " + Arrays.toString( Intervals.minAsIntArray( targetInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsIntArray( targetInterval ) ) );
+
 			final double[] offset = new double[ targetInterval.numDimensions() ];
-			final Translation translation = new Translation( targetInterval.numDimensions() );
 			final long[] minIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
 			final long[] maxIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
 			for ( int d = 0; d < minIntersectionInTargetInterval.length; ++d )
 			{
-				final double shiftInTargetInterval = intersection.realMin( d ) - targetInterval.min( d );
-				minIntersectionInTargetInterval[ d ] = ( long )Math.floor( shiftInTargetInterval );
-				maxIntersectionInTargetInterval[ d ] = ( long )Math.min( Math.ceil( intersection.realMax( d ) ), targetInterval.max( d ) ) - targetInterval.min( d );
 				offset[ d ] = tile.getPosition( d ) - targetInterval.min( d );
-				translation.set( offset[ d ], d );
+				minIntersectionInTargetInterval[ d ] = ( long ) Math.floor( intersection.realMin( d ) ) - targetInterval.min( d );
+				maxIntersectionInTargetInterval[ d ] = ( long ) Math.ceil ( intersection.realMax( d ) ) - targetInterval.min( d );
 			}
 			final Interval intersectionIntervalInTargetInterval = new FinalInterval( minIntersectionInTargetInterval, maxIntersectionInTargetInterval );
+			final Translation translation = new Translation( offset );
 
 			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
-			final ImagePlusImg< FloatType, ? > correctedTile =
-					( v != null && z != null ) ? IlluminationCorrection.applyCorrection( rawTile, v, z ) : convertToFloat( rawTile );
-			final RandomAccessible< FloatType > extendedTile = Views.extendBorder( correctedTile );
-			final RealRandomAccessible< FloatType > interpolatedTile = Views.interpolate( extendedTile, interpolatorFactory );
-			final RandomAccessible< FloatType > rasteredInterpolatedTile = Views.raster( RealViews.affine( interpolatedTile, translation ) );
+			final RandomAccessibleInterval< R > convertedTile = ( RandomAccessibleInterval ) Converters.convert( rawTile, new RealFloatConverter<>(), new FloatType() );
+			final RandomAccessible< R > extendedTile = Views.extendBorder( convertedTile );
+			final RealRandomAccessible< R > interpolatedTile = Views.interpolate( extendedTile, new NLinearInterpolatorFactory<>() );
+			final RandomAccessible< R > rasteredInterpolatedTile = Views.raster( RealViews.affine( interpolatedTile, translation ) );
+			final RandomAccessibleInterval< R > interpolatedTileInterval = Views.interval( rasteredInterpolatedTile, intersectionIntervalInTargetInterval );
 
-			final IterableInterval< FloatType > sourceInterval = Views.flatIterable( Views.interval( rasteredInterpolatedTile, intersectionIntervalInTargetInterval ) );
-			final IterableInterval< FloatType > outInterval = Views.flatIterable( Views.interval( out, intersectionIntervalInTargetInterval ) );
-			final IterableInterval< DoubleType > maxMinDistancesInterval = Views.flatIterable( Views.interval( maxMinDistances, intersectionIntervalInTargetInterval ) );
+			final RandomAccessibleInterval< R > sourceInterval;
+			if ( flatfield != null )
+			{
+				final RandomAccessible< U >[] flatfieldComponents = new RandomAccessible[] { flatfield.getA(), flatfield.getB() }, adjustedFlatfieldComponents = new RandomAccessible[ 2 ];
+				for ( int i = 0; i < flatfieldComponents.length; ++i )
+				{
+					final RandomAccessibleInterval< U > flatfieldComponentInterval = Views.interval( flatfieldComponents[ i ], new FinalInterval( tile.getSize() ) );
+					final RandomAccessible< U > extendedFlatfieldComponent = Views.extendBorder( flatfieldComponentInterval );
+					final RealRandomAccessible< U > interpolatedFlatfieldComponent = Views.interpolate( extendedFlatfieldComponent, new NLinearInterpolatorFactory<>() );
+					final RandomAccessible< U > rasteredInterpolatedFlatfieldComponent = Views.raster( RealViews.affine( interpolatedFlatfieldComponent, translation ) );
+					adjustedFlatfieldComponents[ i ] = Views.interval( rasteredInterpolatedFlatfieldComponent, intersectionIntervalInTargetInterval );
+				}
+				final RandomAccessiblePair< U, U > adjustedFlatfield = new RandomAccessiblePair<>( adjustedFlatfieldComponents[ 0 ], adjustedFlatfieldComponents[ 1 ] );
+				final FlatfieldCorrectedRandomAccessible< R, U > flatfieldCorrectedTile = new FlatfieldCorrectedRandomAccessible<>( interpolatedTileInterval, adjustedFlatfield );
+				final RandomAccessibleInterval< U > flatfieldCorrectedInterval = Views.interval( flatfieldCorrectedTile, intersectionIntervalInTargetInterval );
+				sourceInterval = ( RandomAccessibleInterval ) Converters.convert( flatfieldCorrectedInterval, new RealFloatConverter<>(), new FloatType() );
+			}
+			else
+			{
+				sourceInterval = interpolatedTileInterval;
+			}
 
-			final Cursor< FloatType > sourceCursor = sourceInterval.localizingCursor();
-			final Cursor< FloatType > outCursor = outInterval.cursor();
-			final Cursor< DoubleType > maxMinDistanceCursor = maxMinDistancesInterval.cursor();
+			final RandomAccessibleInterval< T > outInterval = Views.interval( out, intersectionIntervalInTargetInterval ) ;
+			final RandomAccessibleInterval< FloatType > maxMinDistanceInterval = Views.interval( maxMinDistances, intersectionIntervalInTargetInterval ) ;
+			final RandomAccessibleInterval< Set< Integer > > tileIndexesInterval = tileIndexes != null ? Views.interval( tileIndexes, intersectionIntervalInTargetInterval ) : null;
 
-			while ( sourceCursor.hasNext() || outCursor.hasNext() || maxMinDistanceCursor.hasNext() )
+			final Cursor< R > sourceCursor = Views.flatIterable( sourceInterval ).localizingCursor();
+			final Cursor< T > outCursor = Views.flatIterable( outInterval ).cursor();
+			final Cursor< FloatType > maxMinDistanceCursor = Views.flatIterable( maxMinDistanceInterval ).cursor();
+			final Cursor< Set< Integer > > tileIndexesCursor = tileIndexesInterval != null ? Views.flatIterable( tileIndexesInterval ).cursor() : null;
+
+			while ( sourceCursor.hasNext() || outCursor.hasNext() || maxMinDistanceCursor.hasNext() || ( tileIndexesCursor != null && tileIndexesCursor.hasNext() ) )
 			{
 				sourceCursor.fwd();
 				outCursor.fwd();
-				final DoubleType maxMinDistance = maxMinDistanceCursor.next();
+				final FloatType maxMinDistance = maxMinDistanceCursor.next();
 				double minDistance = Double.MAX_VALUE;
 				for ( int d = 0; d < offset.length; ++d )
 				{
@@ -150,9 +413,37 @@ public class FusionPerformer
 				}
 				if ( minDistance >= maxMinDistance.get() )
 				{
-					maxMinDistance.set( minDistance );
-					outCursor.get().set( sourceCursor.get() );
+					maxMinDistance.setReal( minDistance );
+					outCursor.get().setReal( sourceCursor.get().getRealDouble() );
 				}
+
+				if ( tileIndexesCursor != null )
+					tileIndexesCursor.next().add( tile.getIndex() );
+			}
+		}
+
+		// retain only requested content within overlaps that corresponds to pairwise connections map
+		if ( tileIndexes != null )
+		{
+			final Cursor< T > outCursor = Views.flatIterable( out ).cursor();
+			final Cursor< Set< Integer > > tileIndexesCursor = Views.flatIterable( tileIndexes ).cursor();
+			while ( outCursor.hasNext() || tileIndexesCursor.hasNext() )
+			{
+				boolean retainPixel = false;
+				final Set< Integer > tilesAtPoint = tileIndexesCursor.next();
+				for ( final Integer testTileIndex : tilesAtPoint )
+				{
+					final Set< Integer > connectedTileIndexes = pairwiseConnectionsMap.get( testTileIndex );
+					if ( connectedTileIndexes != null && !Collections.disjoint( tilesAtPoint, connectedTileIndexes ) )
+					{
+						retainPixel = true;
+						break;
+					}
+				}
+
+				outCursor.fwd();
+				if ( !retainPixel )
+					outCursor.get().setZero();
 			}
 		}
 
@@ -169,11 +460,9 @@ public class FusionPerformer
 			final TileInfo cell,
 			final int[] downsampleFactors ) throws Exception
 	{
-//		final ImageType imageType = Utils.getImageType( tiles );
-//		if ( imageType == null )
-//			throw new Exception( "Can't fuse images of different or unknown types" );
-		// TODO: can't derive from the tiles anymore since we convert the image to FloatType with illumination correction
-		final ImageType imageType = ImageType.GRAY32;
+		final ImageType imageType = Utils.getImageType( tiles );
+		if ( imageType == null )
+			throw new Exception( "Can't fuse images of different or unknown types" );
 
 		cell.setType( imageType );
 		final T type = ( T ) imageType.getType();
@@ -193,7 +482,7 @@ public class FusionPerformer
 	@SuppressWarnings( "unchecked" )
 	private static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseSimple( final List< TileInfo > tiles, final TileInfo cell, final T type ) throws Exception
 	{
-		System.out.println( "Fusing tiles within cell #" + cell.getIndex() + " of size " + Arrays.toString( cell.getSize() )+"..." );
+		//System.out.println( "Fusing tiles within cell #" + cell.getIndex() + " of size " + Arrays.toString( cell.getSize() )+"..." );
 
 		// Create output image
 		final Boundaries cellBoundaries = cell.getBoundaries();
@@ -202,7 +491,7 @@ public class FusionPerformer
 
 		for ( final TileInfo tile : tiles )
 		{
-			System.out.println( "Loading tile image " + tile.getFilePath() );
+			//System.out.println( "Loading tile image " + tile.getFilePath() );
 
 			final ImagePlus imp = IJ.openImage( tile.getFilePath() );
 			Utils.workaroundImagePlusNSlices( imp );
@@ -211,7 +500,10 @@ public class FusionPerformer
 				throw new Exception( "Can't open image: " + tile.getFilePath() );
 
 			final Boundaries tileBoundaries = tile.getBoundaries();
-			final FinalInterval intersection = Intervals.intersect( new FinalInterval( tileBoundaries.getMin(), tileBoundaries.getMax() ), cellImg );
+			final FinalInterval intersection = IntervalsNullable.intersect( new FinalInterval( tileBoundaries.getMin(), tileBoundaries.getMax() ), cellImg );
+
+			if ( intersection == null )
+				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval" );
 
 			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
 			final RandomAccessibleInterval< T > correctedDimTile = rawTile.numDimensions() < cell.numDimensions() ? Views.stack( rawTile ) : rawTile;

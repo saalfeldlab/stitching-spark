@@ -34,11 +34,6 @@ public enum ImageType
 		this.type = type;
 	}
 
-	public int getValue()
-	{
-		return val;
-	}
-
 	public RealType< ? > getType()
 	{
 		return type;
@@ -49,7 +44,7 @@ public enum ImageType
 	static
 	{
 		for ( final ImageType type : values() )
-			map.put( type.getValue(), type );
+			map.put( type.val, type );
 	}
 	public static ImageType valueOf( final int val )
 	{

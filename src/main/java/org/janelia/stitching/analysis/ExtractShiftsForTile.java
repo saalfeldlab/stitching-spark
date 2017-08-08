@@ -24,8 +24,8 @@ public class ExtractShiftsForTile
 					shiftsForTile.add( shift );
 
 		final TileInfo[] tiles = Utils.createTilesMap( shifts, true ).values().toArray( new TileInfo[ 0 ] );
-		final TreeMap< Integer, int[] > coordinatesMap = Utils.getTileCoordinatesMap( tiles );
-		final TreeMap< Integer, Long > timestampsMap = Utils.getTileTimestampsMap( tiles );
+		final TreeMap< Integer, int[] > coordinatesMap = Utils.getTilesCoordinatesMap( tiles );
+		final TreeMap< Integer, Long > timestampsMap = Utils.getTilesTimestampsMap( tiles );
 
 		for ( final SerializablePairWiseStitchingResult shift : shiftsForTile )
 		{

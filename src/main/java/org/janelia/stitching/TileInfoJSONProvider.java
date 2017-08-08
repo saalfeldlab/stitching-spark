@@ -8,10 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import org.janelia.bdv.fusion.CellFileImageMetaData;
-
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 
 /**
  * Provides convenience methods for loading tiles configuration and storing it on a disk in JSON format.
@@ -25,6 +22,16 @@ import com.google.gson.GsonBuilder;
 
 public class TileInfoJSONProvider
 {
+	public static boolean isTilesConfiguration( final String input )
+	{
+		try ( final FileReader reader = new FileReader( new File( input ) ) ) {
+			final TileInfo[] tiles = new Gson().fromJson( reader, TileInfo[].class );
+			return ( tiles != null && tiles.length > 0 && !tiles[ 0 ].isNull() );
+		} catch ( final IOException e ) {
+			return false;
+		}
+	}
+
 	public static TileInfo[] loadTilesConfiguration( final String input ) throws IOException
 	{
 		System.out.println( "Loading tiles configuration from " + input );
@@ -41,6 +48,16 @@ public class TileInfoJSONProvider
 		System.out.println( "Saving updated tiles configuration to " + output );
 		try ( final FileWriter writer = new FileWriter( output ) ) {
 			writer.write( new Gson().toJson( tiles ) );
+		}
+	}
+
+	public static boolean isPairwiseConfiguration( final String input )
+	{
+		try ( final FileReader reader = new FileReader( new File( input ) ) ) {
+			final List< SerializablePairWiseStitchingResult > pairwiseShifts = Arrays.asList( new Gson().fromJson( reader, SerializablePairWiseStitchingResult[].class ) );
+			return ( pairwiseShifts != null && !pairwiseShifts.isEmpty() && !pairwiseShifts.get( 0 ).isNull() );
+		} catch ( final IOException e ) {
+			return false;
 		}
 	}
 
@@ -80,28 +97,6 @@ public class TileInfoJSONProvider
 		System.out.println( "Saving pairwise shifts (multiple) to " + output );
 		try ( final FileWriter writer = new FileWriter( output ) ) {
 			writer.write( new Gson().toJson( shiftsMulti ) );
-		}
-	}
-
-	public static void saveMultiscaledExportMetadata( final CellFileImageMetaData export, String output ) throws IOException
-	{
-		if ( !output.endsWith( ".json" ) )
-			output += ".json";
-
-		System.out.println( "Saving multiscaled export metadata to " + output );
-		try ( final FileWriter writer = new FileWriter( output ) ) {
-			writer.write( new GsonBuilder().setPrettyPrinting().create().toJson( export ) );
-		}
-	}
-
-	public static void saveMultiscaledExportMetadataList( final List< CellFileImageMetaData > exports, String output ) throws IOException
-	{
-		if ( !output.endsWith( ".json" ) )
-			output += ".json";
-
-		System.out.println( "Saving multichannel multiscaled export metadata to " + output );
-		try ( final FileWriter writer = new FileWriter( output ) ) {
-			writer.write( new GsonBuilder().setPrettyPrinting().create().toJson( exports ) );
 		}
 	}
 }

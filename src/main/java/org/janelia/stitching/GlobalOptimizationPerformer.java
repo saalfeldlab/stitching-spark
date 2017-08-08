@@ -1,8 +1,10 @@
 package org.janelia.stitching;
 
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -12,13 +14,11 @@ import java.util.Vector;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import mpicbg.models.Tile;
-import mpicbg.models.TranslationModel2D;
-import mpicbg.models.TranslationModel3D;
+import mpicbg.models.TileConfiguration;
 import mpicbg.stitching.ComparePair;
 import mpicbg.stitching.ImagePlusTimePoint;
 import mpicbg.stitching.PointMatchStitching;
 import mpicbg.stitching.StitchingParameters;
-import mpicbg.stitching.TileConfigurationStitching;
 import stitching.utils.Log;
 
 
@@ -27,46 +27,94 @@ public class GlobalOptimizationPerformer
 {
 	public interface TileConfigurationObserver
 	{
-		public void configurationUpdated( final ArrayList< ImagePlusTimePoint > tiles );
+		public void configurationUpdated( final GlobalOptimizationPerformer self, final ArrayList< ImagePlusTimePoint > tiles );
 	}
 
 	public static boolean ignoreZ = false;
 
-	public static Set< Tile<?> > lostTiles = null;
+	public Set< Tile<?> > lostTiles = null;
 
-	private static java.io.PrintStream originalOut, suppressedOut;
+	static private final java.io.PrintStream originalOut, suppressedOut;
+	static
+	{
+		originalOut = System.out;
+		suppressedOut = new java.io.PrintStream(new java.io.OutputStream() {
+			@Override public void write(final int b) {}
+		}) {
+			@Override public void flush() {}
+			@Override public void close() {}
+			@Override public void write(final int b) {}
+			@Override public void write(final byte[] b) {}
+			@Override public void write(final byte[] buf, final int off, final int len) {}
+			@Override public void print(final boolean b) {}
+			@Override public void print(final char c) {}
+			@Override public void print(final int i) {}
+			@Override public void print(final long l) {}
+			@Override public void print(final float f) {}
+			@Override public void print(final double d) {}
+			@Override public void print(final char[] s) {}
+			@Override public void print(final String s) {}
+			@Override public void print(final Object obj) {}
+			@Override public void println() {}
+			@Override public void println(final boolean x) {}
+			@Override public void println(final char x) {}
+			@Override public void println(final int x) {}
+			@Override public void println(final long x) {}
+			@Override public void println(final float x) {}
+			@Override public void println(final double x) {}
+			@Override public void println(final char[] x) {}
+			@Override public void println(final String x) {}
+			@Override public void println(final Object x) {}
+			@Override public java.io.PrintStream printf(final String format, final Object... args) { return this; }
+			@Override public java.io.PrintStream printf(final java.util.Locale l, final String format, final Object... args) { return this; }
+			@Override public java.io.PrintStream format(final String format, final Object... args) { return this; }
+			@Override public java.io.PrintStream format(final java.util.Locale l, final String format, final Object... args) { return this; }
+			@Override public java.io.PrintStream append(final CharSequence csq) { return this; }
+			@Override public java.io.PrintStream append(final CharSequence csq, final int start, final int end) { return this; }
+			@Override public java.io.PrintStream append(final char c) { return this; }
+		};
+	}
 
-	public static ArrayList< ImagePlusTimePoint > optimize(
+	public int remainingGraphSize;
+	public double avgDisplacement, maxDisplacement;
+
+	public static void suppressOutput()
+	{
+		System.setOut( suppressedOut );
+	}
+	public static void restoreOutput()
+	{
+		System.setOut( originalOut );
+	}
+
+	public ArrayList< ImagePlusTimePoint > optimize(
 			final Vector< ComparePair > pairs,
-			final ImagePlusTimePoint fixedImage,
 			final StitchingParameters params )
 	{
-		return optimize(
-				pairs,
-				fixedImage,
-				params,
-				null,
-				null );
+		return optimize( pairs, params, null, null, null );
 	}
-	public static ArrayList< ImagePlusTimePoint > optimize(
+	public ArrayList< ImagePlusTimePoint > optimize(
 			final Vector< ComparePair > pairs,
-			final ImagePlusTimePoint fixedImage,
 			final StitchingParameters params,
 			final TileConfigurationObserver observer )
 	{
-		return optimize(
-				pairs,
-				fixedImage,
-				params,
-				observer,
-				null );
+		return optimize( pairs, params, observer, null, null );
 	}
 
-	public static ArrayList< ImagePlusTimePoint > optimize(
+	public ArrayList< ImagePlusTimePoint > optimize(
 			final Vector< ComparePair > pairs,
-			final ImagePlusTimePoint fixedImage,
 			final StitchingParameters params,
 			final TileConfigurationObserver observer,
+			final PrintWriter logWriter )
+	{
+		return optimize( pairs, params, observer, logWriter, null );
+	}
+
+	public ArrayList< ImagePlusTimePoint > optimize(
+			final Vector< ComparePair > pairs,
+			final StitchingParameters params,
+			final TileConfigurationObserver observer,
+			final PrintWriter logWriter,
 			final Map< Integer, Map< Integer, ComparePair > > anotherChannel )
 	{
 		/*final Set< Integer > tilesPerChannel = new HashSet< Integer >();
@@ -112,47 +160,8 @@ public class GlobalOptimizationPerformer
 		System.out.println( "Total pairs count = " + pairs.size() );
 
 
-
-		originalOut = System.out;
-		suppressedOut = new java.io.PrintStream(new java.io.OutputStream() {
-			@Override public void write(final int b) {}
-		}) {
-			@Override public void flush() {}
-			@Override public void close() {}
-			@Override public void write(final int b) {}
-			@Override public void write(final byte[] b) {}
-			@Override public void write(final byte[] buf, final int off, final int len) {}
-			@Override public void print(final boolean b) {}
-			@Override public void print(final char c) {}
-			@Override public void print(final int i) {}
-			@Override public void print(final long l) {}
-			@Override public void print(final float f) {}
-			@Override public void print(final double d) {}
-			@Override public void print(final char[] s) {}
-			@Override public void print(final String s) {}
-			@Override public void print(final Object obj) {}
-			@Override public void println() {}
-			@Override public void println(final boolean x) {}
-			@Override public void println(final char x) {}
-			@Override public void println(final int x) {}
-			@Override public void println(final long x) {}
-			@Override public void println(final float x) {}
-			@Override public void println(final double x) {}
-			@Override public void println(final char[] x) {}
-			@Override public void println(final String x) {}
-			@Override public void println(final Object x) {}
-			@Override public java.io.PrintStream printf(final String format, final Object... args) { return this; }
-			@Override public java.io.PrintStream printf(final java.util.Locale l, final String format, final Object... args) { return this; }
-			@Override public java.io.PrintStream format(final String format, final Object... args) { return this; }
-			@Override public java.io.PrintStream format(final java.util.Locale l, final String format, final Object... args) { return this; }
-			@Override public java.io.PrintStream append(final CharSequence csq) { return this; }
-			@Override public java.io.PrintStream append(final CharSequence csq, final int start, final int end) { return this; }
-			@Override public java.io.PrintStream append(final char c) { return this; }
-		};
-
-
 		boolean redo;
-		TileConfigurationStitching tc;
+		TileConfiguration tc;
 		int itersCount = 0;
 		do
 		{
@@ -167,7 +176,7 @@ public class GlobalOptimizationPerformer
 
 			for ( final ComparePair pair : pairs )
 			{
-				if ( pair.getCrossCorrelation() >= params.regThreshold && pair.getIsValidOverlap() )
+				if ( /*pair.getCrossCorrelation() >= params.regThreshold && */pair.getIsValidOverlap() )
 				{
 
 					pairsAdded++;
@@ -297,6 +306,9 @@ public class GlobalOptimizationPerformer
 						firstChannelTilesSet.put( img.getImpId(), img );
 			System.out.println( "firstChannelTilesSet size = " + firstChannelTilesSet.size() );
 
+			if ( logWriter != null )
+				logWriter.println( "Tiles after thresholding: " + firstChannelTilesSet.size() );
+
 			// check what we've lost
 			if ( firstChannelTilesSetPrev != null )
 			{
@@ -369,52 +381,30 @@ public class GlobalOptimizationPerformer
 				System.out.println( "Added " + identityMatches + " identity matches" );
 			}
 
-
-
-
-
-
 			if ( tilesSet.isEmpty() )
-			{
-
-				if ( params.dimensionality == 3 )
-				{
-					Log.error( "Error: No correlated tiles found, setting the first tile to (0, 0, 0)." );
-					final TranslationModel3D model = (TranslationModel3D)fixedImage.getModel();
-					model.set( 0, 0, 0 );
-				}
-				else
-				{
-					Log.error( "Error: No correlated tiles found, setting the first tile to (0, 0)." );
-					final TranslationModel2D model = (TranslationModel2D)fixedImage.getModel();
-					model.set( 0, 0 );
-				}
-
-				final ArrayList< ImagePlusTimePoint > imageInformationList = new ArrayList< >();
-				imageInformationList.add( fixedImage );
-
-				Log.info(" number of tiles = " + imageInformationList.size() );
-
-				return imageInformationList;
-			}
-
-
-
-
-
+				return null;
 
 			// trash everything but the largest graph
 			final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
 			Log.info( "Number of tile graphs = " + graphs.size() );
 
+			if ( logWriter != null )
+			{
+				logWriter.println();
+				logWriter.println( "Tile graphs: " + graphs.size() );
+			}
+
 			int largestGraphSize = 0;
 			int largestGraphId = -1;
+			int graphSizesSum = 0;
 
 			final TreeMap< Integer, Integer > graphSizeToCount = new TreeMap<>();
 
 			for ( int i = 0; i < graphs.size(); ++i )
 			{
 				final int graphSize = graphs.get( i ).size();
+
+				graphSizesSum += graphSize;
 
 				if ( graphSize > largestGraphSize )
 				{
@@ -426,38 +416,40 @@ public class GlobalOptimizationPerformer
 			}
 
 			for ( final Entry< Integer, Integer > entry : graphSizeToCount.descendingMap().entrySet() )
-				System.out.println("   " + entry.getKey() + " : " + entry.getValue() + " graphs" );
+			{
+				System.out.println("   " + entry.getKey() + " tiles: " + entry.getValue() + " graphs" );
+				if ( logWriter != null )
+					logWriter.println( "   " + entry.getKey() + " tiles: " + entry.getValue() + " graphs" );
+			}
 
 			final ArrayList< Tile< ? > > largestGraph = new ArrayList< >();
 			largestGraph.addAll( graphs.get( largestGraphId ) );
 			tilesSet.clear();
 			tilesSet.addAll( largestGraph );
-			System.out.println( " Replacing tiles with the largest graph" );
+
+			System.out.println( "Using the largest graph of size " + largestGraphSize + " (throwing away " + ( graphSizesSum - largestGraphSize ) + " tiles from smaller graphs)" );
+			if ( logWriter != null )
+				logWriter.println(  "Using the largest graph of size " + largestGraphSize + " (throwing away " + ( graphSizesSum - largestGraphSize ) + " tiles from smaller graphs)" );
+			remainingGraphSize = largestGraphSize;
 
 
-			tc = new TileConfigurationStitching();
+			tc = new TileConfiguration();
 			tc.addTiles( tilesSet );
 
 			// find a useful fixed tile
-			if ( fixedImage.getConnectedTiles().size() > 0 )
-			{
-				tc.fixTile( fixedImage );
-			}
-			else
-			{
-				for ( final Tile<?> tile : tilesSet )
-					if ( tile.getConnectedTiles().size() > 0 )
-					{
-						tc.fixTile( tile );
-						break;
-					}
-			}
+			for ( final Tile<?> tile : tilesSet )
+				if ( tile.getConnectedTiles().size() > 0 )
+				{
+					tc.fixTile( tile );
+					break;
+				}
+
 			//Log.info(" tiles size =" + tiles.size());
 			//Log.info(" tc.getTiles() size =" + tc.getTiles().size());
 
 			final ArrayList< Set< Tile< ? > > > graphsDebug = Tile.identifyConnectedGraphs( tilesSet );
 			final ArrayList< Integer > graphsSize = new ArrayList<>();
-			int graphSizesSum = 0;
+			graphSizesSum = 0;
 			for ( final Set< Tile< ? > > graph : graphsDebug )
 			{
 				graphsSize.add( graph.size() );
@@ -470,14 +462,19 @@ public class GlobalOptimizationPerformer
 
 			try
 			{
-				System.setOut( suppressedOut );
+				final boolean needSuppressingAndRestoringOutput = System.out != suppressedOut;
+				if ( needSuppressingAndRestoringOutput )
+					suppressOutput();
 
 				long elapsed = System.nanoTime();
+
+				final int iterations = 2000;
 				tc.preAlign();
-				tc.optimize( 10, 2000, 2000 );
+				tc.optimize( 10, iterations, iterations, 1.f, 1 );
 				elapsed = System.nanoTime() - elapsed;
 
-				System.setOut( originalOut );
+				if ( needSuppressingAndRestoringOutput )
+					restoreOutput();
 
 				System.out.println("Optimization round took " + elapsed/1e9 + "s" );
 
@@ -495,7 +492,7 @@ public class GlobalOptimizationPerformer
 					for ( final Tile< ? > t : tc.getTiles() )
 						updatedTilesConfiguration.add( (ImagePlusTimePoint)t );
 					Collections.sort( updatedTilesConfiguration );
-					observer.configurationUpdated( updatedTilesConfiguration );
+					observer.configurationUpdated( this, updatedTilesConfiguration );
 				}
 
 
@@ -504,48 +501,60 @@ public class GlobalOptimizationPerformer
 
 				itersCount++;
 
+
+				final List< Double > errors = new ArrayList<>();
+
 				double longestDisplacement = 0;
 				PointMatch worstMatch = null;
-
 
 				// new way of finding biggest error to look for the largest displacement
 				for ( final Tile t : tc.getTiles() )
 				{
 					for ( final PointMatch p :  (Set< PointMatch >)t.getMatches() )
 					{
-						if ( p.getDistance() > longestDisplacement )
+						final double error = p.getDistance();
+						errors.add( error );
+						if ( longestDisplacement < error )
 						{
-							longestDisplacement = p.getDistance();
+							longestDisplacement = error;
 							worstMatch = p;
 						}
 					}
 				}
-				Log.info( "Maximal displacement: " + longestDisplacement );
-				Log.info( "avgError (avg avg displacement) = " + avgError + ",  maxError (max avg displacement) = " + maxError );
 
+				Log.info( "Max pairwise match displacement: " + longestDisplacement );
+				Log.info( "avgError (avg tile displacement) = " + avgError + ",  maxError (max tile displacement) = " + maxError );
 
-				if ( ( ( avgError*params.relativeThreshold < maxError && maxError > params.absoluteThreshold ) || avgError > params.absoluteThreshold ) )
+				if ( logWriter != null )
 				{
-					/*
-					Tile worstTile = tc.getWorstTile();
-					Set< PointMatch > matches = worstTile.getMatches();
+					logWriter.println();
+					logWriter.println( String.format( "avg error: %.2fpx", avgError ) );
+					logWriter.println( String.format( "max error: %.2fpx", maxError ) );
+				}
+				avgDisplacement = avgError;
+				maxDisplacement = maxError;
 
-					float longestDisplacement = 0;
-					PointMatch worstMatch = null;
 
-					//Log.info( "worstTile: " + ((ImagePlusTimePoint)worstTile).getImagePlus().getTitle() );
+				Collections.sort( errors );
+				Collections.reverse( errors );
 
-					for (PointMatch p : matches)
-					{
-						//Log.info( "distance: " + p.getDistance() + " to " + ((PointMatchStitching)p).getPair().getImagePlus2().getTitle() );
+//				try ( final PrintWriter writer = new PrintWriter( "error_stats.txt" ) )
+//				{
+//					for ( final double error : errors )
+//						writer.println( error );
+//				}
 
-						if (p.getDistance() > longestDisplacement)
-						{
-							longestDisplacement = p.getDistance();
-							worstMatch = p;
-						}
-					}
-					 */
+
+				// FIXME: hack
+				if ( false )
+
+				// FIXME: another hack to change the termination condition
+//				if ( avgError > params.relativeThreshold || maxError > params.absoluteThreshold )
+
+				// original
+//				if ( avgError * params.relativeThreshold < maxError || maxError > params.absoluteThreshold )
+
+				{
 					final ComparePair pair = ((PointMatchStitching)worstMatch).getPair();
 
 					Log.info( "Identified link between " + pair.getImagePlus1().getTitle() + "[" + pair.getTile1().getTimePoint() + "] and " +

@@ -8,6 +8,8 @@ import net.imglib2.Interval;
  * Represents a box in n-dimensional space.
  * Primarily used as a bounding box of a set of tiles.
  *
+ * TODO: remove as it duplicates the functionality of Interval + Intervals
+ *
  * @author Igor Pisarev
  */
 

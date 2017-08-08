@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.flatfield;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -8,12 +8,12 @@ import net.imglib2.Interval;
 import net.imglib2.SerializableFinalInterval;
 
 /**
- * Command line arguments parser for illumination correction.
+ * Command line arguments parser for flatfield correction.
  *
  * @author Igor Pisarev
  */
 
-public class IlluminationCorrectionArguments
+public class FlatfieldCorrectionArguments
 {
 	@Option(name = "-i", aliases = { "--input" }, required = true,
 			usage = "Path to a tile configuration JSON file")
@@ -27,18 +27,22 @@ public class IlluminationCorrectionArguments
 			usage = "Number of bins to use")
 	private int bins = 256;
 
+	@Option(name = "-p", aliases = { "--pivot" }, required = false,
+			usage = "Pivot value which is to subtract from all histograms (usually the background intensity value)")
+	private double pivotValue = 101;
+
 	@Option(name = "--min", required = false,
 			usage = "Min value of a histogram")
-	private Integer histMinValue = null;
+	private double histMinValue = 80;
 
 	@Option(name = "--max", required = false,
 			usage = "Max value of a histogram")
-	private Integer histMaxValue = null;
+	private double histMaxValue = 500;
 
 
 	private boolean parsedSuccessfully = false;
 
-	public IlluminationCorrectionArguments( final String[] args ) throws CmdLineException
+	public FlatfieldCorrectionArguments( final String[] args ) throws CmdLineException
 	{
 		final CmdLineParser parser = new CmdLineParser( this );
 		try
@@ -57,14 +61,19 @@ public class IlluminationCorrectionArguments
 
 	public String inputFilePath() { return inputFilePath; }
 	public int bins() { return bins; }
-	public Integer histMinValue() { return histMinValue; }
-	public Integer histMaxValue() { return histMaxValue; }
+	public double pivotValue() { return pivotValue; }
+	public Double histMinValue() { return histMinValue; }
+	public Double histMaxValue() { return histMaxValue; }
 	public String cropMinMaxIntervalStr() { return cropMinMaxInterval; };
 
 	public Interval cropMinMaxInterval( final long[] fullTileSize )
 	{
 		if ( cropMinMaxInterval == null )
-			return SerializableFinalInterval.createMinSize( 0,0,0, fullTileSize[0],fullTileSize[1],fullTileSize[2] );
+		{
+			final long[] minSize = new long[ fullTileSize.length * 2 ];
+			System.arraycopy( fullTileSize, 0, minSize, fullTileSize.length, fullTileSize.length );
+			return SerializableFinalInterval.createMinSize( minSize );
+		}
 
 		final String[] intervalStrSplit = cropMinMaxInterval.trim().split(",");
 		final long[] intervalMinMax = new long[ intervalStrSplit.length ];

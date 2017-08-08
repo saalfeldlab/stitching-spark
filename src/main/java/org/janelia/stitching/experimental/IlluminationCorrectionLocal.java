@@ -125,7 +125,7 @@ public class IlluminationCorrectionLocal
 	public void shutdown()
 	{
 		if ( multithreadedExecutor != null )
-			multithreadedExecutor.shutdown();
+			multithreadedExecutor.close();
 	}
 
 

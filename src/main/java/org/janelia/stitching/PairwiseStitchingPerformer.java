@@ -15,6 +15,7 @@ import mpicbg.imglib.algorithm.scalespace.DifferenceOfGaussianPeak;
 import mpicbg.imglib.algorithm.scalespace.SubpixelLocalization;
 import mpicbg.imglib.cursor.LocalizableByDimCursor;
 import mpicbg.imglib.cursor.LocalizableCursor;
+import mpicbg.imglib.custom.PointValidator;
 import mpicbg.imglib.image.Image;
 import mpicbg.imglib.image.ImageFactory;
 import mpicbg.imglib.image.display.imagej.ImageJFunctions;
@@ -49,16 +50,11 @@ public class PairwiseStitchingPerformer
 		numThreads = n;
 	}
 
-	public static SerializablePairWiseStitchingResult stitchPairwise( final ImagePlus imp1, final ImagePlus imp2,
-			final Roi roi1, final Roi roi2,
-			final int timepoint1, final int timepoint2, final StitchingParameters params )
-	{
-		return stitchPairwise( imp1, imp2, roi1, roi2, null, null, timepoint1, timepoint2, params, 1 )[ 0 ];
-	}
-
 	public static SerializablePairWiseStitchingResult[] stitchPairwise( final ImagePlus imp1, final ImagePlus imp2,
 			Roi roi1, Roi roi2, final int[] roiZ1, final int[] roiZ2,
-			final int timepoint1, final int timepoint2, final StitchingParameters params, final int numHighestPeaks )
+			final int timepoint1, final int timepoint2, final StitchingParameters params, final int numHighestPeaks,
+			final PointValidator searchRadiusPointValidator, final long[][] roiToTileOffset, final double[] globalOffset,
+			final double[] stageOffset, final long[] confidenceIntervalMin, final long[] confidenceIntervalMax )
 	{
 		SerializablePairWiseStitchingResult[] result = null;
 		roi1 = getOnlyRectangularRoi( roi1 );
@@ -79,11 +75,11 @@ public class PairwiseStitchingPerformer
 				final Image<FloatType> image1 = getWrappedImageFloat( imp1, params.channel1, timepoint1 );
 
 				if ( imp2.getType() == ImagePlus.GRAY32 )
-					result = performStitching( image1, getWrappedImageFloat( imp2, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getWrappedImageFloat( imp2, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY16 )
-					result = performStitching( image1, getWrappedImageUnsignedShort( imp2, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getWrappedImageUnsignedShort( imp2, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY8 )
-					result = performStitching( image1, getWrappedImageUnsignedByte( imp2, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getWrappedImageUnsignedByte( imp2, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else
 					Log.error( "Unknown image type: " + imp2.getType() );
 
@@ -94,11 +90,11 @@ public class PairwiseStitchingPerformer
 				final Image<UnsignedShortType> image1 = getWrappedImageUnsignedShort( imp1, params.channel1, timepoint1 );
 
 				if ( imp2.getType() == ImagePlus.GRAY32 )
-					result = performStitching( image1, getWrappedImageFloat( imp2, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getWrappedImageFloat( imp2, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY16 )
-					result = performStitching( image1, getWrappedImageUnsignedShort( imp2, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getWrappedImageUnsignedShort( imp2, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY8 )
-					result = performStitching( image1, getWrappedImageUnsignedByte( imp2, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getWrappedImageUnsignedByte( imp2, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else
 					Log.error( "Unknown image type: " + imp2.getType() );
 
@@ -109,11 +105,11 @@ public class PairwiseStitchingPerformer
 				final Image<UnsignedByteType> image1 = getWrappedImageUnsignedByte( imp1, params.channel1, timepoint1 );
 
 				if ( imp2.getType() == ImagePlus.GRAY32 )
-					result = performStitching( image1, getWrappedImageFloat( imp2, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getWrappedImageFloat( imp2, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY16 )
-					result = performStitching( image1, getWrappedImageUnsignedShort( imp2, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getWrappedImageUnsignedShort( imp2, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY8 )
-					result = performStitching( image1, getWrappedImageUnsignedByte( imp2, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getWrappedImageUnsignedByte( imp2, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else
 					Log.error( "Unknown image type: " + imp2.getType() );
 
@@ -135,11 +131,11 @@ public class PairwiseStitchingPerformer
 				final Image< FloatType > image1 = getImage( imp1, roi1, roiZ1, imgFactoryFloat, params.channel1, timepoint1 );
 
 				if ( imp2.getType() == ImagePlus.GRAY32 )
-					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryFloat, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryFloat, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY16 )
-					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryShort, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryShort, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY8 )
-					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryByte, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryByte, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else
 					Log.error( "Unknown image type: " + imp2.getType() );
 			}
@@ -148,11 +144,11 @@ public class PairwiseStitchingPerformer
 				final Image< UnsignedShortType > image1 = getImage( imp1, roi1, roiZ1, imgFactoryShort, params.channel1, timepoint1 );
 
 				if ( imp2.getType() == ImagePlus.GRAY32 )
-					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryFloat, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryFloat, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY16 )
-					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryShort, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryShort, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY8 )
-					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryByte, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryByte, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else
 					Log.error( "Unknown image type: " + imp2.getType() );
 			}
@@ -161,11 +157,11 @@ public class PairwiseStitchingPerformer
 				final Image< UnsignedByteType > image1 = getImage( imp1, roi1, roiZ1, imgFactoryByte, params.channel1, timepoint1 );
 
 				if ( imp2.getType() == ImagePlus.GRAY32 )
-					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryFloat, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryFloat, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY16 )
-					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryShort, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryShort, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else if ( imp2.getType() == ImagePlus.GRAY8 )
-					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryByte, params.channel2, timepoint2 ), params, numHighestPeaks );
+					result = performStitching( image1, getImage( imp2, roi2, roiZ2, imgFactoryByte, params.channel2, timepoint2 ), params, numHighestPeaks, searchRadiusPointValidator, roiToTileOffset, globalOffset, stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 				else
 					Log.error( "Unknown image type: " + imp2.getType() );
 			}
@@ -183,29 +179,35 @@ public class PairwiseStitchingPerformer
 		// add the offset to the shift
 		for ( int i = 0; i < result.length; i++ )
 		{
-			if ( roi2 != null )
+			if ( result[ i ] != null )
 			{
-				result[ i ].getOffset()[ 0 ] -= roi2.getBounds().x;
-				result[ i ].getOffset()[ 1 ] -= roi2.getBounds().y;
+				if ( roi2 != null )
+				{
+					result[ i ].getOffset()[ 0 ] -= roi2.getBounds().x;
+					result[ i ].getOffset()[ 1 ] -= roi2.getBounds().y;
+				}
+
+				if ( roi1 != null )
+				{
+					result[ i ].getOffset()[ 0 ] += roi1.getBounds().x;
+					result[ i ].getOffset()[ 1 ] += roi1.getBounds().y;
+				}
+
+				if ( roiZ2 != null )
+					result[ i ].getOffset()[ 2 ] -= roiZ2[ 0 ];
+
+				if ( roiZ1 != null )
+					result[ i ].getOffset()[ 2 ] += roiZ1[ 0 ];
 			}
-
-			if ( roi1 != null )
-			{
-				result[ i ].getOffset()[ 0 ] += roi1.getBounds().x;
-				result[ i ].getOffset()[ 1 ] += roi1.getBounds().y;
-			}
-
-			if ( roiZ2 != null )
-				result[ i ].getOffset()[ 2 ] -= roiZ2[ 0 ];
-
-			if ( roiZ1 != null )
-				result[ i ].getOffset()[ 2 ] += roiZ1[ 0 ];
 		}
 
 		return result;
 	}
 
-	public static < T extends RealType<T>, S extends RealType<S> > SerializablePairWiseStitchingResult[] performStitching( final Image<T> img1, final Image<S> img2, final StitchingParameters params, final int numHighestPeaks )
+	public static < T extends RealType<T>, S extends RealType<S> > SerializablePairWiseStitchingResult[] performStitching(
+			final Image<T> img1, final Image<S> img2, final StitchingParameters params, final int numHighestPeaks,
+			final PointValidator searchRadiusPointValidator, final long[][] roiToTileOffset, final double[] globalOffset,
+			final double[] stageOffset, final long[] confidenceIntervalMin, final long[] confidenceIntervalMax )
 	{
 		if ( img1 == null )
 		{
@@ -223,15 +225,27 @@ public class PairwiseStitchingPerformer
 			return null;
 		}
 
-		final SerializablePairWiseStitchingResult[] result = computePhaseCorrelation( img1, img2, params.checkPeaks, params.subpixelAccuracy, numHighestPeaks );
+		final SerializablePairWiseStitchingResult[] result = computePhaseCorrelation(
+				img1, img2, params.checkPeaks, params.subpixelAccuracy, numHighestPeaks,
+				searchRadiusPointValidator, roiToTileOffset, globalOffset,
+				stageOffset, confidenceIntervalMin, confidenceIntervalMax );
 
 		return result;
 	}
 
-	public static < T extends RealType<T>, S extends RealType<S> > SerializablePairWiseStitchingResult[] computePhaseCorrelation( final Image<T> img1, final Image<S> img2, final int numPeaks, final boolean subpixelAccuracy, final int numHighestPeaks )
+	public static < T extends RealType<T>, S extends RealType<S> > SerializablePairWiseStitchingResult[] computePhaseCorrelation(
+			final Image<T> img1, final Image<S> img2, final int numPeaks, final boolean subpixelAccuracy, final int numHighestPeaks,
+			final PointValidator searchRadiusPointValidator, final long[][] roiToTileOffset, final double[] globalOffset,
+			final double[] stageOffset, final long[] confidenceIntervalMin, final long[] confidenceIntervalMax )
 	{
 		final PhaseCorrelation< T, S > phaseCorr = new PhaseCorrelation<>( img1, img2 );
 		phaseCorr.setInvestigateNumPeaks( numPeaks );
+
+		phaseCorr.setSearchRadiusPointValidator( searchRadiusPointValidator );
+		phaseCorr.setRoiToTileOffset( roiToTileOffset );
+		phaseCorr.setGlobalOffset( globalOffset );
+		phaseCorr.setStageOffset( stageOffset );
+		phaseCorr.setConfidenceInterval( confidenceIntervalMin, confidenceIntervalMax );
 
 		if ( numThreads > 0 )
 		{
@@ -257,39 +271,47 @@ public class PairwiseStitchingPerformer
 
 		for ( int index = 0; index < result.length; index++ )
 		{
-			final PhaseCorrelationPeak pcp = peaks.get( peaks.size() - index - 1 );
-
-			if ( subpixelAccuracy )
+			final int peakSortedDescIndex = peaks.size() - index - 1;
+			if ( peakSortedDescIndex < 0 )
 			{
-				final Image<FloatType> pcm = phaseCorr.getPhaseCorrelationMatrix();
-
-				final ArrayList<DifferenceOfGaussianPeak<FloatType>> list = new ArrayList<>();
-				final Peak p = new Peak( pcp );
-				list.add( p );
-
-				final SubpixelLocalization<FloatType> spl = new SubpixelLocalization<>( pcm, list );
-				final boolean move[] = new boolean[ pcm.getNumDimensions() ];
-				for ( int i = 0; i < pcm.getNumDimensions(); ++i )
-					move[ i ] = false;
-				spl.setCanMoveOutside( true );
-				spl.setAllowedToMoveInDim( move );
-				spl.setMaxNumMoves( 0 );
-				spl.setAllowMaximaTolerance( false );
-				spl.process();
-
-				final Peak peak = (Peak)list.get( 0 );
-
-				for ( int d = 0; d < img1.getNumDimensions(); ++d )
-					shift[ d ] = peak.getPCPeak().getPosition()[ d ] + peak.getSubPixelPositionOffset( d );
-
-				result[ index ] = new SerializablePairWiseStitchingResult( null, shift.clone(), pcp.getCrossCorrelationPeak(), p.getValue().get() );
+				result[ index ] = null;
 			}
 			else
 			{
-				for ( int d = 0; d < img1.getNumDimensions(); ++d )
-					shift[ d ] = pcp.getPosition()[ d ];
+				final PhaseCorrelationPeak pcp = peaks.get( peakSortedDescIndex );
 
-				result[ index ] = new SerializablePairWiseStitchingResult( null, shift.clone(), pcp.getCrossCorrelationPeak(), pcp.getPhaseCorrelationPeak() );
+				if ( subpixelAccuracy )
+				{
+					final Image<FloatType> pcm = phaseCorr.getPhaseCorrelationMatrix();
+
+					final ArrayList<DifferenceOfGaussianPeak<FloatType>> list = new ArrayList<>();
+					final Peak p = new Peak( pcp );
+					list.add( p );
+
+					final SubpixelLocalization<FloatType> spl = new SubpixelLocalization<>( pcm, list );
+					final boolean move[] = new boolean[ pcm.getNumDimensions() ];
+					for ( int i = 0; i < pcm.getNumDimensions(); ++i )
+						move[ i ] = false;
+					spl.setCanMoveOutside( true );
+					spl.setAllowedToMoveInDim( move );
+					spl.setMaxNumMoves( 0 );
+					spl.setAllowMaximaTolerance( false );
+					spl.process();
+
+					final Peak peak = (Peak)list.get( 0 );
+
+					for ( int d = 0; d < img1.getNumDimensions(); ++d )
+						shift[ d ] = peak.getPCPeak().getPosition()[ d ] + peak.getSubPixelPositionOffset( d );
+
+					result[ index ] = new SerializablePairWiseStitchingResult( null, shift.clone(), pcp.getCrossCorrelationPeak(), p.getValue().get() );
+				}
+				else
+				{
+					for ( int d = 0; d < img1.getNumDimensions(); ++d )
+						shift[ d ] = pcp.getPosition()[ d ];
+
+					result[ index ] = new SerializablePairWiseStitchingResult( null, shift.clone(), pcp.getCrossCorrelationPeak(), pcp.getPhaseCorrelationPeak() );
+				}
 			}
 		}
 

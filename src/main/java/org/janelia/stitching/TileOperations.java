@@ -49,6 +49,29 @@ public class TileOperations
 		return new Boundaries( paddedMin, paddedMax );
 	}
 
+	// TODO: remove as it duplicates Intervals.smallestContainingInterval() functionality
+	public static Interval floorCeilRealInterval( final RealInterval realInterval )
+	{
+		final long[] min = new long[ realInterval.numDimensions() ], max = new long[ realInterval.numDimensions() ];
+		for ( int d = 0; d < realInterval.numDimensions(); ++d )
+		{
+			min[ d ] = ( long ) Math.floor( realInterval.realMin( d ) );
+			max[ d ] = ( long ) Math.ceil( realInterval.realMax( d ) );
+		}
+		return new FinalInterval( min, max );
+	}
+
+	public static Interval roundRealInterval( final RealInterval realInterval )
+	{
+		final long[] min = new long[ realInterval.numDimensions() ], max = new long[ realInterval.numDimensions() ];
+		for ( int d = 0; d < realInterval.numDimensions(); ++d )
+		{
+			min[ d ] = Math.round( realInterval.realMin( d ) );
+			max[ d ] = Math.round( realInterval.realMax( d ) );
+		}
+		return new FinalInterval( min, max );
+	}
+
 	/**
 	 * @return a list of overlapping pairs
 	 */
@@ -84,16 +107,34 @@ public class TileOperations
 	}
 
 	/**
+	 * @return an overlap as a RealInterval with relative coordinates of the first tile
+	 */
+	public static RealInterval getOverlappingRegionReal( final TileInfo t1, final TileInfo t2 )
+	{
+		final double[] min = new double[ t1.numDimensions() ], max = new double[ t1.numDimensions() ];
+		for ( int d = 0; d < t1.numDimensions(); d++ )
+		{
+			final double p1 = t1.getPosition( d ), p2 = t2.getPosition( d );
+			final long s1 = t1.getSize( d ), s2 = t2.getSize( d );
+
+			if ( !( ( p2 >= p1 && p2 < p1 + s1 ) || ( p1 >= p2 && p1 < p2 + s2 ) ) )
+				return null;
+
+			min[ d ] = Math.max( 0, p2 - p1 );
+			max[ d ] = Math.min( s1 - 1, p2 + s2 - p1 - 1 );
+		}
+		return new FinalRealInterval( min, max );
+	}
+
+	/**
 	 * @return true if two tiles overlap, false otherwise
 	 */
 	public static boolean overlap( final TileInfo t1, final TileInfo t2 )
 	{
 		for ( int d = 0; d < t1.numDimensions(); d++ )
 		{
-			final long p1 = Math.round( t1.getPosition( d ) ), p2 = Math.round( t2.getPosition( d ) );
-			final long s1 = t1.getSize( d ), s2 = t2.getSize( d );
-
-			if ( !( ( p2 >= p1 && p2 < p1 + s1 ) || ( p1 >= p2 && p1 < p2 + s2 ) ) )
+			final double min1 = t1.getPosition( d ), min2 = t2.getPosition( d ), max1 = t1.getMax( d ), max2 = t2.getMax( d );
+			if ( !( ( min2 >= min1 && min2 <= max1 ) || ( min1 >= min2 && min1 <= max2 ) ) )
 				return false;
 		}
 		return true;
@@ -103,10 +144,8 @@ public class TileOperations
 	{
 		for ( int d = 0; d < t1.numDimensions(); d++ )
 		{
-			final double p1 = Math.round( t1.realMin( d ) ), p2 = Math.round( t2.realMin( d ) );
-			final double q1 = t1.realMax( d ), q2 = t2.realMax( d );
-
-			if ( !( ( p2 >= p1 && p2 < q1 ) || ( p1 >= p2 && p1 < q2 ) ) )
+			final double min1 = t1.realMin( d ), min2 = t2.realMin( d ), max1 = t1.realMax( d ), max2 = t2.realMax( d );
+			if ( !( ( min2 >= min1 && min2 <= max1 ) || ( min1 >= min2 && min1 <= max2 ) ) )
 				return false;
 		}
 		return true;
@@ -133,7 +172,7 @@ public class TileOperations
 	/**
 	 * @return a list of tiles lying within specified subregion (overlapping with it)
 	 */
-	public static List< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final long[] min, final int[] dimensions )
+	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final long[] min, final int[] dimensions )
 	{
 		assert min.length == dimensions.length;
 		final TileInfo subregion = new TileInfo( min.length );
@@ -147,9 +186,9 @@ public class TileOperations
 	/**
 	 * @return a list of tiles lying within specified subregion (overlapping with it)
 	 */
-	public static List< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final TileInfo subregion )
+	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final TileInfo subregion )
 	{
-		final List< TileInfo > tilesWithinSubregion = new ArrayList<>();
+		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			if ( TileOperations.overlap( tile, subregion ) )
 				tilesWithinSubregion.add( tile );
@@ -160,7 +199,7 @@ public class TileOperations
 	{
 		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
-			if ( TileOperations.overlap( new FinalRealInterval( tile.getPosition(), tile.getMax() ), subregion ) )
+			if ( TileOperations.overlap( tile, subregion ) )
 				tilesWithinSubregion.add( tile );
 		return tilesWithinSubregion;
 	}
@@ -301,12 +340,23 @@ public class TileOperations
 	 */
 	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int subregionsCountPerDim )
 	{
+		final int[] subregionsCountPerDimArr = new int[ space.numDimensions() ];
+		Arrays.fill( subregionsCountPerDimArr, subregionsCountPerDim );
+		return divideSpaceByCount( space, subregionsCountPerDimArr );
+	}
+
+	/**
+	 * Cuts given region into a set of non-overlapping tiles with exactly {@code subregionsCountPerDim} tiles specified for each dimension separately.
+	 * @return a list of non-overlapping tiles that form a given region of space.
+	 */
+	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int[] subregionsCountPerDim )
+	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
 		final int[] sizePlusOneCount = new int[ space.numDimensions() ];
 		for ( int d = 0; d < subregionDimsArr.length; d++ )
 		{
-			subregionDimsArr[ d ] = space.dimension( d ) / subregionsCountPerDim;
-			sizePlusOneCount[ d ] = ( int ) ( space.dimension( d ) - subregionsCountPerDim * subregionDimsArr[ d ] );
+			subregionDimsArr[ d ] = space.dimension( d ) / subregionsCountPerDim[ d ];
+			sizePlusOneCount[ d ] = ( int ) ( space.dimension( d ) - subregionsCountPerDim[ d ] * subregionDimsArr[ d ] );
 		}
 		return divideSpace( space, new FinalDimensions( subregionDimsArr ), sizePlusOneCount );
 	}
@@ -328,7 +378,7 @@ public class TileOperations
 			subregions.get( i ).setIndex( i );
 		return subregions;
 	}
-	private static void divideSpaceRecursive( final Boundaries space, final Dimensions subregionDims, final int[] sizePlusOneCount, final ArrayList< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
+	private static void divideSpaceRecursive( final Boundaries space, final Dimensions subregionDims, final int[] sizePlusOneCount, final List< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
 	{
 		if ( currDim == space.numDimensions() )
 		{

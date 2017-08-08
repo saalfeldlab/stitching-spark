@@ -2,13 +2,16 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 
+import net.imglib2.RealInterval;
+import net.imglib2.RealPositionable;
+
 /**
  * Represents tile image metadata.
  *
  * @author Igor Pisarev
  */
 
-public class TileInfo implements Serializable {
+public class TileInfo implements Serializable, RealInterval {
 
 	private static final long serialVersionUID = -3986869827110711078L;
 
@@ -17,10 +20,12 @@ public class TileInfo implements Serializable {
 	private String file;
 	private double[] position;
 	private long[] size;
+	private double[] pixelResolution;
 
 	public TileInfo( final int dim ) {
 		position = new double[ dim ];
 		size = new long[ dim ];
+		pixelResolution = new double[ dim ];
 	}
 
 	protected TileInfo() { }
@@ -44,16 +49,32 @@ public class TileInfo implements Serializable {
 	public double[] getPosition() {
 		return position;
 	}
-	
+
 	public double[] getMax() {
-		double[] max = new double[ numDimensions() ];
+		final double[] max = new double[ numDimensions() ];
 		for ( int d = 0; d < max.length; d++ )
-			max[ d ] = position[ d ] + size[ d ] - 1;
+			max[ d ] = getMax( d );
 		return max;
+	}
+
+	public double getMax( final int d ) {
+		return position[ d ] + size[ d ] - 1;
 	}
 
 	public void setPosition( final double[] position ) {
 		this.position = position;
+	}
+
+	public double[] getPixelResolution() {
+		return pixelResolution;
+	}
+
+	public double getPixelResolution( final int d ) {
+		return pixelResolution[ d ];
+	}
+
+	public void setPixelResolution( final double[] pixelResolution ) {
+		this.pixelResolution = pixelResolution;
 	}
 
 	public long getSize( final int d ) {
@@ -71,8 +92,9 @@ public class TileInfo implements Serializable {
 
 	public void setSize( final long[] size ) {
 		this.size = size;
-		for ( final long s : size )
-			assert s >= 0;
+		if ( size != null )
+			for ( final long s : size )
+				assert s >= 0;
 	}
 
 	public ImageType getType() {
@@ -91,6 +113,11 @@ public class TileInfo implements Serializable {
 		this.index = index;
 	}
 
+	public boolean isNull() {
+		return file == null;
+	}
+
+	@Override
 	public int numDimensions() {
 		return position.length;
 	}
@@ -112,6 +139,47 @@ public class TileInfo implements Serializable {
 		newTile.setFilePath( file );
 		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );
+		newTile.setPixelResolution( pixelResolution == null ? null : pixelResolution.clone() );
 		return newTile;
+	}
+
+	@Override
+	public double realMin( final int d )
+	{
+		return position[ d ];
+	}
+
+	@Override
+	public void realMin( final double[] min )
+	{
+		for ( int d = 0; d < min.length; ++d )
+			min[ d ] = realMin( d );
+	}
+
+	@Override
+	public void realMin( final RealPositionable min )
+	{
+		for ( int d = 0; d < min.numDimensions(); ++d )
+			min.setPosition( realMin( d ), d );
+	}
+
+	@Override
+	public double realMax( final int d )
+	{
+		return position[ d ] + size[ d ] - 1;
+	}
+
+	@Override
+	public void realMax( final double[] max )
+	{
+		for ( int d = 0; d < max.length; ++d )
+			max[ d ] = realMax( d );
+	}
+
+	@Override
+	public void realMax( final RealPositionable max )
+	{
+		for ( int d = 0; d < max.numDimensions(); ++d )
+			max.setPosition( realMax( d ), d );
 	}
 }

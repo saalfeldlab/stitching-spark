@@ -8,7 +8,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.TreeMap;
 
 import org.apache.commons.io.IOUtils;
 
@@ -44,16 +43,15 @@ public class StitchingJob implements Serializable {
 	private String saveFolder;
 	private String datasetName;
 
-	private TileInfo[] tiles;
-	private int dimensionality;
-
+	private List< TileInfo[] > tilesMultichannel;
 
 	public StitchingJob( final StitchingArguments args )
 	{
 		this.args = args;
+
 		pipeline = setUpPipeline( args );
 
-		final File inputFile = new File( args.inputFilePath() ).getAbsoluteFile();
+		final File inputFile = new File( args.inputTileConfigurations().get( 0 ) ).getAbsoluteFile();
 		baseFolder = saveFolder = inputFile.getParent();
 		datasetName = inputFile.getName();
 		if ( datasetName.endsWith( ".json" ) )
@@ -69,6 +67,8 @@ public class StitchingJob implements Serializable {
 	private EnumSet< PipelineStep > setUpPipeline( final StitchingArguments args )
 	{
 		final List< PipelineStep > pipelineStepsList = new ArrayList<>();
+
+		// mandatory step that validates tile configurations and tries to add some missing tiles, etc.
 		pipelineStepsList.add( PipelineStep.Metadata );
 
 		if ( !args.fuseOnly() )
@@ -87,20 +87,21 @@ public class StitchingJob implements Serializable {
 	public StitchingParameters getParams() { return params; }
 	public void setParams( final StitchingParameters params ) { this.params = params; }
 
-	public TreeMap< Integer, TileInfo > getTilesMap()
-	{
-		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
-		for ( final TileInfo tile : tiles )
-			tilesMap.put( tile.getIndex(), tile );
-		return tilesMap;
+	public int getChannels() {
+		return args.inputTileConfigurations().size();
 	}
 
-	public TileInfo[] getTiles() {
-		return tiles;
+	public TileInfo[] getTiles( final int channel ) {
+		return tilesMultichannel.get( channel );
 	}
 
-	public void setTiles( final TileInfo[] tiles ) throws Exception {
-		this.tiles = tiles;
+	public void setTiles( final TileInfo[] tiles, final int channel ) throws Exception {
+		tilesMultichannel.set( channel, tiles );
+		checkTilesConfiguration();
+	}
+
+	public void setTilesMultichannel( final List< TileInfo[] > tilesMultichannel ) throws Exception {
+		this.tilesMultichannel = tilesMultichannel;
 		checkTilesConfiguration();
 	}
 
@@ -111,44 +112,62 @@ public class StitchingJob implements Serializable {
 
 	public String getDatasetName() { return datasetName; }
 
-	public int getDimensionality() { return dimensionality; }
+	public int getDimensionality() { return tilesMultichannel.get( 0 )[ 0 ].numDimensions(); }
+	public double[] getPixelResolution() { return tilesMultichannel.get( 0 )[ 0 ].getPixelResolution(); }
 
 	public void validateTiles() throws IllegalArgumentException
 	{
-		if ( tiles.length < 2 )
-			throw new IllegalArgumentException( "There must be at least 2 tiles in the dataset" );
+		final int dimensionality = getDimensionality();
 
-		for ( int i = 0; i < tiles.length; i++ )
-			if ( tiles[ i ].getPosition().length != tiles[ i ].getSize().length )
-				throw new IllegalArgumentException( "Incorrect dimensionality" );
+		double[] pixelResolution = getPixelResolution();
+		if ( pixelResolution == null )
+			pixelResolution = new double[] { 0.097, 0.097, 0.18 };
 
-		for ( int i = 1; i < tiles.length; i++ )
-			if ( tiles[ i ].numDimensions() != tiles[ i - 1 ].numDimensions() )
-				throw new IllegalArgumentException( "Incorrect dimensionality" );
+		for ( final TileInfo[] tiles : tilesMultichannel )
+		{
+			if ( tiles.length < 2 )
+				throw new IllegalArgumentException( "There must be at least 2 tiles in the dataset" );
 
-		// Everything is correct
-		this.dimensionality = tiles[ 0 ].numDimensions();
+			for ( int i = 0; i < tiles.length; i++ )
+				if ( tiles[ i ].getPosition().length != tiles[ i ].getSize().length )
+					throw new IllegalArgumentException( "Incorrect dimensionality" );
+
+			for ( int i = 1; i < tiles.length; i++ )
+				if ( tiles[ i ].numDimensions() != tiles[ i - 1 ].numDimensions() )
+					throw new IllegalArgumentException( "Incorrect dimensionality" );
+
+			for ( final TileInfo tile : tiles )
+				if ( tile.getPixelResolution() == null )
+					tile.setPixelResolution( pixelResolution.clone() );
+
+			if ( dimensionality != tiles[ 0 ].numDimensions() )
+				throw new IllegalArgumentException( "Channels have different dimensionality" );
+		}
+
 		if ( params != null )
 			params.dimensionality = dimensionality;
 	}
 
 	private void checkTilesConfiguration() throws Exception
 	{
-		boolean malformed = ( tiles == null );
-		if ( !malformed )
-			for ( final TileInfo tile : tiles )
-				if ( tile == null )
-					malformed = true;
+		for ( final TileInfo[] tiles : tilesMultichannel )
+		{
+			boolean malformed = ( tiles == null );
+			if ( !malformed )
+				for ( final TileInfo tile : tiles )
+					if ( tile == null )
+						malformed = true;
 
-		if ( malformed )
-			throw new NullPointerException( "Malformed input" );
+			if ( malformed )
+				throw new NullPointerException( "Malformed input" );
 
-		for ( int i = 0; i < tiles.length; i++ ) {
-			if ( tiles[ i ].getFilePath() == null || tiles[ i ].getPosition() == null )
-				throw new NullPointerException( "Some of required parameters are missing (file or position)" );
+			for ( int i = 0; i < tiles.length; i++ ) {
+				if ( tiles[ i ].getFilePath() == null || tiles[ i ].getPosition() == null )
+					throw new NullPointerException( "Some of required parameters are missing (file or position)" );
 
-			if ( tiles[ i ].getIndex() == null )
-				tiles[ i ].setIndex( i );
+				if ( tiles[ i ].getIndex() == null )
+					tiles[ i ].setIndex( i );
+			}
 		}
 	}
 

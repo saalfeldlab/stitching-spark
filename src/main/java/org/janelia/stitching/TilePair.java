@@ -23,9 +23,22 @@ public class TilePair implements Pair< TileInfo, TileInfo >, Serializable
 
 	protected TilePair() { }
 
-	public TileInfo[] toArray() { return tilePair.clone(); }
-	public TileInfo getA() { return tilePair[ 0 ]; }
-	public TileInfo getB() { return tilePair[ 1 ]; }
+	@Override
+	public TileInfo getA()
+	{
+		return tilePair[ 0 ];
+	}
+
+	@Override
+	public TileInfo getB()
+	{
+		return tilePair[ 1 ];
+	}
+
+	public TileInfo[] toArray()
+	{
+		return tilePair.clone();
+	}
 
 	public void swap()
 	{
@@ -33,7 +46,7 @@ public class TilePair implements Pair< TileInfo, TileInfo >, Serializable
 		tilePair[ 0 ] = tilePair[ 1 ];
 		tilePair[ 1 ] = tmp;
 	}
-	
+
 	@Override
 	public String toString()
 	{

@@ -10,7 +10,7 @@ import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 import java.util.function.IntToDoubleFunction;
 
-public class MultithreadedExecutor
+public class MultithreadedExecutor implements AutoCloseable
 {
 	private final ExecutorService threadPool;
 	private final int numThreads;
@@ -32,7 +32,8 @@ public class MultithreadedExecutor
 		this.numThreads = numThreads;
 	}
 
-	public void shutdown()
+	@Override
+	public void close()
 	{
 		threadPool.shutdown();
 	}

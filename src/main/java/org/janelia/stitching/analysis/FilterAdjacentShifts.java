@@ -143,7 +143,7 @@ public class FilterAdjacentShifts
 				}
 			}
 
-			// just for Sample9
+			// only for Sample9
 			shift.setIsValidOverlap( true );
 			adjacentShifts.add( shift );
 		}
@@ -172,7 +172,7 @@ public class FilterAdjacentShifts
 
 	public static List< TilePair > filterAdjacentPairs( final List< TilePair > overlappingPairs, final int dim )
 	{
-		return filterAdjacentPairs( overlappingPairs, new Integer(dim) );
+		return filterAdjacentPairs( overlappingPairs, new Integer( dim ) );
 	}
 
 	public static List< TilePair > filterAdjacentPairs( final List< TilePair > overlappingPairs )
@@ -183,31 +183,29 @@ public class FilterAdjacentShifts
 	private static List< TilePair > filterAdjacentPairs( final List< TilePair > overlappingPairs, final Integer dim )
 	{
 		final List< TilePair > adjacentPairs = new ArrayList<>();
-
 		for ( final TilePair pair : overlappingPairs )
 		{
 			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( pair.getA(), pair.getB() );
 
-			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
+			final List< Integer > shortEdgeDims = new ArrayList<>();
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
 			{
 				final int maxPossibleOverlap = ( int ) Math.min( pair.getA().getSize( d ), pair.getB().getSize( d ) );
 				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
-					shortEdges[d] = true;
+					shortEdgeDims.add( d );
 			}
 
-			if (
-					( ( !shortEdges[0] || shortEdges[1] || shortEdges[2] )  ||  (dim != null && dim.intValue() != 0)  ) && // x
-					( ( shortEdges[0] || !shortEdges[1] || shortEdges[2] )  ||  (dim != null && dim.intValue() != 1)  ) && // y
-					( ( shortEdges[0] || shortEdges[1] || !shortEdges[2] )  ||  (dim != null && dim.intValue() != 2)  ) && // z
-
-					true
-					)
-				continue;
-
-			adjacentPairs.add( pair );
+			if ( dim == null )
+			{
+				if ( shortEdgeDims.size() <= 1 )
+					adjacentPairs.add( pair );
+			}
+			else
+			{
+				if ( shortEdgeDims.size() == 1 && dim.equals( shortEdgeDims.get( 0 ) ) )
+					adjacentPairs.add( pair );
+			}
 		}
-
 		return adjacentPairs;
 	}
 }

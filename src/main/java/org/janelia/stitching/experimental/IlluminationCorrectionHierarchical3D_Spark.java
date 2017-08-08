@@ -30,10 +30,10 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.storage.StorageLevel;
-import org.janelia.stitching.TiffSliceLoader;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
+import org.janelia.util.TiffSliceReader;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -778,7 +778,7 @@ public class IlluminationCorrectionHierarchical3D_Spark implements Serializable
 				// generator
 				( intermediateHist, tile ) ->
 				{
-					final ImagePlus imp = TiffSliceLoader.loadSlice( tile, currentSlice );
+					final ImagePlus imp = TiffSliceReader.readSlice( tile.getFilePath(), currentSlice );
 					Utils.workaroundImagePlusNSlices( imp );
 
 					final Img< T > img = ImagePlusImgs.from( imp );
@@ -879,7 +879,7 @@ public class IlluminationCorrectionHierarchical3D_Spark implements Serializable
 		final JavaRDD< TileInfo > rdd = sparkContext.parallelize( Arrays.asList( tiles ) );
 		rdd.foreach( tile ->
 				{
-					final ImagePlus imp = TiffSliceLoader.loadSlice(tile, slice);
+					final ImagePlus imp = TiffSliceReader.readSlice(tile.getFilePath(), slice);
 					Utils.workaroundImagePlusNSlices( imp );
 					final Img< ? extends RealType > img = ImagePlusImgs.from( imp );
 					final Cursor< ? extends RealType > imgCursor = Views.flatIterable( img ).cursor();

@@ -1,15 +1,15 @@
 package org.janelia.stitching;
 
-public class PipelineExecutionException extends Exception 
+public class PipelineExecutionException extends Exception
 {
 	private static final long serialVersionUID = -2015347403889233169L;
 
-	public PipelineExecutionException() 
+	public PipelineExecutionException()
 	{
         super();
     }
 
-    public PipelineExecutionException( final String message ) 
+    public PipelineExecutionException( final String message )
     {
         super( message );
     }
@@ -22,5 +22,10 @@ public class PipelineExecutionException extends Exception
     public PipelineExecutionException( final Throwable cause )
     {
         super( cause );
+    }
+
+    public PipelineExecutionException( final Exception exception )
+    {
+    	this( exception.getMessage(), exception.getCause() );
     }
 }

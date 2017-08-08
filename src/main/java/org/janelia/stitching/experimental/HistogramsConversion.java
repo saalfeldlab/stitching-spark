@@ -103,7 +103,7 @@ public class HistogramsConversion implements Serializable
 			}
 			, getNumSlices() );
 
-		pool.shutdown();
+		pool.close();
 	}
 
 	private < V extends TreeMap< Short, Integer > >void saveSliceHistogramsToDisk( final int scale, final int slice, final V[] hist ) throws Exception
