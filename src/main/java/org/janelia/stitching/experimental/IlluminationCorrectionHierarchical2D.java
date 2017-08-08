@@ -27,6 +27,7 @@ import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.spark.Accumulator;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -327,7 +328,7 @@ public class IlluminationCorrectionHierarchical2D implements Serializable
 				for ( int d = 0; d < blockPosition.length; d++ )
 					blockPosition[ d ] *= blockSize[ d ];
 
-				final Interval blockInterval = Intervals.createMinSize( Utils.concatArrays( blockPosition, blockSize ) );
+				final Interval blockInterval = Intervals.createMinSize( ArrayUtils.addAll( blockPosition, blockSize ) );
 				final RandomAccessibleInterval< T > blockImg = Views.interval( stack, blockInterval );
 				final IterableInterval< T > blockIterable = Views.iterable( blockImg );
 				final Cursor< T > blockCursor = blockIterable.cursor();
