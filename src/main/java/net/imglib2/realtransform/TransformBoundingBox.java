@@ -10,10 +10,10 @@ import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.Localizable;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.interpolation.InterpolatorFactory;
-import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.ByteType;
 import net.imglib2.util.ConstantUtils;
 import net.imglib2.util.Intervals;
@@ -22,10 +22,11 @@ import net.imglib2.view.Views;
 public class TransformBoundingBox
 {
 	
-	public static <T extends RealType<T>> RandomAccessibleInterval<T> warpRai( 
-			RandomAccessibleInterval<T> in,
-			InterpolatorFactory<T,RandomAccessibleInterval<?>> interpolator,
-			InvertibleRealTransform xfm )
+
+	public static <T> RandomAccessibleInterval<T> warpRai(
+			final RandomAccessibleInterval<T> in,
+			final InterpolatorFactory<T,RandomAccessible<T>> interpolator,
+			final InvertibleRealTransform xfm )
 	{
 		return Views.interval( 
 					Views.raster( RealViews.transformReal( 
