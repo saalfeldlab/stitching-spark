@@ -108,7 +108,7 @@ public class TransformBoundingBox
 		return new FinalInterval( min, max );
 	}
 
-	public static FinalInterval boundingBoxFowardCorners( Interval interval, RealTransform xfm )
+	public static FinalInterval boundingBoxForwardCorners( final Interval interval, final RealTransform xfm )
 	{
 //		assert( interval.numDimensions() == invtps.getNumDims() );
 
@@ -154,6 +154,8 @@ public class TransformBoundingBox
 		double[] ptWarp = new double[ nd ];
 
 		// inverse transform each corner of the input interval 
+		Arrays.fill( min, Double.POSITIVE_INFINITY );
+		Arrays.fill( max, Double.NEGATIVE_INFINITY );
 		// and keep track of where they end up
 		Cursor<?> cornerCursor = cornerIterator( interval );
 		while( cornerCursor.hasNext() )
@@ -167,7 +169,43 @@ public class TransformBoundingBox
 //			System.out.println( "error: " + error );
 			System.out.println( "corner: " + ptOrig[ 0 ] + " " + ptOrig[ 1 ]);
 			System.out.println( "goes to: " + ptWarp[ 0 ] + " " + ptWarp[ 1 ]);
-			
+
+			updateMin( min, ptWarp );
+			updateMax( max, ptWarp );
+		}
+
+		return new FinalRealInterval( min, max );
+	}
+
+	public static FinalRealInterval boundingBoxForwardCorners( final RealInterval interval, final InvertibleRealTransform invxfm )
+	{
+//		assert( interval.numDimensions() == invtps.getNumDims() );
+
+		final int nd = interval.numDimensions();
+		final double[] min = new double[ nd ];
+		final double[] max = new double[ nd ];
+
+		Arrays.fill( min, Double.POSITIVE_INFINITY );
+		Arrays.fill( max, Double.NEGATIVE_INFINITY );
+
+		final double[] ptOrig = new double[ nd ];
+		final double[] ptWarp = new double[ nd ];
+
+		// inverse transform each corner of the input interval
+		// and keep track of where they end up
+		final Cursor<?> cornerCursor = cornerIterator( interval );
+		while( cornerCursor.hasNext() )
+		{
+			cornerCursor.fwd();
+			cornerPointReal( ptOrig, interval, cornerCursor );
+//			double error = invxfm.inverseTol( ptOrig, ptWarp, 0.05, 3000 );
+			invxfm.apply( ptOrig, ptWarp );
+//			ptWarp = invtps.inverse(ptOrig, 0.05 );
+
+//			System.out.println( "error: " + error );
+//			System.out.println( "corner: " + ptOrig[ 0 ] + " " + ptOrig[ 1 ]);
+//			System.out.println( "goes to: " + ptWarp[ 0 ] + " " + ptWarp[ 1 ]);
+
 			updateMin( min, ptWarp );
 			updateMax( max, ptWarp );
 		}
