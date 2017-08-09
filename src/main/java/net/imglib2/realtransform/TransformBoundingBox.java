@@ -14,6 +14,7 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.interpolation.InterpolatorFactory;
+import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.integer.ByteType;
 import net.imglib2.util.ConstantUtils;
 import net.imglib2.util.Intervals;
@@ -23,14 +24,16 @@ public class TransformBoundingBox
 {
 	
 
-	public static <T> RandomAccessibleInterval<T> warpRai(
+	public static <T extends NumericType<T>> RandomAccessibleInterval<T> warpRai(
 			final RandomAccessibleInterval<T> in,
 			final InterpolatorFactory<T,RandomAccessible<T>> interpolator,
 			final InvertibleRealTransform xfm )
 	{
-		return Views.interval( 
-					Views.raster( RealViews.transformReal( 
-						Views.interpolate( in, interpolator ),
+		return Views.interval(
+					Views.raster( RealViews.transformReal(
+						Views.interpolate(
+								Views.extendZero(in),
+								interpolator ),
 						xfm )),
 					boundingBoxCorners( in, xfm ));
 	}
