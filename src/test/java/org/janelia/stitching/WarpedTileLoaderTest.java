@@ -11,6 +11,7 @@ import bdv.img.TpsTransformWrapper;
 import ij.ImageJ;
 import ij.ImagePlus;
 import net.imglib2.Cursor;
+import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.img.imageplus.ImagePlusImg;
@@ -46,6 +47,12 @@ public class WarpedTileLoaderTest
 		imp.show();
 
 		final RandomAccessibleInterval< T > warpedTile = WarpedTileLoader.load( slabMin, slabTile, transform );
+
+		final Interval estimatedBoundingBox = WarpedTileLoader.getBoundingBox( slabMin, slabTile, transform );
+		for ( int d = 0; d < Math.max( warpedTile.numDimensions(), estimatedBoundingBox.numDimensions() ); ++d )
+			if ( warpedTile.min( d ) != estimatedBoundingBox.min( d ) || warpedTile.max( d ) != estimatedBoundingBox.max( d ) )
+				throw new RuntimeException( "warped image dimensions != estimated bounding box" );
+
 		System.out.println( String.format( "Warped tile: min=%s, dimensions=%s", Arrays.toString( Intervals.minAsLongArray( warpedTile ) ), Arrays.toString( Intervals.dimensionsAsLongArray( warpedTile ) ) ) );
 
 		final ImagePlusImg< T, ? > warpedImg = new ImagePlusImgFactory< T >().create( warpedTile, Util.getTypeFromInterval( warpedTile ) );
