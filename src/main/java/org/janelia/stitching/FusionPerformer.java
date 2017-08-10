@@ -11,6 +11,7 @@ import java.util.Set;
 import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 
 import bdv.export.Downsample;
+import bdv.img.TpsTransformWrapper;
 import ij.IJ;
 import ij.ImagePlus;
 import net.imglib2.Cursor;
@@ -51,6 +52,223 @@ public class FusionPerformer
 		MAX_MIN_DISTANCE,
 		BLENDING
 	}
+
+
+	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingMaxMinDistance(
+			final Interval targetInterval,
+			final List< TileInfo > tilesWithinCell,
+			final Map< Integer, String > slabsMap,
+			final Map< String, double[] > slabsMin,
+			final Map< String, TpsTransformWrapper > slabsTransforms ) throws Exception
+	{
+		final ImageType imageType = Utils.getImageType( tilesWithinCell );
+		if ( imageType == null )
+			throw new Exception( "Can't fuse images of different or unknown types" );
+
+		// initialize output image
+		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), ( T ) imageType.getType().createVariable() );
+
+		// initialize helper image for hard-cut fusion strategy
+		final RandomAccessibleInterval< FloatType > maxMinDistances = ArrayImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
+
+		for ( final TileInfo tile : tilesWithinCell )
+		{
+			final String slab = slabsMap.get( tile.getIndex() );
+
+			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabsMin.get( slab ), tile, slabsTransforms.get( slab ) );
+
+			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
+					warpedTileImg,
+					targetInterval );
+
+			if ( intersection == null )
+				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval: " + "Warped tile " + tile.getIndex() +  "; " + "Output cell " + " at " + Arrays.toString( Intervals.minAsIntArray( targetInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsIntArray( targetInterval ) ) );
+
+			final long[] offset = new long[ targetInterval.numDimensions() ];
+			final long[] minIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
+			final long[] maxIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
+			for ( int d = 0; d < minIntersectionInTargetInterval.length; ++d )
+			{
+				offset[ d ] = warpedTileImg.min( d ) - targetInterval.min( d );
+				minIntersectionInTargetInterval[ d ] = ( long ) Math.floor( intersection.realMin( d ) ) - targetInterval.min( d );
+				maxIntersectionInTargetInterval[ d ] = ( long ) Math.ceil ( intersection.realMax( d ) ) - targetInterval.min( d );
+			}
+			final Interval intersectionIntervalInTargetInterval = new FinalInterval( minIntersectionInTargetInterval, maxIntersectionInTargetInterval );
+
+			final RandomAccessibleInterval< T > warpedTileInTargetSpace = Views.offset( warpedTileImg, Intervals.minAsLongArray( targetInterval ) );
+			final RandomAccessibleInterval< T > sourceInterval = Views.interval( warpedTileInTargetSpace, intersectionIntervalInTargetInterval );
+			final RandomAccessibleInterval< T > outInterval = Views.interval( out, intersectionIntervalInTargetInterval ) ;
+			final RandomAccessibleInterval< FloatType > maxMinDistanceInterval = Views.interval( maxMinDistances, intersectionIntervalInTargetInterval ) ;
+
+			final Cursor< T > sourceCursor = Views.flatIterable( sourceInterval ).localizingCursor();
+			final Cursor< T > outCursor = Views.flatIterable( outInterval ).cursor();
+			final Cursor< FloatType > maxMinDistanceCursor = Views.flatIterable( maxMinDistanceInterval ).cursor();
+
+			while ( sourceCursor.hasNext() || outCursor.hasNext() || maxMinDistanceCursor.hasNext() )
+			{
+				sourceCursor.fwd();
+				outCursor.fwd();
+				final FloatType maxMinDistance = maxMinDistanceCursor.next();
+				double minDistance = Double.MAX_VALUE;
+				for ( int d = 0; d < offset.length; ++d )
+				{
+					final double cursorPosition = sourceCursor.getDoublePosition( d );
+					final double dx = Math.min(
+							cursorPosition - offset[ d ],
+							warpedTileImg.dimension( d ) - 1 + offset[ d ] - cursorPosition );
+					if ( dx < minDistance ) minDistance = dx;
+				}
+				if ( minDistance >= maxMinDistance.get() && sourceCursor.get().getRealDouble() != 0 )
+				{
+					maxMinDistance.setReal( minDistance );
+					outCursor.get().setReal( sourceCursor.get().getRealDouble() );
+				}
+			}
+		}
+
+		return out;
+	}
+
+	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingBlending(
+			final Interval targetInterval,
+			final List< TileInfo > tilesWithinCell,
+			final Map< Integer, String > slabsMap,
+			final Map< String, double[] > slabsMin,
+			final Map< String, TpsTransformWrapper > slabsTransforms ) throws Exception
+	{
+		final ImageType imageType = Utils.getImageType( tilesWithinCell );
+		if ( imageType == null )
+			throw new Exception( "Can't fuse images of different or unknown types" );
+
+		// initialize helper images for blending fusion strategy
+		final RandomAccessibleInterval< FloatType > weights = ArrayImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
+		final RandomAccessibleInterval< FloatType > values = ArrayImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
+
+		for ( final TileInfo tile : tilesWithinCell )
+		{
+			final String slab = slabsMap.get( tile.getIndex() );
+
+			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabsMin.get( slab ), tile, slabsTransforms.get( slab ) );
+
+			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
+					warpedTileImg,
+					targetInterval );
+
+			if ( intersection == null )
+				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval: " + "Warped tile " + tile.getIndex() +  "; " + "Output cell " + " at " + Arrays.toString( Intervals.minAsIntArray( targetInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsIntArray( targetInterval ) ) );
+
+			final long[] offset = new long[ targetInterval.numDimensions() ];
+			final long[] minIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
+			final long[] maxIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
+			for ( int d = 0; d < minIntersectionInTargetInterval.length; ++d )
+			{
+				offset[ d ] = warpedTileImg.min( d ) - targetInterval.min( d );
+				minIntersectionInTargetInterval[ d ] = ( long ) Math.floor( intersection.realMin( d ) ) - targetInterval.min( d );
+				maxIntersectionInTargetInterval[ d ] = ( long ) Math.ceil ( intersection.realMax( d ) ) - targetInterval.min( d );
+			}
+			final Interval intersectionIntervalInTargetInterval = new FinalInterval( minIntersectionInTargetInterval, maxIntersectionInTargetInterval );
+
+			final RandomAccessibleInterval< T > warpedTileInTargetSpace = Views.offset( warpedTileImg, Intervals.minAsLongArray( targetInterval ) );
+			final RandomAccessibleInterval< T > sourceInterval = Views.interval( warpedTileInTargetSpace, intersectionIntervalInTargetInterval );
+			final RandomAccessibleInterval< FloatType > weightsInterval = Views.interval( weights, intersectionIntervalInTargetInterval ) ;
+			final RandomAccessibleInterval< FloatType > valuesInterval = Views.interval( values, intersectionIntervalInTargetInterval ) ;
+
+			final Cursor< T > sourceCursor = Views.flatIterable( sourceInterval ).localizingCursor();
+			final Cursor< FloatType > weightsCursor = Views.flatIterable( weightsInterval ).cursor();
+			final Cursor< FloatType > valuesCursor = Views.flatIterable( valuesInterval ).cursor();
+
+			final double[] position = new double[ sourceCursor.numDimensions() ];
+			while ( sourceCursor.hasNext() || weightsCursor.hasNext() || valuesCursor.hasNext() )
+			{
+				final double value = sourceCursor.next().getRealDouble();
+
+				sourceCursor.localize( position );
+				for ( int d = 0; d < position.length; ++d )
+					position[ d ] -= offset[ d ];
+				final double weight = getBlendingWeight( position, warpedTileImg, FRACTION_BLENDED );
+
+				final FloatType weightAccum = weightsCursor.next();
+				final FloatType valueAccum = valuesCursor.next();
+
+				if ( value != 0 )
+				{
+					weightAccum.setReal( weightAccum.getRealDouble() + weight );
+					valueAccum.setReal( valueAccum.getRealDouble() + value * weight );
+				}
+			}
+		}
+
+		// initialize output image
+		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), ( T ) imageType.getType().createVariable() );
+		final Cursor< FloatType > weightsCursor = Views.flatIterable( weights ).cursor();
+		final Cursor< FloatType > valuesCursor = Views.flatIterable( values ).cursor();
+		final Cursor< T > outCursor = Views.flatIterable( out ).cursor();
+		while ( outCursor.hasNext() || weightsCursor.hasNext() || valuesCursor.hasNext() )
+		{
+			final double weight = weightsCursor.next().getRealDouble();
+			final double value = valuesCursor.next().getRealDouble();
+			outCursor.next().setReal( weight == 0 ? 0 : value / weight );
+		}
+
+		return out;
+	}
+
+
+	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingMaxIntensity(
+			final Interval targetInterval,
+			final List< TileInfo > tilesWithinCell,
+			final Map< Integer, String > slabsMap,
+			final Map< String, double[] > slabsMin,
+			final Map< String, TpsTransformWrapper > slabsTransforms ) throws Exception
+	{
+		final ImageType imageType = Utils.getImageType( tilesWithinCell );
+		if ( imageType == null )
+			throw new Exception( "Can't fuse images of different or unknown types" );
+
+		// initialize output image
+		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), ( T ) imageType.getType().createVariable() );
+
+		for ( final TileInfo tile : tilesWithinCell )
+		{
+			final String slab = slabsMap.get( tile.getIndex() );
+
+			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabsMin.get( slab ), tile, slabsTransforms.get( slab ) );
+
+			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
+					warpedTileImg,
+					targetInterval );
+
+			if ( intersection == null )
+				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval: " + "Warped tile " + tile.getIndex() +  "; " + "Output cell " + " at " + Arrays.toString( Intervals.minAsIntArray( targetInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsIntArray( targetInterval ) ) );
+
+			final long[] offset = new long[ targetInterval.numDimensions() ];
+			final long[] minIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
+			final long[] maxIntersectionInTargetInterval = new long[ targetInterval.numDimensions() ];
+			for ( int d = 0; d < minIntersectionInTargetInterval.length; ++d )
+			{
+				offset[ d ] = warpedTileImg.min( d ) - targetInterval.min( d );
+				minIntersectionInTargetInterval[ d ] = ( long ) Math.floor( intersection.realMin( d ) ) - targetInterval.min( d );
+				maxIntersectionInTargetInterval[ d ] = ( long ) Math.ceil ( intersection.realMax( d ) ) - targetInterval.min( d );
+			}
+			final Interval intersectionIntervalInTargetInterval = new FinalInterval( minIntersectionInTargetInterval, maxIntersectionInTargetInterval );
+
+			final RandomAccessibleInterval< T > warpedTileInTargetSpace = Views.offset( warpedTileImg, Intervals.minAsLongArray( targetInterval ) );
+			final RandomAccessibleInterval< T > sourceInterval = Views.interval( warpedTileInTargetSpace, intersectionIntervalInTargetInterval );
+			final RandomAccessibleInterval< T > outInterval = Views.interval( out, intersectionIntervalInTargetInterval ) ;
+
+			final Cursor< T > sourceCursor = Views.flatIterable( sourceInterval ).localizingCursor();
+			final Cursor< T > outCursor = Views.flatIterable( outInterval ).cursor();
+
+			while ( sourceCursor.hasNext() || outCursor.hasNext() )
+			{
+				final T outPixel = outCursor.next();
+				outPixel.setReal( Math.max( sourceCursor.next().getRealDouble(), outPixel.getRealDouble() ) );
+			}
+		}
+
+		return out;
+	}
+
 
 	private final static double FRACTION_BLENDED = 0.2;
 
