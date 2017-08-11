@@ -11,7 +11,7 @@ import net.imglib2.RealPositionable;
  * @author Igor Pisarev
  */
 
-public class TileInfo implements Serializable, RealInterval {
+public class TileInfo implements Cloneable, Serializable, RealInterval {
 
 	private static final long serialVersionUID = -3986869827110711078L;
 
