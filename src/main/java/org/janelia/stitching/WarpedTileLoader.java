@@ -27,21 +27,50 @@ import net.imglib2.view.Views;
 
 public class WarpedTileLoader
 {
-	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > load( final double[] slabMin, final TileInfo slabTile, final TpsTransformWrapper transform )
+	private static final long[] DEFAULT_PADDING = new long[] { 200, 200, 200 };
+
+	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > load(
+			final double[] slabMin,
+			final TileInfo slabTile,
+			final TpsTransformWrapper transform )
+	{
+		return load( slabMin, slabTile, transform, DEFAULT_PADDING );
+	}
+	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > load(
+			final double[] slabMin,
+			final TileInfo slabTile,
+			final TpsTransformWrapper transform,
+			final long[] padding )
 	{
 		final ImagePlus imp = ImageImporter.openImage( slabTile.getFilePath() );
 		final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
-		return warp( slabMin, slabTile, rawTile, transform );
+		return warp( slabMin, slabTile, rawTile, transform, padding );
 	}
 
-	public static Interval getBoundingBox( final double[] slabMin, final TileInfo slabTile, final TpsTransformWrapper transform )
+	public static Interval getBoundingBox(
+			final double[] slabMin,
+			final TileInfo slabTile,
+			final TpsTransformWrapper transform )
+	{
+		return getBoundingBox( slabMin, slabTile, transform, DEFAULT_PADDING );
+	}
+	public static Interval getBoundingBox(
+			final double[] slabMin,
+			final TileInfo slabTile,
+			final TpsTransformWrapper transform,
+			final long[] padding )
 	{
 		final Interval tileInterval = new FinalInterval( new FinalDimensions( slabTile.getSize() ) );
 		final RandomAccessibleInterval< ByteType > fakeTileImg = ConstantUtils.constantRandomAccessibleInterval( new ByteType(), slabMin.length, tileInterval );
-		return warp( slabMin, slabTile, fakeTileImg, transform );
+		return warp( slabMin, slabTile, fakeTileImg, transform, padding );
 	}
 
-	private static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > warp( final double[] slabMin, final TileInfo slabTile, final RandomAccessibleInterval< T > img, final TpsTransformWrapper transform )
+	private static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > warp(
+			final double[] slabMin,
+			final TileInfo slabTile,
+			final RandomAccessibleInterval< T > img,
+			final TpsTransformWrapper transform,
+			final long[] padding )
 	{
 		final double[] tileSlabMinPhysicalUnits = new double[ slabMin.length ], tileSlabMaxPhysicalUnits = new double[ slabMin.length ];
 		for ( int d = 0; d < slabMin.length; ++d )
@@ -63,14 +92,14 @@ public class WarpedTileLoader
 		final RandomAccessible< T > rasteredTransformedImgPixels = Views.raster( transformedImgPixels );
 
 		final RealInterval estimatedBoundingBoxPhysicalUnits = TransformBoundingBox.boundingBoxForwardCorners( tileSlabPhysicalUnitsInterval, transform );
-		final long[] estimatedBoundingBoxMin = new long[ slabMin.length ], estimatedBoundingBoxMax = new long[ slabMin.length ];
+		final long[] paddedBoundingBoxMin = new long[ slabMin.length ], paddedBoundingBoxMax = new long[ slabMin.length ];
 		for ( int d = 0; d < slabMin.length; ++d )
 		{
-			estimatedBoundingBoxMin[ d ] = Math.round( estimatedBoundingBoxPhysicalUnits.realMin( d ) / slabTile.getPixelResolution( d ) );
-			estimatedBoundingBoxMax[ d ] = Math.round( estimatedBoundingBoxPhysicalUnits.realMax( d ) / slabTile.getPixelResolution( d ) );
+			paddedBoundingBoxMin[ d ] = Math.round( estimatedBoundingBoxPhysicalUnits.realMin( d ) / slabTile.getPixelResolution( d ) ) - padding[ d ] / 2;
+			paddedBoundingBoxMax[ d ] = Math.round( estimatedBoundingBoxPhysicalUnits.realMax( d ) / slabTile.getPixelResolution( d ) ) + padding[ d ] / 2 + padding[ d ] % 2;
 		}
-		final Interval estimatedBoundingBox = new FinalInterval( estimatedBoundingBoxMin, estimatedBoundingBoxMax );
+		final Interval paddedBoundingBox = new FinalInterval( paddedBoundingBoxMin, paddedBoundingBoxMax );
 
-		return Views.interval( rasteredTransformedImgPixels, estimatedBoundingBox );
+		return Views.interval( rasteredTransformedImgPixels, paddedBoundingBox );
 	}
 }
