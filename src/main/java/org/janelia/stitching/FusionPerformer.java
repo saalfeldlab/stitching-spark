@@ -66,7 +66,8 @@ public class FusionPerformer
 			throw new Exception( "Can't fuse images of different or unknown types" );
 
 		// initialize output image
-		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), ( T ) imageType.getType().createVariable() );
+		final T type = ( T ) imageType.getType();
+		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), type.createVariable() );
 
 		// initialize helper image for hard-cut fusion strategy
 		final RandomAccessibleInterval< FloatType > maxMinDistances = ArrayImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
@@ -74,8 +75,10 @@ public class FusionPerformer
 		for ( final TileInfo tile : tilesWithinCell )
 		{
 			final String slab = slabsMap.get( tile.getIndex() );
+			final double[] slabMin = slabsMin.get( slab );
+			final TpsTransformWrapper slabTransform = slabsTransforms.get( slab );
 
-			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabsMin.get( slab ), tile, slabsTransforms.get( slab ) );
+			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabMin, tile, slabTransform );
 
 			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
 					warpedTileImg,
@@ -104,23 +107,47 @@ public class FusionPerformer
 			final Cursor< T > outCursor = Views.flatIterable( outInterval ).cursor();
 			final Cursor< FloatType > maxMinDistanceCursor = Views.flatIterable( maxMinDistanceInterval ).cursor();
 
+			final double[] warpedGlobalPositionMicrons = new double[ sourceCursor.numDimensions() ], unwarpedLocalPositionPixels = new double[ sourceCursor.numDimensions() ];
+			final T zero = type.createVariable();
+			zero.setZero();
 			while ( sourceCursor.hasNext() || outCursor.hasNext() || maxMinDistanceCursor.hasNext() )
 			{
+				// move all cursors forward
 				sourceCursor.fwd();
 				outCursor.fwd();
-				final FloatType maxMinDistance = maxMinDistanceCursor.next();
+				maxMinDistanceCursor.fwd();
+
+				if ( sourceCursor.get().valueEquals( zero ) )
+					continue;
+
+				// get warped global position
+				for ( int d = 0; d < warpedGlobalPositionMicrons.length; ++d )
+					warpedGlobalPositionMicrons[ d ] = ( sourceCursor.getDoublePosition( d ) + targetInterval.min( d ) ) * tile.getPixelResolution( d );
+				// get unwarped local position
+				slabTransform.applyInverse( unwarpedLocalPositionPixels, warpedGlobalPositionMicrons );
+				for ( int d = 0; d < unwarpedLocalPositionPixels.length; ++d )
+					unwarpedLocalPositionPixels[ d ] = warpedGlobalPositionMicrons[ d ] / tile.getPixelResolution( d ) - ( tile.getPosition( d ) - slabMin[ d ] );
+
+				// check that the point is within tile
+				boolean insideTile = true;
+				for ( int d = 0; d < unwarpedLocalPositionPixels.length; ++d )
+					insideTile &= unwarpedLocalPositionPixels[ d ] >= 0 && unwarpedLocalPositionPixels[ d ] <= tile.getSize( d ) - 1;
+				if ( !insideTile )
+					continue;
+
+				// update the distance and the value if needed
 				double minDistance = Double.MAX_VALUE;
-				for ( int d = 0; d < offset.length; ++d )
+				for ( int d = 0; d < unwarpedLocalPositionPixels.length; ++d )
 				{
-					final double cursorPosition = sourceCursor.getDoublePosition( d );
-					final double dx = Math.min(
-							cursorPosition - offset[ d ],
-							warpedTileImg.dimension( d ) - 1 + offset[ d ] - cursorPosition );
-					if ( dx < minDistance ) minDistance = dx;
+					final double dist = Math.min(
+							unwarpedLocalPositionPixels[ d ],
+							tile.getSize( d ) - 1 - unwarpedLocalPositionPixels[ d ]
+						);
+					minDistance = Math.min( dist, minDistance );
 				}
-				if ( minDistance >= maxMinDistance.get() && sourceCursor.get().getRealDouble() != 0 )
+				if ( minDistance >= maxMinDistanceCursor.get().get() )
 				{
-					maxMinDistance.setReal( minDistance );
+					maxMinDistanceCursor.get().setReal( minDistance );
 					outCursor.get().setReal( sourceCursor.get().getRealDouble() );
 				}
 			}

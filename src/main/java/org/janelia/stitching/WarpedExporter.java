@@ -236,7 +236,7 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T > > impleme
 				for ( final Integer tileIndex : tileIndexesWithinCell )
 					tilesWithinCell.add( tilesMap.get( tileIndex ) );
 
-				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseWarpedTilesWithinCellUsingBlending(
+				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseWarpedTilesWithinCellUsingMaxMinDistance(
 						biggerCellBox,
 						tilesWithinCell,
 						slabsMap,
