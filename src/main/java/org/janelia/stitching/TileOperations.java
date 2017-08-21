@@ -407,12 +407,12 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping tiles of a specified size.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
-	public static ArrayList< TileInfo > divideSpace( final Boundaries space, final Dimensions subregionDims )
+	public static ArrayList< TileInfo > divideSpace( final Interval space, final Dimensions subregionDims )
 	{
 		return divideSpace( space, subregionDims, new int[ space.numDimensions() ] );
 	}
 
-	private static ArrayList< TileInfo > divideSpace( final Boundaries space, final Dimensions subregionDims, final int[] sizePlusOneCount )
+	private static ArrayList< TileInfo > divideSpace( final Interval space, final Dimensions subregionDims, final int[] sizePlusOneCount )
 	{
 		final ArrayList< TileInfo > subregions = new ArrayList<>();
 		divideSpaceRecursive( space, subregionDims, sizePlusOneCount, subregions, new TileInfo( space.numDimensions() ), 0 );
@@ -420,7 +420,7 @@ public class TileOperations
 			subregions.get( i ).setIndex( i );
 		return subregions;
 	}
-	private static void divideSpaceRecursive( final Boundaries space, final Dimensions subregionDims, final int[] sizePlusOneCount, final List< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
+	private static void divideSpaceRecursive( final Interval space, final Dimensions subregionDims, final int[] sizePlusOneCount, final List< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
 	{
 		if ( currDim == space.numDimensions() )
 		{
