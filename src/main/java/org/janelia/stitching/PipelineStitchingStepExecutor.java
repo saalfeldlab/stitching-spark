@@ -27,6 +27,7 @@ import org.janelia.util.ImageImporter;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
+import mpicbg.models.Point;
 import net.imglib2.Cursor;
 import net.imglib2.FinalDimensions;
 import net.imglib2.Interval;
@@ -361,8 +362,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 		final Broadcast< TileSearchRadiusEstimator > broadcastedSearchRadiusEstimator = sparkContext.broadcast( searchRadiusEstimator );
 
-		// for dividing the overlap area into 1x1 or 2x2, etc. which leads to 1 or 4 matches per pair of tiles
-		final int dividedParts = 1;
+		// for splitting the overlap area into 1x1 or 2x2, etc. which leads to 1 or 4 matches per pair of tiles
+		final int splitOverlapParts = job.getArgs().splitOverlapParts();
 
 		System.out.println( "Broadcasting flatfield correction images" );
 		final List< RandomAccessiblePairNullable< U, U > > flatfieldCorrectionForChannels = new ArrayList<>();
@@ -413,20 +414,22 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final LongAccumulator noOverlapWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 
+		final boolean isLocalSparkContext = sparkContext.isLocal();
+
 		final JavaRDD< TilePair > rdd = sparkContext.parallelize( overlappingTiles, overlappingTiles.size() );
-		final JavaRDD< SerializablePairWiseStitchingResult[] > pairwiseStitching = rdd.map( pairOfTiles ->
+		final JavaRDD< SerializablePairWiseStitchingResult[] > pairwiseStitching = rdd.map( tilePair ->
 			{
 				// stats
 				final TileSearchRadiusEstimator localSearchRadiusEstimator = broadcastedSearchRadiusEstimator.value();
 				final SearchRadius searchRadius;
 
-				final TileInfo[] pair = pairOfTiles.toArray();
-				final Interval[] overlaps = new Boundaries[ pair.length ];
-				final ImagePlus[] imps = new ImagePlus[ pair.length ];
+				final TileInfo[] tilePairArr = tilePair.toArray();
+				final Interval[] overlaps = new Boundaries[ tilePairArr.length ];
+				final ImagePlus[] imps = new ImagePlus[ tilePairArr.length ];
 
-				final TileInfo fixedTile = pair[ 0 ], movingTile = pair[ 1 ];
+				final TileInfo fixedTile = tilePairArr[ 0 ], movingTile = tilePairArr[ 1 ];
 
-				System.out.println( "Processing tile pair " + pairOfTiles );
+				System.out.println( "Processing tile pair " + tilePair );
 
 				final double[] voxelDimensions = fixedTile.getPixelResolution();
 				final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
@@ -439,23 +442,23 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				if ( localSearchRadiusEstimator != null )
 				{
 					final int minNumNearestNeighbors = job.getArgs().minStatsNeighborhood();
-					final SearchRadius[] tilesSearchRadius = new SearchRadius[ pair.length ];
-					for ( int j = 0; j < pair.length; j++ )
+					final SearchRadius[] tilesSearchRadius = new SearchRadius[ tilePairArr.length ];
+					for ( int j = 0; j < tilePairArr.length; j++ )
 					{
-						tilesSearchRadius[ j ] = localSearchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( pair[ j ] );
+						tilesSearchRadius[ j ] = localSearchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( tilePairArr[ j ] );
 						if ( tilesSearchRadius[ j ].getUsedPointsIndexes().size() < minNumNearestNeighbors )
 						{
 							notEnoughNeighborsWithinConfidenceIntervalPairsCount.add( 1 );
 
 //								System.out.println( "Found " + searchRadiusEstimationWindow.getUsedPointsIndexes().size() + " neighbors within the search window but we require " + numNearestNeighbors + " nearest neighbors, perform a K-nearest neighbor search instead..." );
 							System.out.println();
-							System.out.println( pairOfTiles + ": found " + tilesSearchRadius[ j ].getUsedPointsIndexes().size() + " neighbors within the search window of the " + ( j == 0 ? "fixed" : "moving" ) + " tile but we require at least " + minNumNearestNeighbors + " nearest neighbors, so ignore this tile pair for now" );
+							System.out.println( tilePair + ": found " + tilesSearchRadius[ j ].getUsedPointsIndexes().size() + " neighbors within the search window of the " + ( j == 0 ? "fixed" : "moving" ) + " tile but we require at least " + minNumNearestNeighbors + " nearest neighbors, so ignore this tile pair for now" );
 							System.out.println();
 
-							final SerializablePairWiseStitchingResult[] invalidResult = new SerializablePairWiseStitchingResult[ dividedParts ];
+							final SerializablePairWiseStitchingResult[] invalidResult = new SerializablePairWiseStitchingResult[ splitOverlapParts ];
 							for ( int i = 0; i < invalidResult.length; ++i )
 							{
-								invalidResult[ i ] = new SerializablePairWiseStitchingResult( pairOfTiles, null, 0 );
+								invalidResult[ i ] = new SerializablePairWiseStitchingResult( tilePair, null, 0 );
 								invalidResult[ i ].setIsValidOverlap( false );
 							}
 							return invalidResult;
@@ -474,18 +477,18 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 						}
 						else
 						{
-							System.out.println( pairOfTiles + ": found " + tilesSearchRadius[ j ].getUsedPointsIndexes().size() + " neighbors within the search window for the " + ( j == 0 ? "fixed" : "moving" ) + " tile, estimate search radius based on that" );
+							System.out.println( tilePair + ": found " + tilesSearchRadius[ j ].getUsedPointsIndexes().size() + " neighbors within the search window for the " + ( j == 0 ? "fixed" : "moving" ) + " tile, estimate search radius based on that" );
 						}
 					}
 
 					System.out.println();
-					System.out.println( pairOfTiles + ": found search radiuses for both tiles in the pair, get a combined search radius for the moving tile" );
+					System.out.println( tilePair + ": found search radiuses for both tiles in the pair, get a combined search radius for the moving tile" );
 					System.out.println();
 
 					searchRadius = localSearchRadiusEstimator.getCombinedCovariancesSearchRadius( tilesSearchRadius[ 0 ], tilesSearchRadius[ 1 ] );
 
 					final Interval boundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
-					System.out.println( String.format( pairOfTiles + ": estimated combined search radius for the moving tile. Bounding box: min=%s, max=%s, size=%s",
+					System.out.println( String.format( tilePair + ": estimated combined search radius for the moving tile. Bounding box: min=%s, max=%s, size=%s",
 							Arrays.toString( Intervals.minAsIntArray( boundingBox ) ),
 							Arrays.toString( Intervals.maxAsIntArray( boundingBox ) ),
 							Arrays.toString( Intervals.dimensionsAsIntArray( boundingBox ) ) ) );
@@ -498,7 +501,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				// detect dimension with short edge
 				int shortEdgeDimension = -1;
 				{
-					final Boundaries testOverlap = TileOperations.getOverlappingRegion( pair[ 0 ], pair[ 1 ] );
+					final Boundaries testOverlap = TileOperations.getOverlappingRegion( tilePairArr[ 0 ], tilePairArr[ 1 ] );
 					if ( testOverlap != null )
 					{
 						if ( shortEdgeDimension == -1 )
@@ -511,29 +514,29 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				// find overlapping regions
 				if ( searchRadius == null )
 				{
-					for ( int j = 0; j < pair.length; j++ )
+					for ( int j = 0; j < tilePairArr.length; j++ )
 					{
 						System.out.println( "Prepairing #" + (j+1) + " of a pair,  padding ROI by " + Arrays.toString( job.getArgs().padding() ) + "(padding arg)" );
-						final Boundaries overlap = TileOperations.getOverlappingRegion( pair[ j ], pair[ ( j + 1 ) % pair.length ] );
+						final Boundaries overlap = TileOperations.getOverlappingRegion( tilePairArr[ j ], tilePairArr[ ( j + 1 ) % tilePairArr.length ] );
 						overlaps[ j ] = TileOperations.padInterval(
 								overlap,
-								new FinalDimensions( pair[ j ].getSize() ),
+								new FinalDimensions( tilePairArr[ j ].getSize() ),
 								job.getArgs().padding()
 							);
 					}
 				}
 				else
 				{
-					final Pair< Interval, Interval > overlapsAdjustedToSearchRadius = adjustOverlappingRegion( pairOfTiles, searchRadius );
+					final Pair< Interval, Interval > overlapsAdjustedToSearchRadius = adjustOverlappingRegion( tilePair, searchRadius );
 					if ( overlapsAdjustedToSearchRadius == null )
 					{
 						noOverlapWithinConfidenceIntervalPairsCount.add( 1 );
-						System.out.println( pairOfTiles + ": cannot find a non-empty overlap that covers the confidence range (The confidence range says there is no overlap?)" );
+						System.out.println( tilePair + ": cannot find a non-empty overlap that covers the confidence range (The confidence range says there is no overlap?)" );
 
-						final SerializablePairWiseStitchingResult[] invalidResult = new SerializablePairWiseStitchingResult[ dividedParts ];
+						final SerializablePairWiseStitchingResult[] invalidResult = new SerializablePairWiseStitchingResult[ splitOverlapParts ];
 						for ( int i = 0; i < invalidResult.length; ++i )
 						{
-							invalidResult[ i ] = new SerializablePairWiseStitchingResult( pairOfTiles, null, 0 );
+							invalidResult[ i ] = new SerializablePairWiseStitchingResult( tilePair, null, 0 );
 							invalidResult[ i ].setIsValidOverlap( false );
 						}
 						return invalidResult;
@@ -554,23 +557,23 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				if ( Arrays.stream( Intervals.dimensionsAsIntArray( overlaps[ 0 ] ) ).min().getAsInt() <= 1 )
 				{
 					noOverlapWithinConfidenceIntervalPairsCount.add( 1 );
-					System.out.println( pairOfTiles + ": overlap is <= 1px" );
+					System.out.println( tilePair + ": overlap is <= 1px" );
 
-					final SerializablePairWiseStitchingResult[] invalidResult = new SerializablePairWiseStitchingResult[ dividedParts ];
+					final SerializablePairWiseStitchingResult[] invalidResult = new SerializablePairWiseStitchingResult[ splitOverlapParts ];
 					for ( int i = 0; i < invalidResult.length; ++i )
 					{
-						invalidResult[ i ] = new SerializablePairWiseStitchingResult( pairOfTiles, null, 0 );
+						invalidResult[ i ] = new SerializablePairWiseStitchingResult( tilePair, null, 0 );
 						invalidResult[ i ].setIsValidOverlap( false );
 					}
 					return invalidResult;
 				}
 
 				// prepare images
-				for ( int j = 0; j < pair.length; j++ )
+				for ( int j = 0; j < tilePairArr.length; j++ )
 				{
 					System.out.println( "Averaging corresponding tile images for " + job.getChannels() + " channels" );
 //					final ComparableTuple< Integer > coordinates = new ComparableTuple<>( Conversions.toBoxedArray( Utils.getTileCoordinates( pair[ j ] ) ) );
-					final String coordsStr = Utils.getTileCoordinatesString( pair[ j ] );
+					final String coordsStr = Utils.getTileCoordinatesString( tilePairArr[ j ] );
 					int channelsUsed = 0;
 					final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( overlaps[ j ] ) );
 					for ( int channel = 0; channel < job.getChannels(); channel++ )
@@ -587,10 +590,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 						// skip if no tile exists for this channel at this particular stage position
 						if ( tileInfo == null )
-							throw new PipelineExecutionException( pairOfTiles + ": cannot find corresponding tile for this channel" );
+							throw new PipelineExecutionException( tilePair + ": cannot find corresponding tile for this channel" );
 
-						if ( pair[ j ].getIndex().intValue() != tileInfo.getIndex().intValue() )
-							throw new PipelineExecutionException( pairOfTiles + ": different indexes for the same stage position " + Utils.getTileCoordinatesString( tileInfo ) );
+						if ( tilePairArr[ j ].getIndex().intValue() != tileInfo.getIndex().intValue() )
+							throw new PipelineExecutionException( tilePair + ": different indexes for the same stage position " + Utils.getTileCoordinatesString( tileInfo ) );
 
 						// FIXME: throw exception in case some image files are missing (or, check for missing files beforehand)
 						final ImagePlus imp = ImageImporter.openImage( tileInfo.getFilePath() );
@@ -632,7 +635,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					}
 
 					if ( channelsUsed == 0 )
-						throw new PipelineExecutionException( pairOfTiles + ": images are missing in all channels" );
+						throw new PipelineExecutionException( tilePair + ": images are missing in all channels" );
 
 					final FloatType denom = new FloatType( channelsUsed );
 					final Cursor< FloatType > dstCursor = Views.iterable( dst ).cursor();
@@ -652,11 +655,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				// divide hyperplane with long edges into subintervals
 				final Boundaries fullRoi = new Boundaries( Conversions.toLongArray( Utils.getImagePlusDimensions( imps[ 0 ] ) ) );
 				final int[] roiPartsCount = new int[ fullRoi.numDimensions() ];
-				Arrays.fill( roiPartsCount, dividedParts );
+				Arrays.fill( roiPartsCount, splitOverlapParts );
 				roiPartsCount[ shortEdgeDimension ] = 1;
 				final List< TileInfo > roiParts = TileOperations.divideSpaceByCount( fullRoi, roiPartsCount );
 
-				System.out.println( String.format( "Stitching (%d subintervals with grid of %s)..", roiParts.size(), Arrays.toString( roiPartsCount ) ) );
+				System.out.println( String.format( "Splitting the overlap in %d subintervals with grid of %s..", roiParts.size(), Arrays.toString( roiPartsCount ) ) );
 
 				final SerializablePairWiseStitchingResult[] roiPartsResults = new SerializablePairWiseStitchingResult[ roiParts.size() ];
 				for ( int roiPartIndex = 0; roiPartIndex < roiParts.size(); ++roiPartIndex )
@@ -701,9 +704,13 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					final double variance = pixelSumSquares / pixelCount - Math.pow( pixelSum / pixelCount, 2 );
 
 					final int timepoint = 1;
-					PairwiseStitchingPerformer.setThreads( 1 ); // TODO: determine automatically based on parallelism / smth else. Or, use different values for local/cluster configurations
 
-					// for transforming 'overlap offset' to 'global offset'
+					if ( isLocalSparkContext )
+						PairwiseStitchingPerformer.setThreads( Runtime.getRuntime().availableProcessors() );
+					else
+						PairwiseStitchingPerformer.setThreads( 1 );
+
+					// for transforming 'overlap offset' to 'tile offset'
 					final long[][] roiToTileOffset = new long[ 2 ][];
 					for ( int i = 0; i < 2; ++i )
 					{
@@ -712,7 +719,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							roiToTileOffset[ i ][ d ] = (i==0?1:-1) * ( overlaps[ i ].min( d ) + roiPartInterval.min( d ) );
 					}
 
-					// 'global offset' is the position of the fixed tile so the relative shift can be transformed to the global coordinate space
+					// for transforming 'tile offset' to 'global offset'
 					final double[] globalOffset = new double[ fixedTile.numDimensions() ];
 					for ( int d = 0; d < globalOffset.length; ++d )
 						globalOffset[ d ] = fixedTile.getPosition( d );
@@ -722,11 +729,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					for ( int d = 0; d < stageOffset.length; ++d )
 						stageOffset[ d ] = movingTile.getPosition( d ) - fixedTile.getPosition( d );
 
-					// TODO: make confidence interval implement PointValidator so we can take advantage of the same way of testing a particular shift
 					final SerializablePairWiseStitchingResult[] results = PairwiseStitchingPerformer.stitchPairwise(
 							roiPartImps[0], roiPartImps[1], null, null, null, null, timepoint, timepoint, job.getParams(), 1,
 							searchRadius, roiToTileOffset, globalOffset, stageOffset,
-							null, null
+							null, null // TODO: remove these unused parameters
 						);
 
 					final SerializablePairWiseStitchingResult result = results[ 0 ];
@@ -734,19 +740,37 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					if ( result == null )
 					{
 						noPeaksWithinConfidenceIntervalPairsCount.add( 1 );
-						System.out.println( pairOfTiles + ": no peaks found within the confidence interval" );
+						System.out.println( tilePair + ": no peaks found within the confidence interval" );
 
-						final SerializablePairWiseStitchingResult invalidResult = new SerializablePairWiseStitchingResult( pairOfTiles, null, 0 );
+						final SerializablePairWiseStitchingResult invalidResult = new SerializablePairWiseStitchingResult( tilePair, null, 0 );
 						invalidResult.setIsValidOverlap( false );
 						roiPartsResults[ roiPartIndex ] = invalidResult;
 					}
 					else
 					{
-						result.setTilePair( pairOfTiles );
-						result.setVariance( variance );
+						// compute new tile offset
 						for ( int i = 0; i < 2; ++i )
 							for ( int d = 0; d < roiPartInterval.numDimensions(); ++d )
 								result.getOffset()[ d ] += roiToTileOffset[ i ][ d ];
+
+						// create point pair using center point of each ROI
+						final Point fixedTilePoint, movingTilePoint;
+						{
+							final double[] fixedTileRoiCenter = new double[ roiPartsCount.length ], movingTileRoiCenter = new double[ roiPartsCount.length ];;
+							for ( int d = 0; d < fixedTileRoiCenter.length; ++d )
+							{
+								fixedTileRoiCenter[ d ] = roiToTileOffset[ 0 ][ d ] + roiPartInterval.dimension( d ) / 2;
+								movingTileRoiCenter[ d ] = fixedTileRoiCenter[ d ] - result.getOffset( d );
+							}
+							fixedTilePoint = new Point( fixedTileRoiCenter );
+							movingTilePoint = new Point( movingTileRoiCenter );
+						}
+						final PointPair pointPair = new PointPair( fixedTilePoint, movingTilePoint );
+
+						result.setTilePair( tilePair );
+						result.setPointPair( pointPair );
+						result.setVariance( variance );
+
 						roiPartsResults[ roiPartIndex ] = result;
 					}
 
@@ -757,7 +781,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				for ( int i = 0; i < 2; i++ )
 					imps[ i ].close();
 
-				System.out.println( "Stitched tile pair " + pairOfTiles + ", got " + roiPartsResults.length + " matches" );
+				System.out.println( "Stitched tile pair " + tilePair + ", got " + roiPartsResults.length + " matches" );
 				return roiPartsResults;
 			} );
 

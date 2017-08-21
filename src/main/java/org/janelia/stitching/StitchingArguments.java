@@ -73,6 +73,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Export the dataset using blending strategy instead of hardcut (max.min.distance)")
 	private boolean blending = false;
 
+	@Option(name = "-s", aliases = { "--split" }, required = false,
+			usage = "Number of parts the overlap is split in along every 'long' edge")
+	private int splitOverlapParts = 2;
+
 	/**
 	 * Toggle pipeline stages. By default all stages are executed.
 	 */
@@ -115,6 +119,13 @@ public class StitchingArguments implements Serializable {
 
 	protected StitchingArguments() { }
 
+	public static StitchingArguments defaultFusionArgs()
+	{
+		final StitchingArguments args = new StitchingArguments();
+		args.fuseOnly = true;
+		return args;
+	}
+
 	public boolean parsedSuccessfully() { return parsedSuccessfully; }
 
 	public long[] padding()
@@ -138,6 +149,7 @@ public class StitchingArguments implements Serializable {
 	public boolean useAllPairs() { return allPairs; }
 	public boolean exportOverlaps() { return exportOverlaps; }
 	public boolean blending() { return blending; }
+	public int splitOverlapParts() { return splitOverlapParts; }
 
 	public boolean stitchOnly() { return stitchOnly; }
 	public boolean fuseOnly() { return fuseOnly; }

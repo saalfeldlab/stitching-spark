@@ -1,6 +1,8 @@
 package org.janelia.stitching;
 
 import mpicbg.models.Model;
+import mpicbg.models.SimilarityModel2D;
+import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
 
@@ -35,6 +37,26 @@ public class TileModelFactory {
 		final TileInfo tile = new TileInfo( dim );
 		tile.setPosition( offset );
 		return createModel( dim, tile );
+	}
+
+	public static < M extends Model< M > > M createSimilarityModel( final TileInfo tile ) throws Exception
+	{
+		switch ( tile.numDimensions() ) {
+		case 2:
+			final SimilarityModel2D m2d = new SimilarityModel2D();
+//			if ( tile != null )
+//				m2d.setScaleRotationTranslation( 1.0, 0.0, tile.getPosition(0), tile.getPosition(1) );
+			return (M)m2d;
+
+		case 3:
+			final SimilarityModel3D m3d = new SimilarityModel3D();
+//			if ( tile != null)
+//				m3d.set( tile.getPosition(0), tile.getPosition(1), tile.getPosition(2) );
+			return (M)m3d;
+
+		default:
+			throw new Exception( "Not supported" );
+		}
 	}
 
 	private static < M extends Model< M > > M createModel( final int dim, final TileInfo tile ) throws Exception {
