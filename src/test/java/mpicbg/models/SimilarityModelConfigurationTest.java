@@ -1,6 +1,7 @@
 package mpicbg.models;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.TreeMap;
@@ -10,6 +11,9 @@ import org.janelia.stitching.TileInfoJSONProvider;
 
 public class SimilarityModelConfigurationTest
 {
+	private static final double REGULARIZER_TRANSLATION = 0.9;
+	private static final double REGULARIZER_IDENTITY = 0.1;
+
 	public static void main( final String[] args ) throws Exception
 	{
 		final List< SerializablePairWiseStitchingResult[] > shiftsMulti = TileInfoJSONProvider.loadPairwiseShiftsMulti( "/nrs/saalfeld/igor/MB_310C_run2/test-similarity-model/iter0/pairwise.json" );
@@ -53,7 +57,22 @@ public class SimilarityModelConfigurationTest
 
 		final TreeMap< Integer, Tile< ? > > tiles = new TreeMap<>();
 		for ( final Integer index : square )
-			tiles.put( index, new Tile<>( new SimilarityModel3D() ) );
+		{
+			tiles.put( index, new Tile<>(
+					new InterpolatedAffineModel3D<>(
+							new SimilarityModel3D(),
+							new InterpolatedAffineModel3D<>(
+									new TranslationModel3D(),
+									new ConstantAffineModel3D<>(
+											new IdentityModel()
+										),
+									REGULARIZER_IDENTITY
+								),
+							REGULARIZER_TRANSLATION
+						)
+					)
+				);
+		}
 
 		for ( int i = 0; i < square.size(); ++i )
 		{
@@ -85,7 +104,12 @@ public class SimilarityModelConfigurationTest
 		for ( final Entry< Integer, Tile< ? > > entry : tiles.entrySet() )
 		{
 			final Tile< ? > tile = entry.getValue();
-			System.out.println( "Tile " + entry.getKey() + ": " + tile.getModel() + ", error=" + PointMatch.maxDistance( tile.getMatches() ) );
+			final Affine3D< ? > affineModel = ( Affine3D< ? > ) tile.getModel();
+			final double[][] matrix = new double[ 3 ][ 4 ];
+			affineModel.toMatrix( matrix );
+			final double[] scaling = new double[] { matrix[ 0 ][ 0 ], matrix[ 1 ][ 1 ], matrix[ 2 ][ 2 ] };
+			final double[] translation = new double[] { matrix[ 0 ][ 3 ], matrix[ 1 ][ 3 ], matrix[ 2 ][ 3 ] };
+			System.out.println( "Tile " + entry.getKey() + ": scaling=" + Arrays.toString( scaling ) + ", translation=" + Arrays.toString( translation ) + ", error=" + PointMatch.maxDistance( tile.getMatches() ) );
 		}
 	}
 }
