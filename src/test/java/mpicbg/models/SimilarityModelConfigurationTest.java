@@ -1,3 +1,5 @@
+package mpicbg.models;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
@@ -5,11 +7,6 @@ import java.util.TreeMap;
 
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
-
-import mpicbg.models.PointMatch;
-import mpicbg.models.SimilarityModel3D;
-import mpicbg.models.Tile;
-import mpicbg.models.TileConfiguration;
 
 public class SimilarityModelConfigurationTest
 {

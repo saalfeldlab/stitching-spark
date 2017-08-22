@@ -1,12 +1,10 @@
+package mpicbg.models;
+
 import java.util.ArrayList;
 import java.util.List;
 
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
-
-import mpicbg.models.PointMatch;
-import mpicbg.models.SimilarityModel3D;
-import mpicbg.models.TranslationModel3D;
 
 public class SimilarityModelSinglePairTest
 {
