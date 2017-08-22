@@ -107,7 +107,6 @@ public class FusionPerformer
 			final Cursor< T > outCursor = Views.flatIterable( outInterval ).cursor();
 			final Cursor< FloatType > maxMinDistanceCursor = Views.flatIterable( maxMinDistanceInterval ).cursor();
 
-			final double[] warpedGlobalPositionMicrons = new double[ sourceCursor.numDimensions() ], unwarpedLocalPositionPixels = new double[ sourceCursor.numDimensions() ];
 			final T zero = type.createVariable();
 			zero.setZero();
 			while ( sourceCursor.hasNext() || outCursor.hasNext() || maxMinDistanceCursor.hasNext() )
@@ -120,28 +119,24 @@ public class FusionPerformer
 				if ( sourceCursor.get().valueEquals( zero ) )
 					continue;
 
-				// get warped global position
-				for ( int d = 0; d < warpedGlobalPositionMicrons.length; ++d )
-					warpedGlobalPositionMicrons[ d ] = ( sourceCursor.getDoublePosition( d ) + targetInterval.min( d ) ) * tile.getPixelResolution( d );
-				// get unwarped local position
-				slabTransform.applyInverse( unwarpedLocalPositionPixels, warpedGlobalPositionMicrons );
-				for ( int d = 0; d < unwarpedLocalPositionPixels.length; ++d )
-					unwarpedLocalPositionPixels[ d ] = warpedGlobalPositionMicrons[ d ] / tile.getPixelResolution( d ) - ( tile.getPosition( d ) - slabMin[ d ] );
+				// get global position
+				final double[] globalPosition = new double[ sourceCursor.numDimensions() ];
+				sourceCursor.localize( globalPosition );
+				for ( int d = 0; d < globalPosition.length; ++d )
+					globalPosition[ d ] += targetInterval.min( d );
 
-				// check that the point is within tile
-				boolean insideTile = true;
-				for ( int d = 0; d < unwarpedLocalPositionPixels.length; ++d )
-					insideTile &= unwarpedLocalPositionPixels[ d ] >= 0 && unwarpedLocalPositionPixels[ d ] <= tile.getSize( d ) - 1;
-				if ( !insideTile )
+				// get local position inside tile, or null if outside
+				final double[] positionInsideTile = getPositionInsideTile( globalPosition, tile, slabMin, slabTransform );
+				if ( positionInsideTile == null )
 					continue;
 
 				// update the distance and the value if needed
 				double minDistance = Double.MAX_VALUE;
-				for ( int d = 0; d < unwarpedLocalPositionPixels.length; ++d )
+				for ( int d = 0; d < positionInsideTile.length; ++d )
 				{
 					final double dist = Math.min(
-							unwarpedLocalPositionPixels[ d ],
-							tile.getSize( d ) - 1 - unwarpedLocalPositionPixels[ d ]
+							positionInsideTile[ d ],
+							tile.getSize( d ) - 1 - positionInsideTile[ d ]
 						);
 					minDistance = Math.min( dist, minDistance );
 				}
@@ -154,6 +149,39 @@ public class FusionPerformer
 		}
 
 		return out;
+	}
+
+	private static double[] getPositionInsideTile(
+			final double[] globalPositionPixels,
+			final TileInfo tile,
+			final double[] slabMin,
+			final TpsTransformWrapper slabTransform )
+	{
+		// get warped global position in physical units
+		final double[] warpedGlobalPositionPhysicalUnits = new double[ globalPositionPixels.length ];
+		for ( int d = 0; d < warpedGlobalPositionPhysicalUnits.length; ++d )
+			warpedGlobalPositionPhysicalUnits[ d ] = globalPositionPixels[ d ] * tile.getPixelResolution( d );
+
+		// get unwarped slab position in physical units
+		final double[] unwarpedSlabPositionPhysicalUnits = new double[ globalPositionPixels.length ];
+		slabTransform.applyInverse( unwarpedSlabPositionPhysicalUnits, warpedGlobalPositionPhysicalUnits );
+
+		// get unwarped slab position in pixels
+		final double[] unwarpedSlabPositionPixels = new double[ globalPositionPixels.length ];
+		for ( int d = 0; d < unwarpedSlabPositionPixels.length; ++d )
+			unwarpedSlabPositionPixels[ d ] = unwarpedSlabPositionPhysicalUnits[ d ] / tile.getPixelResolution( d );
+
+		// get unwarped local (tile) position in pixels
+		final double[] unwarpedLocalPositionPixels = new double[ globalPositionPixels.length ];
+		for ( int d = 0; d < unwarpedLocalPositionPixels.length; ++d )
+			unwarpedLocalPositionPixels[ d ] = unwarpedSlabPositionPixels[ d ] - tile.getPosition( d );
+
+		// check that the point is within tile
+		boolean insideTile = true;
+		for ( int d = 0; d < unwarpedLocalPositionPixels.length; ++d )
+			insideTile &= unwarpedLocalPositionPixels[ d ] >= 0 && unwarpedLocalPositionPixels[ d ] <= tile.getSize( d ) - 1;
+
+		return insideTile ? unwarpedLocalPositionPixels : null;
 	}
 
 	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingBlending(
