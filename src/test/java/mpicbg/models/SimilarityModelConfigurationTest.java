@@ -11,8 +11,7 @@ import org.janelia.stitching.TileInfoJSONProvider;
 
 public class SimilarityModelConfigurationTest
 {
-	private static final double REGULARIZER_TRANSLATION = 0.9;
-	private static final double REGULARIZER_IDENTITY = 0.1;
+	private static final double REGULARIZER_TRANSLATION = 0.5;
 
 	public static void main( final String[] args ) throws Exception
 	{
@@ -61,17 +60,10 @@ public class SimilarityModelConfigurationTest
 			tiles.put( index, new Tile<>(
 					new InterpolatedAffineModel3D<>(
 							new SimilarityModel3D(),
-							new InterpolatedAffineModel3D<>(
-									new TranslationModel3D(),
-									new ConstantAffineModel3D<>(
-											new IdentityModel()
-										),
-									REGULARIZER_IDENTITY
-								),
+							new TranslationModel3D(),
 							REGULARIZER_TRANSLATION
 						)
-					)
-				);
+				) );
 		}
 
 		for ( int i = 0; i < square.size(); ++i )
