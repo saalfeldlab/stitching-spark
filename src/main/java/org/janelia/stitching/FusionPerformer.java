@@ -16,6 +16,7 @@ import ij.IJ;
 import ij.ImagePlus;
 import net.imglib2.Cursor;
 import net.imglib2.Dimensions;
+import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
@@ -53,7 +54,6 @@ public class FusionPerformer
 		BLENDING
 	}
 
-
 	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingMaxMinDistance(
 			final Interval targetInterval,
 			final List< TileInfo > tilesWithinCell,
@@ -80,10 +80,7 @@ public class FusionPerformer
 
 			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabMin, tile, slabTransform );
 
-			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
-					warpedTileImg,
-					targetInterval );
-
+			final FinalRealInterval intersection = IntervalsNullable.intersectReal( warpedTileImg, targetInterval );
 			if ( intersection == null )
 				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval: " + "Warped tile " + tile.getIndex() +  "; " + "Output cell " + " at " + Arrays.toString( Intervals.minAsIntArray( targetInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsIntArray( targetInterval ) ) );
 
@@ -109,6 +106,7 @@ public class FusionPerformer
 
 			final T zero = type.createVariable();
 			zero.setZero();
+
 			while ( sourceCursor.hasNext() || outCursor.hasNext() || maxMinDistanceCursor.hasNext() )
 			{
 				// move all cursors forward
@@ -195,6 +193,8 @@ public class FusionPerformer
 		if ( imageType == null )
 			throw new Exception( "Can't fuse images of different or unknown types" );
 
+		final T type = ( T ) imageType.getType();
+
 		// initialize helper images for blending fusion strategy
 		final RandomAccessibleInterval< FloatType > weights = ArrayImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
 		final RandomAccessibleInterval< FloatType > values = ArrayImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
@@ -202,13 +202,12 @@ public class FusionPerformer
 		for ( final TileInfo tile : tilesWithinCell )
 		{
 			final String slab = slabsMap.get( tile.getIndex() );
+			final double[] slabMin = slabsMin.get( slab );
+			final TpsTransformWrapper slabTransform = slabsTransforms.get( slab );
 
 			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabsMin.get( slab ), tile, slabsTransforms.get( slab ) );
 
-			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
-					warpedTileImg,
-					targetInterval );
-
+			final FinalRealInterval intersection = IntervalsNullable.intersectReal( warpedTileImg, targetInterval );
 			if ( intersection == null )
 				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval: " + "Warped tile " + tile.getIndex() +  "; " + "Output cell " + " at " + Arrays.toString( Intervals.minAsIntArray( targetInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsIntArray( targetInterval ) ) );
 
@@ -232,29 +231,41 @@ public class FusionPerformer
 			final Cursor< FloatType > weightsCursor = Views.flatIterable( weightsInterval ).cursor();
 			final Cursor< FloatType > valuesCursor = Views.flatIterable( valuesInterval ).cursor();
 
-			final double[] position = new double[ sourceCursor.numDimensions() ];
+			final T zero = type.createVariable();
+			zero.setZero();
+
+			final Dimensions unwarpedTileDimensions = new FinalDimensions( tile.getSize() );
+
 			while ( sourceCursor.hasNext() || weightsCursor.hasNext() || valuesCursor.hasNext() )
 			{
-				final double value = sourceCursor.next().getRealDouble();
+				// move all cursors forward
+				sourceCursor.fwd();
+				weightsCursor.fwd();
+				valuesCursor.fwd();
 
-				sourceCursor.localize( position );
-				for ( int d = 0; d < position.length; ++d )
-					position[ d ] -= offset[ d ];
-				final double weight = getBlendingWeight( position, warpedTileImg, FRACTION_BLENDED );
+				if ( sourceCursor.get().valueEquals( zero ) )
+					continue;
 
-				final FloatType weightAccum = weightsCursor.next();
-				final FloatType valueAccum = valuesCursor.next();
+				// get global position
+				final double[] globalPosition = new double[ sourceCursor.numDimensions() ];
+				sourceCursor.localize( globalPosition );
+				for ( int d = 0; d < globalPosition.length; ++d )
+					globalPosition[ d ] += targetInterval.min( d );
 
-				if ( value != 0 )
-				{
-					weightAccum.setReal( weightAccum.getRealDouble() + weight );
-					valueAccum.setReal( valueAccum.getRealDouble() + value * weight );
-				}
+				// get local position inside tile, or null if outside
+				final double[] positionInsideTile = getPositionInsideTile( globalPosition, tile, slabMin, slabTransform );
+				if ( positionInsideTile == null )
+					continue;
+
+				// update values and weights
+				final double weight = getBlendingWeight( positionInsideTile, unwarpedTileDimensions, FRACTION_BLENDED );
+				weightsCursor.get().setReal( weightsCursor.get().getRealDouble() + weight );
+				valuesCursor.get().setReal( valuesCursor.get().getRealDouble() + sourceCursor.get().getRealDouble() * weight );
 			}
 		}
 
 		// initialize output image
-		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), ( T ) imageType.getType().createVariable() );
+		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), type.createVariable() );
 		final Cursor< FloatType > weightsCursor = Views.flatIterable( weights ).cursor();
 		final Cursor< FloatType > valuesCursor = Views.flatIterable( values ).cursor();
 		final Cursor< T > outCursor = Views.flatIterable( out ).cursor();
