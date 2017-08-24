@@ -4,6 +4,7 @@ import java.io.Serializable;
 
 import net.imglib2.RealInterval;
 import net.imglib2.RealPositionable;
+import net.imglib2.realtransform.AffineTransform3D;
 
 /**
  * Represents tile image metadata.
@@ -21,6 +22,8 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 	private double[] position;
 	private long[] size;
 	private double[] pixelResolution;
+
+	private AffineTransform3D transform;
 
 	public TileInfo( final int dim ) {
 		position = new double[ dim ];
@@ -113,6 +116,14 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 		this.index = index;
 	}
 
+	public AffineTransform3D getTransform() {
+		return transform;
+	}
+
+	public void setTransform( final AffineTransform3D transform ) {
+		this.transform = transform;
+	}
+
 	public boolean isNull() {
 		return file == null;
 	}
@@ -140,6 +151,7 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );
 		newTile.setPixelResolution( pixelResolution == null ? null : pixelResolution.clone() );
+		newTile.setTransform( transform == null ? null : transform.copy() );
 		return newTile;
 	}
 
