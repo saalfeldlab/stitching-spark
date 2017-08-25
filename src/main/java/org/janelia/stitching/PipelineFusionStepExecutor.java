@@ -91,15 +91,13 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			}
 		}
 
-		baseExportPath = Paths.get( baseExportPath, "export.n5" ).toString();
+		baseExportPath = Paths.get( baseExportPath, "export.n5" + overlapsPathSuffix ).toString();
 
 		// FIXME: allow it for now
 //		if ( Files.exists( Paths.get( baseExportPath ) ) )
 //			throw new PipelineExecutionException( "Export path already exists: " + baseExportPath );
 
 		final N5Writer n5 = N5.openFSWriter( baseExportPath );
-		if ( !overlapsPathSuffix.isEmpty() )
-			n5.createGroup( overlapsPathSuffix );
 
 		int[][] downsamplingFactors = null;
 
@@ -116,8 +114,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final String absoluteChannelPath = job.getArgs().inputTileConfigurations().get( channel );
 			final String absoluteChannelPathNoExt = absoluteChannelPath.lastIndexOf( '.' ) != -1 ? absoluteChannelPath.substring( 0, absoluteChannelPath.lastIndexOf( '.' ) ) : absoluteChannelPath;
 
-			final String channelGroupPath = overlapsPathSuffix + "/c" + channel;
-			n5.createGroup( channelGroupPath );
+			n5.createGroup( N5ExportMetadata.getChannelGroupPath( channel ) );
 
 			// special mode which allows to export only overlaps of tile pairs that have been used for final stitching
 			final Map< Integer, Set< Integer > > pairwiseConnectionsMap = getPairwiseConnectionsMap( absoluteChannelPath );
@@ -246,9 +243,10 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final Map< Integer, Set< Integer > > pairwiseConnectionsMap = new HashMap<>();
 		try
 		{
-			final List< SerializablePairWiseStitchingResult > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShifts( Utils.addFilenameSuffix( channelPath, "_pairwise" ) );
-			for ( final SerializablePairWiseStitchingResult pairwiseShift : pairwiseShifts )
+			final List< SerializablePairWiseStitchingResult[] > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( Paths.get( channelPath ).getParent().resolve( "pairwise-stitched.json" ).toString() );
+			for ( final SerializablePairWiseStitchingResult[] pairwiseShiftMulti : pairwiseShifts )
 			{
+				final SerializablePairWiseStitchingResult pairwiseShift = pairwiseShiftMulti[ 0 ];
 				if ( pairwiseShift.getIsValidOverlap() )
 				{
 					final TileInfo[] pairArr = pairwiseShift.getTilePair().toArray();
@@ -263,7 +261,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		}
 		catch ( final IOException e )
 		{
-			throw new PipelineExecutionException( "--overlaps mode is requested but the pairwise shifts file is not available", e );
+			throw new PipelineExecutionException( "--overlaps mode is requested but pairwise-stitched.json file is not available", e );
 		}
 
 		return pairwiseConnectionsMap;
