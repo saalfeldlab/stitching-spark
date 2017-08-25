@@ -288,6 +288,25 @@ public class TileOperations
 	}
 
 	/**
+	 * Estimates the bounding box of a transformed (or shifted) tile.
+	 *
+	 * FIXME: to be consistent with an affine transformation or a real shift vector, {@link TileInfo#getBoundaries()} should be changed from rounding to extending
+	 * to the smallest containing interval
+	 */
+	public static Interval estimateBoundingBox( final TileInfo tile )
+	{
+		if ( tile.getTransform() == null )
+			return tile.getBoundaries();
+
+		final double[] tileMax = new double[ tile.numDimensions() ];
+		for ( int d = 0; d < tileMax.length; ++d )
+			tileMax[ d ] = tile.getSize( d ) - 1;
+		final RealInterval tileRealBoundsAtZero = new FinalRealInterval( new double[ tile.numDimensions() ], tileMax );
+		final RealInterval estimatedRealBounds = tile.getTransform().estimateBounds( tileRealBoundsAtZero );
+		return Intervals.smallestContainingInterval( estimatedRealBounds );
+	}
+
+	/**
 	 * Applies a user-defined {@code function} for each pixel of an {@code interval} defined within a larger {@code space}.
 	 */
 	public static void forEachPixel( final Interval interval, final Dimensions space, final LongConsumer function )
