@@ -314,12 +314,10 @@ public class FusionPerformer
 
 				// get local tile position
 				tileTransform.applyInverse( localTilePosition, globalPosition );
+
 				boolean isInsideTile = true;
 				for ( int d = 0; d < localTilePosition.length; ++d )
-				{
-					localTilePosition[ d ] -= tile.getPosition( d );
 					isInsideTile &= localTilePosition[ d ] >= 0 && localTilePosition[ d ] <= tile.getSize( d ) - 1;
-				}
 				if ( !isInsideTile )
 					continue;
 
