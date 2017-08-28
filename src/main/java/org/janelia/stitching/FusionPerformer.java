@@ -294,6 +294,7 @@ public class FusionPerformer
 			final T zero = type.createVariable();
 			zero.setZero();
 
+			final double[] globalPosition = new double[ targetInterval.numDimensions() ];
 			final double[] localTilePosition = new double[ targetInterval.numDimensions() ];
 			final RealPoint pointInsideTile = new RealPoint( targetInterval.numDimensions() );
 
@@ -307,7 +308,6 @@ public class FusionPerformer
 					continue;
 
 				// get global position
-				final double[] globalPosition = new double[ sourceCursor.numDimensions() ];
 				sourceCursor.localize( globalPosition );
 				for ( int d = 0; d < globalPosition.length; ++d )
 					globalPosition[ d ] += targetInterval.min( d );
