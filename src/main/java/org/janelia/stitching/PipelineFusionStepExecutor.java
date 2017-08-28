@@ -2,13 +2,13 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
@@ -25,11 +25,14 @@ import org.janelia.util.Conversions;
 
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalDimensions;
+import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
 import net.imglib2.img.cell.CellGrid;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.IntervalsHelper;
 import net.imglib2.view.RandomAccessiblePairNullable;
 
 /**
@@ -43,7 +46,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 {
 	private static final long serialVersionUID = -8151178964876747760L;
 
-	final TreeMap< Integer, long[] > levelToImageDimensions = new TreeMap<>(), levelToCellSize = new TreeMap<>();
+	private static final int MAX_PARTITIONS = 15000;
 
 	double[] normalizedVoxelDimensions;
 
@@ -176,32 +179,71 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 	{
 		final int[] cellSize = getOptimalCellSize();
 
-		final Boundaries boundingBox;
-		if ( job.getArgs().minCoord() != null && job.getArgs().maxCoord() != null )
-			boundingBox = new Boundaries( job.getArgs().minCoord(), job.getArgs().maxCoord() );
-		else
-			boundingBox = TileOperations.getCollectionBoundaries( tiles );
+		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
+		final Map< Integer, Interval > transformedTilesBoundingBoxes = new HashMap<>();
+		for ( final TileInfo tile : tiles )
+			transformedTilesBoundingBoxes.put( tile.getIndex(), TileOperations.estimateBoundingBox( tile ) );
 
-		final long[] offset = Intervals.minAsLongArray( boundingBox );
+		final Interval fullBoundingBox = TileOperations.getCollectionBoundaries( transformedTilesBoundingBoxes.values() );
+		final long[] offset = Intervals.minAsLongArray( fullBoundingBox );
+		final Interval roi = ( job.getArgs().minCoord() != null && job.getArgs().maxCoord() != null ) ? new FinalInterval( job.getArgs().minCoord(), job.getArgs().maxCoord() ) : null;
+		final Interval boundingBox = roi != null ? IntervalsHelper.translate( roi, offset ) : fullBoundingBox;
 		final long[] dimensions = Intervals.dimensionsAsLongArray( boundingBox );
 
 		// use the size of the tile as a bigger cell to minimize the number of loads for each image
 		final int[] biggerCellSize = new int[ cellSize.length ];
 		for ( int d = 0; d < biggerCellSize.length; ++d )
 			biggerCellSize[ d ] = cellSize[ d ] * ( int ) Math.ceil( ( double ) tiles[ 0 ].getSize( d ) / cellSize[ d ] );
-		System.out.println( "Adjusted intermediate cell size to " + Arrays.toString( biggerCellSize ) + " (for faster processing)" );
 
 		final List< TileInfo > biggerCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );
 
 		N5.openFSWriter( baseExportPath ).createDataset( fullScaleOutputPath, Intervals.dimensionsAsLongArray( boundingBox ), cellSize, getN5DataType( tiles[ 0 ].getType() ), CompressionType.GZIP );
 
-		sparkContext.parallelize( biggerCells, biggerCells.size() ).foreach( biggerCell ->
+		// get cell grid coordinates to know the offset
+		final List< long[] > gridCoords = sparkContext.parallelize( biggerCells, Math.min( biggerCells.size(), MAX_PARTITIONS ) ).map( biggerCell ->
+		{
+			final Boundaries biggerCellBox = biggerCell.getBoundaries();
+
+			final long[] biggerCellOffsetCoordinates = new long[ biggerCellBox.numDimensions() ];
+			for ( int d = 0; d < biggerCellOffsetCoordinates.length; d++ )
+				biggerCellOffsetCoordinates[ d ] = biggerCellBox.min( d ) - offset[ d ];
+
+			final long[] biggerCellGridPosition = new long[ biggerCell.numDimensions() ];
+			final CellGrid cellGrid = new CellGrid( dimensions, cellSize );
+			cellGrid.getCellPosition( biggerCellOffsetCoordinates, biggerCellGridPosition );
+
+			return biggerCellGridPosition;
+		} ).collect();
+		final long[] gridOffset = new long[ biggerCellSize.length ];
+		Arrays.fill( gridOffset, Long.MAX_VALUE );
+		for ( final long[] gridCoord : gridCoords )
+			for ( int d = 0; d < gridOffset.length; ++d )
+				gridOffset[ d ] = Math.min( gridCoord[ d ], gridOffset[ d ] );
+
+		System.out.println();
+		System.out.println( "Adjusted intermediate cell size to " + Arrays.toString( biggerCellSize ) + " (for faster processing)" );
+		System.out.println( "Grid offset = " + Arrays.toString( gridOffset ) );
+		System.out.println();
+
+		sparkContext.parallelize( biggerCells, Math.min( biggerCells.size(), MAX_PARTITIONS ) ).foreach( biggerCell ->
 			{
-				final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( tiles, biggerCell );
-				if ( tilesWithinCell.isEmpty() )
+				final Boundaries biggerCellBox = biggerCell.getBoundaries();
+				final Set< Integer > tileIndexesWithinCell = TileOperations.findTilesWithinSubregion( transformedTilesBoundingBoxes, biggerCellBox );
+				if ( tileIndexesWithinCell.isEmpty() )
 					return;
 
-				final Boundaries biggerCellBox = biggerCell.getBoundaries();
+				final List< TileInfo > tilesWithinCell = new ArrayList<>();
+				for ( final Integer tileIndex : tileIndexesWithinCell )
+					tilesWithinCell.add( tilesMap.get( tileIndex ) );
+
+				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
+						job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
+						tilesWithinCell,
+						biggerCellBox,
+						broadcastedFlatfieldCorrection.value(),
+						broadcastedPairwiseConnectionsMap.value()
+					);
+
 				final long[] biggerCellOffsetCoordinates = new long[ biggerCellBox.numDimensions() ];
 				for ( int d = 0; d < biggerCellOffsetCoordinates.length; d++ )
 					biggerCellOffsetCoordinates[ d ] = biggerCellBox.min( d ) - offset[ d ];
@@ -210,15 +252,12 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				final CellGrid cellGrid = new CellGrid( dimensions, cellSize );
 				cellGrid.getCellPosition( biggerCellOffsetCoordinates, biggerCellGridPosition );
 
-				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
-							job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
-							tilesWithinCell,
-							biggerCellBox,
-							broadcastedFlatfieldCorrection.value(),
-							broadcastedPairwiseConnectionsMap.value() );
+				final long[] biggerCellGridOffsetPosition = new long[ biggerCellGridPosition.length ];
+				for ( int d = 0; d < gridOffset.length; ++d )
+					biggerCellGridOffsetPosition[ d ] = biggerCellGridPosition[ d ] - gridOffset[ d ];
 
 				final N5Writer n5Local = N5.openFSWriter( baseExportPath );
-				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridPosition );
+				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridOffsetPosition );
 			}
 		);
 	}

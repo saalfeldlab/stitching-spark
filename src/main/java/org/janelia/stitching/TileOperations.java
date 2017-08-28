@@ -2,7 +2,12 @@ package org.janelia.stitching;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.function.LongConsumer;
 
 import net.imglib2.Dimensions;
@@ -195,6 +200,15 @@ public class TileOperations
 		return tilesWithinSubregion;
 	}
 
+	public static Set< Integer > findTilesWithinSubregion( final Map< Integer, ? extends Interval > tiles, final Interval subregion )
+	{
+		final Set< Integer > tilesWithinSubregion = new HashSet<>();
+		for ( final Entry< Integer, ? extends Interval > entry : tiles.entrySet() )
+			if ( TileOperations.overlap( entry.getValue(), subregion ) )
+				tilesWithinSubregion.add( entry.getKey() );
+		return tilesWithinSubregion;
+	}
+
 	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final RealInterval subregion )
 	{
 		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
@@ -232,6 +246,31 @@ public class TileOperations
 		}
 
 		return boundaries;
+	}
+	/**
+	 * @return an integer bounding box of a collection of tiles
+	 */
+	public static Interval getCollectionBoundaries( final Collection< ? extends Interval > boxes )
+	{
+		if ( boxes.isEmpty() )
+			return null;
+
+		final int dim = boxes.iterator().next().numDimensions();
+
+		final long[] min = new long[ dim ], max = new long[ dim ];
+		Arrays.fill( min, Long.MAX_VALUE );
+		Arrays.fill( max, Long.MIN_VALUE );
+
+		for ( final Interval box : boxes )
+		{
+			for ( int d = 0; d < dim; d++ )
+			{
+				min[ d ] = Math.min( box.min( d ), min[ d ] );
+				max[ d ] = Math.max( box.max( d ), max[ d ] );
+			}
+		}
+
+		return new FinalInterval( min, max );
 	}
 	/**
 	 * @return a real bounding box of a collection of tiles
