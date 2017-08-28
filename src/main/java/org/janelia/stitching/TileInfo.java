@@ -1,5 +1,8 @@
 package org.janelia.stitching;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 
 import net.imglib2.RealInterval;
@@ -14,7 +17,7 @@ import net.imglib2.realtransform.AffineTransform3D;
 
 public class TileInfo implements Cloneable, Serializable, RealInterval {
 
-	private static final long serialVersionUID = -3986869827110711078L;
+	private static final long serialVersionUID = 1947165645036235954L;
 
 	private ImageType type;
 	private Integer index;
@@ -23,7 +26,7 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 	private long[] size;
 	private double[] pixelResolution;
 
-	private AffineTransform3D transform;
+	private transient AffineTransform3D transform;
 
 	public TileInfo( final int dim ) {
 		position = new double[ dim ];
@@ -193,5 +196,36 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 	{
 		for ( int d = 0; d < max.numDimensions(); ++d )
 			max.setPosition( realMax( d ), d );
+	}
+
+	// writing/reading AffineTransform3D for supporting Serializable property
+	private void writeObject( final ObjectOutputStream oos ) throws IOException
+	{
+		oos.defaultWriteObject();
+		final double[][] transformMatrix;
+		if ( transform == null )
+		{
+			transformMatrix = null;
+		}
+		else
+		{
+			transformMatrix = new double[ 3 ][ 4 ];
+			transform.toMatrix( transformMatrix );
+		}
+		oos.writeObject( transformMatrix );
+	}
+	private void readObject( final ObjectInputStream ois ) throws ClassNotFoundException, IOException
+	{
+		ois.defaultReadObject();
+		final double[][] transformMatrix = ( double[][] ) ois.readObject();
+		if ( transformMatrix == null )
+		{
+			transform = null;
+		}
+		else
+		{
+			transform = new AffineTransform3D();
+			transform.set( transformMatrix );
+		}
 	}
 }

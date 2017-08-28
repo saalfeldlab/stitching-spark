@@ -27,6 +27,7 @@ import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.SerializableFinalInterval;
 import net.imglib2.img.cell.CellGrid;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.type.NativeType;
@@ -182,7 +183,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 		final Map< Integer, Interval > transformedTilesBoundingBoxes = new HashMap<>();
 		for ( final TileInfo tile : tiles )
-			transformedTilesBoundingBoxes.put( tile.getIndex(), TileOperations.estimateBoundingBox( tile ) );
+			transformedTilesBoundingBoxes.put( tile.getIndex(), new SerializableFinalInterval( TileOperations.estimateBoundingBox( tile ) ) );
 
 		final Interval fullBoundingBox = TileOperations.getCollectionBoundaries( transformedTilesBoundingBoxes.values() );
 		final long[] offset = Intervals.minAsLongArray( fullBoundingBox );
