@@ -147,13 +147,13 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			if ( !n5.datasetExists( fullScaleOutputPath ) )
 				fuse( baseExportPath, fullScaleOutputPath, job.getTiles( channel ) );
 
+			broadcastedPairwiseConnectionsMap.destroy();
+			broadcastedFlatfieldCorrection.destroy();
+
 			// Generate lower scale levels
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
 				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic( sparkContext, baseExportPath, fullScaleOutputPath, new FinalVoxelDimensions( "um", voxelDimensions ) );
-
-			broadcastedPairwiseConnectionsMap.destroy();
-			broadcastedFlatfieldCorrection.destroy();
 		}
 
 		System.out.println( "All channels have been exported" );
