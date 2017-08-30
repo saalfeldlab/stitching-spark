@@ -281,12 +281,10 @@ public class FusionPerformer
 			tileIndexes = null;
 		}
 
-		// TODO: use flatfield correction
-
 		for ( final TileInfo tile : tilesWithinCell )
 		{
 			final AffineGet tileTransform = tile.getTransform() != null ? tile.getTransform() : new Translation( tile.getPosition() );
-			final RandomAccessibleInterval< T > transformedTileImg = TransformedTileImageLoader.load( tile );
+			final RandomAccessibleInterval< T > transformedTileImg = TransformedTileImageLoader.load( tile, flatfield );
 
 			final FinalRealInterval intersection = IntervalsNullable.intersectReal( transformedTileImg, targetInterval );
 			if ( intersection == null )
