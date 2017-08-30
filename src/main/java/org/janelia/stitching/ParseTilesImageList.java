@@ -32,7 +32,7 @@ public class ParseTilesImageList
 		}
 		System.out.println( "Pixel resolution: " + Arrays.toString( pixelResolution ) );
 
-		final String fileNamePattern = "^.*?_ch(\\d?)_.*?_(\\d{3}x_\\d{3}y_\\d{3}z)_.*?\\.tif$";
+		final String fileNamePattern = "^.*?_(\\d{3})nm_.*?_(\\d{3}x_\\d{3}y_\\d{3}z)_.*?\\.tif$";
 		final String baseOutputFolder = Paths.get( imageListFilepath ).getParent().toString();
 
 		final TreeMap< Integer, List< TileInfo > > tiles = new TreeMap<>();
@@ -61,18 +61,18 @@ public class ParseTilesImageList
 				for ( int d = 0; d < objCoords.length; ++d )
 					objCoords[ d ] /= pixelResolution[ d ];
 
-				final int ch = Integer.parseInt( filename.replaceAll( fileNamePattern, "$1" ) );
+				final int nm = Integer.parseInt( filename.replaceAll( fileNamePattern, "$1" ) );
 
-				if ( !tiles.containsKey( ch ) )
-					tiles.put( ch, new ArrayList<>() );
+				if ( !tiles.containsKey( nm ) )
+					tiles.put( nm, new ArrayList<>() );
 
 				final TileInfo tile = new TileInfo( 3 );
-				tile.setIndex( tiles.get( ch ).size() );
+				tile.setIndex( tiles.get( nm ).size() );
 				tile.setFilePath( filepath );
 				tile.setPosition( objCoords );
 				tile.setSize( null );
 				tile.setPixelResolution( pixelResolution.clone() );
-				tiles.get( ch ).add( tile );
+				tiles.get( nm ).add( tile );
 			}
 		}
 
@@ -81,21 +81,17 @@ public class ParseTilesImageList
 			System.out.println( String.format( "  ch%d: %d tiles", entry.getKey(), entry.getValue().size() ) );
 
 		// run metadata step
-		final List< TileInfo[] > tileChannels = new ArrayList<>();
-		for ( final List< TileInfo > tilesList : tiles.values() )
-			tileChannels.add( tilesList.toArray( new TileInfo[ 0 ] ) );
-
-		PipelineMetadataStepExecutor.process( tileChannels );
+		PipelineMetadataStepExecutor.process( tiles );
 
 		// check that tile configuration forms a single graph
 		// NOTE: may fail with StackOverflowError. Pass -Xss to the JVM
-		final List< TilePair > overlappingPairs = TileOperations.findOverlappingTiles( tileChannels.get( 0 ) );
+		final List< TilePair > overlappingPairs = TileOperations.findOverlappingTiles( tiles.firstEntry().getValue().toArray( new TileInfo[ 0 ] ) );
 		final List< Integer > connectedComponentsSize = CheckConnectedGraphs.connectedComponentsSize( overlappingPairs );
 		if ( connectedComponentsSize.size() > 1 )
 			throw new Exception( "Expected single graph, got several components of size " + connectedComponentsSize );
 
 		// finally save the configurations as JSON files
-		for ( int channel = 0; channel < tileChannels.size(); ++channel )
-			TileInfoJSONProvider.saveTilesConfiguration( tileChannels.get( channel ), baseOutputFolder + "/ch" + channel + ".json" );
+		for ( final int channel : tiles.keySet() )
+			TileInfoJSONProvider.saveTilesConfiguration( tiles.get( channel ).toArray( new TileInfo[ 0 ] ), Paths.get( baseOutputFolder, channel + "nm.json" ).toString() );
 	}
 }
