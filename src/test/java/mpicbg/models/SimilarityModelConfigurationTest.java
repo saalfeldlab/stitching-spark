@@ -76,8 +76,8 @@ public class SimilarityModelConfigurationTest
 		for ( final Integer index : square )
 		{
 			tiles.put( index, new Tile<>(
-					new TranslationModel3D()
 //					new RigidModel3D()
+					new SimilarityModel3D()
 
 //					new InterpolatedAffineModel3D<>(
 //							new SimilarityModel3D(),
@@ -143,6 +143,7 @@ public class SimilarityModelConfigurationTest
 		// optimize
 		final TileConfiguration tc = new TileConfiguration();
 		tc.addTiles( tiles.values() );
+		tc.fixTile( tiles.firstEntry().getValue() );
 		tc.preAlign();
 		tc.optimize( 10, 1000, 1000, DAMPNESS_FACTOR, 1 );
 
