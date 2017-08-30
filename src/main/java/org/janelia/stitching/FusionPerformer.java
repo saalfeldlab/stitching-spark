@@ -1,6 +1,9 @@
 package org.janelia.stitching;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -15,6 +18,7 @@ import net.imglib2.RealPoint;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgFactory;
+import net.imglib2.img.list.ListImg;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.Translation;
 import net.imglib2.type.NativeType;
@@ -262,7 +266,21 @@ public class FusionPerformer
 			throw new RuntimeException( "Unknown fusion mode" );
 		}
 
-		// TODO: initialize helper image for tile connections when exporting only overlaps
+		// initialize helper image for tile connections when exporting only overlaps
+		final RandomAccessibleInterval< Set< Integer > > tileIndexes;
+		if ( pairwiseConnectionsMap != null )
+		{
+			final int numElements = ( int ) Intervals.numElements( targetInterval );
+			final List< Set< Integer > > tileIndexesList = new ArrayList<>( numElements );
+			for ( int i = 0; i < numElements; ++i )
+				tileIndexesList.add( new HashSet<>() );
+			tileIndexes = new ListImg<>( tileIndexesList, Intervals.dimensionsAsLongArray( targetInterval ) );
+		}
+		else
+		{
+			tileIndexes = null;
+		}
+
 		// TODO: use flatfield correction
 
 		for ( final TileInfo tile : tilesWithinCell )
@@ -291,6 +309,9 @@ public class FusionPerformer
 			final RandomAccessibleInterval< T > sourceInterval = Views.interval( transformedTileInTargetSpace, intersectionIntervalInTargetInterval );
 			final Cursor< T > sourceCursor = Views.flatIterable( sourceInterval ).localizingCursor();
 
+			final RandomAccessibleInterval< Set< Integer > > tileIndexesInterval = tileIndexes != null ? Views.interval( tileIndexes, intersectionIntervalInTargetInterval ) : null;
+			final Cursor< Set< Integer > > tileIndexesCursor = tileIndexesInterval != null ? Views.flatIterable( tileIndexesInterval ).cursor() : null;
+
 			final T zero = type.createVariable();
 			zero.setZero();
 
@@ -301,8 +322,10 @@ public class FusionPerformer
 			while ( sourceCursor.hasNext() )
 			{
 				// move all cursors forward
-				sourceCursor.fwd();
 				fusionStrategy.moveCursorsForward();
+				sourceCursor.fwd();
+				if ( tileIndexesCursor != null )
+					tileIndexesCursor.fwd();
 
 				if ( sourceCursor.get().valueEquals( zero ) )
 					continue;
@@ -324,10 +347,42 @@ public class FusionPerformer
 				// update the value if the point is inside tile
 				pointInsideTile.setPosition( localTilePosition );
 				fusionStrategy.updateValue( tile, pointInsideTile, sourceCursor.get() );
+
+				if ( tileIndexesCursor != null )
+					tileIndexesCursor.get().add( tile.getIndex() );
 			}
 		}
 
-		return fusionStrategy.getOutImage();
+		final ImagePlusImg< T, ? > outImage = fusionStrategy.getOutImage();
+
+		// retain only requested content within overlaps that corresponds to pairwise connections map, if required
+		if ( tileIndexes != null )
+		{
+			final Cursor< T > outCursor = Views.flatIterable( outImage ).cursor();
+			final Cursor< Set< Integer > > tileIndexesCursor = Views.flatIterable( tileIndexes ).cursor();
+			while ( outCursor.hasNext() || tileIndexesCursor.hasNext() )
+			{
+				outCursor.fwd();
+				tileIndexesCursor.fwd();
+
+				boolean retainPixel = false;
+				final Set< Integer > tilesAtPoint = tileIndexesCursor.get();
+				for ( final Integer testTileIndex : tilesAtPoint )
+				{
+					final Set< Integer > connectedTileIndexes = pairwiseConnectionsMap.get( testTileIndex );
+					if ( connectedTileIndexes != null && !Collections.disjoint( tilesAtPoint, connectedTileIndexes ) )
+					{
+						retainPixel = true;
+						break;
+					}
+				}
+
+				if ( !retainPixel )
+					outCursor.get().setZero();
+			}
+		}
+
+		return outImage;
 	}
 
 	// TODO: 'channel' version + virtual image loader was needed for the Zeiss dataset
