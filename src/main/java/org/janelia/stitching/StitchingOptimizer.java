@@ -16,12 +16,14 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 
 import ij.ImagePlus;
+import mpicbg.models.Affine3D;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Tile;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
 import mpicbg.stitching.StitchingParameters;
+import net.imglib2.realtransform.AffineTransform3D;
 
 public class StitchingOptimizer implements Serializable
 {
@@ -133,7 +135,13 @@ public class StitchingOptimizer implements Serializable
 			final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
 			final List< ImagePlusTimePoint > optimized = optimizationPerformer.optimize( comparePointPairs, job.getParams(), logWriter );
 
-			// Update tile positions
+			System.out.println();
+			System.out.println("*********");
+			System.out.println("tiles replaced to TranslationModel: " + optimizationPerformer.replacedTiles );
+			System.out.println("*********");
+			System.out.println();
+
+			// Update tile transforms
 			for ( int channel = 0; channel < job.getChannels(); channel++ )
 			{
 				final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( job.getTiles( channel ) );
@@ -141,14 +149,22 @@ public class StitchingOptimizer implements Serializable
 				final List< TileInfo > newTiles = new ArrayList<>();
 				for ( final ImagePlusTimePoint optimizedTile : optimized )
 				{
-					final double[] pos = new double[ job.getDimensionality() ];
-					optimizedTile.getModel().applyInPlace( pos );
+					final Affine3D< ? > affineModel = ( Affine3D< ? > ) optimizedTile.getModel();
+					final double[][] matrix = new double[ 3 ][ 4 ];
+					affineModel.toMatrix( matrix );
+
+					final AffineTransform3D tileTransform = new AffineTransform3D();
+					tileTransform.set( matrix );
 
 					if ( tilesMap.containsKey( optimizedTile.getImpId() ) )
 					{
 						final TileInfo newTile = tilesMap.get( optimizedTile.getImpId() ).clone();
-						newTile.setPosition( pos );
+						newTile.setTransform( tileTransform );
 						newTiles.add( newTile );
+					}
+					else
+					{
+						throw new RuntimeException("tile is not in input set");
 					}
 				}
 
@@ -157,7 +173,7 @@ public class StitchingOptimizer implements Serializable
 
 				// sort the tiles by their index
 				final TileInfo[] tilesToSave = Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
-				TileOperations.translateTilesToOriginReal( tilesToSave );
+//				TileOperations.translateTilesToOriginReal( tilesToSave );
 				// save final tiles configuration
 				TileInfoJSONProvider.saveTilesConfiguration(
 						tilesToSave,
@@ -213,12 +229,10 @@ public class StitchingOptimizer implements Serializable
 
 	private OptimizationParameters findBestOptimizationParameters( final List< SerializablePairWiseStitchingResult[] > shifts, final double maxAllowedError, final PrintWriter logWriter )
 	{
-		// FIXME: testing single configuration
 		final List< OptimizationParameters > optimizationParametersList = new ArrayList<>();
-//		for ( double testMinCrossCorrelation = 0.1; testMinCrossCorrelation <= 1; testMinCrossCorrelation += 0.05 )
-//			for ( double testMinVariance = 0; testMinVariance <= 300; testMinVariance += 1 + ( int ) testMinVariance / 10 )
-//				optimizationParametersList.add( new OptimizationParameters( testMinCrossCorrelation, testMinVariance ) );
-		optimizationParametersList.add( new OptimizationParameters( 0.5, 0.0 ) );
+		for ( double testMinCrossCorrelation = 0.1; testMinCrossCorrelation <= 1; testMinCrossCorrelation += 0.05 )
+			for ( double testMinVariance = 0; testMinVariance <= 300; testMinVariance += 1 + ( int ) testMinVariance / 10 )
+				optimizationParametersList.add( new OptimizationParameters( testMinCrossCorrelation, testMinVariance ) );
 
 		final Broadcast< StitchingParameters > broadcastedStitchingParameters = sparkContext.broadcast( job.getParams() );
 
@@ -232,7 +246,7 @@ public class StitchingOptimizer implements Serializable
 						++validPairs;
 
 				final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
-//				GlobalOptimizationPerformer.suppressOutput();
+				GlobalOptimizationPerformer.suppressOutput();
 				optimizationPerformer.optimize( comparePointPairs, broadcastedStitchingParameters.value() );
 				final OptimizationResult optimizationResult = new OptimizationResult(
 						maxAllowedError,

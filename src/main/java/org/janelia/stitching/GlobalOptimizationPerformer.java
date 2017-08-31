@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
@@ -15,6 +16,7 @@ import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
+import mpicbg.models.TranslationModel3D;
 import mpicbg.stitching.ImagePlusTimePoint;
 import mpicbg.stitching.StitchingParameters;
 
@@ -22,7 +24,9 @@ import mpicbg.stitching.StitchingParameters;
 // based on the GlobalOptimization class from the original Fiji's Stitching plugin repository
 public class GlobalOptimizationPerformer
 {
-	public Set< Tile<?> > lostTiles = null;
+	public Map< Integer, Tile< ? > > lostTiles = null;
+
+	public int replacedTiles = 0;
 
 	static private final java.io.PrintStream originalOut, suppressedOut;
 	static
@@ -102,24 +106,7 @@ public class GlobalOptimizationPerformer
 				final Tile< ? > t1 = comparePointPair.getTile1();
 				final Tile< ? > t2 = comparePointPair.getTile2();
 
-				/*Point p1, p2;
-				if ( params.dimensionality == 3 )
-				{
-					// the transformations that map each tile into the relative global coordinate system (that's why the "-")
-					p1 = new Point( new double[]{ 0,0,0 } );
-					p2 = new Point( new double[]{ -pair.getRelativeShift()[ 0 ], -pair.getRelativeShift()[ 1 ], -pair.getRelativeShift()[ 2 ] } );
-				}
-				else
-				{
-					p1 = new Point( new double[]{ 0, 0 } );
-					p2 = new Point( new double[]{ -pair.getRelativeShift()[ 0 ], -pair.getRelativeShift()[ 1 ] } );
-				}*/
-
 				final float weight = comparePointPair.getCrossCorrelation();
-
-//				final ComparePair comparePair = new ComparePair( comparePointPair.getTile1(), comparePointPair.getTile2() );
-//				t1.addMatch( new PointMatchStitching( comparePointPair.getPointPair().getA(), comparePointPair.getPointPair().getB(), weight, comparePair ) );
-//				t2.addMatch( new PointMatchStitching( comparePointPair.getPointPair().getB(), comparePointPair.getPointPair().getA(), weight, comparePair ) );
 
 				t1.addMatch( new PointMatch( comparePointPair.getPointPair().getA(), comparePointPair.getPointPair().getB(), weight ) );
 				t2.addMatch( new PointMatch( comparePointPair.getPointPair().getB(), comparePointPair.getPointPair().getA(), weight ) );
@@ -130,6 +117,40 @@ public class GlobalOptimizationPerformer
 				tilesSet.add( t1 );
 				tilesSet.add( t2 );
 			}
+		}
+
+		// check if there are enough point matches
+		{
+			final Set< Tile< ? > > newTilesSet = new HashSet<>();
+			for ( final Tile< ? > tile : tilesSet )
+			{
+				if ( tile.getMatches().size() < tile.getModel().getMinNumMatches() )
+				{
+					final Tile< ? > replacementTile = new ImagePlusTimePoint(
+							( ( ImagePlusTimePoint ) tile ).getImagePlus(),
+							( ( ImagePlusTimePoint ) tile ).getImpId(),
+							( ( ImagePlusTimePoint ) tile ).getTimePoint(),
+							new TranslationModel3D(),
+							null
+						);
+					replacementTile.addMatches( tile.getMatches() );
+					for ( final Tile< ? > connectedTile : tile.getConnectedTiles() )
+					{
+						// don't use removeConnectedTile() because it "overdoes" it by removing point matches from both sides which we would like to preserve
+						connectedTile.getConnectedTiles().remove( tile );
+						connectedTile.addConnectedTile( replacementTile );
+						replacementTile.addConnectedTile( connectedTile );
+					}
+					newTilesSet.add( replacementTile );
+					++replacedTiles;
+				}
+				else
+				{
+					newTilesSet.add( tile );
+				}
+			}
+			tilesSet.clear();
+			tilesSet.addAll( newTilesSet );
 		}
 
 		writeLog( logWriter, "Pairs above the threshold: " + pairsAdded + ", pairs total = " + comparePointPairs.size() );
@@ -172,7 +193,6 @@ public class GlobalOptimizationPerformer
 
 		writeLog( logWriter, "Using the largest graph of size " + largestGraphSize + " (throwing away " + ( graphSizesSum - largestGraphSize ) + " tiles from smaller graphs)" );
 		remainingGraphSize = largestGraphSize;
-
 
 		final TileConfiguration tc = new TileConfiguration();
 		tc.addTiles( tilesSet );
@@ -242,12 +262,12 @@ public class GlobalOptimizationPerformer
 		Collections.sort( errors );
 		Collections.reverse( errors );
 
-		lostTiles = new HashSet<>();
+		lostTiles = new TreeMap<>();
 		for ( final ComparePointPair comparePointPair : comparePointPairs )
 			for ( final ImagePlusTimePoint t : new ImagePlusTimePoint[] { comparePointPair.getTile1(), comparePointPair.getTile2() } )
-				lostTiles.add( t );
+				lostTiles.put( t.getImpId(), t );
 		for ( final Tile< ? > t : tc.getTiles() )
-			lostTiles.remove( t );
+			lostTiles.remove( ( ( ImagePlusTimePoint ) t ).getImpId() );
 		System.out.println( "Tiles lost: " + lostTiles.size() );
 
 
