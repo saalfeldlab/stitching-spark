@@ -5,11 +5,14 @@ import java.io.FileReader;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TreeMap;
 
 import org.janelia.stitching.analysis.CheckConnectedGraphs;
+import org.janelia.stitching.analysis.FilterAdjacentShifts;
 
 public class ParseTilesImageList
 {
@@ -76,7 +79,7 @@ public class ParseTilesImageList
 			}
 		}
 
-		System.out.println( "Parsed from ImageList.csv:" );
+		System.out.println( "Parsed from " + Paths.get( imageListFilepath ).getFileName() + ":" );
 		for ( final Entry< Integer, List< TileInfo > > entry : tiles.entrySet() )
 			System.out.println( String.format( "  ch%d: %d tiles", entry.getKey(), entry.getValue().size() ) );
 
@@ -89,6 +92,50 @@ public class ParseTilesImageList
 		final List< Integer > connectedComponentsSize = CheckConnectedGraphs.connectedComponentsSize( overlappingPairs );
 		if ( connectedComponentsSize.size() > 1 )
 			throw new Exception( "Expected single graph, got several components of size " + connectedComponentsSize );
+
+		// trace overlaps to ensure that tile positions are accurate
+		System.out.println();
+		final long[] tileSize = tiles.firstEntry().getValue().get( 0 ).getSize();
+		System.out.println( "tile size = " + Arrays.toString( tileSize ) );
+		for ( int d = 0; d < tiles.firstEntry().getValue().get( 0 ).numDimensions(); ++d )
+		{
+			final List< TilePair > adjacentPairsDim = FilterAdjacentShifts.filterAdjacentPairs( overlappingPairs, d );
+
+			// verify against grid coordinates
+			final Set< TilePair > adjacentPairsDimSet = new HashSet<>( adjacentPairsDim );
+			for ( final TilePair pair : overlappingPairs )
+			{
+				final TreeMap< Integer, Integer > diff = new TreeMap<>();
+				for ( int k = 0; k < Math.max( pair.getA().numDimensions(), pair.getB().numDimensions() ); ++k )
+					if ( Utils.getTileCoordinates( pair.getB() )[ k ] != Utils.getTileCoordinates( pair.getA() )[ k ] )
+						diff.put( k, Utils.getTileCoordinates( pair.getB() )[ k ] - Utils.getTileCoordinates( pair.getA() )[ k ] );
+				if ( diff.size() == 1 && diff.firstKey().intValue() == d && Math.abs( diff.firstEntry().getValue().intValue() ) == 1 )
+				{
+					if ( !adjacentPairsDimSet.contains( pair ) )
+						throw new RuntimeException( "adjacent pairs don't match with grid coordinates" );
+					adjacentPairsDimSet.remove( pair );
+				}
+			}
+			if ( !adjacentPairsDimSet.isEmpty() )
+				throw new RuntimeException( "some extra pairs have been added that are not adjacent in the grid" );
+
+			double minOverlap = Double.POSITIVE_INFINITY, maxOverlap = Double.NEGATIVE_INFINITY, avgOverlap = 0;
+			for ( final TilePair pair : adjacentPairsDim )
+			{
+				final double overlap = tileSize[ d ] - Math.abs( pair.getB().getPosition( d ) - pair.getA().getPosition( d ) );
+				minOverlap = Math.min( overlap, minOverlap );
+				maxOverlap = Math.max( overlap, maxOverlap );
+				avgOverlap += overlap;
+			}
+			avgOverlap /= adjacentPairsDim.size();
+			System.out.println( String.format( "Overlaps for [%c] adjacent pairs: min=%d, max=%d, avg=%d",
+					new char[] { 'x', 'y', 'z' }[ d ],
+					Math.round( minOverlap ),
+					Math.round( maxOverlap ),
+					Math.round( avgOverlap )
+				) + " (" + Math.round( avgOverlap / tileSize[ d ] * 100 ) + "% of tile size)" );
+		}
+		System.out.println();
 
 		// finally save the configurations as JSON files
 		for ( final int channel : tiles.keySet() )
