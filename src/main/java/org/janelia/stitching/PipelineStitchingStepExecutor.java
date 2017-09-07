@@ -123,15 +123,16 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 //				overlappingTiles.clear();
 //				overlappingTiles.addAll( newPairs );
 
+				// FIXME: don't stop after the first iteration for now in order to restitch the dataset initializing it with translation-based solution
 				if ( iteration == 0 )
 				{
 					// stop if all input tiles are included in the stitched set
-					if ( stageTiles.length == stitchedTiles.length )
+					/*if ( stageTiles.length == stitchedTiles.length )
 					{
 						System.out.println( "Stopping on iteration " + iteration + ": all input tiles (n=" + stageTiles.length + ") are included in the stitched set" );
 						copyFinalSolution( iteration );
 						break;
-					}
+					}*/
 				}
 				else
 				{
