@@ -706,9 +706,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 					final int timepoint = 1;
 
-					if ( isLocalSparkContext )
-						PairwiseStitchingPerformer.setThreads( Runtime.getRuntime().availableProcessors() );
-					else
+//					if ( isLocalSparkContext )
+//						PairwiseStitchingPerformer.setThreads( Runtime.getRuntime().availableProcessors() );
+//					else
 						PairwiseStitchingPerformer.setThreads( 1 );
 
 					// for transforming 'overlap offset' to 'tile offset'
