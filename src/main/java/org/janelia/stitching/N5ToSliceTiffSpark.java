@@ -15,17 +15,32 @@ public class N5ToSliceTiffSpark
 
 	public static void main( final String[] args ) throws Exception
 	{
-		final String n5Path = args[ 0 ];
-		final boolean binned;
-		if ( args.length > 1 )
+		int lastArg = 0;
+		final String n5Path = args[ lastArg++ ];
+
+		final Integer requestedChannel;
 		{
-			if ( args[ 1 ].equalsIgnoreCase( "--binned" ) )
-				binned = true;
+			if ( args.length > lastArg )
+			{
+				Integer requestedChannelParsed;
+				try
+				{
+					requestedChannelParsed = Integer.parseInt( args[ lastArg ] );
+					lastArg++;
+				}
+				catch ( final NumberFormatException e )
+				{
+					requestedChannelParsed = null;
+				}
+				requestedChannel = requestedChannelParsed;
+			}
 			else
-				throw new Exception( "Unexpected argument. Possible values are: --binned" );
+			{
+				requestedChannel = null;
+			}
 		}
-		else
-			binned = false;
+
+		final boolean binned = args.length > lastArg && args[ lastArg++ ].equalsIgnoreCase( "--binned" );
 
 		final int scaleLevel = binned ? SCALE_LEVEL_BINNED : SCALE_LEVEL;
 		System.out.println( "Using scale level " + scaleLevel + " to generate slice TIFFs" );
@@ -34,12 +49,18 @@ public class N5ToSliceTiffSpark
 		final String outFolder = "slice-tiff" + ( binned ? "-binned" : "" );
 		final String outputPath = Paths.get( outBaseFolder, outFolder ).toString();
 		System.out.println( "Output path: " + outputPath );
+		System.out.println( "Tiff compression: none" );
+
+		System.out.println( requestedChannel != null ? "Processing channel " + requestedChannel : "Processing all channels" );
 
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf().setAppName( "ConvertN5ToSliceTIFF" ) ) )
 		{
 			final N5ExportMetadata exportMetadata = new N5ExportMetadata( n5Path );
 			for ( int channel = 0; channel < exportMetadata.getNumChannels(); ++channel )
 			{
+				if ( requestedChannel != null && channel != requestedChannel.intValue() )
+					continue;
+
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
 				final String outputChannelPath = Paths.get( outputPath, "ch" + channel ).toString();
 				N5SliceTiffConverter.convertToSliceTiff( sparkContext, n5Path, n5DatasetPath, outputChannelPath, TiffUtils.TiffCompression.LZW );
