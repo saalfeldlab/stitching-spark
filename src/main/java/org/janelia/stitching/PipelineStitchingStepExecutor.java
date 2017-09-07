@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
+import scala.Tuple2;
 
 /**
  * Computes updated tile positions using phase correlation for pairwise matches and then global optimization for fitting all of them together.
@@ -321,8 +323,49 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				).toString();
 
 			// Initiate the computation
-			final List< SerializablePairWiseStitchingResult[] > adjacentShiftsMulti = computePairwiseShifts( pendingOverlappingTiles, statsTileConfigurationPath );
-			pairwiseShiftsMulti.addAll( adjacentShiftsMulti );
+			final List< Tuple2< SerializablePairWiseStitchingResult[], double[] > > adjacentShiftsMulti = computePairwiseShifts( pendingOverlappingTiles, statsTileConfigurationPath );
+
+			// merge results with preloaded pairwise shifts
+			for ( final Tuple2< SerializablePairWiseStitchingResult[], double[] > entry : adjacentShiftsMulti )
+				pairwiseShiftsMulti.add( entry._1() );
+
+			// save statistics on search radiuses
+			final String searchRadiusStatsPath = Paths.get( basePath, iterationDirname, "searchRadiusStats.txt" ).toString();
+			try ( final PrintWriter writer = new PrintWriter( searchRadiusStatsPath ) )
+			{
+				writer.println( "Tile1_index Tile1_grid_X Tile1_grid_Y Tile1_grid_Z Tile1_timestamp Tile2_index Tile2_grid_X Tile2_grid_Y Tile2_grid_Z Tile2_timestamp Radius_1st Radius_2nd Radius_3rd" );
+				for ( final Tuple2< SerializablePairWiseStitchingResult[], double[] > entry : adjacentShiftsMulti )
+					writer.println(
+							String.format(
+									""
+									+ "%d %d %d %d %d"
+									+ " "
+									+ "%d %d %d %d %d"
+									+ " "
+									+ "%.2f %.2f %.2f",
+
+									entry._1()[ 0 ].getTilePair().getA().getIndex(),
+									Utils.getTileCoordinates( entry._1()[ 0 ].getTilePair().getA() )[ 0 ],
+									Utils.getTileCoordinates( entry._1()[ 0 ].getTilePair().getA() )[ 1 ],
+									Utils.getTileCoordinates( entry._1()[ 0 ].getTilePair().getA() )[ 2 ],
+									Utils.getTileTimestamp( entry._1()[ 0 ].getTilePair().getA() ),
+
+									entry._1()[ 0 ].getTilePair().getB().getIndex(),
+									Utils.getTileCoordinates( entry._1()[ 0 ].getTilePair().getB() )[ 0 ],
+									Utils.getTileCoordinates( entry._1()[ 0 ].getTilePair().getB() )[ 1 ],
+									Utils.getTileCoordinates( entry._1()[ 0 ].getTilePair().getB() )[ 2 ],
+									Utils.getTileTimestamp( entry._1()[ 0 ].getTilePair().getB() ),
+
+									entry._2() != null ? entry._2()[ 0 ] : -1,
+									entry._2() != null ? entry._2()[ 1 ] : -1,
+									entry._2() != null ? entry._2()[ 2 ] : -1
+								)
+						);
+			}
+			catch ( final Exception e )
+			{
+				throw new PipelineExecutionException( "Can't write search radius stats: " + e.getMessage(), e );
+			}
 
 			try {
 				System.out.println( "Stitched all tiles pairwise, store this information on disk.." );
@@ -337,7 +380,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 * Computes the best possible pairwise shifts between every pair of tiles on a Spark cluster.
 	 * It uses phase correlation for measuring similarity between two images.
 	 */
-	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< SerializablePairWiseStitchingResult[] > computePairwiseShifts( final List< TilePair > overlappingTiles, final String statsTileConfigurationPath ) throws PipelineExecutionException
+	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< Tuple2< SerializablePairWiseStitchingResult[], double[] > > computePairwiseShifts( final List< TilePair > overlappingTiles, final String statsTileConfigurationPath ) throws PipelineExecutionException
 	{
 		// try to load the stitched tile configuration from the previous iteration
 		final TileSearchRadiusEstimator searchRadiusEstimator;
@@ -418,7 +461,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final boolean isLocalSparkContext = sparkContext.isLocal();
 
 		final JavaRDD< TilePair > rdd = sparkContext.parallelize( overlappingTiles, overlappingTiles.size() );
-		final JavaRDD< SerializablePairWiseStitchingResult[] > pairwiseStitching = rdd.map( tilePair ->
+		final JavaRDD< Tuple2< SerializablePairWiseStitchingResult[], double[] > > pairwiseStitching = rdd.map( tilePair ->
 			{
 				// stats
 				final TileSearchRadiusEstimator localSearchRadiusEstimator = broadcastedSearchRadiusEstimator.value();
@@ -462,7 +505,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 								invalidResult[ i ] = new SerializablePairWiseStitchingResult( tilePair, null, 0 );
 								invalidResult[ i ].setIsValidOverlap( false );
 							}
-							return invalidResult;
+							return new Tuple2<>( invalidResult, null );
 
 //								final SearchRadius searchRadiusNearestNeighbors = localSearchRadiusEstimator.getSearchRadiusTreeUsingKNearestNeighbors( movingTile, numNearestNeighbors );
 //								if ( searchRadiusNearestNeighbors.getUsedPointsIndexes().size() != numNearestNeighbors )
@@ -540,7 +583,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							invalidResult[ i ] = new SerializablePairWiseStitchingResult( tilePair, null, 0 );
 							invalidResult[ i ].setIsValidOverlap( false );
 						}
-						return invalidResult;
+						return new Tuple2<>( invalidResult, null );
 					}
 
 					overlaps[ 0 ] = overlapsAdjustedToSearchRadius.getA();
@@ -572,7 +615,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 						invalidResult[ i ] = new SerializablePairWiseStitchingResult( tilePair, null, 0 );
 						invalidResult[ i ].setIsValidOverlap( false );
 					}
-					return invalidResult;
+					return new Tuple2<>( invalidResult, null );
 				}
 
 				// prepare images
@@ -789,18 +832,20 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					imps[ i ].close();
 
 				System.out.println( "Stitched tile pair " + tilePair + ", got " + roiPartsResults.length + " matches" );
-				return roiPartsResults;
+
+				return new Tuple2<>( roiPartsResults, searchRadius.getEllipseRadius() );
 			} );
 
-		final List< SerializablePairWiseStitchingResult[] > stitchingResults = pairwiseStitching.collect();
+		final List< Tuple2< SerializablePairWiseStitchingResult[], double[] > > stitchingResults = pairwiseStitching.collect();
 
 		broadcastedFlatfieldCorrectionForChannels.destroy();
 		broadcastedSearchRadiusEstimator.destroy();
 		broadcastedCoordsToTilesChannels.destroy();
 
 		int validPairs = 0;
-		for ( final SerializablePairWiseStitchingResult[] shiftMulti : stitchingResults )
+		for ( final Tuple2< SerializablePairWiseStitchingResult[], double[] > entry : stitchingResults )
 		{
+			final SerializablePairWiseStitchingResult[] shiftMulti = entry._1();
 			final SerializablePairWiseStitchingResult shift = shiftMulti[ 0 ];
 			if ( shift.getIsValidOverlap() )
 				++validPairs;
