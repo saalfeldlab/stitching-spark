@@ -1,5 +1,7 @@
 package org.janelia.stitching;
 
+import mpicbg.models.InterpolatedAffineModel2D;
+import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.Model;
 import mpicbg.models.SimilarityModel2D;
 import mpicbg.models.SimilarityModel3D;
@@ -14,6 +16,8 @@ import mpicbg.models.TranslationModel3D;
  */
 
 public class TileModelFactory {
+
+	private static final double REGULARIZER_TRANSLATION = 0.1;
 
 	/**
 	 * @return default translational model initialized to origin
@@ -43,16 +47,22 @@ public class TileModelFactory {
 	{
 		switch ( tile.numDimensions() ) {
 		case 2:
-			final SimilarityModel2D m2d = new SimilarityModel2D();
-//			if ( tile != null )
-//				m2d.setScaleRotationTranslation( 1.0, 0.0, tile.getPosition(0), tile.getPosition(1) );
-			return (M)m2d;
+//			final SimilarityModel2D m2d = new SimilarityModel2D();
+//			return (M)m2d;
+			return ( M ) new InterpolatedAffineModel2D<>(
+					new SimilarityModel2D(),
+					new TranslationModel2D(),
+					REGULARIZER_TRANSLATION
+				);
 
 		case 3:
-			final SimilarityModel3D m3d = new SimilarityModel3D();
-//			if ( tile != null)
-//				m3d.set( tile.getPosition(0), tile.getPosition(1), tile.getPosition(2) );
-			return (M)m3d;
+//			final SimilarityModel3D m3d = new SimilarityModel3D();
+//			return (M)m3d;
+			return ( M ) new InterpolatedAffineModel3D<>(
+					new SimilarityModel3D(),
+					new TranslationModel3D(),
+					REGULARIZER_TRANSLATION
+				);
 
 		default:
 			throw new Exception( "Not supported" );
