@@ -547,10 +547,16 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					overlaps[ 1 ] = overlapsAdjustedToSearchRadius.getB();
 
 					// find the shortest edge if the initial overlap was null (shortEdgeDimension is still -1)
-					if ( shortEdgeDimension == -1 )
-						for ( int d = 0; d < overlaps[ 0 ].numDimensions(); ++d )
-							if ( shortEdgeDimension == -1 || overlaps[ 0 ].dimension( d ) < overlaps[ 0 ].dimension( shortEdgeDimension ) )
-								shortEdgeDimension = d;
+//					if ( shortEdgeDimension == -1 )
+//						for ( int d = 0; d < overlaps[ 0 ].numDimensions(); ++d )
+//							if ( shortEdgeDimension == -1 || overlaps[ 0 ].dimension( d ) < overlaps[ 0 ].dimension( shortEdgeDimension ) )
+//								shortEdgeDimension = d;
+
+					// FIXME: find the shortest dimension of the adjusted overlap (this makes more sense)
+					shortEdgeDimension = -1;
+					for ( int d = 0; d < overlaps[ 0 ].numDimensions(); ++d )
+						if ( shortEdgeDimension == -1 || overlaps[ 0 ].dimension( d ) < overlaps[ 0 ].dimension( shortEdgeDimension ) )
+							shortEdgeDimension = d;
 				}
 
 				// when the overlap is 1px thick in Z, it breaks the code below because corresponding cropped images are 2D in this case, so just ignore this pair
