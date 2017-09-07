@@ -17,6 +17,8 @@ import org.janelia.stitching.Utils;
 
 public class FindPairwiseChanges
 {
+	private static final double SEARCH_RADIUS_MULTIPLIER = 3;
+
 	public static void main( final String[] args ) throws IOException, PipelineExecutionException
 	{
 		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
@@ -64,7 +66,7 @@ public class FindPairwiseChanges
 			final int minNumNeighbors,
 			final boolean adjacentOnly ) throws PipelineExecutionException
 	{
-		final TileSearchRadiusEstimator predictor = new TileSearchRadiusEstimator( stageTiles, stitchedTiles );
+		final TileSearchRadiusEstimator predictor = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
 		final List< TileInfo > predictedTiles = new ArrayList<>();
 		for ( final TileInfo stageTile : stageTiles )
 		{
