@@ -101,7 +101,7 @@ public class N5ToMIPsSpark
 						n5DatasetPath,
 						mipStepsCells,
 						outputChannelPath,
-						TiffUtils.TiffCompression.LZW
+						TiffUtils.TiffCompression.NONE
 					);
 			}
 		}

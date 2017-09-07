@@ -63,7 +63,13 @@ public class N5ToSliceTiffSpark
 
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
 				final String outputChannelPath = Paths.get( outputPath, "ch" + channel ).toString();
-				N5SliceTiffConverter.convertToSliceTiff( sparkContext, n5Path, n5DatasetPath, outputChannelPath, TiffUtils.TiffCompression.LZW );
+				N5SliceTiffConverter.convertToSliceTiff(
+						sparkContext,
+						n5Path,
+						n5DatasetPath,
+						outputChannelPath,
+						TiffUtils.TiffCompression.NONE
+					);
 			}
 		}
 	}
