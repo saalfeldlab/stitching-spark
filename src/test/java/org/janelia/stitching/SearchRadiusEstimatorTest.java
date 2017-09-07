@@ -18,6 +18,7 @@ import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.MultithreadedExecutor;
 import org.junit.Assert;
+import org.junit.Test;
 import org.ojalgo.matrix.BasicMatrix.Builder;
 import org.ojalgo.matrix.PrimitiveMatrix;
 
@@ -42,6 +43,7 @@ import net.imglib2.util.ValuePair;
 
 public class SearchRadiusEstimatorTest
 {
+	private final static double SEARCH_RADIUS_MULTIPLIER = 3;
 	private final static double EPSILON = 1e-3;
 
 	final Random rnd = new Random();
@@ -63,17 +65,20 @@ public class SearchRadiusEstimatorTest
 		}
 		final double[] estimationWindowSize = new double[ offsets.get( 0 ).length ];
 		Arrays.fill( estimationWindowSize, 1e10 );
-		return new SearchRadiusEstimator( stage, stitched, estimationWindowSize );
+		return new SearchRadiusEstimator( stage, stitched, estimationWindowSize, SEARCH_RADIUS_MULTIPLIER );
 	}
 
-//	@Test
+	@Test
 	public void testEigen() throws PipelineExecutionException
 	{
-		final SearchRadius radius = new SearchRadius( new double[ 3 ], new double[][] {
-				new double[] { 88.5333, -33.6, -5.33333 },
-				new double[] { -33.6, 15.4424, 2.66667 },
-				new double[] { -5.33333, 2.66667, 0.484848 }
-			} );
+		final SearchRadius radius = new SearchRadius(
+				SEARCH_RADIUS_MULTIPLIER,
+				new double[ 3 ],
+				new double[][] {
+					new double[] { 88.5333, -33.6, -5.33333 },
+					new double[] { -33.6, 15.4424, 2.66667 },
+					new double[] { -5.33333, 2.66667, 0.484848 } }
+			);
 
 		final double[] eigenValues = radius.getEigenValues();
 
@@ -414,7 +419,7 @@ public class SearchRadiusEstimatorTest
 		final double[] estimationWindowSize = new double[ 2 ];
 		Arrays.fill( estimationWindowSize, 1e10 );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles/*, estimationWindowSize*/ );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles/*, estimationWindowSize*/, SEARCH_RADIUS_MULTIPLIER );
 		final SearchRadius radius = estimator.getSearchRadiusWithinEstimationWindow( testStageTile );
 
 		// test exhaustive search against KD-tree search
@@ -590,7 +595,7 @@ public class SearchRadiusEstimatorTest
 
 		final TileInfo testStageTile = stageTiles[ rnd.nextInt( stageTiles.length ) ];
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles/*, estimationWindowSize*/ );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles/*, estimationWindowSize*/, SEARCH_RADIUS_MULTIPLIER );
 		final SearchRadius radius = estimator.getSearchRadiusWithinEstimationWindow( testStageTile );
 
 		// test exhaustive search against KD-tree search
@@ -714,7 +719,7 @@ public class SearchRadiusEstimatorTest
 		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
 
 		final List< TilePair > overlappingTilePairs = TileOperations.findOverlappingTiles( stageTiles );
 		TilePair tilePair = null;
@@ -877,7 +882,7 @@ public class SearchRadiusEstimatorTest
 		System.out.println( "Chosen Z index = " + zCoordChosen );
 		System.out.println( "2d Stage tiles = " + stageTiles.length + ", 2d stitched tiles = " + stitchedTiles.length );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
 		System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( estimator.getEstimationWindowSize() ) ) + " --" );
 
 		final List< TilePair > overlappingTilePairs = FilterAdjacentShifts.filterAdjacentPairs( TileOperations.findOverlappingTiles( stageTiles ) );
@@ -1547,7 +1552,7 @@ public class SearchRadiusEstimatorTest
 		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/groups/betzig/betziglab/4Stephan/160727_Sample2_C3/Stitch_Igor/restitching/restitching-covariance/ch0.json" );
 		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/groups/betzig/betziglab/4Stephan/160727_Sample2_C3/Stitch_Igor/restitching/ch0-final.json" );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
 		System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( estimator.getEstimationWindowSize() ) ) + " --" );
 
 		final List< TilePair > overlappingTilePairs = FilterAdjacentShifts.filterAdjacentPairs( TileOperations.findOverlappingTiles( stageTiles ) );

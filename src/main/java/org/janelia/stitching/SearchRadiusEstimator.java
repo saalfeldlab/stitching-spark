@@ -22,14 +22,20 @@ public class SearchRadiusEstimator implements Serializable
 
 	private final Map< Integer, double[] > stageValues, stitchedValues;
 	private final double[] estimationWindowSize;
+	private final double searchRadiusMultiplier;
 
 	private final KDTree< Integer > tree;
 
-	public SearchRadiusEstimator( final Map< Integer, double[] > stageValues, final Map< Integer, double[] > stitchedValues, final double[] estimationWindowSize )
+	public SearchRadiusEstimator(
+			final Map< Integer, double[] > stageValues,
+			final Map< Integer, double[] > stitchedValues,
+			final double[] estimationWindowSize,
+			final double searchRadiusMultiplier )
 	{
 		this.stageValues = stageValues;
 		this.stitchedValues = stitchedValues;
 		this.estimationWindowSize = estimationWindowSize;
+		this.searchRadiusMultiplier = searchRadiusMultiplier;
 
 		final List< Integer > stageSubsetIndexes = new ArrayList<>();
 		final List< RealLocalizable > stageSubsetPositions = new ArrayList<>();
@@ -157,7 +163,9 @@ public class SearchRadiusEstimator implements Serializable
 			}
 		}
 
-		return new SearchRadius( meanValues, covarianceMatrix, pointIndexes, stagePosition );
+		System.out.println( "Using searchRadiusMultiplier=" + searchRadiusMultiplier + " to stretch the error ellipse with respect to standard deviation" );
+
+		return new SearchRadius( searchRadiusMultiplier, meanValues, covarianceMatrix, pointIndexes, stagePosition );
 	}
 
 	private Interval getEstimationWindow( final double[] stagePosition )
@@ -210,6 +218,6 @@ public class SearchRadiusEstimator implements Serializable
 		combinedPointIndexesSet.addAll( movingSearchRadius.getUsedPointsIndexes() );
 		final List< Integer > combinedPointIndexes = new ArrayList<>( combinedPointIndexesSet );
 
-		return new SearchRadius( combinedOffsetsMeanValues, combinedOffsetsCovarianceMatrix, combinedPointIndexes, movingSearchRadius.getStagePosition() );
+		return new SearchRadius( searchRadiusMultiplier, combinedOffsetsMeanValues, combinedOffsetsCovarianceMatrix, combinedPointIndexes, movingSearchRadius.getStagePosition() );
 	}
 }

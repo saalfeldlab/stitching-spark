@@ -14,8 +14,6 @@ import net.imglib2.RealInterval;
 
 public class SearchRadius implements PointValidator
 {
-	public static final double UNCERTAINTY_STD_TIMES = 3;	 // 3*std
-
 	private final ErrorEllipse errorEllipse;
 
 	private final double[] offsetsMeanValues;
@@ -27,19 +25,15 @@ public class SearchRadius implements PointValidator
 	private final double[] eigenValues;
 	private final double[][] eigenVectors;
 
-	public SearchRadius( final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix ) throws PipelineExecutionException
+	public SearchRadius( final double searchRadiusMultiplier, final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix ) throws PipelineExecutionException
 	{
-		this( offsetsMeanValues, offsetsCovarianceMatrix, null );
+		this( searchRadiusMultiplier, offsetsMeanValues, offsetsCovarianceMatrix, null );
 	}
-	public SearchRadius( final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix, final List< Integer > usedPointsIndexes ) throws PipelineExecutionException
+	public SearchRadius( final double searchRadiusMultiplier, final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix, final List< Integer > usedPointsIndexes ) throws PipelineExecutionException
 	{
-		this( offsetsMeanValues, offsetsCovarianceMatrix, usedPointsIndexes, null );
+		this( searchRadiusMultiplier, offsetsMeanValues, offsetsCovarianceMatrix, usedPointsIndexes, null );
 	}
-	public SearchRadius( final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix, final List< Integer > usedPointsIndexes, final double[] stagePosition ) throws PipelineExecutionException
-	{
-		this( offsetsMeanValues, offsetsCovarianceMatrix, usedPointsIndexes, stagePosition, UNCERTAINTY_STD_TIMES );
-	}
-	public SearchRadius( final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix, final List< Integer > usedPointsIndexes, final double[] stagePosition, final double stdTimes ) throws PipelineExecutionException
+	public SearchRadius( final double searchRadiusMultiplier, final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix, final List< Integer > usedPointsIndexes, final double[] stagePosition ) throws PipelineExecutionException
 	{
 		this.offsetsMeanValues = offsetsMeanValues;
 		this.offsetsCovarianceMatrix = offsetsCovarianceMatrix;
@@ -62,7 +56,7 @@ public class SearchRadius implements PointValidator
 
         final double[] ellipseRadius = new double[ eigenValues.length ];
         for ( int i = 0; i < ellipseRadius.length; ++i )
-        	ellipseRadius[ i ] = Math.sqrt( eigenValues[ i ] ) * stdTimes;
+        	ellipseRadius[ i ] = Math.sqrt( eigenValues[ i ] ) * searchRadiusMultiplier;
 
         final MatrixStore< Double > eigenVectorsStore = eigen.getV();
         eigenVectors = new double[ ( int) eigenVectorsStore.countRows() ][ ( int ) eigenVectorsStore.countColumns() ];

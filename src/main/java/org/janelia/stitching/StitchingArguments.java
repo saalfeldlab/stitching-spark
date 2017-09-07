@@ -31,6 +31,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Min neighborhood for estimating confidence intervals using offset statistics")
 	private int minStatsNeighborhood = 5;
 
+	@Option(name = "-r", aliases = { "--radius" }, required = false,
+			usage = "Search radius multiplier (error ellipse size)")
+	private double searchRadiusMultiplier = 3;
+
 	@Option(name = "-w", aliases = { "--searchwindow" }, required = false,
 			usage = "Search window size for local offset statistics in terms of number of tiles")
 	private String statsWindowSizeTiles = "3,3,3";
@@ -144,6 +148,7 @@ public class StitchingArguments implements Serializable {
 
 	public List< String > inputTileConfigurations() { return inputTileConfigurations; }
 	public int minStatsNeighborhood() { return minStatsNeighborhood; }
+	public double searchRadiusMultiplier() { return searchRadiusMultiplier; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurSigma() { return blurSigma; }
 	public boolean useAllPairs() { return allPairs; }
