@@ -68,6 +68,14 @@ public class SearchRadiusEstimatorTest
 		return new SearchRadiusEstimator( stage, stitched, estimationWindowSize, SEARCH_RADIUS_MULTIPLIER );
 	}
 
+	private double getVectorLength( final double[] vector )
+	{
+		double s = 0;
+		for ( int d = 0; d < vector.length; ++d )
+			s += vector[ d ] * vector[ d ];
+		return Math.sqrt( s );
+	}
+
 	@Test
 	public void testEigen() throws PipelineExecutionException
 	{
@@ -113,6 +121,10 @@ public class SearchRadiusEstimatorTest
 		Assert.assertArrayEquals( new double[] { 0.0298783, 0.233007, -0.972016 }, eigenVectorsSorted[ 0 ], EPSILON );
 		Assert.assertArrayEquals( new double[] { 0.366347, 0.902228, 0.227538   }, eigenVectorsSorted[ 1 ], EPSILON );
 		Assert.assertArrayEquals( new double[] { -0.929998, 0.362894, 0.0584043 }, eigenVectorsSorted[ 2 ], EPSILON );
+
+		Assert.assertEquals( 1.0, getVectorLength( eigenVectorsSorted[ 0 ] ), EPSILON );
+		Assert.assertEquals( 1.0, getVectorLength( eigenVectorsSorted[ 1 ] ), EPSILON );
+		Assert.assertEquals( 1.0, getVectorLength( eigenVectorsSorted[ 2 ] ), EPSILON );
 	}
 
 //	@Test
