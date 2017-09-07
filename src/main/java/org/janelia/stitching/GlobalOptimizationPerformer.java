@@ -24,6 +24,8 @@ import mpicbg.stitching.StitchingParameters;
 // based on the GlobalOptimization class from the original Fiji's Stitching plugin repository
 public class GlobalOptimizationPerformer
 {
+	private static final double DAMPNESS_FACTOR = 0.9;
+
 	public Map< Integer, Tile< ? > > lostTiles = null;
 
 	public int replacedTiles = 0;
@@ -221,7 +223,7 @@ public class GlobalOptimizationPerformer
 
 		final int iterations = 2000;
 		tc.preAlign();
-		tc.optimize( 10, iterations, iterations, 1.f, 1 );
+		tc.optimize( 10, iterations, iterations, DAMPNESS_FACTOR, 1 );
 		elapsed = System.nanoTime() - elapsed;
 
 		writeLog( logWriter, "Optimization round took " + elapsed/1e9 + "s" );
