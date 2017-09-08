@@ -34,7 +34,7 @@ public class TileOperations
 	 * The padded interval cannot exceed the outer space boundaries (e.g., 0 and {@code outerDimensions}-1), so in this case the remainder is applied towards the other side.
 	 * If the resulting interval has reached the outer space size (0, {@code outerDimensions}-1), the rest of the remaining padding is ignored.
 	 */
-	public static Boundaries padInterval( final Boundaries interval, final Dimensions outerDimensions, final long[] padding )
+	public static Interval padInterval( final Interval interval, final Dimensions outerDimensions, final long[] padding )
 	{
 		final long[] paddedMin = new long[ interval.numDimensions() ], paddedMax = new long[ interval.numDimensions() ];
 		for ( int d = 0; d < interval.numDimensions(); d++ )
@@ -51,7 +51,7 @@ public class TileOperations
 					paddedMin[ d ] = Math.max( paddedMin[ d ] - remainder, 0 );
 			}
 		}
-		return new Boundaries( paddedMin, paddedMax );
+		return new FinalInterval( paddedMin, paddedMax );
 	}
 
 	// TODO: remove as it duplicates Intervals.smallestContainingInterval() functionality
