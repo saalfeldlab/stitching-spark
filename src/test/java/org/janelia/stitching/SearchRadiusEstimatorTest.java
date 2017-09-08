@@ -396,8 +396,8 @@ public class SearchRadiusEstimatorTest
 		final int width = 1200;
 		final int height = 1200;
 
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" );
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z.json" );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z-final.json" );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
 		final int dx = 0, dy = 1;
@@ -598,8 +598,8 @@ public class SearchRadiusEstimatorTest
 		final int height = 600;
 		final int depth = 600;
 
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" );
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z.json" );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z-final.json" );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
 		final double[] estimationWindowSize = new double[ 3 ];
@@ -727,8 +727,8 @@ public class SearchRadiusEstimatorTest
 //	@Test
 	public void testCombinedEllipseError3D() throws PipelineExecutionException, IOException
 	{
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" );
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z.json" );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z-final.json" );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
 		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
@@ -737,7 +737,7 @@ public class SearchRadiusEstimatorTest
 		TilePair tilePair = null;
 		SearchRadius fixedTileSearchRadius = null, movingTileSearchRadius = null;
 		boolean foundNeighborhood = false;
-		final int minNeighborhood = 20;
+		final int minNeighborhood = 5;
 		while ( !foundNeighborhood )
 		{
 			tilePair = overlappingTilePairs.get( rnd.nextInt( overlappingTilePairs.size() ) );
@@ -748,7 +748,7 @@ public class SearchRadiusEstimatorTest
 		}
 		System.out.println( "Found overlapping tile pair with neighborhood: fixedTile=" + fixedTileSearchRadius.getUsedPointsIndexes().size() + " points, movingTile=" + movingTileSearchRadius.getUsedPointsIndexes().size() + " points" );
 
-		final ErrorEllipse combinedErrorEllipse = estimator.getCombinedErrorEllipse( fixedTileSearchRadius, movingTileSearchRadius );
+		final SearchRadius combinedErrorEllipse = estimator.getCombinedCovariancesSearchRadius( fixedTileSearchRadius, movingTileSearchRadius );
 
 		final Interval fixedTileSearchRadiusBoundingBox = Intervals.smallestContainingInterval( fixedTileSearchRadius.getBoundingBox() );
 		final Interval movingTileSearchRadiusBoundingBox = Intervals.smallestContainingInterval( movingTileSearchRadius.getBoundingBox() );

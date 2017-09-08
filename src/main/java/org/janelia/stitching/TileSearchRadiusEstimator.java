@@ -94,12 +94,6 @@ public class TileSearchRadiusEstimator implements Serializable
 		return estimator.getSearchRadiusTreeUsingKNearestNeighbors( getStagePosition( tile ), numNearestNeighbors );
 	}
 
-	@Deprecated
-	public ErrorEllipse getCombinedErrorEllipse( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius )
-	{
-		return estimator.getCombinedErrorEllipse( fixedSearchRadius, movingSearchRadius );
-	}
-
 	public SearchRadius getCombinedCovariancesSearchRadius( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius ) throws PipelineExecutionException
 	{
 		return estimator.getCombinedCovariancesSearchRadius( fixedSearchRadius, movingSearchRadius );
