@@ -53,6 +53,7 @@ import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.IntervalsNullable;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
@@ -640,16 +641,13 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 //						return null;
 				}
 
-				// find overlapping regions
-				final Interval[] overlaps = findOverlaps( searchRadius, tilePair );
-				// skip current pair if not enough overlap (in predicted positions)
-				if ( overlaps == null || !FilterAdjacentShifts.isAdjacent( FilterAdjacentShifts.getMaxPossibleOverlap( new ValuePair<>( tilePair.getA().getBoundaries(), tilePair.getB().getBoundaries() ) ), overlaps[ 0 ] ) )
-					return null;
+				// get ROIs in corresponding images
+				final Interval[] overlapsInOriginalTileSpace = getOverlapIntervals( tileBoxPair, searchRadius );
 
 				// prepare roi images
 				final ImagePlus[] roiImps = prepareRoiImages(
-						tilePair,
-						overlaps,
+						tileBoxPair,
+						overlapsInOriginalTileSpace,
 						broadcastedCoordsToTilesChannels.value(),
 						broadcastedFlatfieldCorrectionForChannels.value()
 					);
@@ -872,26 +870,44 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		return searchRadius;
 	}
 
-	private Interval[] findOverlaps( final SearchRadius searchRadius, final TilePair tilePair )
+	/**
+	 * Returns overlap intervals tile box pair in the coordinate space of each tile (useful for cropping)
+	 *
+	 * @param tileBoxPair
+	 * @param searchRadius
+	 * @return
+	 */
+	private Interval[] getOverlapIntervals( final TilePair tileBoxPair, final SearchRadius searchRadius )
 	{
 		final Interval[] overlaps = new Interval[ 2 ];
-		final TileInfo[] tilePairArr = tilePair.toArray();
+		final Interval[] tileBoxesInFixedSpace = new Interval[] { tileBoxPair.getA().getBoundaries(), transformMovingTileBox( tileBoxPair ) };
+		final Interval overlapInFixedSpace = IntervalsNullable.intersect( tileBoxesInFixedSpace[ 0 ], tileBoxesInFixedSpace[ 1 ] );
+		if ( overlapInFixedSpace == null )
+			throw new RuntimeException( "boxes do not overlap" );
+
+		final long[] originalMovingTileTopLeftCornerInFixedSpace = Intervals.minAsLongArray( IntervalsHelper.offset( tileBoxesInFixedSpace[ 1 ], Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) ) );
+		final Interval[] originalTilesInFixedSpace = new Interval[] {
+				new FinalInterval( tileBoxPair.getA().getOriginalTile().getSize() ),
+				IntervalsHelper.translate( new FinalInterval( tileBoxPair.getB().getOriginalTile().getSize() ), originalMovingTileTopLeftCornerInFixedSpace ) };
+
 		if ( searchRadius == null )
 		{
-			for ( int j = 0; j < tilePairArr.length; j++ )
+			for ( int j = 0; j < 2; j++ )
 			{
 				System.out.println( "Prepairing #" + (j+1) + " of a pair,  padding ROI by " + Arrays.toString( job.getArgs().padding() ) + "(padding arg)" );
-				final Boundaries overlap = TileOperations.getOverlappingRegion( tilePairArr[ j ], tilePairArr[ ( j + 1 ) % tilePairArr.length ] );
+				final Interval overlap = IntervalsHelper.offset( overlapInFixedSpace, Intervals.minAsLongArray( originalTilesInFixedSpace[ j ] ) );
 				overlaps[ j ] = TileOperations.padInterval(
 						overlap,
-						new FinalDimensions( tilePairArr[ j ].getSize() ),
+						originalTilesInFixedSpace[ j ],
 						job.getArgs().padding()
 					);
 			}
 		}
 		else
 		{
-			final Pair< Interval, Interval > overlapsAdjustedToSearchRadius = adjustOverlappingRegion( tilePair, searchRadius );
+			throw new RuntimeException( "TODO" );
+			// TODO: extend overlap to capture the search radius entirely
+			/*final Pair< Interval, Interval > overlapsAdjustedToSearchRadius = adjustOverlappingRegion( tileBoxPair, searchRadius );
 			if ( overlapsAdjustedToSearchRadius == null )
 			{
 				// TODO: pass actions to update accumulators
@@ -901,18 +917,19 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			}
 
 			overlaps[ 0 ] = overlapsAdjustedToSearchRadius.getA();
-			overlaps[ 1 ] = overlapsAdjustedToSearchRadius.getB();
+			overlaps[ 1 ] = overlapsAdjustedToSearchRadius.getB();*/
 		}
 		return overlaps;
 	}
 
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > ImagePlus[] prepareRoiImages(
-			final TilePair tilePair,
-			final Interval[] overlaps,
+			final TilePair tileBoxPair,
+			final Interval[] overlapsInOriginalTileSpace,
 			final List< Map< String, TileInfo > > coordsToTilesChannels,
 			final List< RandomAccessiblePairNullable< U, U > > flatfieldCorrectionChannels ) throws Exception
 	{
-		final double[] voxelDimensions = tilePair.getA().getPixelResolution();
+		final TilePair originalTilePair = new TilePair( tileBoxPair.getA(), tileBoxPair.getB() );
+		final double[] voxelDimensions = originalTilePair.getA().getPixelResolution();
 		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
 		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
 		final double blurSigma = job.getArgs().blurSigma();
@@ -921,23 +938,23 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			blurSigmas[ d ] = blurSigma / normalizedVoxelDimensions[ d ];
 
 		final ImagePlus[] roiImps = new ImagePlus[ 2 ];
-		final TileInfo[] tilePairArr = tilePair.toArray();
+		final TileInfo[] originalTilePairArr = originalTilePair.toArray();
 		for ( int j = 0; j < 2; j++ )
 		{
 			System.out.println( "Averaging corresponding tile images for " + job.getChannels() + " channels" );
-			final String coordsStr = Utils.getTileCoordinatesString( tilePairArr[ j ] );
+			final String coordsStr = Utils.getTileCoordinatesString( originalTilePairArr[ j ] );
 			int channelsUsed = 0;
-			final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( overlaps[ j ] ) );
+			final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( overlapsInOriginalTileSpace[ j ] ) );
 			for ( int channel = 0; channel < job.getChannels(); channel++ )
 			{
 				final TileInfo tileInfo = coordsToTilesChannels.get( channel ).get( coordsStr );
 
 				// skip if no tile exists for this channel at this particular stage position
 				if ( tileInfo == null )
-					throw new PipelineExecutionException( tilePair + ": cannot find corresponding tile for this channel" );
+					throw new PipelineExecutionException( originalTilePair + ": cannot find corresponding tile for this channel" );
 
-				if ( tilePairArr[ j ].getIndex().intValue() != tileInfo.getIndex().intValue() )
-					throw new PipelineExecutionException( tilePair + ": different indexes for the same stage position " + Utils.getTileCoordinatesString( tileInfo ) );
+				if ( originalTilePairArr[ j ].getIndex().intValue() != tileInfo.getIndex().intValue() )
+					throw new PipelineExecutionException( originalTilePair + ": different indexes for the same stage position " + Utils.getTileCoordinatesString( tileInfo ) );
 
 				final ImagePlus imp = ImageImporter.openImage( tileInfo.getFilePath() );
 				if ( imp == null )
@@ -951,7 +968,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 				// open image and crop roi
 				final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
-				final RandomAccessibleInterval< T > imgCrop = Views.interval( img, overlaps[ j ] );
+				final RandomAccessibleInterval< T > imgCrop = Views.interval( img, overlapsInOriginalTileSpace[ j ] );
 
 				// get flatfield-corrected source if the flatfields are provided
 				final RandomAccessibleInterval< FloatType > sourceInterval;
@@ -979,7 +996,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			}
 
 			if ( channelsUsed == 0 )
-				throw new PipelineExecutionException( tilePair + ": images are missing in all channels" );
+				throw new PipelineExecutionException( originalTilePair + ": images are missing in all channels" );
 
 			// average output image over number of accumulated channels
 			final FloatType denom = new FloatType( channelsUsed );
