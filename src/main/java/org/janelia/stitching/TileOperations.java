@@ -385,7 +385,7 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping cubes with a side length of {@code subregionSize}.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
-	public static ArrayList< TileInfo > divideSpaceBySize( final Boundaries space, final int subregionSize )
+	public static ArrayList< TileInfo > divideSpaceBySize( final Interval space, final int subregionSize )
 	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
 		Arrays.fill( subregionDimsArr, subregionSize );
@@ -396,7 +396,7 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping tiles with exactly {@code subregionsCountPerDim} tiles for each dimension.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
-	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int subregionsCountPerDim )
+	public static ArrayList< TileInfo > divideSpaceByCount( final Interval space, final int subregionsCountPerDim )
 	{
 		final int[] subregionsCountPerDimArr = new int[ space.numDimensions() ];
 		Arrays.fill( subregionsCountPerDimArr, subregionsCountPerDim );
@@ -407,7 +407,7 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping tiles with exactly {@code subregionsCountPerDim} tiles specified for each dimension separately.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
-	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int[] subregionsCountPerDim )
+	public static ArrayList< TileInfo > divideSpaceByCount( final Interval space, final int[] subregionsCountPerDim )
 	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
 		final int[] sizePlusOneCount = new int[ space.numDimensions() ];
