@@ -84,5 +84,19 @@ public class IntervalPaddingTest
 		Assert.assertArrayEquals( new long[] { 0,   0 }, Intervals.minAsLongArray( interval ) );
 		Assert.assertArrayEquals( new long[] { 8, 149 }, Intervals.maxAsLongArray( interval ) );
 	}
-}
 
+	@Test
+	public void testZeroPadding()
+	{
+		final Interval interval = TileOperations.padInterval(
+				new FinalInterval(
+						new long[] { 50 },
+						new long[] { 60 }
+					),
+				new FinalDimensions( new long[] { 100 } ),
+				new long[] { 0 }
+			);
+		Assert.assertArrayEquals( new long[] { 50 }, Intervals.minAsLongArray( interval ) );
+		Assert.assertArrayEquals( new long[] { 60 }, Intervals.maxAsLongArray( interval ) );
+	}
+}
