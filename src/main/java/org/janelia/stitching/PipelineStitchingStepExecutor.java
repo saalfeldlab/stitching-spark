@@ -111,6 +111,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final List< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles( 0 ) );
 		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
 
+		// split tiles into 8 boxes
+		final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
+		Arrays.fill( tileBoxesGridSize, job.getArgs().splitOverlapParts() );
+		final List< TileInfo > tileBoxes = splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
 		// Remove pairs with small overlap area if only adjacent pairs are requested
 		if ( !job.getArgs().useAllPairs() )
 		{
@@ -121,6 +125,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 
 		//final boolean pairsJustUpdated = false;
+		// find pairs of tile boxes that overlap by more than 50% when transformed into relative coordinate space of the fixed original tile
+		final List< TilePair > overlappingBoxes = findOverlappingTileBoxes( tileBoxes );
+		System.out.println( "Overlapping box pairs count = " + overlappingBoxes.size() );
 
 		final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );
 		try
@@ -136,7 +143,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				if ( !Files.exists( Paths.get( stitchedTilesFilepath ) ) )
 				{
 					System.out.println( "************** Iteration " + iteration + " **************" );
-					preparePairwiseShiftsMulti( overlappingTiles, iteration );
+					preparePairwiseShiftsMulti( overlappingBoxes, iteration );
 					optimizer.optimize( iteration );
 				}
 				else
@@ -194,6 +201,118 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			e.printStackTrace();
 			throw new PipelineExecutionException( e );
 		}
+	}
+
+	/**
+	 * Splits each tile into grid of smaller boxes, and for each box stores index mapping to the original tile.
+	 *
+	 * @param tiles
+	 * @return
+	 */
+	private List< TileInfo > splitTilesIntoBoxes( final TileInfo[] tiles, final int[] gridSize )
+	{
+		final List< TileInfo > tileSplitBoxes = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+		{
+			final Interval zeroMinTileInterval = new FinalInterval( tile.getSize() );
+			final List< TileInfo > splitTile = TileOperations.divideSpaceByCount( zeroMinTileInterval, gridSize );
+			for ( final TileInfo box : splitTile )
+			{
+				box.setOriginalTileIndex( tile.getIndex() );
+				box.setFilePath( tile.getFilePath() );
+				box.setPixelResolution( tile.getPixelResolution().clone() );
+				box.setType( tile.getType() );
+				box.setTransform( tile.getTransform().copy() );
+
+				box.setIndex( tileSplitBoxes.size() );
+				tileSplitBoxes.add( box );
+			}
+		}
+		return tileSplitBoxes;
+	}
+
+	/**
+	 * Returns list of tile box pairs that are adjacent (overlap by more than 50%) in transformed space.
+	 *
+	 * @param tileBoxes
+	 * @return
+	 */
+	private List< TilePair > findOverlappingTileBoxes( final List< TileInfo > tileBoxes )
+	{
+		final List< TilePair > overlappingBoxes = new ArrayList<>();
+		for ( int i = 0; i < tileBoxes.size(); i++ )
+		{
+			for ( int j = i + 1; j < tileBoxes.size(); j++ )
+			{
+				if ( tileBoxes.get( i ).getOriginalTileIndex().intValue() != tileBoxes.get( j ).getOriginalTileIndex().intValue() )
+				{
+					final TilePair tileBoxPair = new TilePair( tileBoxes.get( i ), tileBoxes.get( j ) );
+					final Interval fixedTileBoxInterval = tileBoxPair.getA().getBoundaries();
+					final Interval movingInFixedTileBoxInterval = transformMovingTileBox( tileBoxPair );
+					final Interval tileBoxesOverlap = IntervalsNullable.intersect( fixedTileBoxInterval, movingInFixedTileBoxInterval );
+					if ( FilterAdjacentShifts.isAdjacent( getMinTileDimensions( tileBoxPair ), tileBoxesOverlap ) )
+						overlappingBoxes.add( tileBoxPair );
+				}
+			}
+		}
+		return overlappingBoxes;
+	}
+
+	/**
+	 * Returns an interval of the moving tile box being transformed into coordinate space of the fixed tile box.
+	 * @param tileBoxPair
+	 * @return
+	 */
+	private Interval transformMovingTileBox( final TilePair tileBoxPair )
+	{
+		final TileInfo fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
+		final double[] movingMiddlePoint = getTileBoxMiddlePoint( movingTileBox );
+		final double[] movingInFixedMiddlePoint = new double[ movingMiddlePoint.length ];
+		final AffineTransform3D movingToFixed = new AffineTransform3D();
+		movingToFixed.preConcatenate( movingTileBox.getTransform() ).preConcatenate( fixedTileBox.getTransform().inverse() );
+		movingToFixed.apply( movingMiddlePoint, movingInFixedMiddlePoint );
+		final RealInterval movingInFixedTileBoxRealInterval = getTileBoxInterval( movingInFixedMiddlePoint, movingTileBox.getSize() );
+		return TileOperations.roundRealInterval( movingInFixedTileBoxRealInterval );
+	}
+
+	/**
+	 * Returns middle point in a given tile box.
+	 *
+	 * @param tileBox
+	 * @return
+	 */
+	private double[] getTileBoxMiddlePoint( final TileInfo tileBox )
+	{
+		final double[] middlePoint = new double[ tileBox.numDimensions() ];
+		for ( int d = 0; d < middlePoint.length; ++d )
+			middlePoint[ d ] = tileBox.getPosition( d ) + 0.5 * tileBox.getSize( d );
+		return middlePoint;
+	}
+
+	/**
+	 * Returns an interval of a given tile box with specified middle point.
+	 *
+	 * @param middlePoint
+	 * @param boxSize
+	 * @return
+	 */
+	private RealInterval getTileBoxInterval( final double[] middlePoint, final long[] boxSize )
+	{
+		final double[] min = new double[ middlePoint.length ], max = new double[ middlePoint.length ];
+		for ( int d = 0; d < middlePoint.length; ++d )
+		{
+			min[ d ] = middlePoint[ d ] - 0.5 * boxSize[ d ];
+			max[ d ] = middlePoint[ d ] + 0.5 * boxSize[ d ];
+		}
+		return new FinalRealInterval( min, max );
+	}
+
+	private Dimensions getMinTileDimensions( final TilePair pair )
+	{
+		final long[] minDimensions = new long[ Math.max( pair.getA().numDimensions(), pair.getB().numDimensions() ) ];
+		for ( int d = 0; d < minDimensions.length; ++d )
+			minDimensions[ d ] = Math.min( pair.getA().getSize( d ), pair.getB().getSize( d ) );
+		return new FinalDimensions( minDimensions );
 	}
 
 	private void copyFinalSolution( final int fromIteration ) throws IOException
