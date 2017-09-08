@@ -206,7 +206,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			final List< TileInfo > splitTile = TileOperations.divideSpaceByCount( zeroMinTileInterval, gridSize );
 			for ( final TileInfo box : splitTile )
 			{
-				box.setOriginalTileIndex( tile.getIndex() );
+				box.setOriginalTile( tile );
 				box.setFilePath( tile.getFilePath() );
 				box.setPixelResolution( tile.getPixelResolution().clone() );
 				box.setType( tile.getType() );
@@ -232,7 +232,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		{
 			for ( int j = i + 1; j < tileBoxes.size(); j++ )
 			{
-				if ( tileBoxes.get( i ).getOriginalTileIndex().intValue() != tileBoxes.get( j ).getOriginalTileIndex().intValue() )
+				if ( tileBoxes.get( i ).getOriginalTile().getIndex().intValue() != tileBoxes.get( j ).getOriginalTile().getIndex().intValue() )
 				{
 					final TilePair tileBoxPair = new TilePair( tileBoxes.get( i ), tileBoxes.get( j ) );
 					final Interval fixedTileBoxInterval = tileBoxPair.getA().getBoundaries();
@@ -613,7 +613,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final JavaRDD< TilePair > rdd = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() );
 		final JavaRDD< StitchingResult > pairwiseStitching = rdd.map( tileBoxPair ->
 			{
-				System.out.println( "Processing tile box pair " + tileBoxPair + " of tiles (" + tileBoxPair.getA().getOriginalTileIndex() + "," + tileBoxPair.getB().getOriginalTileIndex() + ")" );
+				System.out.println( "Processing tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
 
 				final Interval movingBoxInFixedSpace = transformMovingTileBox( tileBoxPair );
 

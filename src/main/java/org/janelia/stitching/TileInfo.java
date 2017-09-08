@@ -26,7 +26,7 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 	private long[] size;
 	private double[] pixelResolution;
 
-	private Integer originalTileIndex;
+	private TileInfo originalTile;
 
 	private transient AffineTransform3D transform;
 
@@ -129,12 +129,12 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 		this.transform = transform;
 	}
 
-	public Integer getOriginalTileIndex() {
-		return originalTileIndex;
+	public TileInfo getOriginalTile() {
+		return originalTile;
 	}
 
-	public void setOriginalTileIndex( final Integer originalTileIndex) {
-		this.originalTileIndex = originalTileIndex;
+	public void setOriginalTile( final TileInfo originalTile ) {
+		this.originalTile = originalTile;
 	}
 
 	public boolean isNull() {
@@ -165,7 +165,7 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 		newTile.setSize( size == null ? null : size.clone() );
 		newTile.setPixelResolution( pixelResolution == null ? null : pixelResolution.clone() );
 		newTile.setTransform( transform == null ? null : transform.copy() );
-		newTile.setOriginalTileIndex( originalTileIndex == null ? null : new Integer( originalTileIndex ) );
+		newTile.setOriginalTile( originalTile == null ? null : originalTile.clone() );
 		return newTile;
 	}
 
