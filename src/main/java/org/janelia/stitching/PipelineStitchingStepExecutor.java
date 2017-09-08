@@ -611,9 +611,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 
 		final JavaRDD< TilePair > rdd = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() );
-		final JavaRDD< StitchingResult > pairwiseStitching = rdd.map( tilePair ->
+		final JavaRDD< StitchingResult > pairwiseStitching = rdd.map( tileBoxPair ->
 			{
-				System.out.println( "Processing tile pair " + tilePair );
+				System.out.println( "Processing tile box pair " + tileBoxPair + " of tiles (" + tileBoxPair.getA().getOriginalTileIndex() + "," + tileBoxPair.getB().getOriginalTileIndex() + ")" );
+
+				final Interval movingBoxInFixedSpace = transformMovingTileBox( tileBoxPair );
 
 				// stats
 				final TileSearchRadiusEstimator localSearchRadiusEstimator = broadcastedSearchRadiusEstimator.value();
@@ -623,10 +625,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					// FIXME: for testing purposes
 //					searchRadius = null;
 
-					// TODO: offset values
-					final double[] offsetsMeanValues = new double[ tilePair.getA().numDimensions() ];
+					// mean offset is the top-left coordinate of the moving box in the fixed space
+					final double[] offsetsMeanValues = Intervals.minAsDoubleArray( movingBoxInFixedSpace );
 					final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
-					searchRadius = new SearchRadius( 50, offsetsMeanValues, offsetsCovarianceMatrix );
+					final double sphereRadiusPixels = job.getArgs().searchRadiusMultiplier();
+					searchRadius = new SearchRadius( sphereRadiusPixels, offsetsMeanValues, offsetsCovarianceMatrix );
 				}
 				else
 				{
@@ -901,26 +904,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			overlaps[ 1 ] = overlapsAdjustedToSearchRadius.getB();
 		}
 		return overlaps;
-	}
-
-	private Integer findShortestEdgeDimension( final Interval[] overlaps )
-	{
-		int shortestEdgeDimension = -1;
-		for ( int d = 0; d < overlaps[ 0 ].numDimensions(); ++d )
-			if ( shortestEdgeDimension == -1 || overlaps[ 0 ].dimension( d ) < overlaps[ 0 ].dimension( shortestEdgeDimension ) )
-				shortestEdgeDimension = d;
-
-		// when the overlap is 1px thick in Z, it breaks the code below because corresponding cropped images are 2D in this case, so just ignore this pair
-		// gaussian blur and phase correlation also require at least 2px in every dimension
-		if ( shortestEdgeDimension == -1 || overlaps[ 0 ].dimension( shortestEdgeDimension ) <= 1 )
-		{
-			// TODO: pass actions to update accumulators
-//			noOverlapWithinConfidenceIntervalPairsCount.add( 1 );
-			System.out.println( "overlap is <= 1px" );
-			return null;
-		}
-
-		return shortestEdgeDimension;
 	}
 
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > ImagePlus[] prepareRoiImages(
