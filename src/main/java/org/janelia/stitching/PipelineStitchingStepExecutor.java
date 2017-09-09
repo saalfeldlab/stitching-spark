@@ -879,7 +879,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 */
 	private Interval[] getOverlapIntervals( final TilePair tileBoxPair, final SearchRadius searchRadius )
 	{
-		final Interval[] overlaps = new Interval[ 2 ];
 		final Interval[] tileBoxesInFixedSpace = new Interval[] { tileBoxPair.getA().getBoundaries(), transformMovingTileBox( tileBoxPair ) };
 		final Interval overlapInFixedSpace = IntervalsNullable.intersect( tileBoxesInFixedSpace[ 0 ], tileBoxesInFixedSpace[ 1 ] );
 		if ( overlapInFixedSpace == null )
@@ -890,35 +889,32 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				new FinalInterval( tileBoxPair.getA().getOriginalTile().getSize() ),
 				IntervalsHelper.translate( new FinalInterval( tileBoxPair.getB().getOriginalTile().getSize() ), originalMovingTileTopLeftCornerInFixedSpace ) };
 
+		final Interval[] tileBoxOverlaps = new Interval[ 2 ];
+		for ( int j = 0; j < 2; j++ )
+			tileBoxOverlaps[ j ] = IntervalsHelper.offset( overlapInFixedSpace, Intervals.minAsLongArray( originalTilesInFixedSpace[ j ] ) );
+
+		final long[] padding;
 		if ( searchRadius == null )
 		{
-			for ( int j = 0; j < 2; j++ )
-			{
-				System.out.println( "Prepairing #" + (j+1) + " of a pair,  padding ROI by " + Arrays.toString( job.getArgs().padding() ) + "(padding arg)" );
-				final Interval overlap = IntervalsHelper.offset( overlapInFixedSpace, Intervals.minAsLongArray( originalTilesInFixedSpace[ j ] ) );
-				overlaps[ j ] = TileOperations.padInterval(
-						overlap,
-						originalTilesInFixedSpace[ j ],
-						job.getArgs().padding()
-					);
-			}
+			padding = job.getArgs().padding();
+			System.out.println( "Padding ROI by " + Arrays.toString( padding ) + " (padding arg)" );
 		}
 		else
 		{
-			throw new RuntimeException( "TODO" );
-			// TODO: extend overlap to capture the search radius entirely
-			/*final Pair< Interval, Interval > overlapsAdjustedToSearchRadius = adjustOverlappingRegion( tileBoxPair, searchRadius );
-			if ( overlapsAdjustedToSearchRadius == null )
-			{
-				// TODO: pass actions to update accumulators
-//				noOverlapWithinConfidenceIntervalPairsCount.add( 1 );
-				System.out.println( tilePair + ": cannot find a non-empty overlap that covers the confidence range (The confidence range says there is no overlap?)" );
-				return null;
-			}
-
-			overlaps[ 0 ] = overlapsAdjustedToSearchRadius.getA();
-			overlaps[ 1 ] = overlapsAdjustedToSearchRadius.getB();*/
+			final Interval searchRadiusBoundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
+			padding = new long[ searchRadiusBoundingBox.numDimensions() ];
+			for ( int d = 0; d < padding.length; ++d )
+				padding[ d ] = searchRadiusBoundingBox.dimension( d ) / 2;
+			System.out.println( "Padding ROI by " + Arrays.toString( padding ) + " (half-size of the error ellipse) to capture the search radius entirely" );
 		}
+
+		final Interval[] overlaps = new Interval[ 2 ];
+		for ( int j = 0; j < 2; ++j )
+			overlaps[ j ] = TileOperations.padInterval(
+					tileBoxOverlaps[ j ],
+					originalTilesInFixedSpace[ j ],
+					padding
+				);
 		return overlaps;
 	}
 
@@ -1155,52 +1151,47 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		return new StitchingResult( invalidResult, null );
 	}
 
-	public static Pair< Interval, Interval > adjustOverlappingRegion( final TilePair tilePair, final SearchRadius combinedSearchRadius )
+	/**
+	 * Expands the overlaps with respect to the given search radius. Returns expanded ROIs in the coordinate space of each tile (useful for cropping).
+	 *
+	 * @param tileBoxesInFixedSpace
+	 * @param combinedSearchRadius
+	 * @param originalTilesInFixedSpace
+	 * @return
+	 */
+	/*public static Interval[] adjustOverlappingRegion( final Interval[] tileBoxOverlaps, final SearchRadius combinedSearchRadius, final Interval[] originalTilesInFixedSpace )
 	{
-		// adjust the ROI to capture the search radius entirely
 		// try all corners of the bounding box of the search radius and use the largest overlaps
-		final Interval searchRadiusBoundingBox = Intervals.smallestContainingInterval( combinedSearchRadius.getBoundingBox() );
+		final Interval fixedTileBoxInFixedSpace = tileBoxesInFixedSpace[ 0 ], movingTileBoxInFixedSpace = tileBoxesInFixedSpace[ 1 ];
 
-		final TileInfo fixedTile = tilePair.getA();
-		final TileInfo movingTile = tilePair.getB();
+		final int[] cornersPos = new int[ searchRadiusBoundingBox.numDimensions() ];
+		final int[] cornersDimensions = new int[ searchRadiusBoundingBox.numDimensions() ];
+		Arrays.fill( cornersDimensions, 2 );
+		final IntervalIterator cornerIntervalIterator = new IntervalIterator( cornersDimensions );
 
-		final TileInfo[] pair = tilePair.toArray();
-		final Interval[] overlaps = new Interval[ 2 ];
-		for ( int j = 0; j < 2; ++j )
+		final long[] overlappingRegionMin = new long[ searchRadiusBoundingBox.numDimensions() ], overlappingRegionMax = new long[ searchRadiusBoundingBox.numDimensions() ];
+		Arrays.fill( overlappingRegionMin, Long.MAX_VALUE);
+		Arrays.fill( overlappingRegionMax, Long.MIN_VALUE);
+
+		while ( cornerIntervalIterator.hasNext() )
 		{
-			final int[] cornersPos = new int[ searchRadiusBoundingBox.numDimensions() ];
-			final int[] cornersDimensions = new int[ searchRadiusBoundingBox.numDimensions() ];
-			Arrays.fill( cornersDimensions, 2 );
-			final IntervalIterator cornerIntervalIterator = new IntervalIterator( cornersDimensions );
+			cornerIntervalIterator.fwd();
+			cornerIntervalIterator.localize( cornersPos );
 
-			final long[] overlappingRegionMin = new long[ searchRadiusBoundingBox.numDimensions() ], overlappingRegionMax = new long[ searchRadiusBoundingBox.numDimensions() ];
-			Arrays.fill( overlappingRegionMin, Long.MAX_VALUE);
-			Arrays.fill( overlappingRegionMax, Long.MIN_VALUE);
+			final long[] testMovingTileBoxPositionInFixedSpace = new long[ searchRadiusBoundingBox.numDimensions() ];
+			for ( int d = 0; d < cornersPos.length; ++d )
+				testMovingTileBoxPositionInFixedSpace[ d ] = ( cornersPos[ d ] == 0 ? searchRadiusBoundingBox.min( d ) : searchRadiusBoundingBox.max( d ) );
 
-			while ( cornerIntervalIterator.hasNext() )
+			final Interval testMovingTileBoxInFixedSpace = IntervalsHelper.translate( new FinalInterval( movingTileBoxInFixedSpace ), testMovingTileBoxPositionInFixedSpace );
+			final Interval testOverlapInFixedSpace = IntervalsNullable.intersect( fixedTileBoxInFixedSpace, testMovingTileBoxInFixedSpace );
+
+			if ( testOverlapInFixedSpace != null )
 			{
-				cornerIntervalIterator.fwd();
-				cornerIntervalIterator.localize( cornersPos );
-
-				final double[] testMovingTilePosition = new double[ searchRadiusBoundingBox.numDimensions() ];
-				for ( int d = 0; d < cornersPos.length; ++d )
-					testMovingTilePosition[ d ] = ( cornersPos[ d ] == 0 ? searchRadiusBoundingBox.min( d ) : searchRadiusBoundingBox.max( d ) );
-
-				// create fake tile to be able to find an overlapping region with the fixed tile
-				// TODO: use Intervals for this purpose
-				final TileInfo movingTilePossibility = movingTile.clone();
-				movingTilePossibility.setPosition( testMovingTilePosition );
-
-				final Map< Integer, TileInfo > tilesToCompare = new HashMap<>();
-				tilesToCompare.put( fixedTile.getIndex(), fixedTile );
-				tilesToCompare.put( movingTilePossibility.getIndex(), movingTilePossibility );
-
-				final Boundaries overlapPossibility = TileOperations.getOverlappingRegion(
-						tilesToCompare.get( pair[ j ].getIndex() ),
-						tilesToCompare.get( pair[ ( j + 1 ) % pair.length ].getIndex() ) );
-
-				if ( overlapPossibility != null )
+				final Interval[] testTileBoxesInFixedSpace = new Interval[] { tileBoxesInFixedSpace[ 0 ], };
+				for ( int j = 0; j < 2; ++j )
 				{
+					final Interval testOverlap = Intervals.translate(interval, t, d)
+
 					for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
 					{
 						overlappingRegionMin[ d ] = Math.min( overlapPossibility.min( d ), overlappingRegionMin[ d ] );
@@ -1208,32 +1199,36 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					}
 				}
 			}
+		}
 
-			for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
+		for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
+		{
+			if ( overlappingRegionMin[ d ] == Long.MAX_VALUE || overlappingRegionMax[ d ] == Long.MIN_VALUE )
 			{
-				if ( overlappingRegionMin[ d ] == Long.MAX_VALUE || overlappingRegionMax[ d ] == Long.MIN_VALUE )
-				{
-					System.out.println();
-					System.out.println( tilePair + ": cannot find a non-empty overlap that covers the confidence range (The confidence range says there is no overlap?)" );
-					System.out.println();
-					return null;
-				}
-			}
-
-			overlaps[ j ] = new Boundaries( overlappingRegionMin, overlappingRegionMax );
-
-			for ( int d = 0; d < overlaps[ j ].numDimensions(); ++d )
-			{
-				if ( overlaps[ j ].dimension( d ) <= 1 )
-				{
-					System.out.println();
-					System.out.println( tilePair + ": overlap is 1px in dimension " + d + ", skip this pair" );
-					System.out.println();
-					return null;
-				}
+				System.out.println();
+				System.out.println( tilePair + ": cannot find a non-empty overlap that covers the confidence range (The confidence range says there is no overlap?)" );
+				System.out.println();
+				return null;
 			}
 		}
 
-		return new ValuePair<>( overlaps[ 0 ], overlaps[ 1 ] );
-	}
+		overlaps[ j ] = new Boundaries( overlappingRegionMin, overlappingRegionMax );
+
+		for ( int d = 0; d < overlaps[ j ].numDimensions(); ++d )
+		{
+			if ( overlaps[ j ].dimension( d ) <= 1 )
+			{
+				System.out.println();
+				System.out.println( tilePair + ": overlap is 1px in dimension " + d + ", skip this pair" );
+				System.out.println();
+				return null;
+			}
+		}
+
+		final Interval maxOverlapInFixedSpace = new FinalInterval( overlappingRegionMin, overlappingRegionMax );
+
+		final Interval[] maxOverlaps = new Interval[ 2 ];
+		// TODO: fill
+		return maxOverlaps;
+	}*/
 }
