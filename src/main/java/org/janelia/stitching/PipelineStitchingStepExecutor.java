@@ -73,12 +73,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	{
 		private static final long serialVersionUID = -533794988639089455L;
 
-		public final SerializablePairWiseStitchingResult[] shifts;
+		public final SerializablePairWiseStitchingResult shift;
 		public final double[] searchRadiusLength;
 
-		public StitchingResult( final SerializablePairWiseStitchingResult[] shifts, final double[] searchRadiusLength )
+		public StitchingResult( final SerializablePairWiseStitchingResult shift, final double[] searchRadiusLength )
 		{
-			this.shifts = shifts;
+			this.shift = shift;
 			this.searchRadiusLength = searchRadiusLength;
 		}
 	}
@@ -132,7 +132,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				if ( !Files.exists( Paths.get( stitchedTilesFilepath ) ) )
 				{
 					System.out.println( "************** Iteration " + iteration + " **************" );
-					preparePairwiseShiftsMulti( overlappingBoxes, iteration );
+					preparePairwiseShifts( overlappingBoxes, iteration );
 					optimizer.optimize( iteration );
 				}
 				else
@@ -170,8 +170,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 					final String usedPairsFilepath = Paths.get( basePath, iterationDirname, "pairwise-used.json" ).toString();
 					final String previousUsedPairsFilepath = Paths.get( basePath, previousIterationDirname, "pairwise-used.json" ).toString();
-					final List< SerializablePairWiseStitchingResult[] > usedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( usedPairsFilepath );
-					final List< SerializablePairWiseStitchingResult[] > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( previousUsedPairsFilepath );
+					final List< SerializablePairWiseStitchingResult > usedPairs = TileInfoJSONProvider.loadPairwiseShifts( usedPairsFilepath );
+					final List< SerializablePairWiseStitchingResult > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShifts( previousUsedPairsFilepath );
 
 					if ( stitchedTiles.length < previousStitchedTiles.length || ( stitchedTiles.length == previousStitchedTiles.length && usedPairs.size() <= previousUsedPairs.size() ) )
 					{
@@ -354,7 +354,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 * @throws PipelineExecutionException
 	 * @throws IOException
 	 */
-	private void preparePairwiseShiftsMulti( final List< TilePair > overlappingTiles, final int iteration ) throws PipelineExecutionException, IOException
+	private void preparePairwiseShifts( final List< TilePair > overlappingTiles, final int iteration ) throws PipelineExecutionException, IOException
 	{
 		final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString();
 		final String iterationDirname = "iter" + iteration;
@@ -363,10 +363,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		Paths.get( basePath, iterationDirname ).toFile().mkdirs();
 		final String pairwisePath = Paths.get( basePath, iterationDirname, pairwiseFilename ).toString();
 
-		final List< SerializablePairWiseStitchingResult[] > pairwiseShiftsMulti = tryLoadPrecomputedShifts( basePath, iteration );
-		final List< TilePair > pendingOverlappingTiles = removePrecomputedPendingPairs( pairwisePath, overlappingTiles, pairwiseShiftsMulti );
+		final List< SerializablePairWiseStitchingResult > pairwiseShifts = tryLoadPrecomputedShifts( basePath, iteration );
+		final List< TilePair > pendingOverlappingTiles = removePrecomputedPendingPairs( pairwisePath, overlappingTiles, pairwiseShifts );
 
-		if ( pendingOverlappingTiles.isEmpty() && !pairwiseShiftsMulti.isEmpty() )
+		if ( pendingOverlappingTiles.isEmpty() && !pairwiseShifts.isEmpty() )
 		{
 			// If we're able to load precalculated pairwise results, save some time skipping this step and jump to the global optimization
 			System.out.println( "Successfully loaded all pairwise results from disk!" );
@@ -387,13 +387,13 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 			// merge results with preloaded pairwise shifts
 			for ( final StitchingResult result : stitchingResults )
-				pairwiseShiftsMulti.add( result.shifts );
+				pairwiseShifts.add( result.shift );
 
 //			saveSearchRadiusStats( stitchingResults, Paths.get( basePath, iterationDirname, "searchRadiusStats.txt" ).toString() );
 
 			try {
 				System.out.println( "Stitched all tiles pairwise, store this information on disk.." );
-				TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, pairwisePath );
+				TileInfoJSONProvider.savePairwiseShifts( pairwiseShifts, pairwisePath );
 			} catch ( final IOException e ) {
 				e.printStackTrace();
 			}
@@ -409,7 +409,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 * @throws PipelineExecutionException
 	 * @throws IOException
 	 */
-	private List< SerializablePairWiseStitchingResult[] > tryLoadPrecomputedShifts(
+	private List< SerializablePairWiseStitchingResult > tryLoadPrecomputedShifts(
 			final String basePath,
 			final int iteration ) throws PipelineExecutionException, IOException
 	{
@@ -440,11 +440,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 
 		// Try to load precalculated shifts for some pairs of tiles
-		final List< SerializablePairWiseStitchingResult[] > pairwiseShiftsMulti = new ArrayList<>();
+		final List< SerializablePairWiseStitchingResult > pairwiseShifts = new ArrayList<>();
 		try
 		{
 			System.out.println( "try to load pairwise results from disk" );
-			pairwiseShiftsMulti.addAll( TileInfoJSONProvider.loadPairwiseShiftsMulti( pairwisePath ) );
+			pairwiseShifts.addAll( TileInfoJSONProvider.loadPairwiseShifts( pairwisePath ) );
 		}
 		catch ( final FileNotFoundException e )
 		{
@@ -460,7 +460,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		{
 			e.printStackTrace();
 		}
-		return pairwiseShiftsMulti;
+		return pairwiseShifts;
 	}
 
 	/**
@@ -468,7 +468,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 *
 	 * @param pairwisePath
 	 * @param overlappingTiles
-	 * @param pairwiseShiftsMulti
+	 * @param pairwiseShifts
 	 * @return
 	 * @throws PipelineExecutionException
 	 * @throws IOException
@@ -476,7 +476,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	private List< TilePair > removePrecomputedPendingPairs(
 			final String pairwisePath,
 			final List< TilePair > overlappingTiles,
-			final List< SerializablePairWiseStitchingResult[] > pairwiseShiftsMulti ) throws PipelineExecutionException, IOException
+			final List< SerializablePairWiseStitchingResult > pairwiseShifts ) throws PipelineExecutionException, IOException
 	{
 		// remove redundant pairs (that are not contained in the given overlappingTiles list)
 		final Map< Integer, Set< Integer > > overlappingPairsCache = new TreeMap<>();
@@ -489,16 +489,15 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			overlappingPairsCache.get( ind1 ).add( ind2 );
 		}
 		int pairsRemoved = 0;
-		for ( final Iterator< SerializablePairWiseStitchingResult[] > it = pairwiseShiftsMulti.iterator(); it.hasNext(); )
+		for ( final Iterator< SerializablePairWiseStitchingResult > it = pairwiseShifts.iterator(); it.hasNext(); )
 		{
-			final SerializablePairWiseStitchingResult[] resultMulti = it.next();
+			final SerializablePairWiseStitchingResult result = it.next();
 			final Integer[] indexes = new Integer[ 2 ];
-			for ( final SerializablePairWiseStitchingResult result : resultMulti )
-				for ( int i = 0; i < 2; ++i )
-					if ( indexes[ i ] == null )
-						indexes[ i ] = result.getTilePair().toArray()[ i ].getIndex();
-					else if ( !indexes[ i ].equals( result.getTilePair().toArray()[ i ].getIndex() ) )
-						throw new PipelineExecutionException( "Tile indexes do not match" );
+			for ( int i = 0; i < 2; ++i )
+				if ( indexes[ i ] == null )
+					indexes[ i ] = result.getTilePair().toArray()[ i ].getIndex();
+				else if ( !indexes[ i ].equals( result.getTilePair().toArray()[ i ].getIndex() ) )
+					throw new PipelineExecutionException( "Tile indexes do not match" );
 
 			final int ind1 = Math.min( indexes[ 0 ], indexes[ 1 ] );
 			final int ind2 = Math.max( indexes[ 0 ], indexes[ 1 ] );
@@ -512,22 +511,21 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		// resave the new file if something has changed
 		if ( pairsRemoved != 0 )
-			TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, pairwisePath );
+			TileInfoJSONProvider.savePairwiseShifts( pairwiseShifts, pairwisePath );
 
 		// find only pairs that need to be computed
 		final List< TilePair > pendingOverlappingTiles = new ArrayList<>();
 
 		// Create a cache to efficiently lookup the existing pairs of tiles loaded from disk
 		final Map< Integer, Set< Integer > > cache = new TreeMap<>();
-		for ( final SerializablePairWiseStitchingResult[] resultMulti : pairwiseShiftsMulti )
+		for ( final SerializablePairWiseStitchingResult result : pairwiseShifts )
 		{
 			final Integer[] indexes = new Integer[ 2 ];
-			for ( final SerializablePairWiseStitchingResult result : resultMulti )
-				for ( int i = 0; i < 2; ++i )
-					if ( indexes[ i ] == null )
-						indexes[ i ] = result.getTilePair().toArray()[ i ].getIndex();
-					else if ( !indexes[ i ].equals( result.getTilePair().toArray()[ i ].getIndex() ) )
-						throw new PipelineExecutionException( "Tile indexes do not match" );
+			for ( int i = 0; i < 2; ++i )
+				if ( indexes[ i ] == null )
+					indexes[ i ] = result.getTilePair().toArray()[ i ].getIndex();
+				else if ( !indexes[ i ].equals( result.getTilePair().toArray()[ i ].getIndex() ) )
+					throw new PipelineExecutionException( "Tile indexes do not match" );
 
 			final int firstIndex =  Math.min( indexes[ 0 ], indexes[ 1 ] ), secondIndex  =  Math.max( indexes[ 0 ], indexes[ 1 ] );
 			if ( !cache.containsKey( firstIndex ) )
@@ -569,17 +567,17 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 								+ " "
 								+ "%.2f %.2f %.2f",
 
-								result.shifts[ 0 ].getTilePair().getA().getIndex(),
-								Utils.getTileCoordinates( result.shifts[ 0 ].getTilePair().getA() )[ 0 ],
-								Utils.getTileCoordinates( result.shifts[ 0 ].getTilePair().getA() )[ 1 ],
-								Utils.getTileCoordinates( result.shifts[ 0 ].getTilePair().getA() )[ 2 ],
-								Utils.getTileTimestamp( result.shifts[ 0 ].getTilePair().getA() ),
+								result.shift.getTilePair().getA().getIndex(),
+								Utils.getTileCoordinates( result.shift.getTilePair().getA() )[ 0 ],
+								Utils.getTileCoordinates( result.shift.getTilePair().getA() )[ 1 ],
+								Utils.getTileCoordinates( result.shift.getTilePair().getA() )[ 2 ],
+								Utils.getTileTimestamp( result.shift.getTilePair().getA() ),
 
-								result.shifts[ 0 ].getTilePair().getB().getIndex(),
-								Utils.getTileCoordinates( result.shifts[ 0 ].getTilePair().getB() )[ 0 ],
-								Utils.getTileCoordinates( result.shifts[ 0 ].getTilePair().getB() )[ 1 ],
-								Utils.getTileCoordinates( result.shifts[ 0 ].getTilePair().getB() )[ 2 ],
-								Utils.getTileTimestamp( result.shifts[ 0 ].getTilePair().getB() ),
+								result.shift.getTilePair().getB().getIndex(),
+								Utils.getTileCoordinates( result.shift.getTilePair().getB() )[ 0 ],
+								Utils.getTileCoordinates( result.shift.getTilePair().getB() )[ 1 ],
+								Utils.getTileCoordinates( result.shift.getTilePair().getB() )[ 2 ],
+								Utils.getTileTimestamp( result.shift.getTilePair().getB() ),
 
 								result.searchRadiusLength != null ? result.searchRadiusLength[ 0 ] : -1,
 								result.searchRadiusLength != null ? result.searchRadiusLength[ 1 ] : -1,
@@ -707,7 +705,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		int validPairs = 0;
 		for ( final StitchingResult result : stitchingResults )
 		{
-			final SerializablePairWiseStitchingResult shift = result.shifts[ 0 ];
+			final SerializablePairWiseStitchingResult shift = result.shift;
 			if ( shift.getIsValidOverlap() )
 				++validPairs;
 		}
