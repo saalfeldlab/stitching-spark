@@ -29,6 +29,8 @@ import org.janelia.util.ImageImporter;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
+import mpicbg.imglib.custom.OffsetConverter;
+import mpicbg.imglib.custom.PointValidator;
 import mpicbg.models.Point;
 import net.imglib2.Cursor;
 import net.imglib2.Dimensions;
@@ -46,7 +48,6 @@ import net.imglib2.exception.ImgLibException;
 import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
-import net.imglib2.iterator.IntervalIterator;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
@@ -55,8 +56,6 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.IntervalsNullable;
-import net.imglib2.util.Pair;
-import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
@@ -80,20 +79,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		{
 			this.shift = shift;
 			this.searchRadiusLength = searchRadiusLength;
-		}
-	}
-
-	private static class Offsets
-	{
-		public final long[][] roiToTileOffset;
-		public final double[] globalOffset;
-		public final double[] stageOffset;
-
-		public Offsets( final long[][] roiToTileOffset, final double[] globalOffset, final double[] stageOffset )
-		{
-			this.roiToTileOffset = roiToTileOffset;
-			this.globalOffset = globalOffset;
-			this.stageOffset = stageOffset;
 		}
 	}
 
@@ -650,50 +635,30 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 						broadcastedFlatfieldCorrectionForChannels.value()
 					);
 
+				// get required offsets for roi parts
+				final OffsetConverter offsetConverter = getOffsetConverter( tileBoxPair, overlapsInOriginalTileSpace );
 
-				// FIXME: remove
-				final List< TileInfo > roiParts = null;
+				final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( tileBoxPair, roiImps, searchRadius, offsetConverter );
 
-
-				// get results for roi parts
-				final SerializablePairWiseStitchingResult[] roiPartsResults = new SerializablePairWiseStitchingResult[ roiParts.size() ];
-				for ( int roiPartIndex = 0; roiPartIndex < roiParts.size(); ++roiPartIndex )
+				final StitchingResult stitchingResult;
+				if ( pairwiseResult == null )
 				{
-					final Boundaries roiPart = roiParts.get( roiPartIndex ).getBoundaries();
+					// no matches were found
+					stitchingResult = new StitchingResult( null, searchRadius != null ? searchRadius.getEllipseRadius() : null );
+				}
+				else
+				{
+					// put other properties and store the result
 
-					// get images for current roi part
-					final ImagePlus[] roiPartImps = roiParts.size() == 1 ? roiImps : getRoiPartImages( roiImps, roiPart );
-
-					// compute variance within this ROI for both images
-					final double variance = computeVariance( roiPartImps );
-
-					// get required offsets for roi parts
-					final Offsets offsets = getOffsets( tilePair, overlaps, roiPart );
-
-					final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( searchRadius, roiPartImps, roiPart, offsets );
-					if ( pairwiseResult == null )
-					{
-						// no matches were found, replace with invalid result
-						roiPartsResults[ roiPartIndex ] = getInvalidStitchingResult( tilePair, job.getArgs().splitOverlapParts() ).shifts[ roiPartIndex ];
-					}
-					else
-					{
-						// put other properties and store the result
-						pairwiseResult.setTilePair( tilePair );
-						pairwiseResult.setVariance( variance );
-						roiPartsResults[ roiPartIndex ] = pairwiseResult;
-					}
-
-					for ( int i = 0; i < 2; i++ )
-						roiPartImps[ i ].close();
+					stitchingResult = new StitchingResult( pairwiseResult, searchRadius != null ? searchRadius.getEllipseRadius() : null );
 				}
 
 				for ( int i = 0; i < 2; i++ )
 					roiImps[ i ].close();
 
-				System.out.println( "Stitched tile pair " + tilePair + ", got " + roiPartsResults.length + " matches" );
+				System.out.println( "Stitched tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
 
-				return new StitchingResult( roiPartsResults, searchRadius.getEllipseRadius() );
+				return stitchingResult;
 			} );
 
 		final List< StitchingResult > stitchingResults = pairwiseStitching.collect();
@@ -887,9 +852,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				new FinalInterval( tileBoxPair.getA().getOriginalTile().getSize() ),
 				IntervalsHelper.translate( new FinalInterval( tileBoxPair.getB().getOriginalTile().getSize() ), originalMovingTileTopLeftCornerInFixedSpace ) };
 
-		final Interval[] tileBoxOverlaps = new Interval[ 2 ];
+		final Interval[] overlapsInOriginalTileSpace = new Interval[ 2 ];
 		for ( int j = 0; j < 2; j++ )
-			tileBoxOverlaps[ j ] = IntervalsHelper.offset( overlapInFixedSpace, Intervals.minAsLongArray( originalTilesInFixedSpace[ j ] ) );
+			overlapsInOriginalTileSpace[ j ] = IntervalsHelper.offset( overlapInFixedSpace, Intervals.minAsLongArray( originalTilesInFixedSpace[ j ] ) );
 
 		final long[] padding;
 		if ( searchRadius == null )
@@ -906,14 +871,14 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			System.out.println( "Padding ROI by " + Arrays.toString( padding ) + " (half-size of the error ellipse) to capture the search radius entirely" );
 		}
 
-		final Interval[] overlaps = new Interval[ 2 ];
+		final Interval[] paddedOverlapsInOriginalTileSpace = new Interval[ 2 ];
 		for ( int j = 0; j < 2; ++j )
-			overlaps[ j ] = TileOperations.padInterval(
-					tileBoxOverlaps[ j ],
+			paddedOverlapsInOriginalTileSpace[ j ] = TileOperations.padInterval(
+					overlapsInOriginalTileSpace[ j ],
 					originalTilesInFixedSpace[ j ],
 					padding
 				);
-		return overlaps;
+		return paddedOverlapsInOriginalTileSpace;
 	}
 
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > ImagePlus[] prepareRoiImages(
@@ -1064,43 +1029,49 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		return variance;
 	}
 
-	private Offsets getOffsets( final TilePair tilePair, final Interval[] overlaps, final Interval roiPart )
+	/**
+	 * Returns helper object containing required offset values for both tiles to be able to compute the shift vector.
+	 *
+	 * @param tileBoxPair
+	 * @param overlapsInOriginalTileSpace
+	 * @return
+	 */
+	private OffsetConverter getOffsetConverter( final TilePair tileBoxPair, final Interval[] overlapsInOriginalTileSpace )
 	{
-		// for transforming 'overlap offset' to 'tile offset'
+		final int dim = tileBoxPair.getA().numDimensions();
+
+		// for transforming 'roi offset' to 'tile offset' (here tiles stand for boxes, and rois stand for extended overlapping intervals between the boxes)
 		final long[][] roiToTileOffset = new long[ 2 ][];
 		for ( int i = 0; i < 2; ++i )
 		{
-			roiToTileOffset[ i ] = new long[ roiPart.numDimensions() ];
+			roiToTileOffset[ i ] = new long[ dim ];
 			for ( int d = 0; d < roiToTileOffset[ i ].length; ++d )
-				roiToTileOffset[ i ][ d ] = (i==0?1:-1) * ( overlaps[ i ].min( d ) + roiPart.min( d ) );
+				roiToTileOffset[ i ][ d ] = overlapsInOriginalTileSpace[ i ].min( d ) - tileBoxPair.toArray()[ i ].getBoundaries().min( d );
 		}
 
-		// for transforming 'tile offset' to 'global offset'
-		final double[] globalOffset = new double[ roiPart.numDimensions() ];
-		for ( int d = 0; d < globalOffset.length; ++d )
-			globalOffset[ d ] = tilePair.getA().getPosition( d );
+		// for transforming 'tile offset' to 'global offset' (here tile offset is in the coordinate space of the fixed box, and global space is of the original fixed tile)
+		final double[] globalOffset = Intervals.minAsDoubleArray( tileBoxPair.getA().getBoundaries() );
 
-		// 'stage offset' of the moving tile relative to the fixed tile
-		final double[] stageOffset = new double[ roiPart.numDimensions() ];
-		for ( int d = 0; d < stageOffset.length; ++d )
-			stageOffset[ d ] = tilePair.getB().getPosition( d ) - tilePair.getA().getPosition( d );
-
-		return new Offsets( roiToTileOffset, globalOffset, stageOffset );
+		return new FinalOffsetConverter( roiToTileOffset, globalOffset );
 	}
 
 	private SerializablePairWiseStitchingResult stitchPairwise(
-			final SearchRadius searchRadius,
-			final ImagePlus[] roiPartImps,
-			final Interval roiPart,
-			final Offsets offsets )
+			final TilePair tileBoxPair,
+			final ImagePlus[] roiImps,
+			final PointValidator pointValidator,
+			final OffsetConverter offsetConverter )
 	{
+		// compute variance within this ROI for both images
+		final double variance = computeVariance( roiImps );
+
 		final int timepoint = 1;
+		final int numPeaks = 1;
 		PairwiseStitchingPerformer.setThreads( 1 );
 
 		final SerializablePairWiseStitchingResult[] results = PairwiseStitchingPerformer.stitchPairwise(
-				roiPartImps[0], roiPartImps[1], null, null, null, null, timepoint, timepoint, job.getParams(), 1,
-				searchRadius, offsets.roiToTileOffset, offsets.globalOffset, offsets.stageOffset,
-				null, null // TODO: remove these unused parameters
+				roiImps[ 0 ], roiImps[ 1 ], timepoint, timepoint,
+				job.getParams(), numPeaks,
+				pointValidator, offsetConverter
 			);
 
 		final SerializablePairWiseStitchingResult result = results[ 0 ];
@@ -1115,9 +1086,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		else
 		{
 			// compute new tile offset
-			for ( int i = 0; i < 2; ++i )
-				for ( int d = 0; d < roiPart.numDimensions(); ++d )
-					result.getOffset()[ d ] += offsets.roiToTileOffset[ i ][ d ];
+			final double[] tileOffset = offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( result.getOffset() ) );
+			for ( int d = 0; d < tileOffset.length; ++d )
+				result.getOffset()[ d ] = ( float ) tileOffset[ d ];
 
 			// create point pair using center point of each ROI
 			final Point fixedTilePoint, movingTilePoint;
@@ -1134,19 +1105,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			final PointPair pointPair = new PointPair( fixedTilePoint, movingTilePoint );
 
 			result.setPointPair( pointPair );
+			result.setTilePair( tileBoxPair );
+			result.setVariance( variance );
+
 			return result;
 		}
-	}
-
-	private StitchingResult getInvalidStitchingResult( final TilePair tilePair, final int splitOverlapParts )
-	{
-		final SerializablePairWiseStitchingResult[] invalidResult = new SerializablePairWiseStitchingResult[ splitOverlapParts ];
-		for ( int i = 0; i < invalidResult.length; ++i )
-		{
-			invalidResult[ i ] = new SerializablePairWiseStitchingResult( tilePair, null, 0 );
-			invalidResult[ i ].setIsValidOverlap( false );
-		}
-		return new StitchingResult( invalidResult, null );
 	}
 
 	/**
