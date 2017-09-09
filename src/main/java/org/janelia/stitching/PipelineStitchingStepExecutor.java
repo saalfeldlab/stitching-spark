@@ -233,7 +233,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	}
 
 	/**
-	 * Returns an interval of the moving tile box being transformed into coordinate space of the fixed tile box.
+	 * Returns an interval of the moving tile box being transformed into coordinate space of the fixed original tile.
 	 * @param tileBoxPair
 	 * @return
 	 */
