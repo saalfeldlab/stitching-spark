@@ -1091,18 +1091,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				result.getOffset()[ d ] = ( float ) tileOffset[ d ];
 
 			// create point pair using center point of each ROI
-			final Point fixedTilePoint, movingTilePoint;
-			{
-				final double[] fixedTileRoiCenter = new double[ result.getNumDimensions() ], movingTileRoiCenter = new double[ result.getNumDimensions() ];
-				for ( int d = 0; d < fixedTileRoiCenter.length; ++d )
-				{
-					fixedTileRoiCenter[ d ] = offsets.roiToTileOffset[ 0 ][ d ] + roiPart.dimension( d ) / 2;
-					movingTileRoiCenter[ d ] = fixedTileRoiCenter[ d ] - result.getOffset( d );
-				}
-				fixedTilePoint = new Point( fixedTileRoiCenter );
-				movingTilePoint = new Point( movingTileRoiCenter );
-			}
-			final PointPair pointPair = new PointPair( fixedTilePoint, movingTilePoint );
+			final Point fixedTileBoxCenterPoint = new Point( getTileBoxMiddlePoint( tileBoxPair.getA() ) );
+			final double[] movingTileBoxCenter = new double[ result.getNumDimensions() ];
+			for ( int d = 0; d < movingTileBoxCenter.length; ++d )
+				movingTileBoxCenter[ d ] = fixedTileBoxCenterPoint.getL()[ d ] - result.getOffset( d );
+			final Point movingTileBoxCenterPoint = new Point( movingTileBoxCenter );
+			final PointPair pointPair = new PointPair( fixedTileBoxCenterPoint, movingTileBoxCenterPoint );
 
 			result.setPointPair( pointPair );
 			result.setTilePair( tileBoxPair );
