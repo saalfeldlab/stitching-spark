@@ -193,11 +193,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			for ( final TileInfo box : splitTile )
 			{
 				box.setOriginalTile( tile );
-				box.setFilePath( tile.getFilePath() );
-				box.setPixelResolution( tile.getPixelResolution().clone() );
-				box.setType( tile.getType() );
-				box.setTransform( tile.getTransform().copy() );
-
 				box.setIndex( tileSplitBoxes.size() );
 				tileSplitBoxes.add( box );
 			}
@@ -243,7 +238,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final double[] movingMiddlePoint = getTileBoxMiddlePoint( movingTileBox );
 		final double[] movingInFixedMiddlePoint = new double[ movingMiddlePoint.length ];
 		final AffineTransform3D movingToFixed = new AffineTransform3D();
-		movingToFixed.preConcatenate( movingTileBox.getTransform() ).preConcatenate( fixedTileBox.getTransform().inverse() );
+		movingToFixed.preConcatenate( movingTileBox.getOriginalTile().getTransform() ).preConcatenate( fixedTileBox.getOriginalTile().getTransform().inverse() );
 		movingToFixed.apply( movingMiddlePoint, movingInFixedMiddlePoint );
 		final RealInterval movingInFixedTileBoxRealInterval = getTileBoxInterval( movingInFixedMiddlePoint, movingTileBox.getSize() );
 		return TileOperations.roundRealInterval( movingInFixedTileBoxRealInterval );
