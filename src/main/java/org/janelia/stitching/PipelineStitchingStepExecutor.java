@@ -882,7 +882,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			final List< Map< String, TileInfo > > coordsToTilesChannels,
 			final List< RandomAccessiblePairNullable< U, U > > flatfieldCorrectionChannels ) throws Exception
 	{
-		final TilePair originalTilePair = new TilePair( tileBoxPair.getA(), tileBoxPair.getB() );
+		final TilePair originalTilePair = new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() );
 		final double[] voxelDimensions = originalTilePair.getA().getPixelResolution();
 		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
 		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
