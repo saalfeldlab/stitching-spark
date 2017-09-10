@@ -60,7 +60,7 @@ public class SplitTileOperations
 					final Interval fixedTileBoxInterval = tileBoxPair.getA().getBoundaries();
 					final Interval movingInFixedTileBoxInterval = transformMovingTileBox( tileBoxPair );
 					final Interval tileBoxesOverlap = IntervalsNullable.intersect( fixedTileBoxInterval, movingInFixedTileBoxInterval );
-					if ( FilterAdjacentShifts.isAdjacent( getMinTileDimensions( tileBoxPair ), tileBoxesOverlap ) )
+					if ( tileBoxesOverlap != null && FilterAdjacentShifts.isAdjacent( getMinTileDimensions( tileBoxPair ), tileBoxesOverlap ) )
 						overlappingBoxes.add( tileBoxPair );
 				}
 			}
