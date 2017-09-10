@@ -16,6 +16,7 @@ import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 
@@ -324,6 +325,24 @@ public class TileOperations
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
 				tile.setPosition( d, tile.getPosition( d ) + offset[ d ] );
+	}
+
+	/**
+	 * Returns tile transform, that is its affine transform if not null, or translation transform to the position of the tile otherwise.
+	 */
+	public static AffineTransform3D getTileTransform( final TileInfo tile )
+	{
+		final AffineTransform3D ret;
+		if ( tile.getTransform() != null )
+		{
+			ret = tile.getTransform();
+		}
+		else
+		{
+			ret = new AffineTransform3D();
+			ret.setTranslation( tile.getPosition() );
+		}
+		return ret;
 	}
 
 	/**

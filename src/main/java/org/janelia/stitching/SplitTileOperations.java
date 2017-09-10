@@ -78,8 +78,10 @@ public class SplitTileOperations
 		final TileInfo fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
 		final double[] movingMiddlePoint = getTileBoxMiddlePoint( movingTileBox );
 		final double[] movingInFixedMiddlePoint = new double[ movingMiddlePoint.length ];
+		final AffineTransform3D fixedTileTransform = TileOperations.getTileTransform( fixedTileBox.getOriginalTile() );
+		final AffineTransform3D movingTileTransform = TileOperations.getTileTransform( movingTileBox.getOriginalTile() );
 		final AffineTransform3D movingToFixed = new AffineTransform3D();
-		movingToFixed.preConcatenate( movingTileBox.getOriginalTile().getTransform() ).preConcatenate( fixedTileBox.getOriginalTile().getTransform().inverse() );
+		movingToFixed.preConcatenate( movingTileTransform ).preConcatenate( fixedTileTransform.inverse() );
 		movingToFixed.apply( movingMiddlePoint, movingInFixedMiddlePoint );
 		final RealInterval movingInFixedTileBoxRealInterval = getTileBoxInterval( movingInFixedMiddlePoint, movingTileBox.getSize() );
 		return TileOperations.roundRealInterval( movingInFixedTileBoxRealInterval );
