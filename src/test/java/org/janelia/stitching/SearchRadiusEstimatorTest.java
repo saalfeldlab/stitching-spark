@@ -1340,22 +1340,8 @@ public class SearchRadiusEstimatorTest
 					}
 				}
 
-				// Find adjusted overlapping regionsfor both tiles
-				final Pair< Interval, Interval > adjustedOverlaps = PipelineStitchingStepExecutor.adjustOverlappingRegion( tilePair, combinedSearchRadius );
-				// test it against simpler implementation
-				{
-					final Pair< Interval, Interval > adjustedOverlapsTest = adjustOverlapRegion_test( tilePair, new ValuePair<>( fixedTileSearchRadius, movingTileSearchRadius ), combinedSearchRadius );
-//					Assert.assertArrayEquals( Intervals.minAsLongArray( adjustedOverlaps.getA() ), Intervals.minAsLongArray( adjustedOverlapsTest.getA() ) );
-//					Assert.assertArrayEquals( Intervals.maxAsLongArray( adjustedOverlaps.getA() ), Intervals.maxAsLongArray( adjustedOverlapsTest.getA() ) );
-//					Assert.assertArrayEquals( Intervals.minAsLongArray( adjustedOverlaps.getB() ), Intervals.minAsLongArray( adjustedOverlapsTest.getB() ) );
-//					Assert.assertArrayEquals( Intervals.maxAsLongArray( adjustedOverlaps.getB() ), Intervals.maxAsLongArray( adjustedOverlapsTest.getB() ) );
-					System.out.println();
-					System.out.println( "Method1 min1=" + Arrays.toString( Intervals.minAsLongArray( adjustedOverlaps.getA() ) ) + ", Method2 min1=" + Arrays.toString( Intervals.minAsLongArray( adjustedOverlapsTest.getA() ) ) );
-					System.out.println( "Method1 max1=" + Arrays.toString( Intervals.maxAsLongArray( adjustedOverlaps.getA() ) ) + ", Method2 max1=" + Arrays.toString( Intervals.maxAsLongArray( adjustedOverlapsTest.getA() ) ) );
-					System.out.println( "Method1 min2=" + Arrays.toString( Intervals.minAsLongArray( adjustedOverlaps.getB() ) ) + ", Method2 min2=" + Arrays.toString( Intervals.minAsLongArray( adjustedOverlapsTest.getB() ) ) );
-					System.out.println( "Method1 max2=" + Arrays.toString( Intervals.maxAsLongArray( adjustedOverlaps.getB() ) ) + ", Method2 max2=" + Arrays.toString( Intervals.maxAsLongArray( adjustedOverlapsTest.getB() ) ) );
-					System.out.println();
-				}
+				// Find adjusted overlapping region for both tiles
+				final Pair< Interval, Interval > adjustedOverlaps = adjustOverlapRegion( tilePair, new ValuePair<>( fixedTileSearchRadius, movingTileSearchRadius ), combinedSearchRadius );
 
 				// Draw adjusted overlap contour for the fixed tile
 				{
@@ -2125,7 +2111,7 @@ public class SearchRadiusEstimatorTest
 	}
 
 
-	private Pair< Interval, Interval > adjustOverlapRegion_test( final TilePair tilePair, final Pair< SearchRadius, SearchRadius > searchRadiusesPair, final SearchRadius combinedSearchRadius )
+	private Pair< Interval, Interval > adjustOverlapRegion( final TilePair tilePair, final Pair< SearchRadius, SearchRadius > searchRadiusesPair, final SearchRadius combinedSearchRadius )
 	{
 		// adjust the ROI to capture the search radius entirely
 		// try all corners of the bounding box of the search radius and use the largest overlaps
