@@ -7,11 +7,14 @@ import java.util.TreeMap;
 import org.junit.Assert;
 import org.junit.Test;
 
+import net.imglib2.Interval;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 
 public class SplitTileOperationsTest
 {
+	private static final double EPSILON = 1e-9;
+
 	@Test
 	public void splitTilesIntoBoxesTest()
 	{
@@ -53,6 +56,42 @@ public class SplitTileOperationsTest
 		// check that reference to the original tile is preserved
 		for ( final TileInfo tileBox : tileBoxes )
 			Assert.assertEquals( tile, tileBox.getOriginalTile() );
+	}
+
+	@Test
+	public void transformedMovingTileBoxMiddlePointTest()
+	{
+		final TileInfo[] tiles = new TileInfo[ 2 ];
+		tiles[ 0 ] = new TileInfo( 3 );
+		tiles[ 0 ].setIndex( 0 );
+		tiles[ 0 ].setPosition( new double[] { 100, 200, 300 } );
+		tiles[ 0 ].setSize( new long[] { 50, 60, 70 } );
+
+		tiles[ 1 ] = new TileInfo( 3 );
+		tiles[ 1 ].setIndex( 1 );
+		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
+		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
+
+		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
+		Assert.assertEquals( 16, tileBoxes.size() );
+
+		// test left-top-front tile box of the second tile
+		{
+			final TileInfo movingTileBox = tileBoxes.get( 8 );
+			Assert.assertArrayEquals( new double[] { 22.5, 20, 17.5 }, SplitTileOperations.getTileBoxMiddlePoint( movingTileBox ), EPSILON );
+			final Interval transformedSecondTileBox = SplitTileOperations.transformMovingTileBox( TileOperations.getTileTransform( tiles[ 0 ] ), movingTileBox );
+			Assert.assertArrayEquals( new long[] { 40, 10, -10 }, Intervals.minAsLongArray( transformedSecondTileBox ) );
+			Assert.assertArrayEquals( movingTileBox.getSize(), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
+		}
+
+		// test right-bottom-back tile box of the second tile
+		{
+			final TileInfo movingTileBox = tileBoxes.get( 15 );
+			Assert.assertArrayEquals( new double[] { 67.5, 60, 52.5 }, SplitTileOperations.getTileBoxMiddlePoint( movingTileBox ), EPSILON );
+			final Interval transformedSecondTileBox = SplitTileOperations.transformMovingTileBox( TileOperations.getTileTransform( tiles[ 0 ] ), movingTileBox );
+			Assert.assertArrayEquals( new long[] { 85, 50, 25 }, Intervals.minAsLongArray( transformedSecondTileBox ) );
+			Assert.assertArrayEquals( movingTileBox.getSize(), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
+		}
 	}
 
 	@Test

@@ -76,9 +76,21 @@ public class SplitTileOperations
 	public static Interval transformMovingTileBox( final TilePair tileBoxPair )
 	{
 		final TileInfo fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
+		final AffineTransform3D fixedTileTransform = TileOperations.getTileTransform( fixedTileBox.getOriginalTile() );
+		return transformMovingTileBox( fixedTileTransform, movingTileBox );
+	}
+
+	/**
+	 * Returns an interval of the moving tile box being transformed into coordinate space of the fixed original tile.
+	 *
+	 * @param fixedTileTransform
+	 * @param movingTileBox
+	 * @return
+	 */
+	public static Interval transformMovingTileBox( final AffineTransform3D fixedTileTransform, final TileInfo movingTileBox )
+	{
 		final double[] movingMiddlePoint = getTileBoxMiddlePoint( movingTileBox );
 		final double[] movingInFixedMiddlePoint = new double[ movingMiddlePoint.length ];
-		final AffineTransform3D fixedTileTransform = TileOperations.getTileTransform( fixedTileBox.getOriginalTile() );
 		final AffineTransform3D movingTileTransform = TileOperations.getTileTransform( movingTileBox.getOriginalTile() );
 		final AffineTransform3D movingToFixed = new AffineTransform3D();
 		movingToFixed.preConcatenate( movingTileTransform ).preConcatenate( fixedTileTransform.inverse() );
