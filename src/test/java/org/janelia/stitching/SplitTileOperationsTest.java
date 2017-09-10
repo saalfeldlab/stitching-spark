@@ -24,9 +24,9 @@ public class SplitTileOperationsTest
 
 		// test mins
 		final Map< Long, long[] > actualMins = new TreeMap<>();
-		for ( int i = 0; i < 8; ++i )
+		for ( final TileInfo tileBox : tileBoxes )
 		{
-			final long[] mins = Intervals.minAsLongArray( tileBoxes.get( i ).getBoundaries() );
+			final long[] mins = Intervals.minAsLongArray( tileBox.getBoundaries() );
 			final long key = IntervalIndexer.positionToIndex( mins, tile.getSize() );
 			Assert.assertNull( actualMins.put( key, mins ) );
 		}
@@ -47,11 +47,67 @@ public class SplitTileOperationsTest
 		}
 
 		// test dimensions
-		for ( int i = 0; i < 8; ++i )
-			Assert.assertArrayEquals( new long[] { 25, 30, 35 }, Intervals.dimensionsAsLongArray( tileBoxes.get( i ).getBoundaries() ) );
+		for ( final TileInfo tileBox : tileBoxes )
+			Assert.assertArrayEquals( new long[] { 25, 30, 35 }, Intervals.dimensionsAsLongArray( tileBox.getBoundaries() ) );
 
 		// check that reference to the original tile is preserved
 		for ( final TileInfo tileBox : tileBoxes )
 			Assert.assertEquals( tile, tileBox.getOriginalTile() );
+	}
+
+	@Test
+	public void testOverlappingTileBoxes()
+	{
+		final TileInfo[] tiles = new TileInfo[ 2 ];
+		tiles[ 0 ] = new TileInfo( 3 );
+		tiles[ 0 ].setIndex( 0 );
+		tiles[ 0 ].setPosition( new double[] { 100, 200, 300 } );
+		tiles[ 0 ].setSize( new long[] { 50, 60, 70 } );
+
+		tiles[ 1 ] = new TileInfo( 3 );
+		tiles[ 1 ].setIndex( 1 );
+		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
+		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
+
+		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
+		Assert.assertEquals( 16, tileBoxes.size() );
+
+		final List< TilePair > overlappingTileBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes );
+		Assert.assertEquals( 4, overlappingTileBoxes.size() );
+
+		// test references to the original tiles and their order
+		for ( final TilePair tileBoxPair : overlappingTileBoxes )
+		{
+			Assert.assertEquals( tiles[ 0 ], tileBoxPair.getA().getOriginalTile() );
+			Assert.assertEquals( tiles[ 1 ], tileBoxPair.getB().getOriginalTile() );
+		}
+
+		// test mins of overlapping pairs
+		final Map< Long, TilePair > actualMinsFirstTile = new TreeMap<>();
+		for ( final TilePair tileBoxPair : overlappingTileBoxes )
+		{
+			final long[] minsFirstTile = Intervals.minAsLongArray( tileBoxPair.getA().getBoundaries() );
+			final long key = IntervalIndexer.positionToIndex( minsFirstTile, tiles[ 0 ].getSize() );
+			Assert.assertNull( actualMinsFirstTile.put( key, tileBoxPair ) );
+		}
+		final long[][] expectedMinsFirstTileArray = new long[][] {
+			new long[] { 25, 0, 0 },
+			new long[] { 25, 30, 0 },
+			new long[] { 25, 0, 35 },
+			new long[] { 25, 30, 35 },
+		};
+		final long[][] expectedMinsSecondTileArray = new long[][] {
+			new long[] { 0, 0, 0 },
+			new long[] { 0, 0, 0 },
+			new long[] { 0, 0, 35 },
+			new long[] { 0, 0, 35 },
+		};
+		for ( int i = 0; i < overlappingTileBoxes.size(); ++i )
+		{
+			final long key = IntervalIndexer.positionToIndex( expectedMinsFirstTileArray[ i ], tiles[ 0 ].getSize() );
+			final TilePair tileBoxPair = actualMinsFirstTile.get( key );
+			Assert.assertArrayEquals( expectedMinsFirstTileArray[ i ], Intervals.minAsLongArray( tileBoxPair.getA().getBoundaries() ) );
+			Assert.assertArrayEquals( expectedMinsSecondTileArray[ i ], Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) );
+		}
 	}
 }
