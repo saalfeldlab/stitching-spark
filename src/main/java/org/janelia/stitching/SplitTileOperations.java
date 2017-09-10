@@ -165,7 +165,7 @@ public class SplitTileOperations
 		for ( int d = 0; d < middlePoint.length; ++d )
 		{
 			min[ d ] = middlePoint[ d ] - 0.5 * boxSize[ d ];
-			max[ d ] = middlePoint[ d ] + 0.5 * boxSize[ d ];
+			max[ d ] = middlePoint[ d ] + 0.5 * boxSize[ d ] - 1;
 		}
 		return new FinalRealInterval( min, max );
 	}
