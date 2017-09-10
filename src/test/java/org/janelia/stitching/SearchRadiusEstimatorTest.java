@@ -77,6 +77,45 @@ public class SearchRadiusEstimatorTest
 	}
 
 	@Test
+	public void testSphereSearchRadius() throws PipelineExecutionException
+	{
+		final double[] offsetsMeanValues = new double[] { 100, 200, 300 };
+		final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
+		final double sphereRadiusPixels = 50;
+		final SearchRadius searchRadius = new SearchRadius( sphereRadiusPixels, offsetsMeanValues, offsetsCovarianceMatrix );
+
+		Assert.assertArrayEquals( new double[] { 100, 200, 300 }, searchRadius.getEllipseCenter(), EPSILON );
+		Assert.assertArrayEquals( new double[] { sphereRadiusPixels, sphereRadiusPixels, sphereRadiusPixels }, searchRadius.getEllipseRadius(), EPSILON );
+
+		Assert.assertArrayEquals( new double[] { 1, 1, 1 }, searchRadius.getEigenValues(), EPSILON );
+
+		Assert.assertArrayEquals( new double[] { 1, 0, 0 }, searchRadius.getEigenVectors()[ 0 ], EPSILON );
+		Assert.assertArrayEquals( new double[] { 0, 1, 0 }, searchRadius.getEigenVectors()[ 1 ], EPSILON );
+		Assert.assertArrayEquals( new double[] { 0, 0, 1 }, searchRadius.getEigenVectors()[ 2 ], EPSILON );
+
+		final Interval boundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
+		Assert.assertArrayEquals( new long[] {  50, 150, 250 }, Intervals.minAsLongArray( boundingBox ) );
+		Assert.assertArrayEquals( new long[] { 150, 250, 350 }, Intervals.maxAsLongArray( boundingBox ) );
+
+		Assert.assertTrue( searchRadius.testPoint( 100, 200, 300 ) );
+		Assert.assertTrue( searchRadius.testPoint( 51, 200, 300 ) );
+		Assert.assertTrue( searchRadius.testPoint( 149, 200, 300 ) );
+		Assert.assertTrue( searchRadius.testPoint( 100, 151, 300 ) );
+		Assert.assertTrue( searchRadius.testPoint( 100, 249, 300 ) );
+		Assert.assertTrue( searchRadius.testPoint( 100, 200, 251 ) );
+		Assert.assertTrue( searchRadius.testPoint( 100, 200, 349 ) );
+
+		Assert.assertFalse( searchRadius.testPoint( 50, 150, 250 ) );
+		Assert.assertFalse( searchRadius.testPoint( 50, 150, 350 ) );
+		Assert.assertFalse( searchRadius.testPoint( 50, 250, 250 ) );
+		Assert.assertFalse( searchRadius.testPoint( 50, 250, 350 ) );
+		Assert.assertFalse( searchRadius.testPoint( 150, 150, 250 ) );
+		Assert.assertFalse( searchRadius.testPoint( 150, 150, 350 ) );
+		Assert.assertFalse( searchRadius.testPoint( 150, 250, 250 ) );
+		Assert.assertFalse( searchRadius.testPoint( 150, 250, 350 ) );
+	}
+
+	@Test
 	public void testEigen() throws PipelineExecutionException
 	{
 		final SearchRadius radius = new SearchRadius(
