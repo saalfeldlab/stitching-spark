@@ -23,7 +23,6 @@ import org.apache.spark.util.LongAccumulator;
 import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.stitching.StitchingArguments.RestitchingMode;
-import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.Conversions;
 import org.janelia.util.ImageImporter;
 import org.janelia.util.concurrent.SameThreadExecutorService;
@@ -33,14 +32,9 @@ import mpicbg.imglib.custom.OffsetConverter;
 import mpicbg.imglib.custom.PointValidator;
 import mpicbg.models.Point;
 import net.imglib2.Cursor;
-import net.imglib2.Dimensions;
-import net.imglib2.FinalDimensions;
-import net.imglib2.FinalInterval;
-import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.RealInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealFloatConverter;
@@ -48,14 +42,11 @@ import net.imglib2.exception.ImgLibException;
 import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
-import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
-import net.imglib2.util.IntervalsHelper;
-import net.imglib2.util.IntervalsNullable;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
@@ -97,10 +88,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		// split tiles into 8 boxes
 		final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
 		Arrays.fill( tileBoxesGridSize, job.getArgs().splitOverlapParts() );
-		final List< TileInfo > tileBoxes = splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
+		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
 
 		// find pairs of tile boxes that overlap by more than 50% when transformed into relative coordinate space of the fixed original tile
-		final List< TilePair > overlappingBoxes = findOverlappingTileBoxes( tileBoxes );
+		final List< TilePair > overlappingBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes );
 		System.out.println( "Overlapping box pairs count = " + overlappingBoxes.size() );
 
 		final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );
@@ -175,113 +166,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			e.printStackTrace();
 			throw new PipelineExecutionException( e );
 		}
-	}
-
-	/**
-	 * Splits each tile into grid of smaller boxes, and for each box stores index mapping to the original tile.
-	 *
-	 * @param tiles
-	 * @return
-	 */
-	private List< TileInfo > splitTilesIntoBoxes( final TileInfo[] tiles, final int[] gridSize )
-	{
-		final List< TileInfo > tileSplitBoxes = new ArrayList<>();
-		for ( final TileInfo tile : tiles )
-		{
-			final Interval zeroMinTileInterval = new FinalInterval( tile.getSize() );
-			final List< TileInfo > splitTile = TileOperations.divideSpaceByCount( zeroMinTileInterval, gridSize );
-			for ( final TileInfo box : splitTile )
-			{
-				box.setOriginalTile( tile );
-				box.setIndex( tileSplitBoxes.size() );
-				tileSplitBoxes.add( box );
-			}
-		}
-		return tileSplitBoxes;
-	}
-
-	/**
-	 * Returns list of tile box pairs that are adjacent (overlap by more than 50%) in transformed space.
-	 *
-	 * @param tileBoxes
-	 * @return
-	 */
-	private List< TilePair > findOverlappingTileBoxes( final List< TileInfo > tileBoxes )
-	{
-		final List< TilePair > overlappingBoxes = new ArrayList<>();
-		for ( int i = 0; i < tileBoxes.size(); i++ )
-		{
-			for ( int j = i + 1; j < tileBoxes.size(); j++ )
-			{
-				if ( tileBoxes.get( i ).getOriginalTile().getIndex().intValue() != tileBoxes.get( j ).getOriginalTile().getIndex().intValue() )
-				{
-					final TilePair tileBoxPair = new TilePair( tileBoxes.get( i ), tileBoxes.get( j ) );
-					final Interval fixedTileBoxInterval = tileBoxPair.getA().getBoundaries();
-					final Interval movingInFixedTileBoxInterval = transformMovingTileBox( tileBoxPair );
-					final Interval tileBoxesOverlap = IntervalsNullable.intersect( fixedTileBoxInterval, movingInFixedTileBoxInterval );
-					if ( FilterAdjacentShifts.isAdjacent( getMinTileDimensions( tileBoxPair ), tileBoxesOverlap ) )
-						overlappingBoxes.add( tileBoxPair );
-				}
-			}
-		}
-		return overlappingBoxes;
-	}
-
-	/**
-	 * Returns an interval of the moving tile box being transformed into coordinate space of the fixed original tile.
-	 * @param tileBoxPair
-	 * @return
-	 */
-	private Interval transformMovingTileBox( final TilePair tileBoxPair )
-	{
-		final TileInfo fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
-		final double[] movingMiddlePoint = getTileBoxMiddlePoint( movingTileBox );
-		final double[] movingInFixedMiddlePoint = new double[ movingMiddlePoint.length ];
-		final AffineTransform3D movingToFixed = new AffineTransform3D();
-		movingToFixed.preConcatenate( movingTileBox.getOriginalTile().getTransform() ).preConcatenate( fixedTileBox.getOriginalTile().getTransform().inverse() );
-		movingToFixed.apply( movingMiddlePoint, movingInFixedMiddlePoint );
-		final RealInterval movingInFixedTileBoxRealInterval = getTileBoxInterval( movingInFixedMiddlePoint, movingTileBox.getSize() );
-		return TileOperations.roundRealInterval( movingInFixedTileBoxRealInterval );
-	}
-
-	/**
-	 * Returns middle point in a given tile box.
-	 *
-	 * @param tileBox
-	 * @return
-	 */
-	private double[] getTileBoxMiddlePoint( final TileInfo tileBox )
-	{
-		final double[] middlePoint = new double[ tileBox.numDimensions() ];
-		for ( int d = 0; d < middlePoint.length; ++d )
-			middlePoint[ d ] = tileBox.getPosition( d ) + 0.5 * tileBox.getSize( d );
-		return middlePoint;
-	}
-
-	/**
-	 * Returns an interval of a given tile box with specified middle point.
-	 *
-	 * @param middlePoint
-	 * @param boxSize
-	 * @return
-	 */
-	private RealInterval getTileBoxInterval( final double[] middlePoint, final long[] boxSize )
-	{
-		final double[] min = new double[ middlePoint.length ], max = new double[ middlePoint.length ];
-		for ( int d = 0; d < middlePoint.length; ++d )
-		{
-			min[ d ] = middlePoint[ d ] - 0.5 * boxSize[ d ];
-			max[ d ] = middlePoint[ d ] + 0.5 * boxSize[ d ];
-		}
-		return new FinalRealInterval( min, max );
-	}
-
-	private Dimensions getMinTileDimensions( final TilePair pair )
-	{
-		final long[] minDimensions = new long[ Math.max( pair.getA().numDimensions(), pair.getB().numDimensions() ) ];
-		for ( int d = 0; d < minDimensions.length; ++d )
-			minDimensions[ d ] = Math.min( pair.getA().getSize( d ), pair.getB().getSize( d ) );
-		return new FinalDimensions( minDimensions );
 	}
 
 	/**
@@ -594,7 +478,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			{
 				System.out.println( "Processing tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
 
-				final Interval movingBoxInFixedSpace = transformMovingTileBox( tileBoxPair );
+				final Interval movingBoxInFixedSpace = SplitTileOperations.transformMovingTileBox( tileBoxPair );
 
 				// stats
 				final TileSearchRadiusEstimator localSearchRadiusEstimator = broadcastedSearchRadiusEstimator.value();
@@ -620,7 +504,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				}
 
 				// get ROIs in corresponding images
-				final Interval[] overlapsInOriginalTileSpace = getOverlapIntervals( tileBoxPair, searchRadius );
+				final Interval[] overlapsInOriginalTileSpace = SplitTileOperations.getOverlapIntervals( tileBoxPair, searchRadius );
 
 				// prepare roi images
 				final ImagePlus[] roiImps = prepareRoiImages(
@@ -826,54 +710,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				Arrays.toString( Intervals.dimensionsAsIntArray( boundingBox ) ) ) );
 
 		return searchRadius;
-	}
-
-	/**
-	 * Returns overlap intervals tile box pair in the coordinate space of each tile (useful for cropping)
-	 *
-	 * @param tileBoxPair
-	 * @param searchRadius
-	 * @return
-	 */
-	private Interval[] getOverlapIntervals( final TilePair tileBoxPair, final SearchRadius searchRadius )
-	{
-		final Interval[] tileBoxesInFixedSpace = new Interval[] { tileBoxPair.getA().getBoundaries(), transformMovingTileBox( tileBoxPair ) };
-		final Interval overlapInFixedSpace = IntervalsNullable.intersect( tileBoxesInFixedSpace[ 0 ], tileBoxesInFixedSpace[ 1 ] );
-		if ( overlapInFixedSpace == null )
-			throw new RuntimeException( "boxes do not overlap" );
-
-		final long[] originalMovingTileTopLeftCornerInFixedSpace = Intervals.minAsLongArray( IntervalsHelper.offset( tileBoxesInFixedSpace[ 1 ], Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) ) );
-		final Interval[] originalTilesInFixedSpace = new Interval[] {
-				new FinalInterval( tileBoxPair.getA().getOriginalTile().getSize() ),
-				IntervalsHelper.translate( new FinalInterval( tileBoxPair.getB().getOriginalTile().getSize() ), originalMovingTileTopLeftCornerInFixedSpace ) };
-
-		final Interval[] overlapsInOriginalTileSpace = new Interval[ 2 ];
-		for ( int j = 0; j < 2; j++ )
-			overlapsInOriginalTileSpace[ j ] = IntervalsHelper.offset( overlapInFixedSpace, Intervals.minAsLongArray( originalTilesInFixedSpace[ j ] ) );
-
-		final long[] padding;
-		if ( searchRadius == null )
-		{
-			padding = job.getArgs().padding();
-			System.out.println( "Padding ROI by " + Arrays.toString( padding ) + " (padding arg)" );
-		}
-		else
-		{
-			final Interval searchRadiusBoundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
-			padding = new long[ searchRadiusBoundingBox.numDimensions() ];
-			for ( int d = 0; d < padding.length; ++d )
-				padding[ d ] = searchRadiusBoundingBox.dimension( d ) / 2;
-			System.out.println( "Padding ROI by " + Arrays.toString( padding ) + " (half-size of the error ellipse) to capture the search radius entirely" );
-		}
-
-		final Interval[] paddedOverlapsInOriginalTileSpace = new Interval[ 2 ];
-		for ( int j = 0; j < 2; ++j )
-			paddedOverlapsInOriginalTileSpace[ j ] = TileOperations.padInterval(
-					overlapsInOriginalTileSpace[ j ],
-					originalTilesInFixedSpace[ j ],
-					padding
-				);
-		return paddedOverlapsInOriginalTileSpace;
 	}
 
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > ImagePlus[] prepareRoiImages(
@@ -1086,7 +922,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				result.getOffset()[ d ] = ( float ) tileOffset[ d ];
 
 			// create point pair using center point of each ROI
-			final Point fixedTileBoxCenterPoint = new Point( getTileBoxMiddlePoint( tileBoxPair.getA() ) );
+			final Point fixedTileBoxCenterPoint = new Point( SplitTileOperations.getTileBoxMiddlePoint( tileBoxPair.getA() ) );
 			final double[] movingTileBoxCenter = new double[ result.getNumDimensions() ];
 			for ( int d = 0; d < movingTileBoxCenter.length; ++d )
 				movingTileBoxCenter[ d ] = fixedTileBoxCenterPoint.getL()[ d ] - result.getOffset( d );
