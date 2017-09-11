@@ -555,7 +555,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		for ( final StitchingResult result : stitchingResults )
 		{
 			final SerializablePairWiseStitchingResult shift = result.shift;
-			if ( shift.getIsValidOverlap() )
+			if ( shift != null && shift.getIsValidOverlap() )
 				++validPairs;
 		}
 		System.out.println();
