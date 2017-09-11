@@ -218,5 +218,10 @@ public class SplitTileOperationsTest
 		Assert.assertArrayEquals( new double[] { 34, 5, 4 }, offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( roiOffset ) ), EPSILON ); // test that double implementation does the same
 		final double[] movingTileBoxPosition = offsetConverter.tileOffsetToGlobalPosition( originalTileOffset );
 		Assert.assertArrayEquals( new double[] { 34, 5, 4 }, movingTileBoxPosition, EPSILON );
+
+		// test point match
+		final PointPair pointPair = SplitTileOperations.createPointPair( tileBoxPair, Conversions.toDoubleArray( originalTileOffset ) );
+		Assert.assertArrayEquals( new double[] { 37.5, 15, 17.5 }, pointPair.getA().getL(), EPSILON );
+		Assert.assertArrayEquals( new double[] { 3.5, 10, 13.5 }, pointPair.getB().getL(), EPSILON );
 	}
 }
