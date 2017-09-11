@@ -228,6 +228,13 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		Paths.get( basePath, iterationDirname ).toFile().mkdirs();
 		final String pairwisePath = Paths.get( basePath, iterationDirname, pairwiseFilename ).toString();
 
+		// FIXME: replaces checking contents of the pairwise file by simply checking its existence
+		if ( Files.exists( Paths.get( pairwisePath ) ) )
+		{
+			System.out.println( "pairwise.json file exists, don't recompute shifts" );
+			return;
+		}
+
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = tryLoadPrecomputedShifts( basePath, iteration );
 		final List< TilePair > pendingOverlappingTiles = removePrecomputedPendingPairs( pairwisePath, overlappingTiles, pairwiseShifts );
 
