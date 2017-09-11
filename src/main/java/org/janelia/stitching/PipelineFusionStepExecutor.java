@@ -1,6 +1,7 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -27,7 +28,6 @@ import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
-import net.imglib2.SerializableFinalInterval;
 import net.imglib2.img.cell.CellGrid;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.type.NativeType;
@@ -94,9 +94,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		baseExportPath = Paths.get( baseExportPath, "export.n5" ).toString();
 
-		// FIXME: allow it for now
-//		if ( Files.exists( Paths.get( baseExportPath ) ) )
-//			throw new PipelineExecutionException( "Export path already exists: " + baseExportPath );
+		if ( Files.exists( Paths.get( baseExportPath ) ) )
+			throw new PipelineExecutionException( "Export path already exists: " + baseExportPath );
 
 		final N5Writer n5 = N5.openFSWriter( baseExportPath );
 		if ( !overlapsPathSuffix.isEmpty() )
@@ -180,7 +179,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 		final Map< Integer, Interval > transformedTilesBoundingBoxes = new HashMap<>();
 		for ( final TileInfo tile : tiles )
-			transformedTilesBoundingBoxes.put( tile.getIndex(), new SerializableFinalInterval( TileOperations.estimateBoundingBox( tile ) ) );
+			transformedTilesBoundingBoxes.put( tile.getIndex(), new FinalInterval( TileOperations.estimateBoundingBox( tile ) ) );
 
 		final Interval fullBoundingBox = TileOperations.getCollectionBoundaries( transformedTilesBoundingBoxes.values() );
 		final long[] offset = Intervals.minAsLongArray( fullBoundingBox );
@@ -223,16 +222,19 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		System.out.println( "Grid offset = " + Arrays.toString( gridOffset ) );
 		System.out.println();
 
+		final Broadcast< Map< Integer, TileInfo > > broadcastedTilesMap = sparkContext.broadcast( tilesMap );
+		final Broadcast< Map< Integer, Interval > > broadcastedTransformedTilesBoundingBoxes = sparkContext.broadcast( transformedTilesBoundingBoxes );
+
 		sparkContext.parallelize( biggerCells, Math.min( biggerCells.size(), MAX_PARTITIONS ) ).foreach( biggerCell ->
 			{
 				final Boundaries biggerCellBox = biggerCell.getBoundaries();
-				final Set< Integer > tileIndexesWithinCell = TileOperations.findTilesWithinSubregion( transformedTilesBoundingBoxes, biggerCellBox );
+				final Set< Integer > tileIndexesWithinCell = TileOperations.findTilesWithinSubregion( broadcastedTransformedTilesBoundingBoxes.value(), biggerCellBox );
 				if ( tileIndexesWithinCell.isEmpty() )
 					return;
 
 				final List< TileInfo > tilesWithinCell = new ArrayList<>();
 				for ( final Integer tileIndex : tileIndexesWithinCell )
-					tilesWithinCell.add( tilesMap.get( tileIndex ) );
+					tilesWithinCell.add( broadcastedTilesMap.value().get( tileIndex ) );
 
 				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
 						args.blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
@@ -258,6 +260,9 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridOffsetPosition );
 			}
 		);
+
+		broadcastedTilesMap.destroy();
+		broadcastedTransformedTilesBoundingBoxes.destroy();
 	}
 
 	private DataType getN5DataType( final ImageType imageType )
