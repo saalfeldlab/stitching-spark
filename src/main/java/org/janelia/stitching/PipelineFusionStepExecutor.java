@@ -73,11 +73,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 	// TODO: add comprehensive support for 4D images where multiple channels are encoded as the 4th dimension
 	private void runImpl() throws PipelineExecutionException, IOException
 	{
-		final String overlapsPathSuffix = job.getArgs().exportOverlaps() ? "-overlaps" : "";
+		final String overlapsPathSuffix = args.exportOverlaps() ? "-overlaps" : "";
 
 		// determine the best location for storing the export files (near the tile configurations by default)
 		String baseExportPath = null;
-		for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+		for ( final String inputFilePath : args.inputTileConfigurations() )
 		{
 			final String inputFolderPath = Paths.get( inputFilePath ).getParent().toString();
 			if ( baseExportPath == null )
@@ -114,7 +114,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final int channel = ch;
 			System.out.println( "Processing channel #" + channel );
 
-			final String absoluteChannelPath = job.getArgs().inputTileConfigurations().get( channel );
+			final String absoluteChannelPath = args.inputTileConfigurations().get( channel );
 			final String absoluteChannelPathNoExt = absoluteChannelPath.lastIndexOf( '.' ) != -1 ? absoluteChannelPath.substring( 0, absoluteChannelPath.lastIndexOf( '.' ) ) : absoluteChannelPath;
 
 			final String channelGroupPath = overlapsPathSuffix + "/c" + channel;
@@ -131,7 +131,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
 					absoluteChannelPathNoExt + "-flatfield/S.tif",
 					absoluteChannelPathNoExt + "-flatfield/T.tif",
-					job.getDimensionality()
+					numDimensions
 				);
 			if ( flatfieldCorrection != null )
 				System.out.println( "[Flatfield correction] Broadcasting flatfield correction images" );
@@ -167,9 +167,9 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 	private int[] getOptimalCellSize()
 	{
-		final int[] cellSize = new int[ job.getDimensionality() ];
-		for ( int d = 0; d < job.getDimensionality(); d++ )
-			cellSize[ d ] = ( int ) Math.round( job.getArgs().fusionCellSize() / normalizedVoxelDimensions[ d ] );
+		final int[] cellSize = new int[ numDimensions ];
+		for ( int d = 0; d < cellSize.length; d++ )
+			cellSize[ d ] = ( int ) Math.round( args.fusionCellSize() / normalizedVoxelDimensions[ d ] );
 		return cellSize;
 	}
 
@@ -184,7 +184,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		final Interval fullBoundingBox = TileOperations.getCollectionBoundaries( transformedTilesBoundingBoxes.values() );
 		final long[] offset = Intervals.minAsLongArray( fullBoundingBox );
-		final Interval roi = ( job.getArgs().minCoord() != null && job.getArgs().maxCoord() != null ) ? new FinalInterval( job.getArgs().minCoord(), job.getArgs().maxCoord() ) : null;
+		final Interval roi = ( args.minCoord() != null && args.maxCoord() != null ) ? new FinalInterval( args.minCoord(), args.maxCoord() ) : null;
 		final Interval boundingBox = roi != null ? IntervalsHelper.translate( roi, offset ) : fullBoundingBox;
 		final long[] dimensions = Intervals.dimensionsAsLongArray( boundingBox );
 
@@ -235,7 +235,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 					tilesWithinCell.add( tilesMap.get( tileIndex ) );
 
 				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
-						job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
+						args.blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
 						tilesWithinCell,
 						biggerCellBox,
 						broadcastedFlatfieldCorrection.value(),
@@ -277,7 +277,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 	private Map< Integer, Set< Integer > > getPairwiseConnectionsMap( final String channelPath ) throws PipelineExecutionException
 	{
-		if ( !job.getArgs().exportOverlaps() )
+		if ( !args.exportOverlaps() )
 			return null;
 
 		final Map< Integer, Set< Integer > > pairwiseConnectionsMap = new HashMap<>();

@@ -1,10 +1,5 @@
 package org.janelia.stitching;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
-
 import net.imglib2.RealInterval;
 import net.imglib2.RealPositionable;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -15,9 +10,7 @@ import net.imglib2.realtransform.AffineTransform3D;
  * @author Igor Pisarev
  */
 
-public class TileInfo implements Cloneable, Serializable, RealInterval {
-
-	private static final long serialVersionUID = 1947165645036235954L;
+public class TileInfo implements Cloneable, RealInterval {
 
 	private ImageType type;
 	private Integer index;
@@ -28,7 +21,7 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 
 	private TileInfo originalTile;
 
-	private transient AffineTransform3D transform;
+	private AffineTransform3D transform;
 
 	public TileInfo( final int dim ) {
 		position = new double[ dim ];
@@ -210,7 +203,7 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 	}
 
 	// writing/reading AffineTransform3D for supporting Serializable property
-	private void writeObject( final ObjectOutputStream oos ) throws IOException
+	/*private void writeObject( final ObjectOutputStream oos ) throws IOException
 	{
 		oos.defaultWriteObject();
 		final double[][] transformMatrix;
@@ -238,5 +231,5 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 			transform = new AffineTransform3D();
 			transform.set( transformMatrix );
 		}
-	}
+	}*/
 }

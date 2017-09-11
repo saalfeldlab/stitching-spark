@@ -14,14 +14,18 @@ public abstract class PipelineStepExecutor implements Serializable
 {
 	private static final long serialVersionUID = 3546355803511705943L;
 
-	protected final StitchingJob job;
+	protected final StitchingArguments args;
+	protected final int numDimensions;
+	protected final transient StitchingJob job;
 	protected final transient JavaSparkContext sparkContext;
 
 	public PipelineStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
 		this.job = job;
 		this.sparkContext = sparkContext;
+		numDimensions = job.getDimensionality();
+		args = job.getArgs();
 	}
-	
+
 	public abstract void run() throws PipelineExecutionException;
 }

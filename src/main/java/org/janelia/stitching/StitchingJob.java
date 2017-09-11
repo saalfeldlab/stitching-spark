@@ -1,19 +1,9 @@
 package org.janelia.stitching;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-
-import org.apache.commons.io.IOUtils;
-
-import com.google.gson.Gson;
-
-import mpicbg.stitching.StitchingParameters;
 
 /**
  * Represents input parameters and customizations for tweaking the stitching/fusing procedure.
@@ -21,7 +11,7 @@ import mpicbg.stitching.StitchingParameters;
  * @author Igor Pisarev
  */
 
-public class StitchingJob implements Serializable {
+public class StitchingJob {
 
 	public enum PipelineStep
 	{
@@ -37,7 +27,7 @@ public class StitchingJob implements Serializable {
 
 	private final EnumSet< PipelineStep > pipeline;
 	private StitchingArguments args;
-	private transient StitchingParameters params;
+	private SerializableStitchingParameters params;
 	private final String baseFolder;
 
 	private String saveFolder;
@@ -84,8 +74,8 @@ public class StitchingJob implements Serializable {
 
 	public StitchingArguments getArgs() { return args; }
 
-	public StitchingParameters getParams() { return params; }
-	public void setParams( final StitchingParameters params ) { this.params = params; }
+	public SerializableStitchingParameters getParams() { return params; }
+	public void setParams( final SerializableStitchingParameters params ) { this.params = params; }
 
 	public int getChannels() {
 		return args.inputTileConfigurations().size();
@@ -169,16 +159,5 @@ public class StitchingJob implements Serializable {
 					tiles[ i ].setIndex( i );
 			}
 		}
-	}
-
-
-	// TODO: pull request for making StitchingParameters serializable, then remove it
-	private void writeObject( final ObjectOutputStream stream ) throws IOException {
-		stream.defaultWriteObject();
-		stream.write( new Gson().toJson( params ).getBytes() );
-	}
-	private void readObject( final ObjectInputStream stream ) throws IOException, ClassNotFoundException {
-		stream.defaultReadObject();
-		params = new Gson().fromJson( IOUtils.toString(stream), StitchingParameters.class );
 	}
 }

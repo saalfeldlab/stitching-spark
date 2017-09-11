@@ -18,7 +18,6 @@ import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
 import mpicbg.models.TranslationModel3D;
 import mpicbg.stitching.ImagePlusTimePoint;
-import mpicbg.stitching.StitchingParameters;
 
 
 // based on the GlobalOptimization class from the original Fiji's Stitching plugin repository
@@ -85,14 +84,14 @@ public class GlobalOptimizationPerformer
 
 	public ArrayList< ImagePlusTimePoint > optimize(
 			final Vector< ComparePointPair > comparePointPairs,
-			final StitchingParameters params ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+			final SerializableStitchingParameters params ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		return optimize( comparePointPairs, params, null );
 	}
 
 	public ArrayList< ImagePlusTimePoint > optimize(
 			final Vector< ComparePointPair > comparePointPairs,
-			final StitchingParameters params,
+			final SerializableStitchingParameters params,
 			final PrintWriter logWriter ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		final Set< Tile< ? > > tilesSet = new HashSet<>();

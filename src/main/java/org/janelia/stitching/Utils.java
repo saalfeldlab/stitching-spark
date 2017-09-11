@@ -84,9 +84,9 @@ public class Utils {
 		return e;
 	}
 
-	public static ImageCollectionElement createElementSimilarityModel( final StitchingJob job, final TileInfo tile ) throws Exception
+	public static ImageCollectionElement createElementSimilarityModel( final TileInfo tile ) throws Exception
 	{
-		final File file = new File( job == null ? tile.getFilePath() : getAbsoluteImagePath( job, tile) );
+		final File file = new File( tile.getFilePath() );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
 		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.numDimensions() );

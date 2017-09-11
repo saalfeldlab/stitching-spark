@@ -1,7 +1,5 @@
 package org.janelia.stitching;
 
-import java.io.Serializable;
-
 import net.imglib2.util.Pair;
 
 /**
@@ -10,10 +8,8 @@ import net.imglib2.util.Pair;
  * @author Igor Pisarev
  */
 
-public class TilePair implements Pair< TileInfo, TileInfo >, Serializable
+public class TilePair implements Pair< TileInfo, TileInfo >
 {
-	private static final long serialVersionUID = -3199669876217383109L;
-
 	private TileInfo[] tilePair;
 
 	public TilePair( final TileInfo t1, final TileInfo t2 )

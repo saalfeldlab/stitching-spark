@@ -13,7 +13,6 @@ import java.util.TreeMap;
 import java.util.Vector;
 
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.broadcast.Broadcast;
 
 import ij.ImagePlus;
 import mpicbg.models.Affine3D;
@@ -22,7 +21,6 @@ import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Tile;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
-import mpicbg.stitching.StitchingParameters;
 import net.imglib2.realtransform.AffineTransform3D;
 
 public class StitchingOptimizer implements Serializable
@@ -234,7 +232,8 @@ public class StitchingOptimizer implements Serializable
 			for ( double testMinVariance = 0; testMinVariance <= 300; testMinVariance += 1 + ( int ) testMinVariance / 10 )
 				optimizationParametersList.add( new OptimizationParameters( testMinCrossCorrelation, testMinVariance ) );
 
-		final Broadcast< StitchingParameters > broadcastedStitchingParameters = sparkContext.broadcast( job.getParams() );
+		final SerializableStitchingParameters stitchingParameters = job.getParams();
+		final int tilesCount = job.getTiles( 0 ).length;
 
 		final List< OptimizationResult > optimizationResultList = new ArrayList<>( sparkContext.parallelize( optimizationParametersList, optimizationParametersList.size() ).map( optimizationParameters ->
 			{
@@ -247,11 +246,11 @@ public class StitchingOptimizer implements Serializable
 
 				final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
 				GlobalOptimizationPerformer.suppressOutput();
-				optimizationPerformer.optimize( comparePointPairs, broadcastedStitchingParameters.value() );
+				optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
 				final OptimizationResult optimizationResult = new OptimizationResult(
 						maxAllowedError,
 						optimizationParameters,
-						job.getTiles( 0 ).length,
+						tilesCount,
 						optimizationPerformer.remainingGraphSize,
 						validPairs,
 						optimizationPerformer.avgDisplacement,
@@ -261,7 +260,6 @@ public class StitchingOptimizer implements Serializable
 		).collect() );
 
 		GlobalOptimizationPerformer.restoreOutput();
-		broadcastedStitchingParameters.destroy();
 
 		Collections.sort( optimizationResultList );
 
@@ -301,7 +299,7 @@ public class StitchingOptimizer implements Serializable
 			for ( final TileInfo tileInfo : pair.getTilePair().toArray() ) {
 				if ( !fakeTileImagesMap.containsKey( tileInfo.getIndex() ) ) {
 					try {
-						final ImageCollectionElement el = Utils.createElementSimilarityModel( job, tileInfo );
+						final ImageCollectionElement el = Utils.createElementSimilarityModel( tileInfo );
 						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
 						final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
 						fakeTileImagesMap.put( tileInfo.getIndex(), fakeTile );

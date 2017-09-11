@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -115,7 +114,6 @@ public class TileInfoJSONProvider
 	private static Gson createGson()
 	{
 		return new GsonBuilder()
-				.excludeFieldsWithModifiers( Modifier.STATIC )
 				.registerTypeAdapter( AffineTransform3D.class, new AffineTransform3DJsonAdapter() )
 				.create();
 	}

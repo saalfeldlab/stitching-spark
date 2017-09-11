@@ -53,7 +53,7 @@ public class PairwiseStitchingPerformer
 
 	public static SerializablePairWiseStitchingResult[] stitchPairwise(
 			final ImagePlus imp1, final ImagePlus imp2, final int timepoint1, final int timepoint2,
-			final StitchingParameters params, final int numHighestPeaks,
+			final SerializableStitchingParameters params, final int numHighestPeaks,
 			final PointValidator searchRadiusPointValidator, final OffsetConverter offsetConverter )
 	{
 		SerializablePairWiseStitchingResult[] result = null;
@@ -208,7 +208,7 @@ public class PairwiseStitchingPerformer
 
 	public static < T extends RealType<T>, S extends RealType<S> > SerializablePairWiseStitchingResult[] performStitching(
 			final Image<T> img1, final Image<S> img2,
-			final StitchingParameters params, final int numHighestPeaks,
+			final SerializableStitchingParameters params, final int numHighestPeaks,
 			final PointValidator searchRadiusPointValidator, final OffsetConverter offsetConverter )
 	{
 		if ( img1 == null )

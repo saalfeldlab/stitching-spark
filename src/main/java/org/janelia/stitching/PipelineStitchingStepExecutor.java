@@ -73,9 +73,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 	private static final long serialVersionUID = -7152174064553332061L;
 
+	private final SerializableStitchingParameters stitchingParameters;
+
 	public PipelineStitchingStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
 		super( job, sparkContext );
+		stitchingParameters = job.getParams();
 	}
 
 	@Override
@@ -84,8 +87,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		checkForMissingImages();
 
 		// split tiles into 8 boxes
-		final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
-		Arrays.fill( tileBoxesGridSize, job.getArgs().splitOverlapParts() );
+		final int[] tileBoxesGridSize = new int[ numDimensions ];
+		Arrays.fill( tileBoxesGridSize, args.splitOverlapParts() );
 		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
 
 		// find pairs of tile boxes that overlap by more than 50% when transformed into relative coordinate space of the fixed original tile
@@ -98,8 +101,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			for ( int iteration = 0; ; ++iteration )
 			{
 				// check if number of stitched tiles has increased compared to the previous iteration
-				final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString();
-				final String filename = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getFileName().toString();
+				final String basePath = Paths.get( args.inputTileConfigurations().get( 0 ) ).getParent().toString();
+				final String filename = Paths.get( args.inputTileConfigurations().get( 0 ) ).getFileName().toString();
 				final String iterationDirname = "iter" + iteration;
 				final String stitchedTilesFilepath = Paths.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) ).toString();
 
@@ -196,8 +199,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	{
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
-			final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getParent().toString();
-			final String filename = Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getFileName().toString();
+			final String basePath = Paths.get( args.inputTileConfigurations().get( channel ) ).getParent().toString();
+			final String filename = Paths.get( args.inputTileConfigurations().get( channel ) ).getFileName().toString();
 			final String iterationDirname = "iter" + fromIteration;
 			final String stitchedTilesFilepath = Paths.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) ).toString();
 			final String finalTilesFilepath = Paths.get( basePath, Utils.addFilenameSuffix( filename, "-final" ) ).toString();
@@ -218,7 +221,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 */
 	private void preparePairwiseShifts( final List< TilePair > overlappingTiles, final int iteration ) throws PipelineExecutionException, IOException
 	{
-		final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString();
+		final String basePath = Paths.get( args.inputTileConfigurations().get( 0 ) ).getParent().toString();
 		final String iterationDirname = "iter" + iteration;
 		final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 		final String pairwiseFilename = "pairwise.json";
@@ -239,7 +242,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					basePath,
 					previousIterationDirname,
 					Utils.addFilenameSuffix(
-							Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getFileName().toString(),
+							Paths.get( args.inputTileConfigurations().get( 0 ) ).getFileName().toString(),
 							"-stitched"
 						)
 				).toString();
@@ -288,7 +291,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 		else
 		{
-			if ( job.getArgs().restitchingMode() == RestitchingMode.INCREMENTAL )
+			if ( args.restitchingMode() == RestitchingMode.INCREMENTAL )
 			{
 				System.out.println( "Restitching only excluded pairs" );
 				// use pairwise-used from the previous iteration, so they will not be restitched
@@ -471,10 +474,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final LongAccumulator noOverlapWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 
-		final JavaRDD< TilePair > rdd = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() );
-		final JavaRDD< StitchingResult > pairwiseStitching = rdd.map( tileBoxPair ->
+		final JavaRDD< StitchingResult > pairwiseStitching = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() ).map( tileBoxPair ->
 			{
 				System.out.println( "Processing tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
+
+				if ( tileBoxPair.getA().getOriginalTile().getTransform() == null || tileBoxPair.getB().getOriginalTile().getTransform() == null )
+					throw new RuntimeException( "serialization issue: affine transform of original tile is not serialized" );
 
 				final Interval movingBoxInFixedSpace = SplitTileOperations.transformMovingTileBox( tileBoxPair );
 
@@ -489,7 +494,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					// mean offset is the top-left coordinate of the moving box in the fixed space
 					final double[] offsetsMeanValues = Intervals.minAsDoubleArray( movingBoxInFixedSpace );
 					final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
-					final double sphereRadiusPixels = job.getArgs().searchRadiusMultiplier();
+					final double sphereRadiusPixels = args.searchRadiusMultiplier();
 					searchRadius = new SearchRadius( sphereRadiusPixels, offsetsMeanValues, offsetsCovarianceMatrix );
 				}
 				else
@@ -503,6 +508,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 				// get ROIs in corresponding images
 				final Interval[] overlapsInOriginalTileSpace = SplitTileOperations.getAdjustedOverlapIntervals( tileBoxPair, searchRadius );
+				if ( overlapsInOriginalTileSpace == null )
+					throw new RuntimeException( "tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) + ": overlapsInOriginalTileSpace == null" );
 
 				// prepare roi images
 				final ImagePlus[] roiImps = prepareRoiImages(
@@ -573,7 +580,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	{
 		System.out.println( "Broadcasting flatfield correction images" );
 		final List< RandomAccessiblePairNullable< U, U > > flatfieldCorrectionForChannels = new ArrayList<>();
-		for ( final String channelPath : job.getArgs().inputTileConfigurations() )
+		for ( final String channelPath : args.inputTileConfigurations() )
 		{
 			final String channelPathNoExt = channelPath.lastIndexOf( '.' ) != -1 ? channelPath.substring( 0, channelPath.lastIndexOf( '.' ) ) : channelPath;
 			// use it as a folder with the input file's name
@@ -581,7 +588,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					FlatfieldCorrection.loadCorrectionImages(
 							channelPathNoExt + "-flatfield/S.tif",
 							channelPathNoExt + "-flatfield/T.tif",
-							job.getDimensionality()
+							numDimensions
 						)
 				);
 		}
@@ -641,7 +648,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			{
 				final TileInfo[] statsTiles = TileInfoJSONProvider.loadTilesConfiguration( statsTileConfigurationPath );
 				System.out.println( "-- Creating search radius estimator using " + job.getTiles( 0 ).length + " stage tiles and " + statsTiles.length + " stitched tiles --" );
-				searchRadiusEstimator = new TileSearchRadiusEstimator( job.getTiles( 0 ), statsTiles, job.getArgs().searchRadiusMultiplier() );
+				searchRadiusEstimator = new TileSearchRadiusEstimator( job.getTiles( 0 ), statsTiles, args.searchRadiusMultiplier() );
 				System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( searchRadiusEstimator.getEstimationWindowSize() ) ) + " --" );
 			}
 			catch ( final IOException e )
@@ -667,20 +674,21 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final double[] voxelDimensions = originalTilePair.getA().getPixelResolution();
 		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
 		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
-		final double blurSigma = job.getArgs().blurSigma();
+		final double blurSigma = args.blurSigma();
 		final double[] blurSigmas = new  double[ normalizedVoxelDimensions.length ];
 		for ( int d = 0; d < blurSigmas.length; d++ )
 			blurSigmas[ d ] = blurSigma / normalizedVoxelDimensions[ d ];
 
 		final ImagePlus[] roiImps = new ImagePlus[ 2 ];
 		final TileInfo[] originalTilePairArr = originalTilePair.toArray();
+		final int numChannels = args.inputTileConfigurations().size();
 		for ( int j = 0; j < 2; j++ )
 		{
-			System.out.println( "Averaging corresponding tile images for " + job.getChannels() + " channels" );
+			System.out.println( "Averaging corresponding tile images for " + numChannels + " channels" );
 			final String coordsStr = Utils.getTileCoordinatesString( originalTilePairArr[ j ] );
 			int channelsUsed = 0;
 			final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( overlapsInOriginalTileSpace[ j ] ) );
-			for ( int channel = 0; channel < job.getChannels(); channel++ )
+			for ( int channel = 0; channel < numChannels; channel++ )
 			{
 				final TileInfo tileInfo = coordsToTilesChannels.get( channel ).get( coordsStr );
 
@@ -790,7 +798,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		final SerializablePairWiseStitchingResult[] results = PairwiseStitchingPerformer.stitchPairwise(
 				roiImps[ 0 ], roiImps[ 1 ], timepoint, timepoint,
-				job.getParams(), numPeaks,
+				stitchingParameters, numPeaks,
 				pointValidator, offsetConverter
 			);
 
