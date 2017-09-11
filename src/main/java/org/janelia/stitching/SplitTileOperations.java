@@ -1,6 +1,7 @@
 package org.janelia.stitching;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
@@ -11,6 +12,7 @@ import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
+import net.imglib2.iterator.IntervalIterator;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsHelper;
@@ -100,36 +102,18 @@ public class SplitTileOperations
 	}
 
 	/**
-	 * Returns overlap intervals tile box pair in the coordinate space of each tile (useful for cropping).
-	 * The overlaps are extended to capture the bounding box of a given search radius entirely.
-	 *
-	 * @param tileBoxPair
-	 * @param searchRadius
-	 * @return
-	 */
-	public static Interval[] getOverlapIntervals( final TilePair tileBoxPair, final SearchRadius searchRadius )
-	{
-		final Interval searchRadiusBoundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
-		final long[] padding = new long[ searchRadiusBoundingBox.numDimensions() ];
-		for ( int d = 0; d < padding.length; ++d )
-			padding[ d ] = searchRadiusBoundingBox.dimension( d ) / 2;
-		return getOverlapIntervals( tileBoxPair, padding );
-	}
-
-	/**
-	 * Returns overlap intervals tile box pair in the coordinate space of each tile (useful for cropping).
-	 * The overlaps are extended by a given padding value.
+	 * Returns overlap intervals of a given tile box pair in the coordinate space of each tile (useful for cropping).
 	 *
 	 * @param tileBoxPair
 	 * @param padding
 	 * @return
 	 */
-	public static Interval[] getOverlapIntervals( final TilePair tileBoxPair, final long[] padding )
+	public static Interval[] getOverlapIntervals( final TilePair tileBoxPair )
 	{
 		final Interval[] tileBoxesInFixedSpace = new Interval[] { tileBoxPair.getA().getBoundaries(), transformMovingTileBox( tileBoxPair ) };
 		final Interval overlapInFixedSpace = IntervalsNullable.intersect( tileBoxesInFixedSpace[ 0 ], tileBoxesInFixedSpace[ 1 ] );
 		if ( overlapInFixedSpace == null )
-			throw new RuntimeException( "boxes do not overlap" );
+			return null;
 
 		final long[] originalMovingTileTopLeftCornerInFixedSpace = Intervals.minAsLongArray( IntervalsHelper.offset( tileBoxesInFixedSpace[ 1 ], Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) ) );
 		final Interval[] originalTilesInFixedSpace = new Interval[] {
@@ -140,14 +124,111 @@ public class SplitTileOperations
 		for ( int j = 0; j < 2; j++ )
 			overlapsInOriginalTileSpace[ j ] = IntervalsHelper.offset( overlapInFixedSpace, Intervals.minAsLongArray( originalTilesInFixedSpace[ j ] ) );
 
+		return overlapsInOriginalTileSpace;
+	}
+
+	/**
+	 * Returns overlap intervals of a given tile box pair in the coordinate space of each tile (useful for cropping).
+	 * The overlaps are extended by a given padding value.
+	 *
+	 * @param tileBoxPair
+	 * @param padding
+	 * @return
+	 */
+	public static Interval[] getPaddedOverlapIntervals( final TilePair tileBoxPair, final long[] padding )
+	{
+		final Interval[] overlapsInOriginalTileSpace = getOverlapIntervals( tileBoxPair );
+		if ( overlapsInOriginalTileSpace == null )
+			return null;
+
+		final Interval[] tileBoxesInFixedSpace = new Interval[] { tileBoxPair.getA().getBoundaries(), transformMovingTileBox( tileBoxPair ) };
+		final long[] originalMovingTileTopLeftCornerInFixedSpace = Intervals.minAsLongArray( IntervalsHelper.offset( tileBoxesInFixedSpace[ 1 ], Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) ) );
+		final Interval[] originalTilesInFixedSpace = new Interval[] {
+				new FinalInterval( tileBoxPair.getA().getOriginalTile().getSize() ),
+				IntervalsHelper.translate( new FinalInterval( tileBoxPair.getB().getOriginalTile().getSize() ), originalMovingTileTopLeftCornerInFixedSpace ) };
+
 		final Interval[] paddedOverlapsInOriginalTileSpace = new Interval[ 2 ];
 		for ( int j = 0; j < 2; ++j )
-			paddedOverlapsInOriginalTileSpace[ j ] = TileOperations.padInterval(
-					overlapsInOriginalTileSpace[ j ],
-					originalTilesInFixedSpace[ j ],
-					padding
-				);
+			paddedOverlapsInOriginalTileSpace[ j ] = TileOperations.padInterval( overlapsInOriginalTileSpace[ j ], originalTilesInFixedSpace[ j ], padding );
+
 		return paddedOverlapsInOriginalTileSpace;
+	}
+
+	/**
+	 * Returns overlap intervals of a given tile box pair in the coordinate space of each tile (useful for cropping).
+	 * The overlaps are extended to capture the bounding box of a given search radius entirely.
+	 *
+	 * @param tileBoxPair
+	 * @param searchRadius
+	 * @return
+	 */
+	public static Interval[] getAdjustedOverlapIntervals( final TilePair tileBoxPair, final SearchRadius searchRadius )
+	{
+		final Interval originalFixedTileInFixedSpace = new FinalInterval( tileBoxPair.getA().getOriginalTile().getSize() );
+		final long[] movingTileBoxPositionInsideTile = Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() );
+		final Dimensions originalMovingTileDimensions = new FinalDimensions( tileBoxPair.getB().getOriginalTile().getSize() );
+
+		final Interval searchRadiusBoundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
+
+		// try all corners of the bounding box of the search radius and use the largest overlap
+		final int[] cornersPos = new int[ searchRadiusBoundingBox.numDimensions() ];
+		final int[] cornersDimensions = new int[ searchRadiusBoundingBox.numDimensions() ];
+		Arrays.fill( cornersDimensions, 2 );
+		final IntervalIterator cornerIntervalIterator = new IntervalIterator( cornersDimensions );
+
+		final long[] overlapInFixedSpaceMin = new long[ searchRadiusBoundingBox.numDimensions() ], overlapInFixedSpaceMax = new long[ searchRadiusBoundingBox.numDimensions() ];
+		Arrays.fill( overlapInFixedSpaceMin, Long.MAX_VALUE );
+		Arrays.fill( overlapInFixedSpaceMax, Long.MIN_VALUE );
+
+		final long[] overlapInMovingSpaceMin = new long[ searchRadiusBoundingBox.numDimensions() ], overlapInMovingSpaceMax = new long[ searchRadiusBoundingBox.numDimensions() ];
+		Arrays.fill( overlapInMovingSpaceMin, Long.MAX_VALUE );
+		Arrays.fill( overlapInMovingSpaceMax, Long.MIN_VALUE );
+
+		while ( cornerIntervalIterator.hasNext() )
+		{
+			cornerIntervalIterator.fwd();
+			cornerIntervalIterator.localize( cornersPos );
+
+			// get test position of the moving tile box in the fixed space
+			final long[] testMovingTileBoxPositionInFixedSpace = new long[ searchRadiusBoundingBox.numDimensions() ];
+			for ( int d = 0; d < testMovingTileBoxPositionInFixedSpace.length; ++d )
+				testMovingTileBoxPositionInFixedSpace[ d ] = ( cornersPos[ d ] == 0 ? searchRadiusBoundingBox.min( d ) : searchRadiusBoundingBox.max( d ) );
+
+			// calculate new test position of the original moving tile
+			final long[] testOriginalMovingTilePositionInFixedSpace = new long[ testMovingTileBoxPositionInFixedSpace.length ];
+			for ( int d = 0; d < testOriginalMovingTilePositionInFixedSpace.length; ++d )
+				testOriginalMovingTilePositionInFixedSpace[ d ] = testMovingTileBoxPositionInFixedSpace[ d ] - movingTileBoxPositionInsideTile[ d ];
+
+			final Interval testOriginalMovingTileInFixedSpace = IntervalsHelper.translate( new FinalInterval( originalMovingTileDimensions ), testOriginalMovingTilePositionInFixedSpace );
+			final Interval testOriginalTilesOverlapInFixedSpace = IntervalsNullable.intersect( originalFixedTileInFixedSpace, testOriginalMovingTileInFixedSpace );
+
+			if ( testOriginalTilesOverlapInFixedSpace != null )
+			{
+				// update overlap corners in the fixed space
+				for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
+				{
+					overlapInFixedSpaceMin[ d ] = Math.min( testOriginalTilesOverlapInFixedSpace.min( d ), overlapInFixedSpaceMin[ d ] );
+					overlapInFixedSpaceMax[ d ] = Math.max( testOriginalTilesOverlapInFixedSpace.max( d ), overlapInFixedSpaceMax[ d ] );
+				}
+
+				// calculate and update overlap corners in the moving space
+				final Interval testOriginalTilesOverlapInMovingSpace = IntervalsHelper.offset( testOriginalTilesOverlapInFixedSpace, testOriginalMovingTilePositionInFixedSpace );
+				for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
+				{
+					overlapInMovingSpaceMin[ d ] = Math.min( testOriginalTilesOverlapInMovingSpace.min( d ), overlapInMovingSpaceMin[ d ] );
+					overlapInMovingSpaceMax[ d ] = Math.max( testOriginalTilesOverlapInMovingSpace.max( d ), overlapInMovingSpaceMax[ d ] );
+				}
+			}
+		}
+
+		for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
+			if ( ( overlapInFixedSpaceMin[ d ] == Long.MAX_VALUE || overlapInFixedSpaceMax[ d ] == Long.MIN_VALUE ) || ( overlapInMovingSpaceMin[ d ] == Long.MAX_VALUE || overlapInMovingSpaceMax[ d ] == Long.MIN_VALUE ) )
+				return null;
+
+		final Interval[] adjustedOverlapsInOriginalTileSpace = new Interval[ 2 ];
+		adjustedOverlapsInOriginalTileSpace[ 0 ] = new FinalInterval( overlapInFixedSpaceMin, overlapInFixedSpaceMax );
+		adjustedOverlapsInOriginalTileSpace[ 1 ] = new FinalInterval( overlapInMovingSpaceMin, overlapInMovingSpaceMax );
+		return adjustedOverlapsInOriginalTileSpace;
 	}
 
 	/**

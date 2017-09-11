@@ -504,7 +504,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				}
 
 				// get ROIs in corresponding images
-				final Interval[] overlapsInOriginalTileSpace = SplitTileOperations.getOverlapIntervals( tileBoxPair, searchRadius );
+				final Interval[] overlapsInOriginalTileSpace = SplitTileOperations.getAdjustedOverlapIntervals( tileBoxPair, searchRadius );
 
 				// prepare roi images
 				final ImagePlus[] roiImps = prepareRoiImages(
@@ -936,85 +936,4 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			return result;
 		}
 	}
-
-	/**
-	 * Expands the overlaps with respect to the given search radius. Returns expanded ROIs in the coordinate space of each tile (useful for cropping).
-	 *
-	 * @param tileBoxesInFixedSpace
-	 * @param combinedSearchRadius
-	 * @param originalTilesInFixedSpace
-	 * @return
-	 */
-	/*public static Interval[] adjustOverlappingRegion( final Interval[] tileBoxOverlaps, final SearchRadius combinedSearchRadius, final Interval[] originalTilesInFixedSpace )
-	{
-		// try all corners of the bounding box of the search radius and use the largest overlaps
-		final Interval fixedTileBoxInFixedSpace = tileBoxesInFixedSpace[ 0 ], movingTileBoxInFixedSpace = tileBoxesInFixedSpace[ 1 ];
-
-		final int[] cornersPos = new int[ searchRadiusBoundingBox.numDimensions() ];
-		final int[] cornersDimensions = new int[ searchRadiusBoundingBox.numDimensions() ];
-		Arrays.fill( cornersDimensions, 2 );
-		final IntervalIterator cornerIntervalIterator = new IntervalIterator( cornersDimensions );
-
-		final long[] overlappingRegionMin = new long[ searchRadiusBoundingBox.numDimensions() ], overlappingRegionMax = new long[ searchRadiusBoundingBox.numDimensions() ];
-		Arrays.fill( overlappingRegionMin, Long.MAX_VALUE);
-		Arrays.fill( overlappingRegionMax, Long.MIN_VALUE);
-
-		while ( cornerIntervalIterator.hasNext() )
-		{
-			cornerIntervalIterator.fwd();
-			cornerIntervalIterator.localize( cornersPos );
-
-			final long[] testMovingTileBoxPositionInFixedSpace = new long[ searchRadiusBoundingBox.numDimensions() ];
-			for ( int d = 0; d < cornersPos.length; ++d )
-				testMovingTileBoxPositionInFixedSpace[ d ] = ( cornersPos[ d ] == 0 ? searchRadiusBoundingBox.min( d ) : searchRadiusBoundingBox.max( d ) );
-
-			final Interval testMovingTileBoxInFixedSpace = IntervalsHelper.translate( new FinalInterval( movingTileBoxInFixedSpace ), testMovingTileBoxPositionInFixedSpace );
-			final Interval testOverlapInFixedSpace = IntervalsNullable.intersect( fixedTileBoxInFixedSpace, testMovingTileBoxInFixedSpace );
-
-			if ( testOverlapInFixedSpace != null )
-			{
-				final Interval[] testTileBoxesInFixedSpace = new Interval[] { tileBoxesInFixedSpace[ 0 ], };
-				for ( int j = 0; j < 2; ++j )
-				{
-					final Interval testOverlap = Intervals.translate(interval, t, d)
-
-					for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
-					{
-						overlappingRegionMin[ d ] = Math.min( overlapPossibility.min( d ), overlappingRegionMin[ d ] );
-						overlappingRegionMax[ d ] = Math.max( overlapPossibility.max( d ), overlappingRegionMax[ d ] );
-					}
-				}
-			}
-		}
-
-		for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
-		{
-			if ( overlappingRegionMin[ d ] == Long.MAX_VALUE || overlappingRegionMax[ d ] == Long.MIN_VALUE )
-			{
-				System.out.println();
-				System.out.println( tilePair + ": cannot find a non-empty overlap that covers the confidence range (The confidence range says there is no overlap?)" );
-				System.out.println();
-				return null;
-			}
-		}
-
-		overlaps[ j ] = new Boundaries( overlappingRegionMin, overlappingRegionMax );
-
-		for ( int d = 0; d < overlaps[ j ].numDimensions(); ++d )
-		{
-			if ( overlaps[ j ].dimension( d ) <= 1 )
-			{
-				System.out.println();
-				System.out.println( tilePair + ": overlap is 1px in dimension " + d + ", skip this pair" );
-				System.out.println();
-				return null;
-			}
-		}
-
-		final Interval maxOverlapInFixedSpace = new FinalInterval( overlappingRegionMin, overlappingRegionMax );
-
-		final Interval[] maxOverlaps = new Interval[ 2 ];
-		// TODO: fill
-		return maxOverlaps;
-	}*/
 }
