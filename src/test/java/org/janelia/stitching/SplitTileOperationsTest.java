@@ -4,9 +4,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.janelia.util.Conversions;
 import org.junit.Assert;
 import org.junit.Test;
 
+import mpicbg.imglib.custom.OffsetConverter;
 import net.imglib2.Interval;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
@@ -151,7 +153,7 @@ public class SplitTileOperationsTest
 	}
 
 	@Test
-	public void testOverlapIntervals() throws PipelineExecutionException
+	public void testOverlaps() throws PipelineExecutionException
 	{
 		final TileInfo[] tiles = new TileInfo[ 2 ];
 		tiles[ 0 ] = new TileInfo( 3 );
@@ -179,80 +181,24 @@ public class SplitTileOperationsTest
 		}
 
 		final TilePair tileBoxPair = overlappingTileBoxesMap.get( 4 ).get( 8 );
+
+		// test overlaps between tile boxes
 		final Interval[] overlaps = SplitTileOperations.getOverlapIntervals( tileBoxPair );
 		Assert.assertArrayEquals( new long[] { 40, 10, 0 }, Intervals.minAsLongArray( overlaps[ 0 ] ) );
 		Assert.assertArrayEquals( new long[] { 0, 0, 10 }, Intervals.minAsLongArray( overlaps[ 1 ] ) );
 		final long[] overlapDimensions = new long[] { 10, 20, 25 };
 		Assert.assertArrayEquals( overlapDimensions, Intervals.dimensionsAsLongArray( overlaps[ 0 ] ) );
 		Assert.assertArrayEquals( overlapDimensions, Intervals.dimensionsAsLongArray( overlaps[ 1 ] ) );
-	}
 
-	@Test
-	public void testPaddedOverlapIntervals() throws PipelineExecutionException
-	{
-		final TileInfo[] tiles = new TileInfo[ 2 ];
-		tiles[ 0 ] = new TileInfo( 3 );
-		tiles[ 0 ].setIndex( 0 );
-		tiles[ 0 ].setPosition( new double[] { 100, 200, 300 } );
-		tiles[ 0 ].setSize( new long[] { 50, 60, 70 } );
-
-		tiles[ 1 ] = new TileInfo( 3 );
-		tiles[ 1 ].setIndex( 1 );
-		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
-		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
-
-		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
-		Assert.assertEquals( 16, tileBoxes.size() );
-
-		final List< TilePair > overlappingTileBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes );
-		Assert.assertEquals( 4, overlappingTileBoxes.size() );
-
-		final Map< Integer, Map< Integer, TilePair > > overlappingTileBoxesMap = new TreeMap<>();
-		for ( final TilePair tileBoxPair : overlappingTileBoxes )
-		{
-			if ( !overlappingTileBoxesMap.containsKey( tileBoxPair.getA().getIndex() ) )
-				overlappingTileBoxesMap.put( tileBoxPair.getA().getIndex(), new TreeMap<>() );
-			overlappingTileBoxesMap.get( tileBoxPair.getA().getIndex() ).put( tileBoxPair.getB().getIndex(), tileBoxPair );
-		}
-
-		final TilePair tileBoxPair = overlappingTileBoxesMap.get( 4 ).get( 8 );
+		// test padded overlaps between tile boxes
 		final Interval[] paddedOverlaps = SplitTileOperations.getPaddedOverlapIntervals( tileBoxPair, new long[] { 16, 16, 16 } );
 		Assert.assertArrayEquals( new long[] { 24, 2, 0 }, Intervals.minAsLongArray( paddedOverlaps[ 0 ] ) );
 		Assert.assertArrayEquals( new long[] { 0, 0, 2 }, Intervals.minAsLongArray( paddedOverlaps[ 1 ] ) );
 		final long[] paddedOverlapDimensions = new long[] { 26, 36, 41 };
 		Assert.assertArrayEquals( paddedOverlapDimensions, Intervals.dimensionsAsLongArray( paddedOverlaps[ 0 ] ) );
 		Assert.assertArrayEquals( paddedOverlapDimensions, Intervals.dimensionsAsLongArray( paddedOverlaps[ 1 ] ) );
-	}
 
-	@Test
-	public void testAdjustedOverlapIntervals() throws PipelineExecutionException
-	{
-		final TileInfo[] tiles = new TileInfo[ 2 ];
-		tiles[ 0 ] = new TileInfo( 3 );
-		tiles[ 0 ].setIndex( 0 );
-		tiles[ 0 ].setPosition( new double[] { 100, 200, 300 } );
-		tiles[ 0 ].setSize( new long[] { 50, 60, 70 } );
-
-		tiles[ 1 ] = new TileInfo( 3 );
-		tiles[ 1 ].setIndex( 1 );
-		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
-		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
-
-		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
-		Assert.assertEquals( 16, tileBoxes.size() );
-
-		final List< TilePair > overlappingTileBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes );
-		Assert.assertEquals( 4, overlappingTileBoxes.size() );
-
-		final Map< Integer, Map< Integer, TilePair > > overlappingTileBoxesMap = new TreeMap<>();
-		for ( final TilePair tileBoxPair : overlappingTileBoxes )
-		{
-			if ( !overlappingTileBoxesMap.containsKey( tileBoxPair.getA().getIndex() ) )
-				overlappingTileBoxesMap.put( tileBoxPair.getA().getIndex(), new TreeMap<>() );
-			overlappingTileBoxesMap.get( tileBoxPair.getA().getIndex() ).put( tileBoxPair.getB().getIndex(), tileBoxPair );
-		}
-
-		final TilePair tileBoxPair = overlappingTileBoxesMap.get( 4 ).get( 8 );
+		// test adjusted overlaps with respect to the search radius
 		final double[] offsetsMeanValues = new double[] { 40, 10, -10 };
 		final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
 		final double sphereRadiusPixels = 9;
@@ -263,5 +209,14 @@ public class SplitTileOperationsTest
 		final long[] adjustedOverlapDimensions = new long[] { 19, 59, 69 };
 		Assert.assertArrayEquals( adjustedOverlapDimensions, Intervals.dimensionsAsLongArray( adjustedOverlaps[ 0 ] ) );
 		Assert.assertArrayEquals( adjustedOverlapDimensions, Intervals.dimensionsAsLongArray( adjustedOverlaps[ 1 ] ) );
+
+		// test offset converter
+		final OffsetConverter offsetConverter = SplitTileOperations.getOffsetConverter( tileBoxPair, adjustedOverlaps );
+		final int[] roiOffset = new int[] { 3, 4, 5 };
+		final long[] originalTileOffset = offsetConverter.roiOffsetToTileOffset( roiOffset );
+		Assert.assertArrayEquals( new long[] { 34, 5, 4 }, originalTileOffset );
+		Assert.assertArrayEquals( new double[] { 34, 5, 4 }, offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( roiOffset ) ), EPSILON ); // test that double implementation does the same
+		final double[] movingTileBoxPosition = offsetConverter.tileOffsetToGlobalPosition( originalTileOffset );
+		Assert.assertArrayEquals( new double[] { 34, 5, 4 }, movingTileBoxPosition, EPSILON );
 	}
 }
