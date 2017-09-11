@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 
+import mpicbg.imglib.custom.OffsetConverter;
 import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
@@ -229,6 +230,30 @@ public class SplitTileOperations
 		adjustedOverlapsInOriginalTileSpace[ 0 ] = new FinalInterval( overlapInFixedSpaceMin, overlapInFixedSpaceMax );
 		adjustedOverlapsInOriginalTileSpace[ 1 ] = new FinalInterval( overlapInMovingSpaceMin, overlapInMovingSpaceMax );
 		return adjustedOverlapsInOriginalTileSpace;
+	}
+
+	/**
+	 * Returns helper object containing required offset values for both tiles to be able to compute the shift vector.
+	 *
+	 * @param tileBoxPair
+	 * @param overlapsInOriginalTileSpace
+	 * @return
+	 */
+	public static OffsetConverter getOffsetConverter( final TilePair tileBoxPair, final Interval[] overlapsInOriginalTileSpace )
+	{
+		final int dim = tileBoxPair.getA().numDimensions();
+
+		final long[][] roiToOriginalTileOffset = new long[ 2 ][];
+		for ( int i = 0; i < 2; ++i )
+		{
+			roiToOriginalTileOffset[ i ] = new long[ dim ];
+			for ( int d = 0; d < dim; ++d )
+				roiToOriginalTileOffset[ i ][ d ] = overlapsInOriginalTileSpace[ i ].min( d );
+		}
+
+		final double[] originalTileOffsetToMovingTileBox = Intervals.minAsDoubleArray( tileBoxPair.getB().getBoundaries() );
+
+		return new FinalOffsetConverter( roiToOriginalTileOffset, originalTileOffsetToMovingTileBox );
 	}
 
 	/**

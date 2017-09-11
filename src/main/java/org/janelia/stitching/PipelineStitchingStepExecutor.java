@@ -38,7 +38,6 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealFloatConverter;
-import net.imglib2.exception.ImgLibException;
 import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
@@ -515,7 +514,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					);
 
 				// get required offsets for roi parts
-				final OffsetConverter offsetConverter = getOffsetConverter( tileBoxPair, overlapsInOriginalTileSpace );
+				final OffsetConverter offsetConverter = SplitTileOperations.getOffsetConverter( tileBoxPair, overlapsInOriginalTileSpace );
 
 				final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( tileBoxPair, roiImps, searchRadius, offsetConverter );
 
@@ -659,59 +658,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		return searchRadiusEstimator;
 	}
 
-	private SearchRadius estimateSearchRadius( final TileSearchRadiusEstimator searchRadiusEstimator, final TilePair tilePair ) throws PipelineExecutionException
-	{
-		final TileInfo[] tilePairArr = tilePair.toArray();
-		final int minNumNearestNeighbors = job.getArgs().minStatsNeighborhood();
-		final SearchRadius[] tilesSearchRadius = new SearchRadius[ tilePairArr.length ];
-		for ( int j = 0; j < tilePairArr.length; j++ )
-		{
-			tilesSearchRadius[ j ] = searchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( tilePairArr[ j ] );
-			if ( tilesSearchRadius[ j ].getUsedPointsIndexes().size() < minNumNearestNeighbors )
-			{
-				// TODO: pass actions to update accumulators
-//				notEnoughNeighborsWithinConfidenceIntervalPairsCount.add( 1 );
-
-//				System.out.println( "Found " + searchRadiusEstimationWindow.getUsedPointsIndexes().size() + " neighbors within the search window but we require " + numNearestNeighbors + " nearest neighbors, perform a K-nearest neighbor search instead..." );
-				System.out.println();
-				System.out.println( tilePair + ": found " + tilesSearchRadius[ j ].getUsedPointsIndexes().size() + " neighbors within the search window of the " + ( j == 0 ? "fixed" : "moving" ) + " tile but we require at least " + minNumNearestNeighbors + " nearest neighbors, so ignore this tile pair for now" );
-				System.out.println();
-
-				// TODO: should we do k-neighbors request instead of skipping this tile pair?
-//				final SearchRadius searchRadiusNearestNeighbors = localSearchRadiusEstimator.getSearchRadiusTreeUsingKNearestNeighbors( movingTile, numNearestNeighbors );
-//				if ( searchRadiusNearestNeighbors.getUsedPointsIndexes().size() != numNearestNeighbors )
-//				{
-//					if ( localSearchRadiusEstimator.getNumPoints() >= numNearestNeighbors )
-//						throw new PipelineExecutionException( "Required " + numNearestNeighbors + " nearest neighbors, found only " + searchRadiusNearestNeighbors.getUsedPointsIndexes().size() );
-//					else if ( searchRadiusNearestNeighbors.getUsedPointsIndexes().size() != localSearchRadiusEstimator.getNumPoints() )
-//						throw new PipelineExecutionException( "Number of tiles in the stitched solution = " + localSearchRadiusEstimator.getNumPoints() + ", found " + searchRadiusNearestNeighbors.getUsedPointsIndexes().size() + " neighbors" );
-//					else
-//						System.out.println( "Got only " + localSearchRadiusEstimator.getNumPoints() + " neighbors as it is the size of the stitched solution" );
-//				}
-//				searchRadius = searchRadiusNearestNeighbors;
-				return null;
-			}
-			else
-			{
-				System.out.println( tilePair + ": found " + tilesSearchRadius[ j ].getUsedPointsIndexes().size() + " neighbors within the search window for the " + ( j == 0 ? "fixed" : "moving" ) + " tile, estimate search radius based on that" );
-			}
-		}
-
-		System.out.println();
-		System.out.println( tilePair + ": found search radiuses for both tiles in the pair, get a combined search radius for the moving tile" );
-		System.out.println();
-
-		final SearchRadius searchRadius = searchRadiusEstimator.getCombinedCovariancesSearchRadius( tilesSearchRadius[ 0 ], tilesSearchRadius[ 1 ] );
-
-		final Interval boundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
-		System.out.println( String.format( tilePair + ": estimated combined search radius for the moving tile. Bounding box: min=%s, max=%s, size=%s",
-				Arrays.toString( Intervals.minAsIntArray( boundingBox ) ),
-				Arrays.toString( Intervals.maxAsIntArray( boundingBox ) ),
-				Arrays.toString( Intervals.dimensionsAsIntArray( boundingBox ) ) ) );
-
-		return searchRadius;
-	}
-
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > ImagePlus[] prepareRoiImages(
 			final TilePair tileBoxPair,
 			final Interval[] overlapsInOriginalTileSpace,
@@ -810,36 +756,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		Gauss3.gauss( sigmas, extendedImage, image, new SameThreadExecutorService() );
 	}
 
-	private List< TileInfo > divideRoiIntoParts( final long[] dimensions, final int shortestEdgeDimension, final int splitOverlapParts )
-	{
-		final Boundaries fullRoi = new Boundaries( dimensions );
-		final int[] roiPartsCount = new int[ fullRoi.numDimensions() ];
-		Arrays.fill( roiPartsCount, splitOverlapParts );
-		roiPartsCount[ shortestEdgeDimension ] = 1;
-		final List< TileInfo > roiParts = TileOperations.divideSpaceByCount( fullRoi, roiPartsCount );
-		System.out.println( String.format( "Splitting the overlap in %d subintervals with grid of %s..", roiParts.size(), Arrays.toString( roiPartsCount ) ) );
-		return roiParts;
-	}
-
-	private ImagePlus[] getRoiPartImages( final ImagePlus[] roiImps, final Interval roiPart ) throws ImgLibException
-	{
-		final ImagePlus[] roiPartImps = new ImagePlus[ 2 ];
-		for ( int i = 0; i < 2; ++i )
-		{
-			// copy requested content into new image
-			final RandomAccessibleInterval< FloatType > roiImg = ImagePlusImgs.from( roiImps[ i ] );
-			final RandomAccessibleInterval< FloatType > roiPartImg = Views.offsetInterval( roiImg, roiPart );
-			final ImagePlusImg< FloatType, ? > roiPartDst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( roiPart ) );
-			final Cursor< FloatType > srcCursor = Views.flatIterable( roiPartImg ).cursor();
-			final Cursor< FloatType > dstCursor = Views.flatIterable( roiPartDst ).cursor();
-			while ( dstCursor.hasNext() || srcCursor.hasNext() )
-				dstCursor.next().set( srcCursor.next() );
-			roiPartImps[ i ] = roiPartDst.getImagePlus();
-			Utils.workaroundImagePlusNSlices( roiPartImps[ i ] );
-		}
-		return roiPartImps;
-	}
-
 	private double computeVariance( final ImagePlus[] roiPartImps )
 	{
 		double pixelSum = 0, pixelSumSquares = 0;
@@ -858,32 +774,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 		final double variance = pixelSumSquares / pixelCount - Math.pow( pixelSum / pixelCount, 2 );
 		return variance;
-	}
-
-	/**
-	 * Returns helper object containing required offset values for both tiles to be able to compute the shift vector.
-	 *
-	 * @param tileBoxPair
-	 * @param overlapsInOriginalTileSpace
-	 * @return
-	 */
-	private OffsetConverter getOffsetConverter( final TilePair tileBoxPair, final Interval[] overlapsInOriginalTileSpace )
-	{
-		final int dim = tileBoxPair.getA().numDimensions();
-
-		// for transforming 'roi offset' to 'tile offset' (here tiles stand for boxes, and rois stand for extended overlapping intervals between the boxes)
-		final long[][] roiToTileOffset = new long[ 2 ][];
-		for ( int i = 0; i < 2; ++i )
-		{
-			roiToTileOffset[ i ] = new long[ dim ];
-			for ( int d = 0; d < roiToTileOffset[ i ].length; ++d )
-				roiToTileOffset[ i ][ d ] = overlapsInOriginalTileSpace[ i ].min( d ) - tileBoxPair.toArray()[ i ].getBoundaries().min( d );
-		}
-
-		// for transforming 'tile offset' to 'global offset' (here tile offset is in the coordinate space of the fixed box, and global space is of the original fixed tile)
-		final double[] globalOffset = Intervals.minAsDoubleArray( tileBoxPair.getA().getBoundaries() );
-
-		return new FinalOffsetConverter( roiToTileOffset, globalOffset );
 	}
 
 	private SerializablePairWiseStitchingResult stitchPairwise(
@@ -916,12 +806,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 		else
 		{
-			// compute new tile offset
+			// compute new offset between original tiles
 			final double[] tileOffset = offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( result.getOffset() ) );
 			for ( int d = 0; d < tileOffset.length; ++d )
 				result.getOffset()[ d ] = ( float ) tileOffset[ d ];
 
-			// create point pair using center point of each ROI
+			// create point pair using center point of each tile box
 			final Point fixedTileBoxCenterPoint = new Point( SplitTileOperations.getTileBoxMiddlePoint( tileBoxPair.getA() ) );
 			final double[] movingTileBoxCenter = new double[ result.getNumDimensions() ];
 			for ( int d = 0; d < movingTileBoxCenter.length; ++d )
