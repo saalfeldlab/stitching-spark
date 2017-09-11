@@ -30,7 +30,6 @@ import org.janelia.util.concurrent.SameThreadExecutorService;
 import ij.ImagePlus;
 import mpicbg.imglib.custom.OffsetConverter;
 import mpicbg.imglib.custom.PointValidator;
-import mpicbg.models.Point;
 import net.imglib2.Cursor;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
@@ -807,17 +806,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		else
 		{
 			// compute new offset between original tiles
-			final double[] tileOffset = offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( result.getOffset() ) );
-			for ( int d = 0; d < tileOffset.length; ++d )
-				result.getOffset()[ d ] = ( float ) tileOffset[ d ];
+			final double[] originalTileOffset = offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( result.getOffset() ) );
+			for ( int d = 0; d < originalTileOffset.length; ++d )
+				result.getOffset()[ d ] = ( float ) originalTileOffset[ d ];
 
-			// create point pair using center point of each tile box
-			final Point fixedTileBoxCenterPoint = new Point( SplitTileOperations.getTileBoxMiddlePoint( tileBoxPair.getA() ) );
-			final double[] movingTileBoxCenter = new double[ result.getNumDimensions() ];
-			for ( int d = 0; d < movingTileBoxCenter.length; ++d )
-				movingTileBoxCenter[ d ] = fixedTileBoxCenterPoint.getL()[ d ] - result.getOffset( d );
-			final Point movingTileBoxCenterPoint = new Point( movingTileBoxCenter );
-			final PointPair pointPair = new PointPair( fixedTileBoxCenterPoint, movingTileBoxCenterPoint );
+			final PointPair pointPair = SplitTileOperations.createPointPair( tileBoxPair, originalTileOffset );
 
 			result.setPointPair( pointPair );
 			result.setTilePair( tileBoxPair );

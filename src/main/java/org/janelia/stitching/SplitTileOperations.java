@@ -7,6 +7,7 @@ import java.util.List;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 
 import mpicbg.imglib.custom.OffsetConverter;
+import mpicbg.models.Point;
 import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
@@ -254,6 +255,25 @@ public class SplitTileOperations
 		final double[] originalTileOffsetToMovingTileBox = Intervals.minAsDoubleArray( tileBoxPair.getB().getBoundaries() );
 
 		return new FinalOffsetConverter( roiToOriginalTileOffset, originalTileOffsetToMovingTileBox );
+	}
+
+	/**
+	 * Creates a point pair that can be used as {@link PointMatch} between the fixed tile and the moving tile using center point of the fixed tile box.
+	 *
+	 * @param tileBoxPair
+	 * @param originalTileOffset
+	 * @return
+	 */
+	public static PointPair createPointPair( final TilePair tileBoxPair, final double[] originalTileOffset )
+	{
+		// create point pair using center point of each tile box
+		final Point fixedTileBoxCenterPoint = new Point( getTileBoxMiddlePoint( tileBoxPair.getA() ) );
+		final double[] movingTileBoxCenter = new double[ originalTileOffset.length ];
+		for ( int d = 0; d < movingTileBoxCenter.length; ++d )
+			movingTileBoxCenter[ d ] = fixedTileBoxCenterPoint.getL()[ d ] - originalTileOffset[ d ];
+		final Point movingTileBoxCenterPoint = new Point( movingTileBoxCenter );
+		final PointPair pointPair = new PointPair( fixedTileBoxCenterPoint, movingTileBoxCenterPoint );
+		return pointPair;
 	}
 
 	/**
