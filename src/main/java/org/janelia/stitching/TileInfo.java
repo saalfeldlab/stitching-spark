@@ -201,35 +201,4 @@ public class TileInfo implements Cloneable, RealInterval {
 		for ( int d = 0; d < max.numDimensions(); ++d )
 			max.setPosition( realMax( d ), d );
 	}
-
-	// writing/reading AffineTransform3D for supporting Serializable property
-	/*private void writeObject( final ObjectOutputStream oos ) throws IOException
-	{
-		oos.defaultWriteObject();
-		final double[][] transformMatrix;
-		if ( transform == null )
-		{
-			transformMatrix = null;
-		}
-		else
-		{
-			transformMatrix = new double[ 3 ][ 4 ];
-			transform.toMatrix( transformMatrix );
-		}
-		oos.writeObject( transformMatrix );
-	}
-	private void readObject( final ObjectInputStream ois ) throws ClassNotFoundException, IOException
-	{
-		ois.defaultReadObject();
-		final double[][] transformMatrix = ( double[][] ) ois.readObject();
-		if ( transformMatrix == null )
-		{
-			transform = null;
-		}
-		else
-		{
-			transform = new AffineTransform3D();
-			transform.set( transformMatrix );
-		}
-	}*/
 }
