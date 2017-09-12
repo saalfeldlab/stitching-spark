@@ -16,6 +16,7 @@ import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
+import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
 
@@ -128,7 +129,7 @@ public class TileInfoJSONProvider
 			{
 				final JsonArray jsonRowArray = new JsonArray();
 				for ( int col = 0; col < src.numDimensions() + 1; ++col )
-					jsonRowArray.add( src.get( row, col ) );
+					jsonRowArray.add( new JsonPrimitive( src.get( row, col ) ) );
 				jsonMatrixArray.add( jsonRowArray );
 			}
 			return jsonMatrixArray;
