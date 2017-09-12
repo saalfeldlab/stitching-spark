@@ -220,7 +220,7 @@ public class GlobalOptimizationPerformer
 
 		long elapsed = System.nanoTime();
 
-		final int iterations = 2000;
+		final int iterations = 5000;
 		tc.preAlign();
 		tc.optimize( 10, iterations, iterations, DAMPNESS_FACTOR, 1 );
 		elapsed = System.nanoTime() - elapsed;

@@ -17,8 +17,6 @@ import org.apache.spark.broadcast.Broadcast;
 
 import ij.ImagePlus;
 import mpicbg.models.Affine3D;
-import mpicbg.models.IllDefinedDataPointsException;
-import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Tile;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
@@ -29,7 +27,7 @@ public class StitchingOptimizer implements Serializable
 	private static final long serialVersionUID = -3873876669757549452L;
 
 	private static final double MAX_ALLOWED_ERROR_LIMIT = 30;
-	private static final double INITIAL_MAX_ALLOWED_ERROR = 5;
+	private static final double INITIAL_MAX_ALLOWED_ERROR = 15;
 	private static final double MAX_ALLOWED_ERROR_STEP = 5;
 
 	private static double getMaxAllowedError( final int iteration )
@@ -51,6 +49,8 @@ public class StitchingOptimizer implements Serializable
 
 	private static final class OptimizationResult implements Comparable< OptimizationResult >
 	{
+		public final List< ImagePlusTimePoint > optimized;
+
 		public final OptimizationParameters optimizationParameters;
 		public final double score;
 
@@ -60,6 +60,7 @@ public class StitchingOptimizer implements Serializable
 		public final double avgDisplacement;
 
 		public OptimizationResult(
+				final List< ImagePlusTimePoint > optimized,
 				final double maxAllowedError,
 				final OptimizationParameters optimizationParameters,
 				final int fullGraphSize,
@@ -68,6 +69,7 @@ public class StitchingOptimizer implements Serializable
 				final double avgDisplacement,
 				final double maxDisplacement )
 		{
+			this.optimized = optimized;
 			this.optimizationParameters = optimizationParameters;
 			this.remainingGraphSize = remainingGraphSize;
 			this.remainingPairs = remainingPairs;
@@ -124,21 +126,7 @@ public class StitchingOptimizer implements Serializable
 			final double maxAllowedError = getMaxAllowedError( iteration );
 			logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 
-			final OptimizationParameters bestOptimizationParameters = findBestOptimizationParameters( tileBoxShifts, maxAllowedError, logWriter );
-
-			logWriter.println();
-			logWriter.println( "Determined optimization parameters:  min.cross.correlation=" + bestOptimizationParameters.minCrossCorrelation + ", min.variance=" + bestOptimizationParameters.minVariance );
-			System.out.println( "Stitching iteration " + iteration + ": Determined optimization parameters:  min.cross.correlation=" + bestOptimizationParameters.minCrossCorrelation + ", min.variance=" + bestOptimizationParameters.minVariance );
-
-			final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( tileBoxShifts, bestOptimizationParameters );
-			final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
-			final List< ImagePlusTimePoint > optimized = optimizationPerformer.optimize( comparePointPairs, job.getParams(), logWriter );
-
-			System.out.println();
-			System.out.println("*********");
-			System.out.println("tiles replaced to TranslationModel: " + optimizationPerformer.replacedTiles );
-			System.out.println("*********");
-			System.out.println();
+			final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter );
 
 			// Update tile transforms
 			for ( int channel = 0; channel < job.getChannels(); channel++ )
@@ -146,7 +134,7 @@ public class StitchingOptimizer implements Serializable
 				final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( job.getTiles( channel ) );
 
 				final List< TileInfo > newTiles = new ArrayList<>();
-				for ( final ImagePlusTimePoint optimizedTile : optimized )
+				for ( final ImagePlusTimePoint optimizedTile : bestOptimization.optimized )
 				{
 					final Affine3D< ? > affineModel = ( Affine3D< ? > ) optimizedTile.getModel();
 					final double[][] matrix = new double[ 3 ][ 4 ];
@@ -184,21 +172,14 @@ public class StitchingOptimizer implements Serializable
 					);
 			}
 		}
-		catch ( final NotEnoughDataPointsException | IllDefinedDataPointsException e )
-		{
-			System.out.println( "Optimization failed:" );
-			e.printStackTrace();
-			throw new RuntimeException( e );
-		}
 	}
 
-	private OptimizationParameters findBestOptimizationParameters( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final double maxAllowedError, final PrintWriter logWriter )
+	private OptimizationResult findBestOptimization( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final double maxAllowedError, final PrintWriter logWriter )
 	{
 		final List< OptimizationParameters > optimizationParametersList = new ArrayList<>();
-//		for ( double testMinCrossCorrelation = 0.1; testMinCrossCorrelation <= 1; testMinCrossCorrelation += 0.05 )
-//			for ( double testMinVariance = 0; testMinVariance <= 300; testMinVariance += 1 + ( int ) testMinVariance / 10 )
-//				optimizationParametersList.add( new OptimizationParameters( testMinCrossCorrelation, testMinVariance ) );
-		optimizationParametersList.add( new OptimizationParameters( 0, 0 ) );
+		for ( double testMinCrossCorrelation = 0.1; testMinCrossCorrelation <= 1; testMinCrossCorrelation += 0.05 )
+			for ( double testMinVariance = 0; testMinVariance <= 300; testMinVariance += 1 + ( int ) testMinVariance / 10 )
+				optimizationParametersList.add( new OptimizationParameters( testMinCrossCorrelation, testMinVariance ) );
 
 		final SerializableStitchingParameters stitchingParameters = job.getParams();
 		final int tilesCount = job.getTiles( 0 ).length;
@@ -216,15 +197,22 @@ public class StitchingOptimizer implements Serializable
 
 				final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
 				GlobalOptimizationPerformer.suppressOutput();
-				optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
+				final List< ImagePlusTimePoint > optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
+
+				// ignore this configuration if for some tiles there are not enough matches
+				if ( optimizationPerformer.replacedTiles != 0 )
+					return null;
+
 				final OptimizationResult optimizationResult = new OptimizationResult(
+						optimized,
 						maxAllowedError,
 						optimizationParameters,
 						tilesCount,
 						optimizationPerformer.remainingGraphSize,
 						validPairs,
 						optimizationPerformer.avgDisplacement,
-						optimizationPerformer.maxDisplacement );
+						optimizationPerformer.maxDisplacement
+					);
 				return optimizationResult;
 			}
 		).collect() );
@@ -232,6 +220,7 @@ public class StitchingOptimizer implements Serializable
 		broadcastedTileBoxShifts.destroy();
 		GlobalOptimizationPerformer.restoreOutput();
 
+		optimizationResultList.removeAll( Collections.singleton( null ) );
 		Collections.sort( optimizationResultList );
 
 		if ( logWriter != null )
@@ -243,7 +232,7 @@ public class StitchingOptimizer implements Serializable
 				logWriter.println( "score=" + optimizationResult.score + ", graph=" + optimizationResult.remainingGraphSize + ", pairs=" + optimizationResult.remainingPairs + ", avg.error=" + optimizationResult.avgDisplacement + ", max.error=" + optimizationResult.maxDisplacement + ";  cross.corr=" + optimizationResult.optimizationParameters.minCrossCorrelation + ", variance=" + optimizationResult.optimizationParameters.minVariance );
 		}
 
-		return optimizationResultList.get( 0 ).optimizationParameters;
+		return optimizationResultList.get( 0 );
 	}
 
 	private Vector< ComparePointPair > createComparePointPairs( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final OptimizationParameters optimizationParameters )
