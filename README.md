@@ -30,8 +30,11 @@ mvn clean package
 mvn clean package -Pspark-local
 ```
 </details>
+<br/>
 
 The scripts for starting the application are located under `scripts/spark-janelia` and `scripts/spark-local`, and their usage is explained in the next steps.
+
+If running locally, you can access the Spark job tracker at http://localhost:4040/ to monitor the progress of the tasks.
 
 
 ### 2. Preparing input tile configuration files
