@@ -28,6 +28,33 @@
 		<scijava.jvm.version>1.8</scijava.jvm.version>
 	</properties>
 
+	<profiles>
+		<profile>
+			<id>spark-provided</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.apache.spark</groupId>
+					<artifactId>spark-core_2.11</artifactId>
+					<version>2.1.0</version>
+					<scope>provided</scope>
+				</dependency>
+			</dependencies>
+		</profile>
+		<profile>
+			<id>spark-local</id>
+			<dependencies>
+				<dependency>
+					<groupId>org.apache.spark</groupId>
+					<artifactId>spark-core_2.11</artifactId>
+					<version>2.1.0</version>
+				</dependency>
+			</dependencies>
+		</profile>
+	</profiles>
+
 	<dependencies>
 		<dependency>
 			<groupId>sc.fiji</groupId>
@@ -42,12 +69,6 @@
 			<groupId>mpicbg</groupId>
 			<artifactId>mpicbg</artifactId>
 			<version>1.1.2-SNAPSHOT</version>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.spark</groupId>
-			<artifactId>spark-core_2.11</artifactId>
-			<version>2.1.0</version>
-			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>args4j</groupId>
