@@ -16,7 +16,7 @@ git clone --recursive https://github.com/saalfeldlab/stitching-spark.git
 The application can be executed on Janelia cluster or locally. Build the package for the desired execution environment:
 
 <details>
-<summary><u>Compiling for running on Janelia cluster</u></summary>
+<summary><b>Compiling for running on Janelia cluster</b></summary>
 
 ```bash
 mvn clean package
@@ -24,7 +24,7 @@ mvn clean package
 </details>
 
 <details>
-<summary><u>Compiling for running on local machine</u></summary>
+<summary><b>Compiling for running on local machine</b></summary>
 
 ```bash
 mvn clean package -Pspark-local
@@ -56,7 +56,7 @@ The application requires an input file containing the registered tiles configura
 ### 3. Flatfield estimation
 
 <details>
-<summary><u>Run on Janelia cluster</u></summary>
+<summary><b>Run on Janelia cluster</b></summary>
 
 ```bash
 ./flatfield.sh <number of cluster nodes> -i ch0.json
@@ -64,7 +64,7 @@ The application requires an input file containing the registered tiles configura
 </details>
 
 <details>
-<summary><u>Run on local machine</u></summary>
+<summary><b>Run on local machine</b></summary>
 
 ```bash
 python flatfield.py -i ch0.json
@@ -77,7 +77,7 @@ The next steps will detect the flatfield folder and will automatically use the e
 ### 4. Stitch
 
 <details>
-<summary><u>Run on Janelia cluster</u></summary>
+<summary><b>Run on Janelia cluster</b></summary>
 
 ```bash
 ./stitch.sh <number of cluster nodes> -i ch0.json -i ch1.json
@@ -85,7 +85,7 @@ The next steps will detect the flatfield folder and will automatically use the e
 </details>
 
 <details>
-<summary><u>Run on local machine</u></summary>
+<summary><b>Run on local machine</b></summary>
 
 ```bash
 python stitch.py -i ch0.json -i ch1.json
@@ -103,7 +103,7 @@ The pipeline incorporating a higher-order model is currently under development i
 ### 5. Export
 
 <details>
-<summary><u>Run on Janelia cluster</u></summary>
+<summary><b>Run on Janelia cluster</b></summary>
 
 ```bash
 ./export.sh <number of cluster nodes> -i ch0-final.json -i ch1-final.json
@@ -111,7 +111,7 @@ The pipeline incorporating a higher-order model is currently under development i
 </details>
 
 <details>
-<summary><u>Run on local machine</u></summary>
+<summary><b>Run on local machine</b></summary>
 
 ```bash
 python export-local.py -i ch0-final.json -i ch1-final.json
