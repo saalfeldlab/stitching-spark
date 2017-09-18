@@ -49,8 +49,7 @@ The application requires an input file containing the registered tiles configura
   "file" : "FCF_CSMH__54383_20121206_35_C3_zb15_zt01_63X_0-0-0_R1_L087_20130108192825183.lsm.tif",
   "position" : [716.932762003862, -694.0887500300357, -77.41783189603937],
   "size" : [991, 992, 953]
-},
-...
+}
 ]
 ```
 
