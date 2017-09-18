@@ -1,8 +1,8 @@
 [submodule "spark-janelia"]
-	path = startup-janelia/spark-janelia
+	path = scripts/spark-janelia/spark-janelia
 	url = https://github.com/JaneliaSciComp/spark-janelia.git
 	branch = master
 [submodule "flintstone"]
-	path = startup-janelia/flintstone
+	path = scripts/spark-janelia/flintstone
 	url = https://github.com/saalfeldlab/flintstone.git
 	branch = lsf
