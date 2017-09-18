@@ -3,9 +3,42 @@ Reconstruct big images from overlapping tiled images on a Spark cluster.
 
 The code is based on the Stitching plugin for Fiji https://github.com/fiji/Stitching
 
-#### Input
-The application requires an input file containing the registered tiles configuration. For convenience, it should be a JSON formatted as follows:
+## Usage
+
+### 1. Building the package
+
+Clone the repository with submodules:
+
+```bash
+git clone --recursive https://github.com/saalfeldlab/stitching-spark.git 
 ```
+
+The application can be executed on Janelia cluster or locally. Build the package for the desired execution environment:
+
+<details>
+<summary><u>Compiling for running on Janelia cluster</u></summary>
+
+```bash
+mvn clean package
+```
+</details>
+
+<details>
+<summary><u>Compiling for running on local machine</u></summary>
+
+```bash
+mvn clean package -Pspark-local
+```
+</details>
+
+The scripts for starting the application are located under `scripts/spark-janelia` and `scripts/spark-local`, and their usage is explained in the next steps.
+
+
+### 2. Preparing input tile configuration files
+
+The application requires an input file containing the registered tiles configuration for each channel. It should be a JSON formatted as follows:
+
+```json
 [
 {
   file : "FCF_CSMH__54383_20121206_35_C3_zb15_zt01_63X_0-0-0_R1_L086_20130108192758780.lsm.tif",
@@ -17,79 +50,73 @@ The application requires an input file containing the registered tiles configura
   position : [716.932762003862, -694.0887500300357, -77.41783189603937],
   size : [991, 992, 953]
 },
-{
-  file : "FCF_CSMH__54383_20121206_35_C3_zb15_zt01_63X_0-0-0_R1_L088_20130108192856209.lsm.tif",
-  position : [190.0026915705376, -765.0362103552288, -79.91642981085911],
-  size : [991, 992, 953]
-}
+...
 ]
 ```
 
-Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L24-L59)
+### 3. Flatfield estimation
+
+<details>
+<summary><u>Run on Janelia cluster</u></summary>
 
 ```bash
-./flintstone.sh \
-  10 \
-  stitching-spark-0.0.1-SNAPSHOT.jar \
-  org.janelia.stitching.StitchingSpark \
-  -i '/home/igor/3d-fullsize-ch1/stitching/ch0-xy/10z/ch0_10z.json' \
-  --stitch \
-  -r um=0.097,0.097,0.180
+./flatfield.sh <number of cluster nodes> -i ch0.json
 ```
+</details>
 
-You can pass multiple tile configurations at once (e.g. channels) in the following way: `-i ch0.json -i ch1.json ...`
-The multichannel data will be averaged on-the-fly before computing pairwise shifts in order to get higher correlations because of denser signal.
-
-The application checks if a file 'ch0_10z_pairwise.json' exists. If not, it computes pairwise shifts for all tile pairs in approximate 3D six-neighborhood (i.e. diagonal overlaps are typically ignored, this is subject to change and for parameterization, e.g. how much overlap we consider sufficient to calculate pairwise shift vectors).  Shift vectors are stored in the earlier mentioned pairwise file.  Then, it performs global optimization with the parameters specified (or [hardcoded](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/stitching/GlobalOptimizationPerformer.java#L477)).  Output is saved as 'ch0_10z-final.json'
-
-If the directory of the input json file contains two files `v.tif` and `z.tif`, then they are used as flatfield correction coefficients that are applied to each input tile.  TODO specify this nicely in the configuration, e.g. we have independent and actually pretty different correction fields for each channel.
-
-If you omit the `--stitch` parameter, the job also exports (fuses) the result.
-
-
-# fusion (export)
-
-Run `org.janelia.stitching.StitchingSpark` with arguments explained [inline](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/stitching/StitchingArguments.java#L23-L58)
+<details>
+<summary><u>Run on local machine</u></summary>
 
 ```bash
-./flintstone.sh \
-  10 \
-  stitching-spark-0.0.1-SNAPSHOT.jar \
-  org.janelia.stitching.StitchingSpark \
-  -i '/home/igor/3d-fullsize-ch1/stitching/ch0-xy/10z/ch0_10z.json' \
-  --fuse \
-  -f 256 \
-  -r um=0.097,0.097,0.180
+python flatfield.py -i ch0.json
 ```
+</details>
 
-This generates an export of the stitched volume as specified in the json file.  The export uses '''max-border distance''' as fusion mode, no blending.  It currently exports into the ad-hoc BDV cell file format into the directory of the json input file, e.g. `/home/igor/3d-fullsize-ch1/stitching/ch0-xy/10z/channel0` and generates a json file for the BDV cell file viewer.
+This will create a folder named `ch0-flatfield/` near the provided `ch0.json` file. After the application is finished, it will store two files `S.tif` and `T.tif` (the brightfield and the offset respectively).
+The next steps will detect the flatfield folder and will automatically use the estimated flatfields for on-the-fly correction.
 
-You can pass multiple tile configurations at once (e.g. channels) in the following way: `-i ch0.json -i ch1.json ...`
-Each channel will be fused separately, but the resulting json file will contain export configurations for all channels, and the BDV cell file viewer will display all them together.
+### 4. Stitch
 
-As with stitching, if the directory of the input json file contains two files `v.tif` and `z.tif`, then they are used as flatfield correction coefficients that are applied to each input tile.  TODO specify this nicely in the configuration, e.g. we have independent and actually pretty different correction fields for each channel.
-
-# flat-field correction
-Run `org.janelia.flatfield.FlatfieldCorrection` with arguments explained [inline](https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/flatfield/FlatfieldCorrectionArguments.java#L18-L36)
+<details>
+<summary><u>Run on Janelia cluster</u></summary>
 
 ```bash
-./flintstone.sh \
-  10 \
-  stitching-spark-0.0.1-SNAPSHOT.jar \
-  org.janelia.flatfield.FlatfieldCorrection \
-  -i '/home/igor/3d-fullsize-ch1/config_filtered_ch1_unique.json' \
-  --min 0 \
-  --max 10000
+./stitch.sh <number of cluster nodes> -i ch0.json -i ch1.json
 ```
+</details>
 
-The main method checks if a sub-directory near the input json file exists that contains a histograms directory where histograms are stored as one file per slice.  If not, histograms are being generated.
+<details>
+<summary><u>Run on local machine</u></summary>
 
-Histograms are serialized `TreeMap<Short, Integer>` of sorted original integer intensity values without binning at this time (will change later to be more generic).  Binning considering `min`, `max`, and `bins` is performed at loading the treemaps.  If `min` and `max` are not specified, then the min and max of the entire stack is used (which can be terrribly slow and is probably not useful, so specify them).
+```bash
+python stitch.py -i ch0.json -i ch1.json
+```
+</details>
 
-Scale hierarchy including half-pixel shifts (ask if you do not know what that means and why and what the heck) is currently hard-coded.
+This will run the stitching performing a number of iterations until it cannot improve the solution anymore. The multichannel data will be averaged on-the-fly before computing pairwise shifts in order to get higher correlations because of denser signal.
 
-Here is what it does, modify pipeline as needed:
+As a result, it will create files `ch0-final.json` and `ch1-final.json` near the input tile configuration files.
+It will also store a file named `optimizer.txt` that will contain the statistics on average and max errors, number of retained tiles and edges in the final graph, and cross correlation and variance threshold values that were used to obtain the final solution.
 
-[https://github.com/saalfeldlab/stitching-spark/blob/master/src/main/java/org/janelia/flatfield/FlatfieldCorrection.java#L185]
+The current stitching method is iterative translation-based (improving the solution by building the prediction model).
+The pipeline incorporating a higher-order model is currently under development in the `split-tiles` branch.
 
-The pipeline generates output in the a subdirectory `/solution` in the input json file directory.
+### 5. Export
+
+<details>
+<summary><u>Run on Janelia cluster</u></summary>
+
+```bash
+./export.sh <number of cluster nodes> -i ch0-final.json -i ch1-final.json
+```
+</details>
+
+<details>
+<summary><u>Run on local machine</u></summary>
+
+```bash
+python export-local.py -i ch0-final.json -i ch1-final.json
+```
+</details>
+
+This will generate an [N5](https://github.com/saalfeldlab/n5) export under `export.n5/` folder. The export is fully compatible  with [N5 Viewer](https://github.com/saalfeldlab/n5-viewer) for browsing.
