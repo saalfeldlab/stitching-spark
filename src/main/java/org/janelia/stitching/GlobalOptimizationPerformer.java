@@ -11,10 +11,12 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.Vector;
 
+import mpicbg.models.ErrorStatistic;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
+import mpicbg.models.TileUtil;
 import mpicbg.stitching.ComparePair;
 import mpicbg.stitching.ImagePlusTimePoint;
 import mpicbg.stitching.PointMatchStitching;
@@ -470,7 +472,19 @@ public class GlobalOptimizationPerformer
 
 				final int iterations = 2000;
 				tc.preAlign();
-				tc.optimize( 10, iterations, iterations, 1.f, 1 );
+
+				TileUtil.optimizeConcurrently(
+						new ErrorStatistic( iterations + 1 ),
+						10,
+						iterations,
+						iterations,
+						1.f,
+						tc,
+						tc.getTiles(),
+						tc.getFixedTiles(),
+						1 // single-threaded because run with different configurations in parallel using Spark
+					);
+
 				elapsed = System.nanoTime() - elapsed;
 
 				if ( needSuppressingAndRestoringOutput )

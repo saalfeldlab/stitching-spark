@@ -27,6 +27,7 @@ import org.janelia.util.ImageImporter;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
+import mpicbg.imglib.custom.OffsetConverter;
 import net.imglib2.Cursor;
 import net.imglib2.FinalDimensions;
 import net.imglib2.Interval;
@@ -709,7 +710,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					{
 						roiToTileOffset[ i ] = new long[ roiPartInterval.numDimensions() ];
 						for ( int d = 0; d < roiToTileOffset[ i ].length; ++d )
-							roiToTileOffset[ i ][ d ] = (i==0?1:-1) * ( overlaps[ i ].min( d ) + roiPartInterval.min( d ) );
+							roiToTileOffset[ i ][ d ] = overlaps[ i ].min( d ) + roiPartInterval.min( d );
 					}
 
 					// 'global offset' is the position of the fixed tile so the relative shift can be transformed to the global coordinate space
@@ -717,16 +718,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					for ( int d = 0; d < globalOffset.length; ++d )
 						globalOffset[ d ] = fixedTile.getPosition( d );
 
-					// 'stage offset' of the moving tile relative to the fixed tile
-					final double[] stageOffset = new double[ roiPartInterval.numDimensions() ];
-					for ( int d = 0; d < stageOffset.length; ++d )
-						stageOffset[ d ] = movingTile.getPosition( d ) - fixedTile.getPosition( d );
+					final OffsetConverter offsetConverter = new FinalOffsetConverter( roiToTileOffset, globalOffset );
 
-					// TODO: make confidence interval implement PointValidator so we can take advantage of the same way of testing a particular shift
 					final SerializablePairWiseStitchingResult[] results = PairwiseStitchingPerformer.stitchPairwise(
 							roiPartImps[0], roiPartImps[1], null, null, null, null, timepoint, timepoint, job.getParams(), 1,
-							searchRadius, roiToTileOffset, globalOffset, stageOffset,
-							null, null
+							searchRadius, offsetConverter
 						);
 
 					final SerializablePairWiseStitchingResult result = results[ 0 ];
@@ -744,9 +740,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					{
 						result.setTilePair( pairOfTiles );
 						result.setVariance( variance );
-						for ( int i = 0; i < 2; ++i )
-							for ( int d = 0; d < roiPartInterval.numDimensions(); ++d )
-								result.getOffset()[ d ] += roiToTileOffset[ i ][ d ];
+
+						// compute new offset between original tiles
+						final double[] originalTileOffset = offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( result.getOffset() ) );
+						for ( int d = 0; d < originalTileOffset.length; ++d )
+							result.getOffset()[ d ] = ( float ) originalTileOffset[ d ];
+
 						roiPartsResults[ roiPartIndex ] = result;
 					}
 

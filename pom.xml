@@ -32,17 +32,16 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>Stitching_</artifactId>
-			<!--version>3.1.1-SNAPSHOT_PATCHED</version -->
 		</dependency>
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>legacy-imglib1</artifactId>
-			<version>1.1.4-DEPRECATED-PATCHED</version>
+			<version>1.1.4-DEPRECATED</version>
 		</dependency>
 		<dependency>
 			<groupId>mpicbg</groupId>
 			<artifactId>mpicbg</artifactId>
-			<version>1.1.2-SNAPSHOT-FORK</version>
+			<version>1.1.2-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.spark</groupId>
@@ -89,22 +88,22 @@
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5</artifactId>
-			<version>1.1.4-SNAPSHOT</version>
+			<version>1.2.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-imglib2</artifactId>
-			<version>1.0.1-SNAPSHOT</version>
+			<version>1.0.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-viewer_fiji</artifactId>
-			<version>1.1.1-SNAPSHOT</version>
+			<version>1.0.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-spark</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
+			<version>1.0.0</version>
 		</dependency>
 		<dependency>
 			<groupId>net.imglib2</groupId>
