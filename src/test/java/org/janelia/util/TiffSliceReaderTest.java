@@ -3,7 +3,6 @@ package org.janelia.util;
 import java.util.Random;
 
 import org.junit.Assert;
-import org.junit.Test;
 
 import ij.ImagePlus;
 import net.imglib2.Cursor;
@@ -19,13 +18,13 @@ public class TiffSliceReaderTest
 
 	final Random rnd = new Random();
 
-	@Test
+//	@Test
 	public void testUnsignedShort()
 	{
 		test( "/nrs/saalfeld/igor/test-images/unsigned-short.tif" );
 	}
 
-	@Test
+//	@Test
 	public void testFloat()
 	{
 		test( "/nrs/saalfeld/igor/test-images/float.tif" );
