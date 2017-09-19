@@ -16,7 +16,7 @@ git clone --recursive https://github.com/saalfeldlab/stitching-spark.git
 The application can be executed on Janelia cluster or locally. Build the package for the desired execution environment:
 
 <details>
-<summary><b>Compiling for running on Janelia cluster</b></summary>
+<summary><b>Compile for running on Janelia cluster</b></summary>
 
 ```bash
 mvn clean package
@@ -24,7 +24,7 @@ mvn clean package
 </details>
 
 <details>
-<summary><b>Compiling for running on local machine</b></summary>
+<summary><b>Compile for running on local machine</b></summary>
 
 ```bash
 mvn clean package -Pspark-local
@@ -83,6 +83,8 @@ python flatfield.py -i ch0.json
 This will create a folder named `ch0-flatfield/` near the provided `ch0.json` file. After the application is finished, it will store two files `S.tif` and `T.tif` (the brightfield and the offset respectively).
 The next steps will detect the flatfield folder and will automatically use the estimated flatfields for on-the-fly correction.
 
+The full list of available parameters for the flatfield script is available [here](https://github.com/saalfeldlab/stitching-spark/wiki/Flatfield-parameters).
+
 ### 4. Stitch
 
 <details>
@@ -109,6 +111,8 @@ It will also store a file named `optimizer.txt` that will contain the statistics
 The current stitching method is iterative translation-based (improving the solution by building the prediction model).
 The pipeline incorporating a higher-order model is currently under development in the `split-tiles` branch.
 
+The full list of available parameters for the stitch script is available [here](https://github.com/saalfeldlab/stitching-spark/wiki/Stitching-parameters).
+
 ### 5. Export
 
 <details>
@@ -128,3 +132,5 @@ python export-local.py -i ch0-final.json -i ch1-final.json
 </details>
 
 This will generate an [N5](https://github.com/saalfeldlab/n5) export under `export.n5/` folder. The export is fully compatible  with [N5 Viewer](https://github.com/saalfeldlab/n5-viewer) for browsing.
+
+The full list of available parameters for the export script is available [here](https://github.com/saalfeldlab/stitching-spark/wiki/Export-parameters).
