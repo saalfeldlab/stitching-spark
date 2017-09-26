@@ -68,7 +68,7 @@ The application requires an input file containing the registered tiles configura
 <summary><b>Run on Janelia cluster</b></summary>
 
 ```bash
-./flatfield.sh <number of cluster nodes> -i ch0.json
+spark-janelia/flatfield.py <number of cluster nodes> -i ch0.json
 ```
 </details>
 
@@ -76,7 +76,7 @@ The application requires an input file containing the registered tiles configura
 <summary><b>Run on local machine</b></summary>
 
 ```bash
-python flatfield.py -i ch0.json
+spark-local/flatfield.py -i ch0.json
 ```
 </details>
 
@@ -91,7 +91,7 @@ The full list of available parameters for the flatfield script is available [her
 <summary><b>Run on Janelia cluster</b></summary>
 
 ```bash
-./stitch.sh <number of cluster nodes> -i ch0.json -i ch1.json
+spark-janelia/stitch.py <number of cluster nodes> -i ch0.json -i ch1.json
 ```
 </details>
 
@@ -99,7 +99,7 @@ The full list of available parameters for the flatfield script is available [her
 <summary><b>Run on local machine</b></summary>
 
 ```bash
-python stitch.py -i ch0.json -i ch1.json
+spark-local/stitch.py -i ch0.json -i ch1.json
 ```
 </details>
 
@@ -119,7 +119,7 @@ The full list of available parameters for the stitch script is available [here](
 <summary><b>Run on Janelia cluster</b></summary>
 
 ```bash
-./export.sh <number of cluster nodes> -i ch0-final.json -i ch1-final.json
+spark-janelia/export.py <number of cluster nodes> -i ch0-final.json -i ch1-final.json
 ```
 </details>
 
@@ -127,7 +127,7 @@ The full list of available parameters for the stitch script is available [here](
 <summary><b>Run on local machine</b></summary>
 
 ```bash
-python export-local.py -i ch0-final.json -i ch1-final.json
+spark-local/export.py -i ch0-final.json -i ch1-final.json
 ```
 </details>
 
