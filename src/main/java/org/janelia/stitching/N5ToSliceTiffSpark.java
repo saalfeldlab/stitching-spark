@@ -4,6 +4,8 @@ import java.nio.file.Paths;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.spark.N5SliceTiffConverter;
 import org.janelia.saalfeldlab.n5.spark.TiffUtils;
@@ -61,11 +63,12 @@ public class N5ToSliceTiffSpark
 				if ( requestedChannel != null && channel != requestedChannel.intValue() )
 					continue;
 
+				final N5Writer n5 = N5.openFSWriter( n5Path );
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
 				final String outputChannelPath = Paths.get( outputPath, "ch" + channel ).toString();
 				N5SliceTiffConverter.convertToSliceTiff(
 						sparkContext,
-						n5Path,
+						n5,
 						n5DatasetPath,
 						outputChannelPath,
 						TiffUtils.TiffCompression.NONE

@@ -6,7 +6,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5;
-import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.spark.N5MaxIntensityProjection;
 import org.janelia.saalfeldlab.n5.spark.TiffUtils;
@@ -77,7 +77,7 @@ public class N5ToMIPsSpark
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
 				final String outputChannelPath = Paths.get( outputPath, "ch" + channel ).toString();
 
-				final N5Reader n5 = N5.openFSReader( n5Path );
+				final N5Writer n5 = N5.openFSWriter( n5Path );
 				final DatasetAttributes attributes = n5.getDatasetAttributes( n5DatasetPath );
 				final int[] cellDimensions = attributes.getBlockSize();
 
@@ -97,7 +97,7 @@ public class N5ToMIPsSpark
 
 				N5MaxIntensityProjection.createMaxIntensityProjection(
 						sparkContext,
-						n5Path,
+						n5,
 						n5DatasetPath,
 						mipStepsCells,
 						outputChannelPath,
