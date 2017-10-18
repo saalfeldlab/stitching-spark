@@ -1,9 +1,8 @@
 package org.janelia.stitching;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -22,81 +21,63 @@ import com.google.gson.Gson;
 
 public class TileInfoJSONProvider
 {
-	public static boolean isTilesConfiguration( final String input )
+	public static boolean isTilesConfiguration( final Reader reader ) throws IOException
 	{
-		try ( final FileReader reader = new FileReader( new File( input ) ) ) {
-			final TileInfo[] tiles = new Gson().fromJson( reader, TileInfo[].class );
-			return ( tiles != null && tiles.length > 0 && !tiles[ 0 ].isNull() );
-		} catch ( final IOException e ) {
-			return false;
-		}
+		final TileInfo[] tiles = loadTilesConfiguration( reader );
+		return ( tiles != null && tiles.length > 0 && !tiles[ 0 ].isNull() );
 	}
 
-	public static TileInfo[] loadTilesConfiguration( final String input ) throws IOException
+	public static TileInfo[] loadTilesConfiguration( final Reader reader ) throws IOException
 	{
-		System.out.println( "Loading tiles configuration from " + input );
-		try ( final FileReader reader = new FileReader( new File( input ) ) ) {
-			return new Gson().fromJson( reader, TileInfo[].class );
-		}
-	}
-
-	public static void saveTilesConfiguration( final TileInfo[] tiles, String output ) throws IOException
-	{
-		if ( !output.endsWith( ".json" ) )
-			output += ".json";
-
-		System.out.println( "Saving updated tiles configuration to " + output );
-		try ( final FileWriter writer = new FileWriter( output ) ) {
-			writer.write( new Gson().toJson( tiles ) );
-		}
-	}
-
-	public static boolean isPairwiseConfiguration( final String input )
-	{
-		try ( final FileReader reader = new FileReader( new File( input ) ) ) {
-			final List< SerializablePairWiseStitchingResult > pairwiseShifts = Arrays.asList( new Gson().fromJson( reader, SerializablePairWiseStitchingResult[].class ) );
-			return ( pairwiseShifts != null && !pairwiseShifts.isEmpty() && !pairwiseShifts.get( 0 ).isNull() );
-		} catch ( final IOException e ) {
-			return false;
-		}
-	}
-
-	public static ArrayList< SerializablePairWiseStitchingResult > loadPairwiseShifts( final String input ) throws IOException
-	{
-		System.out.println( "Loading pairwise shifts from " + input );
-		try ( final FileReader reader = new FileReader( new File( input ) ) ) {
-			return new ArrayList<>( Arrays.asList( new Gson().fromJson( reader, SerializablePairWiseStitchingResult[].class ) ) );
-		}
-	}
-
-	public static void savePairwiseShifts( final List< SerializablePairWiseStitchingResult > shifts, String output ) throws IOException
-	{
-		if ( !output.endsWith( ".json" ) )
-			output += ".json";
-
-		System.out.println( "Saving pairwise shifts to " + output );
-		try ( final FileWriter writer = new FileWriter( output ) ) {
-			writer.write( new Gson().toJson( shifts ) );
-		}
-	}
-
-	public static ArrayList< SerializablePairWiseStitchingResult[] > loadPairwiseShiftsMulti( final String input ) throws IOException
-	{
-		System.out.println( "Loading pairwise shifts (multiple) from " + input );
-		try ( final FileReader reader = new FileReader( new File( input ) ) )
+		try ( final Reader closeableReader = reader )
 		{
-			return new ArrayList<>( Arrays.asList( new Gson().fromJson( reader, SerializablePairWiseStitchingResult[][].class ) ) );
+			return new Gson().fromJson( closeableReader, TileInfo[].class );
 		}
 	}
 
-	public static void savePairwiseShiftsMulti( final List< SerializablePairWiseStitchingResult[] > shiftsMulti, String output ) throws IOException
+	public static void saveTilesConfiguration( final Writer writer, final TileInfo[] tiles ) throws IOException
 	{
-		if ( !output.endsWith( ".json" ) )
-			output += ".json";
+		try ( final Writer closeableWriter = writer )
+		{
+			closeableWriter.write( new Gson().toJson( tiles ) );
+		}
+	}
 
-		System.out.println( "Saving pairwise shifts (multiple) to " + output );
-		try ( final FileWriter writer = new FileWriter( output ) ) {
-			writer.write( new Gson().toJson( shiftsMulti ) );
+	public static boolean isPairwiseConfiguration( final Reader reader ) throws IOException
+	{
+		final List< SerializablePairWiseStitchingResult > pairwiseShifts = loadPairwiseShifts( reader );
+		return ( pairwiseShifts != null && !pairwiseShifts.isEmpty() && !pairwiseShifts.get( 0 ).isNull() );
+	}
+
+	public static ArrayList< SerializablePairWiseStitchingResult > loadPairwiseShifts( final Reader reader ) throws IOException
+	{
+		try ( final Reader closeableReader = reader )
+		{
+			return new ArrayList<>( Arrays.asList( new Gson().fromJson( closeableReader, SerializablePairWiseStitchingResult[].class ) ) );
+		}
+	}
+
+	public static void savePairwiseShifts( final Writer writer, final List< SerializablePairWiseStitchingResult > shifts ) throws IOException
+	{
+		try ( final Writer closeableWriter = writer )
+		{
+			closeableWriter.write( new Gson().toJson( shifts ) );
+		}
+	}
+
+	public static ArrayList< SerializablePairWiseStitchingResult[] > loadPairwiseShiftsMulti( final Reader reader ) throws IOException
+	{
+		try ( final Reader closeableReader = reader )
+		{
+			return new ArrayList<>( Arrays.asList( new Gson().fromJson( closeableReader, SerializablePairWiseStitchingResult[][].class ) ) );
+		}
+	}
+
+	public static void savePairwiseShiftsMulti( final Writer writer, final List< SerializablePairWiseStitchingResult[] > shiftsMulti ) throws IOException
+	{
+		try ( final Writer closeableWriter = writer )
+		{
+			closeableWriter.write( new Gson().toJson( shiftsMulti ) );
 		}
 	}
 }
