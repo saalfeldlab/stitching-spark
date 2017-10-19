@@ -5,6 +5,8 @@ import java.io.PrintWriter;
 import java.nio.file.Paths;
 import java.util.Arrays;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
@@ -13,10 +15,12 @@ public class TileInfoJSONToTxtConfigurationFormat
 {
 	public static void main( final String[] args ) throws IOException
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		final String inputFilepath = args[ 0 ];
 		final String outputFilepath = inputFilepath.substring( 0, inputFilepath.lastIndexOf( "." ) ) + ".txt";
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilepath );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( inputFilepath ) );
 		TileOperations.translateTilesToOriginReal( tiles );
 
 		try ( final PrintWriter writer = new PrintWriter( outputFilepath ) )

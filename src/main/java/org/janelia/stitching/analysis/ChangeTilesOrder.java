@@ -3,6 +3,8 @@ package org.janelia.stitching.analysis;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.ImageType;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -12,7 +14,9 @@ public class ChangeTilesOrder
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 
 		final List< TileInfo >[] channels = new ArrayList[] { new ArrayList<>(), new ArrayList<>() };
 		for ( final TileInfo tile : tiles)
@@ -36,6 +40,6 @@ public class ChangeTilesOrder
 			allTiles.get( i ).setType( ImageType.GRAY16 );
 		}
 
-		TileInfoJSONProvider.saveTilesConfiguration( allTiles.toArray( new TileInfo[0] ), Utils.addFilenameSuffix( args[0], "_out" ));
+		TileInfoJSONProvider.saveTilesConfiguration( allTiles.toArray( new TileInfo[0] ), dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[0], "_out" ) ) );
 	}
 }

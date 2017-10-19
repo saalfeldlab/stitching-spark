@@ -6,6 +6,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.Boundaries;
 import org.janelia.stitching.ImageType;
 import org.janelia.stitching.PipelineExecutionException;
@@ -140,6 +142,8 @@ public class ExportOverlaps
 
 	public static < T extends RealType< T > & NativeType< T > > void main( final String[] args ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		final String inputFilepath = args[ 0 ];
 		final String outputPath = inputFilepath + "_overlaps";
 		new File( outputPath ).mkdirs();
@@ -147,7 +151,7 @@ public class ExportOverlaps
 		final int tileIndex = Integer.parseInt( args[ 1 ] );
 		System.out.println( "Processing tile " + tileIndex );
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 		final TreeMap< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 
 		for ( final TileInfo tile : tiles )

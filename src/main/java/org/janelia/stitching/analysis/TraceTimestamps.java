@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -17,7 +19,9 @@ public class TraceTimestamps
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 		final List< Pair< TileInfo, Long > > timestamps = Utils.getTilesTimestamps( tiles );
 		final List< Pair< TileInfo, int[] > > coordinates = Utils.getTilesCoordinates( tiles );
 

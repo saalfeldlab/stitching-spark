@@ -13,6 +13,8 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -46,8 +48,10 @@ public class BackgroundTilesFiltering implements Serializable
 
 	public BackgroundTilesFiltering( final String input ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		this.input = input;
-		tiles = TileInfoJSONProvider.loadTilesConfiguration(input);
+		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( input ) );
 		sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "BackgroundTilesFiltering" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )

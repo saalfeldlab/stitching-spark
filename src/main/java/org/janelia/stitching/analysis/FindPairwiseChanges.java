@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.PipelineExecutionException;
 import org.janelia.stitching.SearchRadius;
 import org.janelia.stitching.TileInfo;
@@ -19,8 +21,10 @@ public class FindPairwiseChanges
 {
 	public static void main( final String[] args ) throws IOException, PipelineExecutionException
 	{
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) );
 
 		final List< TilePair > adjacentPairs = FilterAdjacentShifts.filterAdjacentPairs( TileOperations.findOverlappingTiles( stageTiles ) );
 		final List< TilePair > newAdjacentPairs = getPairsWithPrediction( stageTiles, stitchedTiles, 5, true );

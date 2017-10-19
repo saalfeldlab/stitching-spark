@@ -32,6 +32,8 @@ import org.apache.spark.Accumulator;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -152,8 +154,10 @@ public class IlluminationCorrectionHierarchical2D implements Serializable
 
 	public void run() throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		try {
-			tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilepath );
+			tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( inputFilepath ) );
 		} catch (final IOException e) {
 			e.printStackTrace();
 			return;

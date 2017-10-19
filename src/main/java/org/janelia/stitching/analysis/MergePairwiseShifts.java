@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
 
@@ -13,6 +15,8 @@ public class MergePairwiseShifts
 {
 	public static void main( final String[] args ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		String workingDir = null;
 		final Map< Integer, Map< Integer, SerializablePairWiseStitchingResult > > mergedShiftsMap = new TreeMap<>();
 		for ( final String input : args )
@@ -22,7 +26,7 @@ public class MergePairwiseShifts
 			else if (!workingDir.isEmpty() && !workingDir.equals( Paths.get( input ).getParent().toString()+"/" ))
 				workingDir="";
 
-			final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( input );
+			final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( input ) );
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
 			{
 				final int ind1 = Math.min( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
@@ -42,7 +46,7 @@ public class MergePairwiseShifts
 				mergedShifts.add( shift );
 
 		if ( !mergedShifts.isEmpty() )
-			TileInfoJSONProvider.savePairwiseShifts( mergedShifts, workingDir +"merged_pairwise_shifts_set.json" );
+			TileInfoJSONProvider.savePairwiseShifts( mergedShifts, dataProvider.getJsonWriter( workingDir +"merged_pairwise_shifts_set.json" ) );
 
 
 		int valid = 0;

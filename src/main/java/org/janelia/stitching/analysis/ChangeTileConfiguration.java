@@ -5,6 +5,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -19,8 +21,10 @@ public class ChangeTileConfiguration
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final TreeMap<Integer,TileInfo> tilesFrom = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] ) );
-		final TreeMap<Integer, TileInfo > tilesTo = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] ) );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TreeMap<Integer,TileInfo> tilesFrom = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) ) );
+		final TreeMap<Integer, TileInfo > tilesTo = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) ) );
 		final String what = args[ 2 ].trim();
 
 		final int tilesPerChannel = tilesTo.size();
@@ -59,7 +63,7 @@ public class ChangeTileConfiguration
 		System.out.println( "Processed: " + processed );
 
 		final TileInfo[] result = new ArrayList<>( tilesTo.values() ).toArray( new TileInfo[0] );
-		TileInfoJSONProvider.saveTilesConfiguration( result, Utils.addFilenameSuffix( args[ 1 ], "_changed_" + what ) );
+		TileInfoJSONProvider.saveTilesConfiguration( result, dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 1 ], "_changed_" + what ) ) );
 
 		System.out.println( "Done" );
 	}

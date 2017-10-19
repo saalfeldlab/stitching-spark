@@ -5,6 +5,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -14,7 +16,9 @@ public class ExtractShiftsForTile
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 0 ] ) );
 		final int tileIndex = Integer.parseInt( args[ 1 ] );
 
 		final List< SerializablePairWiseStitchingResult > shiftsForTile = new ArrayList<>();

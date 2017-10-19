@@ -4,6 +4,8 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Map;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
@@ -13,7 +15,9 @@ public class ExtractTilePosition
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 		TileOperations.translateTilesToOriginReal( tiles );
 		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 		for ( final int i : new int[] { 18299, 18300 } )

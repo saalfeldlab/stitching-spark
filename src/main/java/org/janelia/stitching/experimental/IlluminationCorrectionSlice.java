@@ -31,6 +31,8 @@ import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.serializer.KryoSerializer;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.ImageType;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -150,6 +152,8 @@ public class IlluminationCorrectionSlice implements Serializable
 
 	public void run() throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "IlluminationCorrection2" )
 				//.set( "spark.driver.maxResultSize", "8g" )
@@ -162,7 +166,7 @@ public class IlluminationCorrectionSlice implements Serializable
 			);
 
 		try {
-			tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilepath );
+			tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( inputFilepath ) );
 			N = tiles.length;
 		} catch (final IOException e) {
 			e.printStackTrace();
@@ -1310,7 +1314,8 @@ public class IlluminationCorrectionSlice implements Serializable
 
 		correctedTiles = task.collect().toArray( new TileInfo[0] );
 		try {
-			TileInfoJSONProvider.saveTilesConfiguration( correctedTiles, Utils.addFilenameSuffix( inputFilepath, "_corrected" ) );
+			final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+			TileInfoJSONProvider.saveTilesConfiguration( correctedTiles, dataProvider.getJsonWriter( Utils.addFilenameSuffix( inputFilepath, "_corrected" ) ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}

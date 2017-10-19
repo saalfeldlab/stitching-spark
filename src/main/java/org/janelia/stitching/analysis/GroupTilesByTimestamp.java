@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -15,7 +17,9 @@ public class GroupTilesByTimestamp
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 		for ( int i = 1; i < tiles.length; i++ )
 			if ( tiles[ i - 1].getIndex().intValue() + 1 != tiles[ i ].getIndex().intValue() )
 				throw new Exception( "Tiles are not sorted by index" );
@@ -38,7 +42,7 @@ public class GroupTilesByTimestamp
 		}
 
 		final String pairwiseSuffix = "_pairwise";
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( Utils.addFilenameSuffix( args[ 0 ], pairwiseSuffix ) );
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( Utils.addFilenameSuffix( args[ 0 ], pairwiseSuffix ) ) );
 		for ( int i = 0; i < tileGroups.size(); i++ )
 		{
 			final Set< Integer > groupTileIndexes = new HashSet<>();
@@ -50,8 +54,8 @@ public class GroupTilesByTimestamp
 					groupShifts.add( shift );
 
 			final String groupSuffix = "_group" + i;
-			TileInfoJSONProvider.saveTilesConfiguration( tileGroups.get( i ).toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( args[ 0 ], groupSuffix ) );
-			TileInfoJSONProvider.savePairwiseShifts( groupShifts, Utils.addFilenameSuffix( Utils.addFilenameSuffix( args[ 0 ], groupSuffix ), pairwiseSuffix ) );
+			TileInfoJSONProvider.saveTilesConfiguration( tileGroups.get( i ).toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 0 ], groupSuffix ) ) );
+			TileInfoJSONProvider.savePairwiseShifts( groupShifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix( Utils.addFilenameSuffix( args[ 0 ], groupSuffix ), pairwiseSuffix ) ) );
 		}
 	}
 }

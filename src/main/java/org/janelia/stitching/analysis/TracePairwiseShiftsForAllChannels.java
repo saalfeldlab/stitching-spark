@@ -8,6 +8,8 @@ import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -17,9 +19,11 @@ public class TracePairwiseShiftsForAllChannels
 {
 	public static void main( final String[] args ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		final Map< Integer, TileInfo >[] channelsMap = new TreeMap[ 2 ];
 		for ( int i = 0; i < channelsMap.length; i++ )
-			channelsMap[ i ] = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ i ] ) );
+			channelsMap[ i ] = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ i ] ) ) );
 
 		// validate
 		for ( int i = 1; i < channelsMap.length; i++ )
@@ -32,15 +36,15 @@ public class TracePairwiseShiftsForAllChannels
 
 		final Map< Integer, TileInfo >[] channelsFinalMap = new TreeMap[ 2 ];
 		for ( int i = 0; i < channelsFinalMap.length; i++ )
-			channelsFinalMap[ i ] = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 2 + i ] ) );
+			channelsFinalMap[ i ] = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 2 + i ] ) ) );
 
 
 		final List< SerializablePairWiseStitchingResult >[] shifts = new List[ 2 ];
 		for ( int i = 0; i < shifts.length; i++ )
-			shifts[ i ] = TileInfoJSONProvider.loadPairwiseShifts( args[ 4 + i ] );
+			shifts[ i ] = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 4 + i ] ) );
 
 		final String pairwiseShiftsCombinedFilepath = args.length > 7 ? args[ args.length - 2 ] : "";
-		final List< SerializablePairWiseStitchingResult > shiftsForCombinedChannels = !pairwiseShiftsCombinedFilepath.isEmpty() ? TileInfoJSONProvider.loadPairwiseShifts( pairwiseShiftsCombinedFilepath ) : null;
+		final List< SerializablePairWiseStitchingResult > shiftsForCombinedChannels = !pairwiseShiftsCombinedFilepath.isEmpty() ? TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( pairwiseShiftsCombinedFilepath ) ) : null;
 		final String outputFolder = args[ args.length - 1 ];
 
 		if ( shifts[ 0 ].size() != shifts[ 1 ].size() || shifts[ 0 ].size() != shiftsForCombinedChannels.size() )

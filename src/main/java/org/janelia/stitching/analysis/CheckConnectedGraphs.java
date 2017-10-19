@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileModelFactory;
@@ -32,7 +34,9 @@ public class CheckConnectedGraphs
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final TileInfo[] tileInfos = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tileInfos = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 		final TreeMap< Integer, TileInfo > tilesMap = Utils.createTilesMap( tileInfos );
 
 		System.out.println( "Finding overlapping pairs.." );

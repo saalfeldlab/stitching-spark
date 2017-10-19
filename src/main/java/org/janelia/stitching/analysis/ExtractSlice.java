@@ -8,6 +8,8 @@ import java.util.Arrays;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -19,6 +21,8 @@ public class ExtractSlice
 {
 	public static void main( final String[] args ) throws IOException
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		final String input = args[ 0 ];
 		final int slice = Integer.parseInt( args[ 1 ] );
 
@@ -27,7 +31,7 @@ public class ExtractSlice
 			final String outFolder = Paths.get( input ).getParent().toString() + "/slice" + slice;
 			new File(outFolder).mkdirs();
 
-			final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( input );
+			final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( input ) );
 			final JavaRDD< TileInfo > rdd = sparkContext.parallelize( Arrays.asList( tiles ) );
 			final TileInfo[] sliceTiles = rdd.map( tile ->
 				{
@@ -44,7 +48,7 @@ public class ExtractSlice
 				}
 			).collect().toArray( new TileInfo[ 0 ] );
 
-			TileInfoJSONProvider.saveTilesConfiguration( sliceTiles, Utils.addFilenameSuffix( input, "_slice" + slice ) );
+			TileInfoJSONProvider.saveTilesConfiguration( sliceTiles, dataProvider.getJsonWriter( Utils.addFilenameSuffix( input, "_slice" + slice ) ) );
 		}
 
 		System.out.println("Done");

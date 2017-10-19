@@ -2,6 +2,8 @@ package org.janelia.stitching.analysis;
 
 import java.util.List;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -19,7 +21,9 @@ public class FilterOutliers
 
 	public static void main_single_channel( final String[] args ) throws Exception
 	{
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 0 ] ) );
 
 		int before = 0, after = 0;
 		for ( int i = 0; i < shifts.size(); i++ )
@@ -44,16 +48,18 @@ public class FilterOutliers
 
 		System.out.println( "before="+before + ", after="+after);
 
-		TileInfoJSONProvider.savePairwiseShifts( shifts, Utils.addFilenameSuffix( args[ 0 ], "_inliers" ) );
+		TileInfoJSONProvider.savePairwiseShifts( shifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 0 ], "_inliers" ) ) );
 	}
 
 
 
 	public static void main/*_channels_discrepancy*/( final String[] args ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		final List< SerializablePairWiseStitchingResult >[] shifts = new List[2];
 		for ( int j = 0; j < 2; j++ )
-			shifts[j]=TileInfoJSONProvider.loadPairwiseShifts( args[ j ] );
+			shifts[j]=TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ j ] ) );
 
 		//final Point zero = new Point( new double[ ch0Shifts.get( 0 ).getNumDimensions() ] );
 		//final List< PairwiseShiftPointMatch > matches = new ArrayList<>(), inliers = new ArrayList<>();
@@ -107,7 +113,7 @@ public class FilterOutliers
 		//	match.getShift().setIsValidOverlap( true );
 
 		for ( int j = 0; j < 2; j++ )
-			TileInfoJSONProvider.savePairwiseShifts( shifts[j], Utils.addFilenameSuffix( args[ j ], "_inliers" ) );
+			TileInfoJSONProvider.savePairwiseShifts( shifts[j], dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ j ], "_inliers" ) ) );
 	}
 
 

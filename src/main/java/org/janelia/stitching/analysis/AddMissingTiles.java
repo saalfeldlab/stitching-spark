@@ -9,6 +9,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -27,9 +29,11 @@ public class AddMissingTiles
 {
 	public static void main( final String[] args ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		// Read inputs
-		final TreeMap< Integer, TileInfo > tilesInfoFinal = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] ) );
-		final List< SerializablePairWiseStitchingResult[] > shiftsMulti = TileInfoJSONProvider.loadPairwiseShiftsMulti( args[ 1 ] );
+		final TreeMap< Integer, TileInfo > tilesInfoFinal = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) ) );
+		final List< SerializablePairWiseStitchingResult[] > shiftsMulti = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( args[ 1 ] ) );
 
 		final List< TileInfo > tilesInfoAdded = new ArrayList<>();
 		final TreeMap< Integer, TileInfo > initialTilesInfo = Utils.createTilesMapMulti( shiftsMulti, false );
@@ -567,7 +571,7 @@ public class AddMissingTiles
 			//System.out.println( t.getPosition(0)+" "+t.getPosition(1)+" "+t.getPosition(2) );
 		}
 
-		TileInfoJSONProvider.saveTilesConfiguration( tilesInfoFinal.values().toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( args[ 0 ], "_all" ) );
+		TileInfoJSONProvider.saveTilesConfiguration( tilesInfoFinal.values().toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 0 ], "_all" ) ) );
 
 
 		System.out.println( "Done" );

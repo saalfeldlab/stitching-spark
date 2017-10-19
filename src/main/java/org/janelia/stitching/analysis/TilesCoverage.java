@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -22,8 +24,10 @@ public class TilesCoverage
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final Map< Integer, TileInfo > initialTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] ) );
-		final Map< Integer, TileInfo > resultingTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] ) );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final Map< Integer, TileInfo > initialTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) ) );
+		final Map< Integer, TileInfo > resultingTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) ) );
 
 		final TreeMap< Integer, TileInfo > uncoveredTiles = new TreeMap<>( initialTilesMap );
 		uncoveredTiles.keySet().removeAll( resultingTilesMap.keySet() );
