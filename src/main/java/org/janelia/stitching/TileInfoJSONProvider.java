@@ -35,7 +35,7 @@ public class TileInfoJSONProvider
 		}
 	}
 
-	public static void saveTilesConfiguration( final Writer writer, final TileInfo[] tiles ) throws IOException
+	public static void saveTilesConfiguration( final TileInfo[] tiles, final Writer writer ) throws IOException
 	{
 		try ( final Writer closeableWriter = writer )
 		{
@@ -57,7 +57,7 @@ public class TileInfoJSONProvider
 		}
 	}
 
-	public static void savePairwiseShifts( final Writer writer, final List< SerializablePairWiseStitchingResult > shifts ) throws IOException
+	public static void savePairwiseShifts( final List< SerializablePairWiseStitchingResult > shifts, final Writer writer ) throws IOException
 	{
 		try ( final Writer closeableWriter = writer )
 		{
@@ -73,7 +73,7 @@ public class TileInfoJSONProvider
 		}
 	}
 
-	public static void savePairwiseShiftsMulti( final Writer writer, final List< SerializablePairWiseStitchingResult[] > shiftsMulti ) throws IOException
+	public static void savePairwiseShiftsMulti( final List< SerializablePairWiseStitchingResult[] > shiftsMulti, final Writer writer ) throws IOException
 	{
 		try ( final Writer closeableWriter = writer )
 		{
