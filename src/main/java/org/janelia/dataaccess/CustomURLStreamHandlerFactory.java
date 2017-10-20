@@ -4,7 +4,7 @@ import java.net.URL;
 import java.net.URLStreamHandler;
 import java.net.URLStreamHandlerFactory;
 
-import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 
 /**
  * Factory for all supported custom protocols.
@@ -18,23 +18,23 @@ class CustomURLStreamHandlerFactory implements URLStreamHandlerFactory
 {
 	private static final String s3Protocol = "s3";
 
-	private final AmazonS3 s3;
+	private final AmazonS3ClientBuilder s3Builder;
 
-	private CustomURLStreamHandlerFactory( final AmazonS3 s3 )
+	private CustomURLStreamHandlerFactory( final AmazonS3ClientBuilder s3Builder )
 	{
-		this.s3 = s3;
+		this.s3Builder = s3Builder;
 	}
 
-	public static void init( final AmazonS3 s3 )
+	public static void init( final AmazonS3ClientBuilder s3Builder )
 	{
-		URL.setURLStreamHandlerFactory( new CustomURLStreamHandlerFactory( s3 ) );
+		URL.setURLStreamHandlerFactory( new CustomURLStreamHandlerFactory( s3Builder ) );
 	}
 
 	@Override
 	public URLStreamHandler createURLStreamHandler( final String protocol )
 	{
 		if ( protocol.equals( s3Protocol ) )
-			return new S3URLStreamHandler( s3 );
+			return new S3URLStreamHandler( s3Builder );
 		return null;
 	}
 }

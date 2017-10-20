@@ -20,15 +20,15 @@ public abstract class DataProviderFactory
 
 	/**
 	 * Constructs an Amazon Web Services S3-based data provider
-	 * using a given {@link AmazonS3} client.
+	 * using a given {@link AmazonS3ClientBuilder}.
 	 *
 	 * @param s3
 	 * @return
 	 */
-	public static DataProvider createAmazonS3DataProvider( final AmazonS3 s3 )
+	public static DataProvider createAmazonS3DataProvider( final AmazonS3ClientBuilder s3Builder )
 	{
-		init( s3 );
-		return new AmazonS3DataProvider( s3 );
+		init( s3Builder );
+		return new AmazonS3DataProvider( s3Builder );
 	}
 
 	/**
@@ -39,16 +39,16 @@ public abstract class DataProviderFactory
 	 */
 	public static DataProvider createAmazonS3DataProvider()
 	{
-		return createAmazonS3DataProvider( AmazonS3ClientBuilder.defaultClient() );
+		return createAmazonS3DataProvider( AmazonS3ClientBuilder.standard() );
 	}
 
-	private synchronized static void init( final AmazonS3 s3 )
+	private synchronized static void init( final AmazonS3ClientBuilder s3Builder )
 	{
 		if ( !initializedCustomURLStreamHandlerFactory )
 		{
 			initializedCustomURLStreamHandlerFactory = true;
-			if ( s3 != null )
-				CustomURLStreamHandlerFactory.init( s3 );
+			if ( s3Builder != null )
+				CustomURLStreamHandlerFactory.init( s3Builder );
 		}
 	}
 }
