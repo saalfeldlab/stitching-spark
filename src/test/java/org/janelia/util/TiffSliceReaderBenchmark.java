@@ -8,6 +8,8 @@ import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.util.concurrent.MultithreadedExecutor;
@@ -22,9 +24,11 @@ public class TiffSliceReaderBenchmark
 
 	public static void main( final String[] args ) throws IOException, InterruptedException, ExecutionException
 	{
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 		System.out.println( "tiles count = " + tiles.length );
-		final TileInfo[] tiles1 = args.length > 1 ? TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] ) : null;
+		final TileInfo[] tiles1 = args.length > 1 ? TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) ) : null;
 		testImagesCount = Math.min( 10, tiles.length );
 		repeats = 5;
 
