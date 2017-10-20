@@ -9,10 +9,12 @@ import java.io.Writer;
 import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
 
 import com.google.gson.GsonBuilder;
 
+import ij.IJ;
 import ij.ImagePlus;
 
 /**
@@ -26,6 +28,13 @@ class FSDataProvider implements DataProvider
 	public ImagePlus loadImage( final String path )
 	{
 		return ImageImporter.openImage( path );
+	}
+
+	@Override
+	public void saveImage( final ImagePlus imp, final String path )
+	{
+		Utils.workaroundImagePlusNSlices( imp );
+		IJ.saveAsTiff( imp, path );
 	}
 
 	@Override

@@ -18,7 +18,8 @@ import ij.ImagePlus;
  */
 public interface DataProvider
 {
-	public ImagePlus loadImage( final String path );
+	public ImagePlus loadImage( final String path ) throws IOException;
+	public void saveImage( final ImagePlus imp, final String path ) throws IOException;
 
 	public Reader getJsonReader( final String path ) throws IOException;
 	public Writer getJsonWriter( final String path ) throws IOException;
