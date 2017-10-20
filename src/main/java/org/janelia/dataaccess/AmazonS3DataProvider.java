@@ -10,19 +10,26 @@ import java.io.Reader;
 import java.io.Writer;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.s3.N5AmazonS3;
+import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.AmazonS3URI;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.transfer.TransferManager;
+import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
+import com.amazonaws.services.s3.transfer.Upload;
 import com.google.gson.GsonBuilder;
 
+import ij.IJ;
 import ij.ImagePlus;
 
 /**
@@ -61,11 +68,13 @@ class AmazonS3DataProvider implements DataProvider
 
 	private final AmazonS3ClientBuilder s3Builder;
 	private transient final AmazonS3 s3;
+	private transient final TransferManager s3TransferManager;
 
 	public AmazonS3DataProvider( final AmazonS3ClientBuilder s3Builder )
 	{
 		this.s3Builder = s3Builder;
 		s3 = s3Builder.build();
+		s3TransferManager = TransferManagerBuilder.standard().withS3Client( s3 ).build();
 	}
 
 	@Override
@@ -74,6 +83,35 @@ class AmazonS3DataProvider implements DataProvider
 		if ( url.endsWith( ".tif" ) || url.endsWith( ".tiff" ) )
 			return ImageImporter.openImage( url );
 		throw new NotImplementedException( "Only TIFF images are supported at the moment" );
+	}
+
+	@Override
+	public void saveImage( final ImagePlus imp, final String url ) throws IOException
+	{
+		Utils.workaroundImagePlusNSlices( imp );
+		// Need to save as a local TIFF file and then upload to S3. IJ does not provide a way to convert ImagePlus to TIFF byte array.
+		Path tempPath = null;
+		try
+		{
+			tempPath = Files.createTempFile( null, ".tif" );
+			IJ.saveAsTiff( imp, tempPath.toString() );
+
+			final AmazonS3URI s3Uri = decodeS3Uri( url );
+	        final Upload s3Upload = s3TransferManager.upload( s3Uri.getBucket(), s3Uri.getKey(), tempPath.toFile() );
+	        try
+	        {
+				s3Upload.waitForCompletion();
+			}
+	        catch ( final InterruptedException e )
+	        {
+				e.printStackTrace();
+			}
+		}
+		finally
+		{
+			if ( tempPath != null )
+				tempPath.toFile().delete();
+		}
 	}
 
 	@Override
