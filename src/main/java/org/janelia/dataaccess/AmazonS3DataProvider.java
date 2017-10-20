@@ -97,13 +97,13 @@ class AmazonS3DataProvider implements DataProvider
 			IJ.saveAsTiff( imp, tempPath.toString() );
 
 			final AmazonS3URI s3Uri = decodeS3Uri( url );
-	        final Upload s3Upload = s3TransferManager.upload( s3Uri.getBucket(), s3Uri.getKey(), tempPath.toFile() );
-	        try
-	        {
+			final Upload s3Upload = s3TransferManager.upload( s3Uri.getBucket(), s3Uri.getKey(), tempPath.toFile() );
+			try
+			{
 				s3Upload.waitForCompletion();
 			}
-	        catch ( final InterruptedException e )
-	        {
+			catch ( final InterruptedException e )
+			{
 				e.printStackTrace();
 			}
 		}
