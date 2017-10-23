@@ -44,6 +44,7 @@ class AmazonS3DataProvider implements DataProvider
 	private class S3ObjectOutputStream extends ByteArrayOutputStream
 	{
 		private final AmazonS3URI uri;
+		private boolean closed;
 
 		public S3ObjectOutputStream( final AmazonS3URI uri )
 		{
@@ -54,17 +55,22 @@ class AmazonS3DataProvider implements DataProvider
 		@Override
 		public void close() throws IOException
 		{
-			super.flush();
-			final byte[] bytes = toByteArray();
-
-			final ObjectMetadata objectMetadata = new ObjectMetadata();
-			objectMetadata.setContentLength( bytes.length );
-
-			try ( final InputStream data = new ByteArrayInputStream( bytes ) )
+			if ( !closed )
 			{
-				s3.putObject( uri.getBucket(), uri.getKey(), data, objectMetadata );
+				super.flush();
+				final byte[] bytes = toByteArray();
+
+				final ObjectMetadata objectMetadata = new ObjectMetadata();
+				objectMetadata.setContentLength( bytes.length );
+
+				try ( final InputStream data = new ByteArrayInputStream( bytes ) )
+				{
+					s3.putObject( uri.getBucket(), uri.getKey(), data, objectMetadata );
+				}
+				super.close();
+
+				closed = true;
 			}
-			super.close();
 		}
 	}
 
