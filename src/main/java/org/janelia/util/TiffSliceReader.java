@@ -5,7 +5,8 @@ import java.awt.image.IndexColorModel;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Paths;
+
+import com.amazonaws.services.s3.model.S3ObjectInputStream;
 
 import ij.CompositeImage;
 import ij.IJ;
@@ -32,6 +33,122 @@ import ij.process.ShortProcessor;
 
 public class TiffSliceReader
 {
+	@FunctionalInterface
+	public static interface TiffInputStreamSupplier
+	{
+		public InputStream get() throws IOException;
+	}
+
+	/**
+	 * Opens the requested slice of a .tif image.
+	 * @param path
+	 * 			a path to the .tif file
+	 * @param slice
+	 * 			an index of the desired slice in IJ's notation (1-indexed)
+	 * @return
+	 * 			an ImagePlus containing the requested slice, or null if it cannot be read
+	 * @throws IOException
+	 */
+	public static ImagePlus readSlice( final String path, final int slice ) throws IOException
+	{
+		return readSlice( () -> new FileInputStream( path ), slice );
+	}
+
+	/**
+	 * Opens the requested slice of a .tif image.
+	 * @param inSupplier
+	 * 			an input stream supplier for the desired tiff file
+	 * @param slice
+	 * 			an index of the desired slice in IJ's notation (1-indexed)
+	 * @return
+	 * 			an ImagePlus containing the requested slice, or null if it cannot be read
+	 * @throws IOException
+	 */
+	public static ImagePlus readSlice( final TiffInputStreamSupplier inSupplier, final int slice ) throws IOException
+	{
+		final FileInfo fileInfo;
+
+		final FileInfo[] fileInfos;
+		try ( final InputStream in = inSupplier.get() )
+		{
+			fileInfos = new TiffDecoder( in, "" ).getTiffInfo();
+			if ( in instanceof S3ObjectInputStream )
+				( ( S3ObjectInputStream ) in ).abort();
+		}
+
+		// Hack to read uncompressed float images correctly (at least in my case). Otherwise, it detects a single slice but with nImages=501
+		if ( fileInfos.length == 1 && fileInfos[ 0 ].nImages > 1 && fileInfos[ 0 ].compression == FileInfo.COMPRESSION_NONE )
+		{
+			fileInfo = fileInfos[ 0 ];
+			final int numPixels = fileInfo.width * fileInfo.height;
+			fileInfo.offset += ( numPixels * bytesPerPixel( fileInfo ) + fileInfo.gapBetweenImages ) * ( slice - 1 );
+		}
+		else
+		{
+			fileInfo = fileInfos[ slice - 1 ];
+		}
+
+		final ImageReader reader = new ImageReader( fileInfo );
+		final Object pixels;
+		try ( final InputStream in = inSupplier.get() )
+		{
+			pixels = reader.readPixels( in, fileInfo.getOffset() );
+			if ( in instanceof S3ObjectInputStream )
+				( ( S3ObjectInputStream ) in ).abort();
+		}
+		if ( pixels == null )
+			return null;
+
+		final int width = fileInfo.width, height = fileInfo.height;
+
+		final ColorModel cm = createColorModel( fileInfo );
+		final ImageProcessor ip;
+		switch ( fileInfo.fileType )
+		{
+		case FileInfo.GRAY8:
+		case FileInfo.COLOR8:
+		case FileInfo.BITMAP:
+			ip = new ByteProcessor(width, height, (byte[])pixels, cm);
+			break;
+		case FileInfo.GRAY16_SIGNED:
+		case FileInfo.GRAY16_UNSIGNED:
+		case FileInfo.GRAY12_UNSIGNED:
+    		ip = new ShortProcessor(width, height, (short[])pixels, cm);
+			break;
+		case FileInfo.GRAY32_INT:
+		case FileInfo.GRAY32_UNSIGNED:
+		case FileInfo.GRAY32_FLOAT:
+		case FileInfo.GRAY24_UNSIGNED:
+		case FileInfo.GRAY64_FLOAT:
+    		ip = new FloatProcessor(width, height, (float[])pixels, cm);
+			break;
+		case FileInfo.RGB:
+		case FileInfo.BGR:
+		case FileInfo.ARGB:
+		case FileInfo.ABGR:
+		case FileInfo.BARG:
+		case FileInfo.RGB_PLANAR:
+		case FileInfo.CMYK:
+			ip = new ColorProcessor(width, height, (int[])pixels);
+			if (fileInfo.fileType==FileInfo.CMYK)
+				ip.invert();
+			break;
+
+		case FileInfo.RGB48:
+		case FileInfo.RGB48_PLANAR:
+			// this is a special case because it effectively creates a stack
+			return createRGB48Image(fileInfo, (Object[])pixels);
+
+		default:
+			return null;
+		}
+
+		final ImagePlus imp = new ImagePlus( fileInfo.fileName, ip );
+		imp.setFileInfo( fileInfo );
+		return imp;
+	}
+
+
 	/**
 	 * Opens the requested slice of a .tif image.
 	 * @param path
@@ -41,7 +158,7 @@ public class TiffSliceReader
 	 * @return
 	 * 			an ImagePlus containing the requested slice, or null if it cannot be read
 	 */
-	public static ImagePlus readSlice( final String path, final int slice )
+	/*public static ImagePlus readSlice( final String path, final int slice )
 	{
 		final FileInfo fileInfo;
 		try
@@ -127,7 +244,7 @@ public class TiffSliceReader
 			e.printStackTrace();
 			return null;
 		}
-	}
+	}*/
 
 	private static ColorModel createColorModel(final FileInfo fi) {
 		if (fi.lutSize>0)
