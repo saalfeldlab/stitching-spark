@@ -16,7 +16,7 @@ import net.imglib2.SerializableFinalInterval;
 public class FlatfieldCorrectionArguments
 {
 	@Option(name = "-i", aliases = { "--input" }, required = true,
-			usage = "Path to a tile configuration JSON file")
+			usage = "Path/link to a tile configuration JSON file")
 	private String inputFilePath;
 
 	@Option(name = "--crop", required = false,

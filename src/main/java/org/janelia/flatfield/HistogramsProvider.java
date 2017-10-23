@@ -1,18 +1,12 @@
 package org.janelia.flatfield;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -23,6 +17,9 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.histogram.Histogram;
 import org.janelia.stitching.TileInfo;
 import org.janelia.util.TiffSliceReader;
@@ -55,6 +52,8 @@ public class HistogramsProvider implements Serializable
 	private static final double REFERENCE_HISTOGRAM_POINTS_PERCENT = 0.25;
 
 	private transient final JavaSparkContext sparkContext;
+	private transient final DataProvider dataProvider;
+	private final DataProviderType dataProviderType;
 	private final TileInfo[] tiles;
 	private final Interval workingInterval;
 	private final String histogramsPath;
@@ -68,13 +67,15 @@ public class HistogramsProvider implements Serializable
 
 	public HistogramsProvider(
 			final JavaSparkContext sparkContext,
+			final DataProvider dataProvider,
 			final Interval workingInterval,
 			final String histogramsPath,
 			final TileInfo[] tiles,
 			final long[] fullTileSize,
-			final Double histMinValue, final Double histMaxValue, final int bins ) throws FileNotFoundException
+			final Double histMinValue, final Double histMaxValue, final int bins ) throws IOException, URISyntaxException
 	{
 		this.sparkContext = sparkContext;
+		this.dataProvider = dataProvider;
 		this.workingInterval = workingInterval;
 		this.histogramsPath = histogramsPath;
 		this.tiles = tiles;
@@ -84,6 +85,8 @@ public class HistogramsProvider implements Serializable
 		this.histMaxValue = histMaxValue;
 		this.bins = bins;
 
+		dataProviderType = dataProvider.getType();
+
 		// TODO: smarter handling with try/catch
 //		if ( !Files.exists( Paths.get( histogramsPath ) ) )
 		if ( !allHistogramsReady() )
@@ -92,14 +95,14 @@ public class HistogramsProvider implements Serializable
 
 	// parallelizing over slices + cache-friendly image loading order
 	@SuppressWarnings("unchecked")
-	private < T extends NativeType< T > & RealType< T > > void populateHistograms() throws FileNotFoundException
+	private < T extends NativeType< T > & RealType< T > > void populateHistograms() throws IOException, URISyntaxException
 	{
 		// Check for existing histograms
 		final List< Integer > remainingSlices = new ArrayList<>();
 		final int minSlice = ( int ) ( workingInterval.numDimensions() == 3 ? workingInterval.min( 2 ) + 1 : 1 );
 		final int maxSlice = ( int ) ( workingInterval.numDimensions() == 3 ? workingInterval.max( 2 ) + 1 : 1 );
 		for ( int slice = minSlice; slice <= maxSlice; slice++ )
-			if ( !Files.exists( Paths.get( generateSliceHistogramsPath( 0, slice ) ) ) )
+			if ( !dataProvider.fileExists( dataProvider.getUri( generateSliceHistogramsPath( 0, slice ) ) ) )
 				remainingSlices.add( slice );
 
 		final Interval workingSliceInterval = new SerializableFinalInterval(
@@ -110,6 +113,8 @@ public class HistogramsProvider implements Serializable
 
 		sparkContext.parallelize( remainingSlices ).zipWithIndex().foreach( tuple ->
 			{
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
+
 				final List< TileInfo > tilesList = Arrays.asList( tiles );
 				final int slice = tuple._1(), index = tuple._2().intValue();
 				System.out.println( "  Processing slice " + slice );
@@ -131,16 +136,17 @@ public class HistogramsProvider implements Serializable
 					System.out.println( "Processing group of size " + tilesGroup.size() + " with order-index = " + index );
 					for ( final TileInfo tile : tilesGroup )
 					{
-						final ImagePlus imp = TiffSliceReader.readSlice( tile.getFilePath(), slice );
-						final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
-						final Cursor< T > cursor = Views.flatIterable( Views.offsetInterval( img, workingSliceInterval ) ).cursor();
+						// TODO: consider converting the entire stack to N5 first (at least for S3)
+						final ImagePlus impSlice = TiffSliceReader.readSlice( () -> dataProviderLocal.getInputStream( URI.create( tile.getFilePath() ) ), slice );
+						final RandomAccessibleInterval< T > imgSlice = ImagePlusImgs.from( impSlice );
+						final Cursor< T > cursor = Views.flatIterable( Views.offsetInterval( imgSlice, workingSliceInterval ) ).cursor();
 						while ( cursor.hasNext() || histogramsImgCursor.hasNext() )
 						{
 							final int key = ( int ) cursor.next().getRealDouble();
 							final HashMap< Integer, Integer > histogram = histogramsImgCursor.next();
 							histogram.put( key, histogram.getOrDefault( key, 0 ) + 1 );
 						}
-						imp.close();
+						impSlice.close();
 						histogramsImgCursor.reset();
 
 						++done;
@@ -163,21 +169,13 @@ public class HistogramsProvider implements Serializable
 					ret.add( new Tuple2<>( pixelGlobal, histogramsGlobalCursor.get() ) );
 				}
 
-				saveSliceHistogramsToDisk( 0, slice, histogramsList.toArray( new HashMap[ 0 ] ) );
+				saveSliceHistograms( dataProviderLocal, 0, slice, histogramsList.toArray( new HashMap[ 0 ] ) );
 			} );
 	}
 
-	private void saveSliceHistogramsToDisk( final int scale, final int slice, final HashMap[] hist ) throws FileNotFoundException
+	private void saveSliceHistograms( final DataProvider dataProvider, final int scale, final int slice, final HashMap[] hist ) throws IOException
 	{
 		final String path = generateSliceHistogramsPath( scale, slice );
-
-		Paths.get( path ).getParent().toFile().mkdirs();
-
-		final OutputStream os = new DataOutputStream(
-				new BufferedOutputStream(
-						new FileOutputStream( path )
-						)
-				);
 
 //		final Kryo kryo = kryoSerializer.newKryo();
 		final Kryo kryo = new Kryo();
@@ -190,49 +188,41 @@ public class HistogramsProvider implements Serializable
 		//try ( final Output output = kryoSerializer.newKryoOutput() )
 		//{
 		//	output.setOutputStream( os );
-		try ( final Output output = new Output( os ) )
+
+		try ( final OutputStream os = dataProvider.getOutputStream( URI.create( path ) ) )
 		{
-			kryo.writeObject( output, hist );
+			try ( final Output output = new Output( os ) )
+			{
+				kryo.writeObject( output, hist );
+			}
 		}
 	}
-	private ListImg< HashMap< Integer, Integer > > readSliceHistogramsFromDisk( final int slice )
+	private ListImg< HashMap< Integer, Integer > > readSliceHistograms( final DataProvider dataProvider, final int slice ) throws IOException
 	{
-		return new ListImg<>( Arrays.asList( readSliceHistogramsArrayFromDisk( 0, slice ) ), new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } );
+		return new ListImg<>( Arrays.asList( readSliceHistogramsArray( dataProvider, 0, slice ) ), new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } );
 	}
-	private HashMap[] readSliceHistogramsArrayFromDisk( final int scale, final int slice )
+	private HashMap[] readSliceHistogramsArray( final DataProvider dataProvider, final int scale, final int slice ) throws IOException
 	{
 		System.out.println( "Loading slice " + slice );
 		final String path = generateSliceHistogramsPath( scale, slice );
 
-		if ( !Files.exists(Paths.get(path)) )
+		if ( !dataProvider.fileExists( URI.create( path ) ) )
 			return null;
 
-		try
+//		final Kryo kryo = kryoSerializer.newKryo();
+		final Kryo kryo = new Kryo();
+		final MapSerializer serializer = new MapSerializer();
+		serializer.setKeysCanBeNull( false );
+		serializer.setKeyClass( Integer.class, kryo.getSerializer( Integer.class ) );
+		serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
+		kryo.register( HashMap.class, serializer );
+
+		try ( final InputStream is = new FileInputStream( path ) )
 		{
-			final InputStream is = new DataInputStream(
-					new BufferedInputStream(
-							new FileInputStream( path )
-							)
-					);
-
-//			final Kryo kryo = kryoSerializer.newKryo();
-			final Kryo kryo = new Kryo();
-
-			final MapSerializer serializer = new MapSerializer();
-			serializer.setKeysCanBeNull( false );
-			serializer.setKeyClass( Integer.class, kryo.getSerializer( Integer.class ) );
-			serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
-			kryo.register( HashMap.class, serializer );
-
 			try ( final Input input = new Input( is ) )
 			{
 				return kryo.readObject( input, HashMap[].class );
 			}
-		}
-		catch ( final IOException e )
-		{
-			e.printStackTrace();
-			return null;
 		}
 	}
 
@@ -256,7 +246,8 @@ public class HistogramsProvider implements Serializable
 		rddHistograms = rddSlices
 				.flatMapToPair( slice ->
 					{
-						final RandomAccessibleInterval< HashMap< Integer, Integer > > sliceHistograms = readSliceHistogramsFromDisk( slice );
+						final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
+						final RandomAccessibleInterval< HashMap< Integer, Integer > > sliceHistograms = readSliceHistograms( dataProviderLocal, slice );
 						final Interval sliceInterval = Intervals.createMinMax( workingInterval.min( 0 ), workingInterval.min( 1 ), workingInterval.max( 0 ), workingInterval.max( 1 ) );
 						final IntervalView< HashMap< Integer, Integer > > sliceHistogramsInterval = Views.offsetInterval( sliceHistograms, sliceInterval );
 						final ListImg< Tuple2< Long, HashMap< Integer, Integer > > > ret = new ListImg<>( Intervals.dimensionsAsLongArray( sliceHistogramsInterval ), null );
@@ -333,10 +324,10 @@ public class HistogramsProvider implements Serializable
 	}
 
 
-	private boolean allHistogramsReady()
+	private boolean allHistogramsReady() throws IOException, URISyntaxException
 	{
 		for ( int slice = 1; slice <= getNumSlices(); slice++ )
-			if ( !Files.exists( Paths.get( generateSliceHistogramsPath( 0, slice ) ) ) )
+			if ( !dataProvider.fileExists( dataProvider.getUri( generateSliceHistogramsPath( 0, slice ) ) ) )
 				return false;
 		return true;
 	}
