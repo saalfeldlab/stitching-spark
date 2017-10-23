@@ -5,9 +5,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -21,7 +24,6 @@ import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
 
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.AmazonS3URI;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.transfer.TransferManager;
@@ -66,14 +68,14 @@ class AmazonS3DataProvider implements DataProvider
 		}
 	}
 
-	private final AmazonS3ClientBuilder s3Builder;
-	private transient final AmazonS3 s3;
-	private transient final TransferManager s3TransferManager;
+	private static final String s3Protocol = "s3";
 
-	public AmazonS3DataProvider( final AmazonS3ClientBuilder s3Builder )
+	private final AmazonS3 s3;
+	private final TransferManager s3TransferManager;
+
+	public AmazonS3DataProvider( final AmazonS3 s3 )
 	{
-		this.s3Builder = s3Builder;
-		s3 = s3Builder.build();
+		this.s3 = s3;
 		s3TransferManager = TransferManagerBuilder.standard().withS3Client( s3 ).build();
 	}
 
@@ -84,15 +86,46 @@ class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
-	public ImagePlus loadImage( final String url )
+	public URI getUri( final String path ) throws URISyntaxException
 	{
-		if ( url.endsWith( ".tif" ) || url.endsWith( ".tiff" ) )
-			return ImageImporter.openImage( url );
+		final URI uri = new URI( path );
+		if ( s3Protocol.equals( uri.getScheme() ) )
+			return uri;
+		return new URI( s3Protocol, null, path );
+	}
+
+	@Override
+	public boolean fileExists( final URI uri ) throws IOException
+	{
+		final AmazonS3URI s3Uri = decodeS3Uri( uri );
+		return s3.doesObjectExist( s3Uri.getBucket(), s3Uri.getKey() );
+	}
+
+	@Override
+	public InputStream getInputStream( final URI uri ) throws IOException
+	{
+		final AmazonS3URI s3Uri = decodeS3Uri( uri );
+		return s3.getObject( s3Uri.getBucket(), s3Uri.getKey() ).getObjectContent();
+	}
+
+	@Override
+	public OutputStream getOutputStream( final URI uri ) throws IOException
+	{
+		final AmazonS3URI s3Uri = decodeS3Uri( uri );
+		return new S3ObjectOutputStream( s3Uri );
+	}
+
+	@Override
+	public ImagePlus loadImage( final URI uri )
+	{
+		final String uriStr = uri.toString();
+		if ( uriStr.endsWith( ".tif" ) || uriStr.endsWith( ".tiff" ) )
+			return ImageImporter.openImage( uriStr );
 		throw new NotImplementedException( "Only TIFF images are supported at the moment" );
 	}
 
 	@Override
-	public void saveImage( final ImagePlus imp, final String url ) throws IOException
+	public void saveImage( final ImagePlus imp, final URI uri ) throws IOException
 	{
 		Utils.workaroundImagePlusNSlices( imp );
 		// Need to save as a local TIFF file and then upload to S3. IJ does not provide a way to convert ImagePlus to TIFF byte array.
@@ -102,7 +135,7 @@ class AmazonS3DataProvider implements DataProvider
 			tempPath = Files.createTempFile( null, ".tif" );
 			IJ.saveAsTiff( imp, tempPath.toString() );
 
-			final AmazonS3URI s3Uri = decodeS3Uri( url );
+			final AmazonS3URI s3Uri = decodeS3Uri( uri );
 			final Upload s3Upload = s3TransferManager.upload( s3Uri.getBucket(), s3Uri.getKey(), tempPath.toFile() );
 			try
 			{
@@ -121,45 +154,43 @@ class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
-	public Reader getJsonReader( final String url ) throws IOException
+	public Reader getJsonReader( final URI uri ) throws IOException
 	{
-		final AmazonS3URI s3Uri = decodeS3Uri( url );
-		return new InputStreamReader( s3.getObject( s3Uri.getBucket(), s3Uri.getKey() ).getObjectContent() );
+		return new InputStreamReader( getInputStream( uri ) );
 	}
 
 	@Override
-	public Writer getJsonWriter( final String url ) throws IOException
+	public Writer getJsonWriter( final URI uri ) throws IOException
 	{
-		final AmazonS3URI s3Uri = decodeS3Uri( url );
-		return new OutputStreamWriter( new S3ObjectOutputStream( s3Uri ) );
+		return new OutputStreamWriter( getOutputStream( uri ) );
 	}
 
 	@Override
-	public N5Reader createN5Reader( final String bucketName )
+	public N5Reader createN5Reader( final URI baseUri ) throws IOException
 	{
-		return N5AmazonS3.openS3Reader( s3Builder, bucketName );
+		return N5AmazonS3.openS3Reader( s3, decodeS3Uri( baseUri ).getBucket() );
 	}
 
 	@Override
-	public N5Writer createN5Writer( final String bucketName ) throws IOException
+	public N5Writer createN5Writer( final URI baseUri ) throws IOException
 	{
-		return N5AmazonS3.openS3Writer( s3Builder, bucketName );
+		return N5AmazonS3.openS3Writer( s3, decodeS3Uri( baseUri ).getBucket() );
 	}
 
 	@Override
-	public N5Reader createN5Reader( final String bucketName, final GsonBuilder gsonBuilder )
+	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5AmazonS3.openS3Reader( s3Builder, bucketName, gsonBuilder );
+		return N5AmazonS3.openS3Reader( s3, decodeS3Uri( baseUri ).getBucket(), gsonBuilder );
 	}
 
 	@Override
-	public N5Writer createN5Writer( final String bucketName, final GsonBuilder gsonBuilder ) throws IOException
+	public N5Writer createN5Writer( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5AmazonS3.openS3Writer( s3Builder, bucketName, gsonBuilder );
+		return N5AmazonS3.openS3Writer( s3, decodeS3Uri( baseUri ).getBucket(), gsonBuilder );
 	}
 
-	public static AmazonS3URI decodeS3Uri( final String url ) throws IOException
+	public static AmazonS3URI decodeS3Uri( final URI uri ) throws IOException
 	{
-		return new AmazonS3URI( URLDecoder.decode( url, StandardCharsets.UTF_8.name() ) );
+		return new AmazonS3URI( URLDecoder.decode( uri.toString(), StandardCharsets.UTF_8.name() ) );
 	}
 }
