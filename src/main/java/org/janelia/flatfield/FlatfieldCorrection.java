@@ -22,7 +22,6 @@ import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
 import org.janelia.histogram.Histogram;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
-import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
 import org.kohsuke.args4j.CmdLineException;
 
@@ -418,7 +417,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		try
 		{
 			System.out.println( "Cleaning up temporary files..." );
-			Utils.deleteFolder( Paths.get( solutionPath ).getParent() );
+			final String folderToDelete = Paths.get( solutionPath ).getParent().toString();
+			dataProvider.deleteFolder( URI.create( folderToDelete ) );
 		}
 		catch ( final IOException e )
 		{
