@@ -78,6 +78,12 @@ class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
+	public DataProviderType getType()
+	{
+		return DataProviderType.AMAZON_S3;
+	}
+
+	@Override
 	public ImagePlus loadImage( final String url )
 	{
 		if ( url.endsWith( ".tif" ) || url.endsWith( ".tiff" ) )

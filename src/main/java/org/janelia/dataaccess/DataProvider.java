@@ -18,6 +18,7 @@ import ij.ImagePlus;
  */
 public interface DataProvider
 {
+	public DataProviderType getType();
 	public ImagePlus loadImage( final String path ) throws IOException;
 	public void saveImage( final ImagePlus imp, final String path ) throws IOException;
 
