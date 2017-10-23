@@ -15,6 +15,8 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -25,7 +27,11 @@ import org.janelia.util.ImageImporter;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3URI;
+import com.amazonaws.services.s3.model.DeleteObjectsRequest;
+import com.amazonaws.services.s3.model.ListObjectsV2Request;
+import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
 import com.amazonaws.services.s3.transfer.Upload;
@@ -105,6 +111,40 @@ class AmazonS3DataProvider implements DataProvider
 	{
 		final AmazonS3URI s3Uri = decodeS3Uri( uri );
 		return s3.doesObjectExist( s3Uri.getBucket(), s3Uri.getKey() );
+	}
+
+	@Override
+	public void deleteFile( final URI uri ) throws IOException
+	{
+		final AmazonS3URI s3Uri = decodeS3Uri( uri );
+		s3.deleteObject( s3Uri.getBucket(), s3Uri.getKey() );
+	}
+
+	@Override
+	public void deleteFolder( final URI uri ) throws IOException
+	{
+		final AmazonS3URI s3Uri = decodeS3Uri( uri );
+		final String prefix = s3Uri.getKey().endsWith( "/" ) ? s3Uri.getKey() : s3Uri.getKey() + "/";
+		final ListObjectsV2Request listObjectsRequest = new ListObjectsV2Request()
+				.withBucketName( s3Uri.getBucket() )
+				.withPrefix( prefix );
+		ListObjectsV2Result objectsListing;
+		do
+		{
+			objectsListing = s3.listObjectsV2( listObjectsRequest );
+			final List< String > objectsToDelete = new ArrayList<>();
+			for ( final S3ObjectSummary object : objectsListing.getObjectSummaries() )
+				objectsToDelete.add(object.getKey());
+
+			if ( !objectsToDelete.isEmpty() )
+			{
+				s3.deleteObjects( new DeleteObjectsRequest( s3Uri.getBucket() )
+						.withKeys( objectsToDelete.toArray( new String[objectsToDelete.size() ] ) )
+					);
+			}
+			listObjectsRequest.setContinuationToken( objectsListing.getNextContinuationToken() );
+		}
+		while ( objectsListing.isTruncated() );
 	}
 
 	@Override

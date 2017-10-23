@@ -11,8 +11,12 @@ import java.io.Reader;
 import java.io.Writer;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 
 import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -48,6 +52,34 @@ class FSDataProvider implements DataProvider
 	public boolean fileExists( final URI uri )
 	{
 		return Files.exists( Paths.get( uri ) );
+	}
+
+	@Override
+	public void deleteFile( final URI uri ) throws IOException
+	{
+		Files.delete( Paths.get( uri.toString() ) );
+	}
+
+	@Override
+	public void deleteFolder( final URI uri ) throws IOException
+	{
+		Files.walkFileTree( Paths.get( uri.toString() ), new SimpleFileVisitor< Path >()
+			{
+			   @Override
+			   public FileVisitResult visitFile( final Path file, final BasicFileAttributes attrs ) throws IOException
+			   {
+			       Files.delete( file );
+			       return FileVisitResult.CONTINUE;
+			   }
+
+			   @Override
+			   public FileVisitResult postVisitDirectory( final Path dir, final IOException exc ) throws IOException
+			   {
+			       Files.delete( dir );
+			       return FileVisitResult.CONTINUE;
+			   }
+			}
+		);
 	}
 
 	@Override
