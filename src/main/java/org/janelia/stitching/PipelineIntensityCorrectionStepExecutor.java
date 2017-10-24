@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -13,14 +14,13 @@ import java.util.TreeMap;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.dataaccess.DataProvider;
 import org.janelia.histogram.Histogram;
-import org.janelia.histogram.HistogramsMatching;
+import org.janelia.histogram.HistogramMatching;
 import org.janelia.intensity.LinearIntensityMap;
 import org.janelia.util.Conversions;
-import org.janelia.util.ImageImporter;
 
 import bdv.export.Downsample;
-import ij.IJ;
 import ij.ImagePlus;
 import mpicbg.models.Affine1D;
 import mpicbg.models.AffineModel1D;
@@ -98,6 +98,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	@Override
 	public void run() throws PipelineExecutionException
 	{
+		final DataProvider dataProvider = job.getDataProvider();
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
 			final TileInfo[] transformedTiles = matchIntensities(
@@ -110,7 +111,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 			try
 			{
 				job.setTiles( transformedTiles, channel );
-				TileInfoJSONProvider.saveTilesConfiguration( transformedTiles, Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "_transformed" ) );
+				final String outputPath = Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "_transformed" );
+				TileInfoJSONProvider.saveTilesConfiguration( transformedTiles, dataProvider.getJsonWriter( URI.create( outputPath ) ) );
 			}
 			catch ( final IOException e )
 			{
@@ -218,6 +220,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		}
 		final JavaRDD< TileInfo > taskTiles = sparkContext.parallelize( tileAndCoeffs ).map( tuple ->
 			{
+				final DataProvider dataProviderLocal = job.getDataProvider();
 				final TileInfo tile = tuple._1();
 				final List< double[] > coeffs = tuple._2();
 
@@ -240,14 +243,14 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 				}
 				final LinearIntensityMap< DoubleType > transform = new LinearIntensityMap< >( ArrayImgs.doubles( unrolledCoeffs, Conversions.toLongArray( unrolledCoeffsDim ) ) );
 
-				final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
+				final ImagePlus imp = dataProviderLocal.loadImage( URI.create( tile.getFilePath() ) );
 				final ImagePlusImg< T, ? > r = ImagePlusImgs.from( imp );
 				transform.run( r );
 
 				tile.setFilePath( destFolder + "/transformed_" + Paths.get( tile.getFilePath() ).getFileName().toString() );
 				final ImagePlus transformed = r.getImagePlus();
 				Utils.workaroundImagePlusNSlices( transformed );
-				IJ.saveAsTiff( transformed, tile.getFilePath() );
+				dataProviderLocal.saveImage( transformed, URI.create( tile.getFilePath() ) );
 				return tile;
 			} );
 		final List< TileInfo > resultingTiles = taskTiles.collect();
@@ -265,7 +268,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	{
 		return sparkContext.parallelize( tiles ).map( tile ->
 			{
-				final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
+				final DataProvider dataProviderLocal = job.getDataProvider();
+				final ImagePlus imp = dataProviderLocal.loadImage( URI.create( tile.getFilePath() ) );
 				final RandomAccessibleInterval< T > image = ImagePlusImgs.from( imp );
 				final Cursor< T > cursor = Views.iterable( image ).cursor();
 				double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
@@ -285,7 +289,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	{
 		return sparkContext.parallelize( tiles ).mapToPair( tile ->
 			{
-				final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
+				final DataProvider dataProviderLocal = job.getDataProvider();
+				final ImagePlus imp = dataProviderLocal.loadImage( URI.create( tile.getFilePath() ) );
 				final RandomAccessibleInterval< T > image = ImagePlusImgs.from( imp );
 
 				// calculate dimensions of downsampled image
@@ -326,7 +331,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	{
 		return sparkContext.parallelize( tiles ).mapToPair( tile ->
 			{
-				final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
+				final DataProvider dataProviderLocal = job.getDataProvider();
+				final ImagePlus imp = dataProviderLocal.loadImage( URI.create( tile.getFilePath() ) );
 				final RandomAccessibleInterval< T > image = ImagePlusImgs.from( imp );
 
 				// calculate dimensions of the downsampled image
@@ -358,6 +364,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 	private < M extends Model< M > & Affine1D< M >, T extends RealType< T > & NativeType< T > >
 	Map< Integer, Map< Integer, List< PointMatch > > > generatePairwiseHistogramsMatches( final TilePair tilePair, final Pair< Double, Double > valueRange ) throws Exception
 	{
+		final DataProvider dataProvider = job.getDataProvider();
+
 		final Map< Integer, Map< Integer, List< PointMatch > > > matches = new HashMap<>();
 
 		final TileInfo[] tilePairArr = tilePair.toArray();
@@ -369,7 +377,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		for ( int i = 0; i < 2; ++i )
 		{
 			// load the image
-			final ImagePlus imp = ImageImporter.openImage( tilePairArr[ i ].getFilePath() );
+			final ImagePlus imp = dataProvider.loadImage( URI.create( tilePairArr[ i ].getFilePath() ) );
 			final RandomAccessibleInterval< T > rawImage = ImagePlusImgs.from( imp );
 
 			// convert it to float to retain precision after downsampling
@@ -481,7 +489,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		{
 			for ( final Entry< Integer, Histogram[] > secondEntry : firstEntry.getValue().entrySet() )
 			{
-				final List< PointMatch > matchesList = HistogramsMatching.generateHistogramMatches( secondEntry.getValue()[ 0 ], secondEntry.getValue()[ 1 ] );
+				final List< PointMatch > matchesList = HistogramMatching.generateHistogramMatches( secondEntry.getValue()[ 0 ], secondEntry.getValue()[ 1 ] );
 
 				if ( !matches.containsKey( firstEntry.getKey() ) )
 					matches.put( firstEntry.getKey(), new HashMap<>() );

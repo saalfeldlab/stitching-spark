@@ -5,11 +5,15 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 
 import org.apache.commons.io.IOUtils;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
 
 import com.google.gson.Gson;
 
@@ -35,6 +39,9 @@ public class StitchingJob implements Serializable {
 
 	private static final long serialVersionUID = 2619120742300093982L;
 
+	private transient DataProvider dataProvider;
+	private final DataProviderType dataProviderType;
+
 	private final EnumSet< PipelineStep > pipeline;
 	private StitchingArguments args;
 	private transient StitchingParameters params;
@@ -49,6 +56,9 @@ public class StitchingJob implements Serializable {
 	{
 		this.args = args;
 
+		dataProvider = DataProviderFactory.createByURI( URI.create( args.inputTileConfigurations().get( 0 ) ) );
+		dataProviderType = dataProvider.getType();
+
 		pipeline = setUpPipeline( args );
 
 		final File inputFile = new File( args.inputTileConfigurations().get( 0 ) ).getAbsoluteFile();
@@ -56,12 +66,6 @@ public class StitchingJob implements Serializable {
 		datasetName = inputFile.getName();
 		if ( datasetName.endsWith( ".json" ) )
 			datasetName = datasetName.substring( 0, datasetName.lastIndexOf( ".json" ) );
-	}
-
-	protected StitchingJob()
-	{
-		pipeline = null;
-		baseFolder = "";
 	}
 
 	private EnumSet< PipelineStep > setUpPipeline( final StitchingArguments args )
@@ -81,6 +85,13 @@ public class StitchingJob implements Serializable {
 	}
 
 	public EnumSet< PipelineStep > getPipeline() { return pipeline; }
+
+	public synchronized DataProvider getDataProvider()
+	{
+		if ( dataProvider == null )
+			dataProvider = DataProviderFactory.createByType( dataProviderType );
+		return dataProvider;
+	}
 
 	public StitchingArguments getArgs() { return args; }
 

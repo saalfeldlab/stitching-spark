@@ -24,7 +24,7 @@ public class StitchingArguments implements Serializable {
 	private static final long serialVersionUID = -8996450783846140673L;
 
 	@Option(name = "-i", aliases = { "--input" }, required = true,
-			usage = "Path to a tile configuration JSON file. Multiple configurations can be passed at once.")
+			usage = "Path/link to a tile configuration JSON file. Multiple configurations can be passed at once.")
 	private List< String > inputTileConfigurations;
 
 	@Option(name = "-n", aliases = { "--neighbors" }, required = false,

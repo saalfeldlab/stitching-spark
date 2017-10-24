@@ -1,6 +1,7 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -12,10 +13,12 @@ import java.util.TreeMap;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
-import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -97,7 +100,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 //		if ( Files.exists( Paths.get( baseExportPath ) ) )
 //			throw new PipelineExecutionException( "Export path already exists: " + baseExportPath );
 
-		final N5Writer n5 = N5.openFSWriter( baseExportPath );
+		final DataProvider dataProvider = job.getDataProvider();
+		final DataProviderType dataProviderType = dataProvider.getType();
+
+		final String n5ExportPath = baseExportPath;
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ) );
 
 		int[][] downsamplingFactors = null;
 
@@ -125,6 +132,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// prepare flatfield correction images
 			// use it as a folder with the input file's name
 			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
+					dataProvider,
 					absoluteChannelPathNoExt + "-flatfield/S.tif",
 					absoluteChannelPathNoExt + "-flatfield/T.tif",
 					job.getDimensionality()
@@ -138,12 +146,17 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// Generate export of the first scale level
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( fullScaleOutputPath ) )
-				fuse( baseExportPath, fullScaleOutputPath, job.getTiles( channel ) );
+				fuse( n5ExportPath, fullScaleOutputPath, job.getTiles( channel ) );
 
 			// Generate lower scale levels
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
-				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic( sparkContext, n5, fullScaleOutputPath, new FinalVoxelDimensions( "um", voxelDimensions ) );
+				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic(
+						sparkContext,
+						() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( n5ExportPath ) ),
+						fullScaleOutputPath,
+						new FinalVoxelDimensions( "um", voxelDimensions )
+					);
 
 			broadcastedPairwiseConnectionsMap.destroy();
 			broadcastedFlatfieldCorrection.destroy();
@@ -155,7 +168,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		for ( int s = 0; s < downsamplingFactors.length; ++s )
 			scalesDouble[ s ] = Conversions.toDoubleArray( downsamplingFactors[ s ] );
 
-		final N5ExportMetadata exportMetadata = new N5ExportMetadata( baseExportPath );
+		// TODO: pass data provider
+		final N5ExportMetadata exportMetadata = new N5ExportMetadata( n5ExportPath );
 		exportMetadata.setDefaultScales( scalesDouble );
 		exportMetadata.setDefaultPixelResolution( new FinalVoxelDimensions( "um", voxelDimensions ) );
 	}
@@ -169,8 +183,9 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		return cellSize;
 	}
 
-	private void fuse( final String baseExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
+	private void fuse( final String n5ExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
 	{
+		final DataProvider dataProvider = job.getDataProvider();
 		final int[] cellSize = getOptimalCellSize();
 
 		final Boundaries boundingBox;
@@ -190,7 +205,14 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		final List< TileInfo > biggerCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );
 
-		N5.openFSWriter( baseExportPath ).createDataset( fullScaleOutputPath, Intervals.dimensionsAsLongArray( boundingBox ), cellSize, getN5DataType( tiles[ 0 ].getType() ), CompressionType.GZIP );
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ) );
+		n5.createDataset(
+				fullScaleOutputPath,
+				Intervals.dimensionsAsLongArray( boundingBox ),
+				cellSize,
+				getN5DataType( tiles[ 0 ].getType() ),
+				CompressionType.GZIP
+			);
 
 		sparkContext.parallelize( biggerCells, biggerCells.size() ).foreach( biggerCell ->
 			{
@@ -214,7 +236,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 							broadcastedFlatfieldCorrection.value(),
 							broadcastedPairwiseConnectionsMap.value() );
 
-				final N5Writer n5Local = N5.openFSWriter( baseExportPath );
+				final DataProvider dataProviderLocal = job.getDataProvider();
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( n5ExportPath ) );
 				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridPosition );
 			}
 		);
@@ -240,10 +263,12 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		if ( !job.getArgs().exportOverlaps() )
 			return null;
 
+		final DataProvider dataProvider = job.getDataProvider();
 		final Map< Integer, Set< Integer > > pairwiseConnectionsMap = new HashMap<>();
 		try
 		{
-			final List< SerializablePairWiseStitchingResult[] > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( Paths.get( channelPath ).getParent().resolve( "pairwise-stitched.json" ).toString() );
+			final String pairwiseShiftsPath = Paths.get( channelPath ).getParent().resolve( "pairwise-stitched.json" ).toString();
+			final List< SerializablePairWiseStitchingResult[] > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 			for ( final SerializablePairWiseStitchingResult[] pairwiseShiftMulti : pairwiseShifts )
 			{
 				final SerializablePairWiseStitchingResult pairwiseShift = pairwiseShiftMulti[ 0 ];
