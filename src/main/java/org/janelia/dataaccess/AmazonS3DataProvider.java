@@ -148,6 +148,24 @@ class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
+	public void copyFile( final URI uriSrc, final URI uriDst ) throws IOException
+	{
+		final AmazonS3URI s3UriSrc = decodeS3Uri( uriSrc );
+		final AmazonS3URI s3UriDst = decodeS3Uri( uriDst );
+		s3.copyObject(
+				s3UriSrc.getBucket(), s3UriSrc.getKey(),
+				s3UriDst.getBucket(), s3UriDst.getKey()
+			);
+	}
+
+	@Override
+	public void moveFile( final URI uriSrc, final URI uriDst ) throws IOException
+	{
+		copyFile( uriSrc, uriDst );
+		deleteFile( uriSrc );
+	}
+
+	@Override
 	public InputStream getInputStream( final URI uri ) throws IOException
 	{
 		final AmazonS3URI s3Uri = decodeS3Uri( uri );

@@ -28,6 +28,9 @@ public interface DataProvider
 
 	public boolean fileExists( final URI uri ) throws IOException;
 
+	public void copyFile( final URI uriSrc, final URI uriDst ) throws IOException;
+	public void moveFile( final URI uriSrc, final URI uriDst ) throws IOException;
+
 	public void deleteFile( final URI uri ) throws IOException;
 	public void deleteFolder( final URI uri ) throws IOException;
 

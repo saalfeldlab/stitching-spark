@@ -83,6 +83,24 @@ class FSDataProvider implements DataProvider
 	}
 
 	@Override
+	public void copyFile( final URI uriSrc, final URI uriDst ) throws IOException
+	{
+		Files.copy(
+				Paths.get( uriSrc.toString() ),
+				Paths.get( uriDst.toString() )
+			);
+	}
+
+	@Override
+	public void moveFile( final URI uriSrc, final URI uriDst ) throws IOException
+	{
+		Files.move(
+				Paths.get( uriSrc.toString() ),
+				Paths.get( uriDst.toString() )
+			);
+	}
+
+	@Override
 	public InputStream getInputStream( final URI uri) throws IOException
 	{
 		return new FileInputStream( uri.toString() );
