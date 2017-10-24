@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.List;
 
 import org.janelia.dataaccess.DataProvider;
@@ -23,7 +24,7 @@ public class FilterOutliers
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 0 ] ) );
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 
 		int before = 0, after = 0;
 		for ( int i = 0; i < shifts.size(); i++ )
@@ -48,7 +49,7 @@ public class FilterOutliers
 
 		System.out.println( "before="+before + ", after="+after);
 
-		TileInfoJSONProvider.savePairwiseShifts( shifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 0 ], "_inliers" ) ) );
+		TileInfoJSONProvider.savePairwiseShifts( shifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 0 ], "_inliers" ) ) ) );
 	}
 
 
@@ -59,7 +60,7 @@ public class FilterOutliers
 
 		final List< SerializablePairWiseStitchingResult >[] shifts = new List[2];
 		for ( int j = 0; j < 2; j++ )
-			shifts[j]=TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ j ] ) );
+			shifts[j]=TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ j ] ) ) );
 
 		//final Point zero = new Point( new double[ ch0Shifts.get( 0 ).getNumDimensions() ] );
 		//final List< PairwiseShiftPointMatch > matches = new ArrayList<>(), inliers = new ArrayList<>();
@@ -113,7 +114,7 @@ public class FilterOutliers
 		//	match.getShift().setIsValidOverlap( true );
 
 		for ( int j = 0; j < 2; j++ )
-			TileInfoJSONProvider.savePairwiseShifts( shifts[j], dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ j ], "_inliers" ) ) );
+			TileInfoJSONProvider.savePairwiseShifts( shifts[j], dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ j ], "_inliers" ) ) ) );
 	}
 
 

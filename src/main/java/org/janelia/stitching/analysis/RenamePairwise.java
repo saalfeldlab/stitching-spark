@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -22,8 +23,8 @@ public class RenamePairwise
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) ) );
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 1 ] ) );
+		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) ) );
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) );
 
 		final Set< Integer > validation = new HashSet<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
@@ -40,7 +41,7 @@ public class RenamePairwise
 			shift.getTilePair().getB().setFilePath( tilesMap.get( shift.getTilePair().getB().getIndex() ).getFilePath() );
 		}
 
-		TileInfoJSONProvider.savePairwiseShifts( shifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 1 ], "_renamed" ) ) );
+		TileInfoJSONProvider.savePairwiseShifts( shifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 1 ], "_renamed" ) ) ) );
 
 		System.out.println( "Done" );
 	}

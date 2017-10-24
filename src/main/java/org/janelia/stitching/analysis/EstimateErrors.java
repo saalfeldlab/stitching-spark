@@ -1,6 +1,7 @@
 package org.janelia.stitching.analysis;
 
 import java.io.PrintWriter;
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -24,8 +25,8 @@ public class EstimateErrors
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final Map< Integer, TileInfo > originalTiles = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) ) );
-		final TileInfo[] resultingTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) );
+		final Map< Integer, TileInfo > originalTiles = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) ) );
+		final TileInfo[] resultingTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) );
 
 		parseCoordinates( resultingTiles );
 		parseTimestamps( resultingTiles );

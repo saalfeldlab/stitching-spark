@@ -1,6 +1,7 @@
 package org.janelia.stitching.analysis;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,8 +24,8 @@ public class FindPairwiseChanges
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) );
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) );
 
 		final List< TilePair > adjacentPairs = FilterAdjacentShifts.filterAdjacentPairs( TileOperations.findOverlappingTiles( stageTiles ) );
 		final List< TilePair > newAdjacentPairs = getPairsWithPrediction( stageTiles, stitchedTiles, 5, true );

@@ -1,6 +1,7 @@
 package org.janelia.stitching.analysis;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,7 +18,7 @@ public class FixTilePosition
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 		final int tileIndex = Integer.parseInt( args[ 1 ] );
 		final int dimToFix = Integer.parseInt( args[ 2 ] );
 		final double newVal = Double.parseDouble( args[ 3 ] );
@@ -27,16 +28,16 @@ public class FixTilePosition
 				tile.setPosition( dimToFix, newVal );
 
 		final String outFilename = Utils.addFilenameSuffix( args[ 0 ], "_fixed_" + tileIndex + "_" + (dimToFix==0?"x":(dimToFix==1?"y":"z")) );
-		TileInfoJSONProvider.saveTilesConfiguration( tiles, dataProvider.getJsonWriter( outFilename ) );
+		TileInfoJSONProvider.saveTilesConfiguration( tiles, dataProvider.getJsonWriter( URI.create( outFilename ) ) );
 
 		try
 		{
-			final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( Utils.addFilenameSuffix( args[ 0 ], "_pairwise" ) ) );
+			final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( Utils.addFilenameSuffix( args[ 0 ], "_pairwise" ) ) ) );
 			final List< SerializablePairWiseStitchingResult > fixedShifts = new ArrayList<>();
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
 				if ( shift.getTilePair().getA().getIndex() != tileIndex && shift.getTilePair().getB().getIndex() != tileIndex )
 					fixedShifts.add( shift );
-			TileInfoJSONProvider.savePairwiseShifts( fixedShifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix( outFilename, "_pairwise" ) ) );
+			TileInfoJSONProvider.savePairwiseShifts( fixedShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( outFilename, "_pairwise" ) ) ) );
 		}
 		catch ( final IOException e )
 		{

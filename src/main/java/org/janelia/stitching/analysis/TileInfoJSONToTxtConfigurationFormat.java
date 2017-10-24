@@ -2,6 +2,7 @@ package org.janelia.stitching.analysis;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.Arrays;
 
@@ -20,7 +21,7 @@ public class TileInfoJSONToTxtConfigurationFormat
 		final String inputFilepath = args[ 0 ];
 		final String outputFilepath = inputFilepath.substring( 0, inputFilepath.lastIndexOf( "." ) ) + ".txt";
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( inputFilepath ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( inputFilepath ) ) );
 		TileOperations.translateTilesToOriginReal( tiles );
 
 		try ( final PrintWriter writer = new PrintWriter( outputFilepath ) )

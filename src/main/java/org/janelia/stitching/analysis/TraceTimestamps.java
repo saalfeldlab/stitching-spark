@@ -1,6 +1,7 @@
 package org.janelia.stitching.analysis;
 
 import java.io.PrintWriter;
+import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
@@ -21,7 +22,7 @@ public class TraceTimestamps
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 		final List< Pair< TileInfo, Long > > timestamps = Utils.getTilesTimestamps( tiles );
 		final List< Pair< TileInfo, int[] > > coordinates = Utils.getTilesCoordinates( tiles );
 

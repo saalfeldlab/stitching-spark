@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
@@ -16,8 +17,8 @@ public class ChooseSameSubset {
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final List< SerializablePairWiseStitchingResult > origShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[0] ) );
-		final TreeMap<Integer, TreeMap<Integer, SerializablePairWiseStitchingResult>> subsetShiftsMap = Utils.createPairwiseShiftsMap(TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[1] ) ), false);
+		final List< SerializablePairWiseStitchingResult > origShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[0] ) ) );
+		final TreeMap<Integer, TreeMap<Integer, SerializablePairWiseStitchingResult>> subsetShiftsMap = Utils.createPairwiseShiftsMap(TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[1] ) ) ), false);
 		final ArrayList< SerializablePairWiseStitchingResult > finalShifts = new ArrayList<>();
 
 		int totalCount = 0, finalCount = 0;
@@ -41,6 +42,6 @@ public class ChooseSameSubset {
 		System.out.println("totalCount="+totalCount);
 		System.out.println("finalCount="+finalCount);
 
-		TileInfoJSONProvider.savePairwiseShifts( finalShifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix(args[0], "_subset") ) );
+		TileInfoJSONProvider.savePairwiseShifts( finalShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix(args[0], "_subset") ) ) );
 	}
 }

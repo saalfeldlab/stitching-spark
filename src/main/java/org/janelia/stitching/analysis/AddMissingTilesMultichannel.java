@@ -1,6 +1,7 @@
 package org.janelia.stitching.analysis;
 
 import java.io.File;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -36,9 +37,9 @@ public class AddMissingTilesMultichannel
 		final TreeMap< Integer, TileInfo >[] tilesFinal = new TreeMap[ 2 ];
 		final List< SerializablePairWiseStitchingResult >[] shifts = new List[ 2 ];
 		for ( int ch = 0; ch < 2; ch++ )
-			tilesFinal[ ch ] = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ ch ] ) ) );
+			tilesFinal[ ch ] = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ ch ] ) ) ) );
 		for ( int ch = 0; ch < 2; ch++ )
-			shifts[ ch ] = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ tilesFinal.length + ch ] ) );
+			shifts[ ch ] = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ tilesFinal.length + ch ] ) ) );
 
 		// Find "tile indices offset" between corresponding tiles across channels
 		final int tilesPerChannel = Utils.createTilesMap( shifts[ 0 ], false ).size();

@@ -1,6 +1,7 @@
 package org.janelia.stitching.analysis;
 
 import java.io.File;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,7 +37,7 @@ public class CheckConnectedGraphs
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tileInfos = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
+		final TileInfo[] tileInfos = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 		final TreeMap< Integer, TileInfo > tilesMap = Utils.createTilesMap( tileInfos );
 
 		System.out.println( "Finding overlapping pairs.." );

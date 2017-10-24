@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,7 +24,7 @@ public class CreateFakePairwiseShifts
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 		final List< TilePair > overlappingPairs = TileOperations.findOverlappingTiles( tiles );
 		final List< SerializablePairWiseStitchingResult > nonAdjacentShifts = new ArrayList<>();
 
@@ -90,7 +91,7 @@ public class CreateFakePairwiseShifts
 		System.out.println( "Adjacent pairs for Y = " + adjShiftsCount[1]);
 		System.out.println( "Adjacent pairs for Z = " + adjShiftsCount[2]);
 
-		TileInfoJSONProvider.savePairwiseShifts( nonAdjacentShifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 0 ], "_pairwise_fake" ) ) );
+		TileInfoJSONProvider.savePairwiseShifts( nonAdjacentShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 0 ], "_pairwise_fake" ) ) ) );
 
 		System.out.println( "Done" );
 	}

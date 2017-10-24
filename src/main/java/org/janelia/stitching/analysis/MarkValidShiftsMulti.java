@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.List;
 import java.util.TreeMap;
 
@@ -15,8 +16,8 @@ public class MarkValidShiftsMulti
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final List< SerializablePairWiseStitchingResult > shiftsFinal = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[0] ) );
-		final List< SerializablePairWiseStitchingResult[] > shiftsMulti = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( args[1] ) );
+		final List< SerializablePairWiseStitchingResult > shiftsFinal = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[0] ) ) );
+		final List< SerializablePairWiseStitchingResult[] > shiftsMulti = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( args[1] ) ) );
 
 		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > shiftsFinalValidMap = Utils.createPairwiseShiftsMap( shiftsFinal, true );
 
@@ -54,6 +55,6 @@ public class MarkValidShiftsMulti
 
 		System.out.println( "Marked " + valid + " shifts as valid" );
 
-		TileInfoJSONProvider.savePairwiseShiftsMulti( shiftsMulti, dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[1], "_final" ) ) );
+		TileInfoJSONProvider.savePairwiseShiftsMulti( shiftsMulti, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[1], "_final" ) ) ) );
 	}
 }

@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -41,8 +42,8 @@ public class AddMissingTilesAverageShift
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
 		// Read inputs
-		final TreeMap< Integer, TileInfo > tilesInfoOriginal = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) ) );
-		final TreeMap< Integer, TileInfo > tilesInfoFinal = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) ) );
+		final TreeMap< Integer, TileInfo > tilesInfoOriginal = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) ) );
+		final TreeMap< Integer, TileInfo > tilesInfoFinal = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) ) );
 
 		parseCoordinates( tilesInfoOriginal.values() );
 
@@ -105,7 +106,7 @@ public class AddMissingTilesAverageShift
 		//for ( final TileInfo tileFinal : tilesInfoFinal.values() )
 		//	System.out.println( (missingTilesInfo.containsKey(tileFinal.getIndex())?"***":"") + Arrays.toString(tileFinal.getPosition()));
 
-		TileInfoJSONProvider.saveTilesConfiguration( tilesInfoFinal.values().toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 1 ], "_all" ) ) );
+		TileInfoJSONProvider.saveTilesConfiguration( tilesInfoFinal.values().toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 1 ], "_all" ) ) ) );
 
 		System.out.println( "Done" );
 	}

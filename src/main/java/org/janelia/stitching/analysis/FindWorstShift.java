@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.List;
 
 import org.janelia.dataaccess.DataProvider;
@@ -27,7 +28,7 @@ public class FindWorstShift
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 0 ] ) );
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 
 		int validShiftsCount = 0;
 		int badShiftsCount = 0;
@@ -109,7 +110,7 @@ public class FindWorstShift
 		if ( badShiftsCount > 0)
 		{
 			System.out.println( "Filtering out bad shifts" );
-			TileInfoJSONProvider.savePairwiseShifts( shifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 0 ], "_good" ) ) );
+			TileInfoJSONProvider.savePairwiseShifts( shifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 0 ], "_good" ) ) ) );
 		}
 	}
 }

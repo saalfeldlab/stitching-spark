@@ -3,6 +3,7 @@ package org.janelia.stitching.experimental;
 import java.io.File;
 import java.io.PrintWriter;
 import java.io.Serializable;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -51,7 +52,7 @@ public class BackgroundTilesFiltering implements Serializable
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
 		this.input = input;
-		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( input ) );
+		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( input ) ) );
 		sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "BackgroundTilesFiltering" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )

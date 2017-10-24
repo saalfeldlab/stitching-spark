@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +27,7 @@ public class MergePairwiseShifts
 			else if (!workingDir.isEmpty() && !workingDir.equals( Paths.get( input ).getParent().toString()+"/" ))
 				workingDir="";
 
-			final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( input ) );
+			final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( input ) ) );
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
 			{
 				final int ind1 = Math.min( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
@@ -46,7 +47,7 @@ public class MergePairwiseShifts
 				mergedShifts.add( shift );
 
 		if ( !mergedShifts.isEmpty() )
-			TileInfoJSONProvider.savePairwiseShifts( mergedShifts, dataProvider.getJsonWriter( workingDir +"merged_pairwise_shifts_set.json" ) );
+			TileInfoJSONProvider.savePairwiseShifts( mergedShifts, dataProvider.getJsonWriter( URI.create( workingDir +"merged_pairwise_shifts_set.json" ) ) );
 
 
 		int valid = 0;

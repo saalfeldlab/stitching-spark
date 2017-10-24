@@ -1,6 +1,7 @@
 package org.janelia.stitching.analysis;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.TreeSet;
@@ -49,7 +50,7 @@ public class FilterTileConfiguration
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( inputFilename ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( inputFilename ) ) );
 		System.out.println( "Total number of tiles = " + tiles.length );
 
 		final ArrayList< TileInfo > filteredTiles = new ArrayList<>();
@@ -58,26 +59,26 @@ public class FilterTileConfiguration
 				filteredTiles.add( tile );
 
 		System.out.println( "Number of tiles after filtering = " + filteredTiles.size() );
-		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( Utils.addFilenameSuffix( inputFilename, "_filtered_" + filenameFilter ) ) );
+		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( inputFilename, "_filtered_" + filenameFilter ) ) ) );
 	}
 
 	public static void filterByTileIndexes( final String inputFilename, final Set< Integer > tileIndexes ) throws IOException
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( inputFilename ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( inputFilename ) ) );
 		final ArrayList< TileInfo > filteredTiles = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			if ( tileIndexes.contains( tile.getIndex() ) )
 				filteredTiles.add( tile );
-		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( Utils.addFilenameSuffix( inputFilename, "_filtered_" + tileIndexes.toString().replaceAll( " ", "" ) ) ) );
+		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( inputFilename, "_filtered_" + tileIndexes.toString().replaceAll( " ", "" ) ) ) ) );
 	}
 
 	public static void filterByTileIndexesExcluded( final String inputFilename, final Set< Integer > tileIndexesExcluded ) throws IOException
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( inputFilename ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( inputFilename ) ) );
 		System.out.println( "Before: " + tiles.length + " tiles" );
 		System.out.println( "Excluding " + tileIndexesExcluded.size() + " tiles.." );
 
@@ -87,6 +88,6 @@ public class FilterTileConfiguration
 				filteredTiles.add( tile );
 
 		System.out.println( "After: " + filteredTiles.size() + " tiles" );
-		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( Utils.addFilenameSuffix( inputFilename, "_excluded_" + tileIndexesExcluded.size() + "_tiles" ) ) );
+		TileInfoJSONProvider.saveTilesConfiguration( filteredTiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( inputFilename, "_excluded_" + tileIndexesExcluded.size() + "_tiles" ) ) ) );
 	}
 }

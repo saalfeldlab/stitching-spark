@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
@@ -23,8 +24,8 @@ public class ChangeTileConfiguration
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TreeMap<Integer,TileInfo> tilesFrom = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) ) );
-		final TreeMap<Integer, TileInfo > tilesTo = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) ) );
+		final TreeMap<Integer,TileInfo> tilesFrom = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) ) );
+		final TreeMap<Integer, TileInfo > tilesTo = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) ) );
 		final String what = args[ 2 ].trim();
 
 		final int tilesPerChannel = tilesTo.size();
@@ -63,7 +64,7 @@ public class ChangeTileConfiguration
 		System.out.println( "Processed: " + processed );
 
 		final TileInfo[] result = new ArrayList<>( tilesTo.values() ).toArray( new TileInfo[0] );
-		TileInfoJSONProvider.saveTilesConfiguration( result, dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 1 ], "_changed_" + what ) ) );
+		TileInfoJSONProvider.saveTilesConfiguration( result, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 1 ], "_changed_" + what ) ) ) );
 
 		System.out.println( "Done" );
 	}
