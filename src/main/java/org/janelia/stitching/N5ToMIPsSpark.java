@@ -1,12 +1,17 @@
 package org.janelia.stitching;
 
+import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5;
-import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
+import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.spark.N5MaxIntensityProjection;
 import org.janelia.saalfeldlab.n5.spark.TiffUtils;
@@ -65,22 +70,30 @@ public class N5ToMIPsSpark
 		final String outputPath = Paths.get( outBaseFolder, outFolder ).toString();
 		System.out.println( "Output path: " + outputPath );
 
+		final DataProvider dataProvider = DataProviderFactory.createByURI( URI.create( n5Path ) );
+		final DataProviderType dataProviderType = dataProvider.getType();
+
+		final List< int[] > channelsCellDimensions = new ArrayList<>();
+		final N5Reader n5 = dataProvider.createN5Reader( URI.create( n5Path ) );
+		final N5ExportMetadata exportMetadata = new N5ExportMetadata( n5Path );
+		for ( int channel = 0; channel < exportMetadata.getNumChannels(); ++channel )
+		{
+			final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
+			final int[] cellDimensions = n5.getDatasetAttributes( n5DatasetPath ).getBlockSize();
+			channelsCellDimensions.add( cellDimensions );
+		}
+
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "N5ToMIPs" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 				.set( "spark.rdd.compress", "true" )
 			) )
 		{
-			final N5ExportMetadata exportMetadata = new N5ExportMetadata( n5Path );
-			for ( int channel = 0; channel < exportMetadata.getNumChannels(); ++channel )
+			for ( int channel = 0; channel < channelsCellDimensions.size(); ++channel )
 			{
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
 				final String outputChannelPath = Paths.get( outputPath, "ch" + channel ).toString();
-
-				final N5Writer n5 = N5.openFSWriter( n5Path );
-				final DatasetAttributes attributes = n5.getDatasetAttributes( n5DatasetPath );
-				final int[] cellDimensions = attributes.getBlockSize();
-
+				final int[] cellDimensions = channelsCellDimensions.get( channel );
 				final int[] mipStepsCells = new int[ cellDimensions.length ];
 				for ( int d = 0; d < mipStepsCells.length; ++d )
 				{
@@ -97,7 +110,13 @@ public class N5ToMIPsSpark
 
 				N5MaxIntensityProjection.createMaxIntensityProjection(
 						sparkContext,
-						n5,
+						() -> {
+							try {
+								return DataProviderFactory.createByType( dataProviderType ).createN5Reader( URI.create( n5Path ) );
+							} catch ( final IOException e ) {
+								throw new RuntimeException( e );
+							}
+						},
 						n5DatasetPath,
 						mipStepsCells,
 						outputChannelPath,
