@@ -86,16 +86,24 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePairNullable< U, U > loadCorrectionImages( final String sPath, final String tPath, final int dimensionality )
+	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePairNullable< U, U > loadCorrectionImages(
+			final DataProvider dataProvider,
+			final String sPath,
+			final String tPath,
+			final int dimensionality ) throws IOException
 	{
 		System.out.println( "Loading flat-field components:" );
 		System.out.println( "  " + sPath );
 		System.out.println( "  " + tPath );
 
-		final ImagePlus sImp = ImageImporter.openImage( sPath );
-		final ImagePlus tImp = ImageImporter.openImage( tPath );
-		if ( sImp == null || tImp == null )
+		if ( !dataProvider.fileExists( URI.create( sPath ) ) || !dataProvider.fileExists( URI.create( tPath ) ) )
+		{
+			System.out.println( "  -- Flat-field images do not exist" );
 			return null;
+		}
+
+		final ImagePlus sImp = dataProvider.loadImage( URI.create( sPath ) );
+		final ImagePlus tImp = dataProvider.loadImage( URI.create( tPath ) );
 
 		final RandomAccessibleInterval< U > sImg = ImagePlusImgs.from( sImp );
 		final RandomAccessibleInterval< U > tImg = ImagePlusImgs.from( tImp );
