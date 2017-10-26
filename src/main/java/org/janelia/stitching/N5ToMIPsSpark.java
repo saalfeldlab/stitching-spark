@@ -13,6 +13,7 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
+import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
 import org.janelia.saalfeldlab.n5.spark.N5MaxIntensityProjection;
 import org.janelia.saalfeldlab.n5.spark.TiffUtils;
 
@@ -74,8 +75,8 @@ public class N5ToMIPsSpark
 		final DataProviderType dataProviderType = dataProvider.getType();
 
 		final List< int[] > channelsCellDimensions = new ArrayList<>();
-		final N5Reader n5 = dataProvider.createN5Reader( URI.create( n5Path ) );
-		final N5ExportMetadata exportMetadata = new N5ExportMetadata( n5Path );
+		final N5Reader n5 = dataProvider.createN5Reader( URI.create( n5Path ), N5ExportMetadata.getGsonBuilder() );
+		final N5ExportMetadataReader exportMetadata = N5ExportMetadata.openForReading( n5 );
 		for ( int channel = 0; channel < exportMetadata.getNumChannels(); ++channel )
 		{
 			final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
@@ -112,7 +113,7 @@ public class N5ToMIPsSpark
 						sparkContext,
 						() -> {
 							try {
-								return DataProviderFactory.createByType( dataProviderType ).createN5Reader( URI.create( n5Path ) );
+								return DataProviderFactory.createByType( dataProviderType ).createN5Reader( URI.create( n5Path ), N5ExportMetadata.getGsonBuilder() );
 							} catch ( final IOException e ) {
 								throw new RuntimeException( e );
 							}

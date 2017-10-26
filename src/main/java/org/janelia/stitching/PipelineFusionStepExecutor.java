@@ -21,6 +21,7 @@ import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
+import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5DownsamplingSpark;
 import org.janelia.stitching.FusionPerformer.FusionMode;
@@ -104,7 +105,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final DataProviderType dataProviderType = dataProvider.getType();
 
 		final String n5ExportPath = baseExportPath;
-		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ) );
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ), N5ExportMetadata.getGsonBuilder() );
 
 		int[][] downsamplingFactors = null;
 
@@ -168,8 +169,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		for ( int s = 0; s < downsamplingFactors.length; ++s )
 			scalesDouble[ s ] = Conversions.toDoubleArray( downsamplingFactors[ s ] );
 
-		// TODO: pass data provider
-		final N5ExportMetadata exportMetadata = new N5ExportMetadata( n5ExportPath );
+		final N5ExportMetadataWriter exportMetadata = N5ExportMetadata.openForWriting( n5 );
 		exportMetadata.setDefaultScales( scalesDouble );
 		exportMetadata.setDefaultPixelResolution( new FinalVoxelDimensions( "um", voxelDimensions ) );
 	}
