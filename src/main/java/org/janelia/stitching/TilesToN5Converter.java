@@ -29,6 +29,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
+import scala.Tuple2;
 
 public class TilesToN5Converter
 {
@@ -38,6 +39,8 @@ public class TilesToN5Converter
 	 *
 	 * @param sparkContext
 	 * 			Spark context instantiated with {@link Kryo} serializer
+	 * @param outputPath
+	 * 			Base N5 path for constructing new tile paths
 	 * @param n5Supplier
 	 * 			{@link N5Writer} supplier
 	 * @param tilesChannels
@@ -46,10 +49,13 @@ public class TilesToN5Converter
 	 * 			Output block size
 	 * @param compression
 	 * 			Output N5 compression
+	 * @return
+	 * 			New tile configurations with updated paths
 	 * @throws IOException
 	 */
-	public static < T extends NumericType< T > & NativeType< T > > void convertTiffToN5(
+	public static < T extends NumericType< T > & NativeType< T > > Map< String, TileInfo[] > convertTiffToN5(
 			final JavaSparkContext sparkContext,
+			final String outputPath,
 			final N5WriterSupplier n5Supplier,
 			final Map< String, TileInfo[] > tilesChannels,
 			final int blockSize,
@@ -62,21 +68,35 @@ public class TilesToN5Converter
 
 		// TODO: can consider pixel resolution to calculate isotropic block size in Z
 
+		final Map< String, TileInfo[] > ret = new LinkedHashMap<>();
+
 		for ( final Entry< String, TileInfo[] > entry : tilesChannels.entrySet() )
 		{
-			final String channelGroupName = Paths.get( entry.getKey() ).getFileName().toString();
-			n5Supplier.get().createGroup( channelGroupName );
+			final String channelName = entry.getKey();
+			n5Supplier.get().createGroup( channelName );
 
-			sparkContext.parallelize( Arrays.asList( entry.getValue() ), entry.getValue().length ).foreach( tile ->
+			final Map< Integer, String > newTilePaths = sparkContext.parallelize( Arrays.asList( entry.getValue() ), entry.getValue().length ).mapToPair( tile ->
 				{
 					final N5Writer n5 = n5Supplier.get();
-					final String tileDatasetPath = Paths.get( channelGroupName, Paths.get( tile.getFilePath() ).getFileName().toString() ).toString();
+					final String tileDatasetPath = Paths.get( channelName, Paths.get( tile.getFilePath() ).getFileName().toString() ).toString();
 					final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
 					final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
 					N5Utils.save( img, n5, tileDatasetPath, blockSizeArr, n5Compression );
+					return new Tuple2<>( tile.getIndex(), Paths.get( outputPath, tileDatasetPath ).toString() );
 				}
-			);
+			).collectAsMap();
+
+			final TileInfo[] newTiles = new TileInfo[ entry.getValue().length ];
+			for ( int i = 0; i < newTiles.length; ++i )
+			{
+				newTiles[ i ] = entry.getValue()[ i ].clone();
+				newTiles[ i ].setFilePath( newTilePaths.get( newTiles[ i ].getIndex() ) );
+			}
+
+			ret.put( channelName, newTiles );
 		}
+
+		return ret;
 	}
 
 	public static void main( final String... args ) throws IOException
@@ -90,24 +110,45 @@ public class TilesToN5Converter
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 			) )
 		{
-			final DataProvider tilesConfigDataProvider = DataProviderFactory.createByURI( URI.create( parsedArgs.getInputChannelsPath().get( 0 ) ) );
+			final DataProvider tileConfigDataProvider = DataProviderFactory.createByURI( URI.create( parsedArgs.getInputChannelsPath().get( 0 ) ) );
 			final Map< String, TileInfo[] > tilesChannels = new LinkedHashMap<>();
 			for ( final String inputPath : parsedArgs.getInputChannelsPath() )
-				tilesChannels.put( inputPath, TileInfoJSONProvider.loadTilesConfiguration( tilesConfigDataProvider.getJsonReader( URI.create( inputPath ) ) ) );
+			{
+				final String channelName = getChannelName( inputPath );
+				final TileInfo[] channelTiles = TileInfoJSONProvider.loadTilesConfiguration( tileConfigDataProvider.getJsonReader( URI.create( inputPath ) ) );
+				tilesChannels.put( channelName, channelTiles );
+			}
 
 			final URI n5Uri = URI.create( parsedArgs.getN5OutputPath() );
 			final N5WriterSupplier n5Supplier = () -> DataProviderFactory.createByURI( n5Uri ).createN5Writer( n5Uri );
 
-			convertTiffToN5(
+			final Map< String, TileInfo[] > newTiles = convertTiffToN5(
 					sparkContext,
+					parsedArgs.getN5OutputPath(),
 					n5Supplier,
 					tilesChannels,
 					parsedArgs.getBlockSize(),
 					parsedArgs.getN5Compression()
 				);
+
+			for ( final String inputPath : parsedArgs.getInputChannelsPath() )
+			{
+				final String channelName = getChannelName( inputPath );
+				final TileInfo[] newChannelTiles = newTiles.get( channelName );
+				final String newConfigPath = Utils.addFilenameSuffix( inputPath, "-converted-n5" );
+				TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, tileConfigDataProvider.getJsonWriter( URI.create( newConfigPath ) ) );
+			}
 		}
 
 		System.out.println( System.lineSeparator() + "Done" );
+	}
+
+	private static String getChannelName( final String tileConfigPath )
+	{
+		final String filename = Paths.get( tileConfigPath ).getFileName().toString();
+		final int lastDotIndex = filename.lastIndexOf( '.' );
+		final String filenameWithoutExtension = lastDotIndex != -1 ? filename.substring( 0, lastDotIndex ) : filename;
+		return filenameWithoutExtension;
 	}
 
 	private static class Arguments

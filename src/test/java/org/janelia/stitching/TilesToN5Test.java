@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Random;
 
 import org.apache.spark.SparkConf;
@@ -15,6 +16,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.junit.Assert;
 import org.junit.Test;
 
 import ij.IJ;
@@ -75,13 +77,19 @@ public class TilesToN5Test
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 			) )
 		{
-			TilesToN5Converter.convertTiffToN5(
+			final Map< String, TileInfo[] > newTiles = TilesToN5Converter.convertTiffToN5(
 					sparkContext,
+					n5Path,
 					() -> N5.openFSWriter( n5Path ),
 					Collections.singletonMap( datasetPath, tiles ),
 					blockSize,
 					CompressionType.GZIP
 				);
+
+			Assert.assertEquals( datasetPath, newTiles.keySet().iterator().next() );
+
+			final TileInfo newTile = newTiles.values().iterator().next()[ 0 ];
+			Assert.assertEquals( Paths.get( n5Path, datasetPath, impFilename ).toString(), newTile.getFilePath() );
 		}
 
 		System.out.println( "Loading N5 cell export from:" + Paths.get( n5Path, datasetPath ).toString() );
