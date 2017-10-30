@@ -18,7 +18,6 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.saalfeldlab.n5.CompressionType;
-import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
@@ -210,7 +209,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				fullScaleOutputPath,
 				Intervals.dimensionsAsLongArray( boundingBox ),
 				cellSize,
-				getN5DataType( tiles[ 0 ].getType() ),
+				N5Utils.dataType( ( T ) tiles[ 0 ].getType().getType() ),
 				CompressionType.GZIP
 			);
 
@@ -241,21 +240,6 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridPosition );
 			}
 		);
-	}
-
-	private DataType getN5DataType( final ImageType imageType )
-	{
-		switch ( imageType )
-		{
-		case GRAY8:
-			return DataType.UINT8;
-		case GRAY16:
-			return DataType.UINT16;
-		case GRAY32:
-			return DataType.FLOAT32;
-		default:
-			return null;
-		}
 	}
 
 	private Map< Integer, Set< Integer > > getPairwiseConnectionsMap( final String channelPath ) throws PipelineExecutionException
