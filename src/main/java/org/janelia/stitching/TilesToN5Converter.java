@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,6 +12,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -78,11 +78,11 @@ public class TilesToN5Converter
 			final Map< Integer, String > newTilePaths = sparkContext.parallelize( Arrays.asList( entry.getValue() ), entry.getValue().length ).mapToPair( tile ->
 				{
 					final N5Writer n5 = n5Supplier.get();
-					final String tileDatasetPath = Paths.get( channelName, Paths.get( tile.getFilePath() ).getFileName().toString() ).toString();
+					final String tileDatasetPath = PathResolver.get( channelName, PathResolver.getFileName( tile.getFilePath() ) );
 					final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
 					final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
 					N5Utils.save( img, n5, tileDatasetPath, blockSizeArr, n5Compression );
-					return new Tuple2<>( tile.getIndex(), Paths.get( outputPath, tileDatasetPath ).toString() );
+					return new Tuple2<>( tile.getIndex(), PathResolver.get( outputPath, tileDatasetPath ) );
 				}
 			).collectAsMap();
 
@@ -145,7 +145,7 @@ public class TilesToN5Converter
 
 	private static String getChannelName( final String tileConfigPath )
 	{
-		final String filename = Paths.get( tileConfigPath ).getFileName().toString();
+		final String filename = PathResolver.getFileName( tileConfigPath );
 		final int lastDotIndex = filename.lastIndexOf( '.' );
 		final String filenameWithoutExtension = lastDotIndex != -1 ? filename.substring( 0, lastDotIndex ) : filename;
 		return filenameWithoutExtension;
