@@ -163,7 +163,7 @@ public class TilesToN5Converter
 
 		@Option(name = "-b", aliases = { "--blockSize" }, required = false,
 				usage = "Output block size.")
-		private int blockSize = 128;
+		private int blockSize = 64;
 
 		@Option(name = "-c", aliases = { "--n5Compression" }, required = false,
 				usage = "N5 compression.")
