@@ -21,7 +21,11 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.histogram.Histogram;
+import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.stitching.PipelineExecutionException;
 import org.janelia.stitching.TileInfo;
+import org.janelia.stitching.TileLoader;
+import org.janelia.stitching.TileLoader.TileType;
 import org.janelia.util.TiffSliceReader;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -31,12 +35,17 @@ import com.esotericsoftware.kryo.serializers.MapSerializer;
 
 import ij.ImagePlus;
 import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.SerializableFinalInterval;
+import net.imglib2.img.cell.CellGrid;
 import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.img.list.ListCursor;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.img.list.ListRandomAccess;
+import net.imglib2.img.list.WrappedListImg;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.IntervalIndexer;
@@ -87,15 +96,91 @@ public class HistogramsProvider implements Serializable
 
 		dataProviderType = dataProvider.getType();
 
-		// TODO: smarter handling with try/catch
-//		if ( !Files.exists( Paths.get( histogramsPath ) ) )
 		if ( !allHistogramsReady() )
-			populateHistograms();
+		{
+			// check if tiles are single image files, or N5 datasets
+			final TileType tileType = TileLoader.getTileType( tiles[ 0 ], dataProvider );
+			// TODO: check that all tiles are of the same type
+
+			if ( tileType == TileType.N5_DATASET )
+				populateHistogramsUsingN5Tiles();
+			else if ( tileType == TileType.IMAGE_FILE )
+				populateHistogramsUsingImageTiles();
+		}
+	}
+
+	private < T extends NativeType< T > & RealType< T > > void populateHistogramsUsingN5Tiles() throws IOException, URISyntaxException
+	{
+		System.out.println( "Populating histograms using hash maps reading tiles as N5..." );
+
+		final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
+		final int[] blockSize = TileLoader.getTileN5DatasetAttributes( tiles[ 0 ], dataProvider ).getBlockSize();
+
+		final List< long[] > blockGridPositions = new ArrayList<>();
+		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
+		for ( int index = 0; index < Intervals.numElements( cellGrid.getGridDimensions() ); ++index )
+		{
+			final long[] blockGridPosition = new long[ cellGrid.numDimensions() ];
+			cellGrid.getCellGridPositionFlat( index, blockGridPosition );
+			blockGridPositions.add( blockGridPosition );
+		}
+
+		sparkContext.parallelize( blockGridPositions ).foreach( blockGridPosition ->
+			{
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsPath ) );
+
+				// initialize histograms data block
+				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, channelDatasetPath, blockGridPosition );
+				final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
+				final ListCursor< HashMap< Integer, Integer > > histogramsBlockImgCursor = histogramsBlockImg.cursor();
+				while ( histogramsBlockImgCursor.hasNext() )
+				{
+					histogramsBlockImgCursor.fwd();
+					histogramsBlockImgCursor.set( new HashMap<>() );
+				}
+
+				// create an interval to be processed in each tile image
+				final long[] blockIntervalMin = new long[ blockSize.length ], blockIntervalMax = new long[ blockSize.length ];
+				for ( int d = 0; d < blockSize.length; ++d )
+				{
+					blockIntervalMin[ d ] = blockGridPosition[ d ] * blockSize[ d ];
+					blockIntervalMax[ d ] = Math.min( ( blockGridPosition[ d ] + 1 ) * blockSize[ d ], fullTileSize[ d ] ) - 1;
+				}
+				final Interval blockInterval = new FinalInterval( blockIntervalMin, blockIntervalMax );
+
+				// loop over tile images and populate the histograms using the corresponding part of each tile image
+				int done = 0;
+				for ( final TileInfo tile : tiles )
+				{
+					final RandomAccessibleInterval< T > tileImg = TileLoader.loadTile( tile, dataProviderLocal );
+					final RandomAccessibleInterval< T > tileImgInterval = Views.offsetInterval( tileImg, blockInterval );
+					final IterableInterval< T > tileImgIterableInterval = Views.flatIterable( tileImgInterval );
+					if ( !tileImgIterableInterval.iterationOrder().equals( histogramsBlockImg.iterationOrder() ) )
+						throw new PipelineExecutionException( "iteration order is different for histograms block and tile interval" );
+
+					final Cursor< T > tileImgIntervalCursor = tileImgIterableInterval.cursor();
+					histogramsBlockImgCursor.reset();
+					while ( histogramsBlockImgCursor.hasNext() || tileImgIntervalCursor.hasNext() )
+					{
+						final int key = ( int ) tileImgIntervalCursor.next().getRealDouble();
+						final HashMap< Integer, Integer > histogram = histogramsBlockImgCursor.next();
+						histogram.put( key, histogram.getOrDefault( key, 0 ) + 1 );
+					}
+
+					if ( ++done % 20 == 0 )
+						System.out.println( "Block min=" + Arrays.toString( blockIntervalMin ) + ", max=" + Arrays.toString( blockIntervalMax ) + ": processed " + done + " tiles" );
+				}
+
+				System.out.println( "Block min=" + Arrays.toString( blockIntervalMin ) + ", max=" + Arrays.toString( blockIntervalMax ) + ": populated histograms" );
+
+				histogramsBlock.save();
+			} );
 	}
 
 	// parallelizing over slices + cache-friendly image loading order
 	@SuppressWarnings("unchecked")
-	private < T extends NativeType< T > & RealType< T > > void populateHistograms() throws IOException, URISyntaxException
+	private < T extends NativeType< T > & RealType< T > > void populateHistogramsUsingImageTiles() throws IOException, URISyntaxException
 	{
 		// Check for existing histograms
 		final List< Integer > remainingSlices = new ArrayList<>();
