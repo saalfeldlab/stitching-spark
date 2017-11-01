@@ -44,6 +44,7 @@ import net.imglib2.img.cell.CellGrid;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.img.list.ListCursor;
 import net.imglib2.img.list.ListImg;
+import net.imglib2.img.list.ListLocalizingCursor;
 import net.imglib2.img.list.ListRandomAccess;
 import net.imglib2.img.list.WrappedListImg;
 import net.imglib2.type.NativeType;
@@ -312,11 +313,68 @@ public class HistogramsProvider implements Serializable
 	}
 
 
-	public JavaPairRDD< Long, Histogram > getHistograms()
+	public JavaPairRDD< Long, Histogram > getHistograms() throws IOException
 	{
 		if ( rddHistograms == null )
-			loadHistograms();
+		{
+			// TODO: if the histograms are stored in the old format, convert them to the new N5 format
+			loadHistogramsN5();
+		}
 		return rddHistograms;
+	}
+
+	private void loadHistogramsN5() throws IOException
+	{
+		final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
+
+		final List< long[] > blockGridPositions = new ArrayList<>();
+		final int[] blockSize = dataProvider.createN5Reader( URI.create( histogramsPath ) ).getDatasetAttributes( channelDatasetPath ).getBlockSize();
+		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
+		for ( int index = 0; index < Intervals.numElements( cellGrid.getGridDimensions() ); ++index )
+		{
+			final long[] blockGridPosition = new long[ cellGrid.numDimensions() ];
+			cellGrid.getCellGridPositionFlat( index, blockGridPosition );
+			blockGridPositions.add( blockGridPosition );
+		}
+
+		rddHistograms = sparkContext.parallelize( blockGridPositions ) .flatMapToPair( blockGridPosition ->
+					{
+						final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
+						final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsPath ) );
+
+						final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, channelDatasetPath, blockGridPosition );
+						final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
+
+						final long[] blockPixelOffset = new long[ blockSize.length ];
+						for ( int d = 0; d < blockPixelOffset.length; ++d )
+							blockPixelOffset[ d ] = blockGridPosition[ d ] * blockSize[ d ];
+
+						// TODO: when workingInterval is specified, add optimized version for loading only those blocks that fall within the desired interval
+						final List< Tuple2< Long, HashMap< Integer, Integer > > > ret = new ArrayList<>();
+						final ListLocalizingCursor< HashMap< Integer, Integer > > histogramsBlockImgCursor = histogramsBlockImg.localizingCursor();
+						final long[] pixelPosition = new long[ blockSize.length ];
+						while ( histogramsBlockImgCursor.hasNext() )
+						{
+							histogramsBlockImgCursor.fwd();
+							histogramsBlockImgCursor.localize( pixelPosition );
+
+							// apply block pixel offset
+							for ( int d = 0; d < pixelPosition.length; ++d )
+								pixelPosition[ d ] += blockPixelOffset[ d ];
+
+							final long pixelIndex = IntervalIndexer.positionToIndex( pixelPosition, fullTileSize );
+							ret.add( new Tuple2<>( pixelIndex, histogramsBlockImgCursor.get() ) );
+						}
+						return ret.iterator();
+					} )
+				.mapValues( map ->
+					{
+						final Histogram histogram = new Histogram( histMinValue, histMaxValue, bins );
+						for ( final Entry< Integer, Integer > entry : map.entrySet() )
+							histogram.put( entry.getKey(), entry.getValue() );
+						return histogram;
+					} )
+				.persist( StorageLevel.MEMORY_ONLY_SER() );
 	}
 
 	private void loadHistograms()
