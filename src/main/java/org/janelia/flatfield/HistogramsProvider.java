@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 
+import org.apache.commons.lang.NotImplementedException;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -28,22 +29,18 @@ import org.janelia.stitching.PipelineExecutionException;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileLoader;
 import org.janelia.stitching.TileLoader.TileType;
-import org.janelia.util.TiffSliceReader;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.MapSerializer;
 
-import ij.ImagePlus;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.SerializableFinalInterval;
 import net.imglib2.img.cell.CellGrid;
-import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.img.list.ListCursor;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.img.list.ListLocalizingCursor;
@@ -62,6 +59,7 @@ public class HistogramsProvider implements Serializable
 	private static final long serialVersionUID = 2090264857259429741L;
 
 	private static final double REFERENCE_HISTOGRAM_POINTS_PERCENT = 0.25;
+	private static final int HISTOGRAMS_DEFAULT_BLOCK_SIZE = 64;
 
 	private transient final JavaSparkContext sparkContext;
 	private transient final DataProvider dataProvider;
@@ -100,25 +98,33 @@ public class HistogramsProvider implements Serializable
 		dataProviderType = dataProvider.getType();
 
 		if ( !allHistogramsReady() )
-		{
-			// check if tiles are single image files, or N5 datasets
-			final TileType tileType = TileLoader.getTileType( tiles[ 0 ], dataProvider );
-			// TODO: check that all tiles are of the same type
-
-			if ( tileType == TileType.N5_DATASET )
-				populateHistogramsUsingN5Tiles();
-			else if ( tileType == TileType.IMAGE_FILE )
-				populateHistogramsUsingImageTiles();
-		}
+			populateHistograms();
 	}
 
-	private < T extends NativeType< T > & RealType< T > > void populateHistogramsUsingN5Tiles() throws IOException, URISyntaxException
+	private < T extends NativeType< T > & RealType< T > > void populateHistograms() throws IOException, URISyntaxException
 	{
-		System.out.println( "Populating histograms using hash maps reading tiles as N5..." );
+		System.out.println( "Populating histograms using hash maps..." );
+
+		// check if tiles are single image files, or N5 datasets
+		final TileType tileType = TileLoader.getTileType( tiles[ 0 ], dataProvider );
+		// TODO: check that all tiles are of the same type
+
+		final int[] blockSize;
+		if ( tileType == TileType.N5_DATASET )
+		{
+			blockSize = TileLoader.getTileN5DatasetAttributes( tiles[ 0 ], dataProvider ).getBlockSize();
+		}
+		else if ( tileType == TileType.IMAGE_FILE )
+		{
+			blockSize = new int[ fullTileSize.length ];
+			Arrays.fill( blockSize, HISTOGRAMS_DEFAULT_BLOCK_SIZE );
+		}
+		else
+		{
+			throw new NotImplementedException( "Backend storage not supported for tiles: " + tileType );
+		}
 
 		final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
-		final int[] blockSize = TileLoader.getTileN5DatasetAttributes( tiles[ 0 ], dataProvider ).getBlockSize();
-
 		final List< long[] > blockGridPositions = new ArrayList<>();
 		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
 		for ( int index = 0; index < Intervals.numElements( cellGrid.getGridDimensions() ); ++index )
@@ -186,86 +192,6 @@ public class HistogramsProvider implements Serializable
 				System.out.println( "Block min=" + Arrays.toString( blockIntervalMin ) + ", max=" + Arrays.toString( blockIntervalMax ) + ": populated histograms" );
 
 				histogramsBlock.save();
-			} );
-	}
-
-	// parallelizing over slices + cache-friendly image loading order
-	@SuppressWarnings("unchecked")
-	private < T extends NativeType< T > & RealType< T > > void populateHistogramsUsingImageTiles() throws IOException, URISyntaxException
-	{
-		// Check for existing histograms
-		final List< Integer > remainingSlices = new ArrayList<>();
-		final int minSlice = ( int ) ( workingInterval.numDimensions() == 3 ? workingInterval.min( 2 ) + 1 : 1 );
-		final int maxSlice = ( int ) ( workingInterval.numDimensions() == 3 ? workingInterval.max( 2 ) + 1 : 1 );
-		for ( int slice = minSlice; slice <= maxSlice; slice++ )
-			if ( !dataProvider.fileExists( dataProvider.getUri( generateSliceHistogramsPath( 0, slice ) ) ) )
-				remainingSlices.add( slice );
-
-		final Interval workingSliceInterval = new SerializableFinalInterval(
-				new long[] { workingInterval.min( 0 ), workingInterval.min( 1 ) },
-				new long[] { workingInterval.max( 0 ), workingInterval.max( 1 ) } );
-
-		System.out.println( "Populating histograms using hash maps..." );
-
-		sparkContext.parallelize( remainingSlices ).zipWithIndex().foreach( tuple ->
-			{
-				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
-
-				final List< TileInfo > tilesList = Arrays.asList( tiles );
-				final int slice = tuple._1(), index = tuple._2().intValue();
-				System.out.println( "  Processing slice " + slice );
-
-				final int slicePixels = ( int ) Intervals.numElements( workingSliceInterval );
-				final List< HashMap< Integer, Integer > > histogramsList = new ArrayList<>( slicePixels );
-				for ( int i = 0; i < slicePixels; ++i )
-					histogramsList.add( new HashMap<>() );
-				final ListImg< HashMap< Integer, Integer > > histogramsImg = new ListImg<>( histogramsList, Intervals.dimensionsAsLongArray( workingSliceInterval ) );
-				final Cursor< HashMap< Integer, Integer > > histogramsImgCursor = Views.flatIterable( histogramsImg ).cursor();
-
-				int done = 0;
-				final int groupSize = remainingSlices.size();
-				for ( int i = 0; i < tilesList.size(); i += groupSize )
-				{
-					final List< TileInfo > tilesGroup = new ArrayList<>( tilesList.subList( i, Math.min( i + groupSize, tilesList.size() ) ) );
-					if ( index < tilesGroup.size() )
-						tilesGroup.add( 0, tilesGroup.remove( index ) );
-					System.out.println( "Processing group of size " + tilesGroup.size() + " with order-index = " + index );
-					for ( final TileInfo tile : tilesGroup )
-					{
-						// TODO: consider converting the entire stack to N5 first (at least for S3)
-						final ImagePlus impSlice = TiffSliceReader.readSlice( () -> dataProviderLocal.getInputStream( URI.create( tile.getFilePath() ) ), slice );
-						final RandomAccessibleInterval< T > imgSlice = ImagePlusImgs.from( impSlice );
-						final Cursor< T > cursor = Views.flatIterable( Views.offsetInterval( imgSlice, workingSliceInterval ) ).cursor();
-						while ( cursor.hasNext() || histogramsImgCursor.hasNext() )
-						{
-							final int key = ( int ) cursor.next().getRealDouble();
-							final HashMap< Integer, Integer > histogram = histogramsImgCursor.next();
-							histogram.put( key, histogram.getOrDefault( key, 0 ) + 1 );
-						}
-						impSlice.close();
-						histogramsImgCursor.reset();
-
-						++done;
-						if ( done % 20 == 0 )
-							System.out.println( "Slice " + slice + ": processed " + done + " images" );
-					}
-				}
-
-				System.out.println( "Obtained result for slice " + slice );
-
-				final List< Tuple2< Long, HashMap< Integer, Integer > > > ret = new ArrayList<>();
-				final long[] position = new long[ workingInterval.numDimensions() ], dimensions = fullTileSize;
-				final RandomAccessibleInterval< HashMap< Integer, Integer > > histogramsGlobal = position.length > 2 ? Views.translate( Views.stack( histogramsImg ), new long[] { 0, 0, slice - 1 } ) : histogramsImg;
-				final Cursor< HashMap< Integer, Integer > > histogramsGlobalCursor = Views.iterable( histogramsGlobal ).localizingCursor();
-				while ( histogramsGlobalCursor.hasNext() )
-				{
-					histogramsGlobalCursor.fwd();
-					histogramsGlobalCursor.localize( position );
-					final long pixelGlobal = IntervalIndexer.positionToIndex( position, dimensions );
-					ret.add( new Tuple2<>( pixelGlobal, histogramsGlobalCursor.get() ) );
-				}
-
-				saveSliceHistograms( dataProviderLocal, 0, slice, histogramsList.toArray( new HashMap[ 0 ] ) );
 			} );
 	}
 
