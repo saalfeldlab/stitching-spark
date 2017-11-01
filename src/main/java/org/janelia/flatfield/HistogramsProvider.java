@@ -21,6 +21,8 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.histogram.Histogram;
+import org.janelia.saalfeldlab.n5.CompressionType;
+import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.stitching.PipelineExecutionException;
 import org.janelia.stitching.TileInfo;
@@ -125,6 +127,14 @@ public class HistogramsProvider implements Serializable
 			cellGrid.getCellGridPositionFlat( index, blockGridPosition );
 			blockGridPositions.add( blockGridPosition );
 		}
+
+		dataProvider.createN5Writer( URI.create( histogramsPath ) ).createDataset(
+				channelDatasetPath,
+				fullTileSize,
+				blockSize,
+				DataType.SERIALIZABLE,
+				CompressionType.GZIP
+			);
 
 		sparkContext.parallelize( blockGridPositions ).foreach( blockGridPosition ->
 			{
