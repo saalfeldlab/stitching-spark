@@ -51,19 +51,19 @@ class FSDataProvider implements DataProvider
 	@Override
 	public boolean fileExists( final URI uri )
 	{
-		return Files.exists( Paths.get( uri ) );
+		return Files.exists( getPath( uri ) );
 	}
 
 	@Override
 	public void deleteFile( final URI uri ) throws IOException
 	{
-		Files.delete( Paths.get( uri.toString() ) );
+		Files.delete( getPath( uri ) );
 	}
 
 	@Override
 	public void deleteFolder( final URI uri ) throws IOException
 	{
-		Files.walkFileTree( Paths.get( uri.toString() ), new SimpleFileVisitor< Path >()
+		Files.walkFileTree( getPath( uri ), new SimpleFileVisitor< Path >()
 			{
 			   @Override
 			   public FileVisitResult visitFile( final Path file, final BasicFileAttributes attrs ) throws IOException
@@ -86,8 +86,8 @@ class FSDataProvider implements DataProvider
 	public void copyFile( final URI uriSrc, final URI uriDst ) throws IOException
 	{
 		Files.copy(
-				Paths.get( uriSrc.toString() ),
-				Paths.get( uriDst.toString() )
+				getPath( uriSrc ),
+				getPath( uriDst )
 			);
 	}
 
@@ -95,77 +95,86 @@ class FSDataProvider implements DataProvider
 	public void moveFile( final URI uriSrc, final URI uriDst ) throws IOException
 	{
 		Files.move(
-				Paths.get( uriSrc.toString() ),
-				Paths.get( uriDst.toString() )
+				getPath( uriSrc ),
+				getPath( uriDst )
 			);
 	}
 
 	@Override
 	public InputStream getInputStream( final URI uri) throws IOException
 	{
-		return new FileInputStream( uri.toString() );
+		return new FileInputStream( getPath( uri ).toFile() );
 	}
 
 	@Override
 	public OutputStream getOutputStream( final URI uri ) throws IOException
 	{
 		createDirs( uri );
-		return new FileOutputStream( uri.toString() );
+		return new FileOutputStream( getPath( uri ).toFile() );
 	}
 
 	@Override
-	public ImagePlus loadImage( final URI uri )
+	public ImagePlus loadImage( final URI uri ) throws IOException
 	{
-		return ImageImporter.openImage( uri.toString() );
+		return ImageImporter.openImage( getCanonicalPathString( uri ) );
 	}
 
 	@Override
-	public void saveImage( final ImagePlus imp, final URI uri )
+	public void saveImage( final ImagePlus imp, final URI uri ) throws IOException
 	{
 		createDirs( uri );
 		Utils.workaroundImagePlusNSlices( imp );
-		IJ.saveAsTiff( imp, uri.toString() );
+		IJ.saveAsTiff( imp, getCanonicalPathString( uri ) );
 	}
 
 	@Override
 	public Reader getJsonReader( final URI uri ) throws IOException
 	{
-		return new FileReader( uri.toString() );
+		return new FileReader( getPath( uri ).toFile() );
 	}
 
 	@Override
 	public Writer getJsonWriter( final URI uri ) throws IOException
 	{
 		createDirs( uri );
-		return new FileWriter( uri.toString() );
+		return new FileWriter( getPath( uri ).toFile() );
 	}
 
 	@Override
-	public N5Reader createN5Reader( final URI baseUri )
+	public N5Reader createN5Reader( final URI baseUri ) throws IOException
 	{
-		return N5.openFSReader( baseUri.toString() );
+		return N5.openFSReader( getCanonicalPathString( baseUri ) );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri ) throws IOException
 	{
-		return N5.openFSWriter( baseUri.toString() );
+		return N5.openFSWriter( getCanonicalPathString( baseUri ) );
 	}
 
 	@Override
-	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder )
+	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5.openFSReader( baseUri.toString(), gsonBuilder );
+		return N5.openFSReader( getCanonicalPathString( baseUri ), gsonBuilder );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5.openFSWriter( baseUri.toString(), gsonBuilder );
+		return N5.openFSWriter( getCanonicalPathString( baseUri ), gsonBuilder );
 	}
 
 	private static boolean createDirs( final URI uri )
 	{
-		return Paths.get( uri.toString() ).getParent().toFile().mkdirs();
+		return getPath( uri ).getParent().toFile().mkdirs();
+	}
+
+	private static Path getPath( final URI uri )
+	{
+		return uri.getScheme() != null ? Paths.get( uri ) : Paths.get( uri.toString() );
+	}
+	private static String getCanonicalPathString( final URI uri ) throws IOException
+	{
+		return getPath( uri ).toFile().getCanonicalPath();
 	}
 }
