@@ -253,7 +253,11 @@ public class HistogramsProvider implements Serializable
 	{
 		if ( rddHistograms == null )
 		{
-			// TODO: if the histograms are stored in the old format, convert them to the new N5 format
+			// if the histograms are stored in the old format, convert them to the new N5 format first
+			final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
+			if ( !dataProvider.createN5Reader( URI.create( histogramsPath ) ).datasetExists( channelDatasetPath ) )
+				convertHistogramsToN5();
+
 			loadHistogramsN5();
 		}
 		return rddHistograms;
@@ -311,6 +315,83 @@ public class HistogramsProvider implements Serializable
 						return histogram;
 					} )
 				.persist( StorageLevel.MEMORY_ONLY_SER() );
+	}
+
+	private void convertHistogramsToN5() throws IOException
+	{
+		final int[] blockSize = new int[ fullTileSize.length ];
+		Arrays.fill( blockSize, HISTOGRAMS_DEFAULT_BLOCK_SIZE );
+
+		final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
+		final List< long[] > blockGridPositions = new ArrayList<>();
+		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
+		for ( int index = 0; index < Intervals.numElements( cellGrid.getGridDimensions() ); ++index )
+		{
+			final long[] blockGridPosition = new long[ cellGrid.numDimensions() ];
+			cellGrid.getCellGridPositionFlat( index, blockGridPosition );
+			blockGridPositions.add( blockGridPosition );
+		}
+
+		dataProvider.createN5Writer( URI.create( histogramsPath ) ).createDataset(
+				channelDatasetPath,
+				fullTileSize,
+				blockSize,
+				DataType.SERIALIZABLE,
+				CompressionType.GZIP
+			);
+
+		sparkContext.parallelize( blockGridPositions ).foreach( blockGridPosition ->
+			{
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsPath ) );
+
+				final long[] blockPixelOffset = new long[ blockSize.length ];
+				for ( int d = 0; d < blockPixelOffset.length; ++d )
+					blockPixelOffset[ d ] = blockGridPosition[ d ] * blockSize[ d ];
+
+				// create an interval to be processed in each tile image
+				final long[] blockIntervalMin = new long[ blockSize.length ], blockIntervalMax = new long[ blockSize.length ];
+				for ( int d = 0; d < blockSize.length; ++d )
+				{
+					blockIntervalMin[ d ] = blockGridPosition[ d ] * blockSize[ d ];
+					blockIntervalMax[ d ] = Math.min( ( blockGridPosition[ d ] + 1 ) * blockSize[ d ], fullTileSize[ d ] ) - 1;
+				}
+				final Interval blockInterval = new FinalInterval( blockIntervalMin, blockIntervalMax );
+				// create a 2D interval to be processed in each slice
+				final Interval sliceInterval = new FinalInterval( new long[] { blockIntervalMin[ 0 ], blockIntervalMin[ 1 ] }, new long[] { blockIntervalMax[ 0 ], blockIntervalMax[ 1 ] } );
+
+				// initialize histograms data block
+				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, channelDatasetPath, blockGridPosition );
+				final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
+				final ListCursor< HashMap< Integer, Integer > > histogramsBlockImgCursor = histogramsBlockImg.cursor();
+				final long[] pixelPosition = new long[ blockGridPosition.length ];
+				while ( histogramsBlockImgCursor.hasNext() )
+				{
+					histogramsBlockImgCursor.fwd();
+					histogramsBlockImgCursor.localize( pixelPosition );
+
+					// apply block pixel offset
+					for ( int d = 0; d < pixelPosition.length; ++d )
+						pixelPosition[ d ] += blockPixelOffset[ d ];
+
+					// load histograms for corresponding slice
+					final int slice = ( int ) pixelPosition[ 2 ] + 1;
+					final RandomAccessibleInterval< HashMap< Integer, Integer > > sliceHistograms = readSliceHistograms( dataProviderLocal, slice );
+					final RandomAccessibleInterval< HashMap< Integer, Integer > > sliceHistogramsInterval = Views.offsetInterval( sliceHistograms, sliceInterval );
+					final Cursor< HashMap< Integer, Integer > > sliceHistogramsIntervalCursor = Views.flatIterable( sliceHistogramsInterval ).cursor();
+					// block cursor is one step forward, make sure they are aligned throughout subsequent steps
+					histogramsBlockImgCursor.set( sliceHistogramsIntervalCursor.next() );
+					while ( sliceHistogramsIntervalCursor.hasNext() )
+					{
+						histogramsBlockImgCursor.fwd();
+						histogramsBlockImgCursor.set( sliceHistogramsIntervalCursor.next() );
+					}
+				}
+
+				System.out.println( "Block min=" + Arrays.toString( blockIntervalMin ) + ", max=" + Arrays.toString( blockIntervalMax ) + ": converted slice histograms to N5" );
+
+				histogramsBlock.save();
+			} );
 	}
 
 	private void loadHistograms()
