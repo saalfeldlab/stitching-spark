@@ -146,7 +146,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 		System.out.println( "Working interval is at " + Arrays.toString( Intervals.minAsLongArray( workingInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsLongArray( workingInterval ) ) );
 
-		basePath = args.inputFilePath().substring( 0, args.inputFilePath().lastIndexOf( "." ) ) + "-flatfield";
+		basePath = args.inputFilePath().substring( 0, args.inputFilePath().lastIndexOf( "." ) );
 		final String outputPath = Paths.get( basePath, args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr() ).toString();
 		histogramsPath = Paths.get( basePath, "histograms" ).toString();
 		solutionPath = Paths.get( outputPath, "solution" ).toString();

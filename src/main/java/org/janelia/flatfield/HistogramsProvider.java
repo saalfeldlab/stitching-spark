@@ -19,6 +19,7 @@ import org.apache.spark.storage.StorageLevel;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.histogram.Histogram;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -55,6 +56,7 @@ public class HistogramsProvider implements Serializable
 
 	private static final double REFERENCE_HISTOGRAM_POINTS_PERCENT = 0.25;
 	private static final int HISTOGRAMS_DEFAULT_BLOCK_SIZE = 64;
+	private static final String HISTOGRAMS_N5_DATASET_NAME = "histograms-n5";
 
 	private transient final JavaSparkContext sparkContext;
 	private transient final DataProvider dataProvider;
@@ -63,6 +65,8 @@ public class HistogramsProvider implements Serializable
 	private final Interval workingInterval;
 	private final String histogramsPath;
 	private final long[] fullTileSize;
+
+	private final String histogramsN5BasePath;
 
 	final Double histMinValue, histMaxValue;
 	final int bins;
@@ -89,6 +93,8 @@ public class HistogramsProvider implements Serializable
 		this.histMinValue = histMinValue;
 		this.histMaxValue = histMaxValue;
 		this.bins = bins;
+
+		histogramsN5BasePath = PathResolver.getParent( histogramsPath );
 
 		dataProviderType = dataProvider.getType();
 
@@ -227,8 +233,7 @@ public class HistogramsProvider implements Serializable
 		if ( rddHistograms == null )
 		{
 			// if the histograms are stored in the old format, convert them to the new N5 format first
-			final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
-			if ( !dataProvider.createN5Reader( URI.create( histogramsPath ) ).datasetExists( channelDatasetPath ) )
+			if ( !dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) ).datasetExists( HISTOGRAMS_N5_DATASET_NAME ) )
 				convertHistogramsToN5();
 
 			loadHistogramsN5();
@@ -295,7 +300,8 @@ public class HistogramsProvider implements Serializable
 		final int[] blockSize = new int[ fullTileSize.length ];
 		Arrays.fill( blockSize, HISTOGRAMS_DEFAULT_BLOCK_SIZE );
 
-		final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
+//		final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
+
 		final List< long[] > blockGridPositions = new ArrayList<>();
 		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
 		for ( int index = 0; index < Intervals.numElements( cellGrid.getGridDimensions() ); ++index )
@@ -305,8 +311,8 @@ public class HistogramsProvider implements Serializable
 			blockGridPositions.add( blockGridPosition );
 		}
 
-		dataProvider.createN5Writer( URI.create( histogramsPath ) ).createDataset(
-				channelDatasetPath,
+		dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) ).createDataset(
+				HISTOGRAMS_N5_DATASET_NAME,
 				fullTileSize,
 				blockSize,
 				DataType.SERIALIZABLE,
@@ -316,7 +322,7 @@ public class HistogramsProvider implements Serializable
 		sparkContext.parallelize( blockGridPositions ).foreach( blockGridPosition ->
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
-				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsPath ) );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
 
 				final long[] blockPixelOffset = new long[ blockSize.length ];
 				for ( int d = 0; d < blockPixelOffset.length; ++d )
@@ -334,7 +340,7 @@ public class HistogramsProvider implements Serializable
 				final Interval sliceInterval = new FinalInterval( new long[] { blockIntervalMin[ 0 ], blockIntervalMin[ 1 ] }, new long[] { blockIntervalMax[ 0 ], blockIntervalMax[ 1 ] } );
 
 				// initialize histograms data block
-				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, channelDatasetPath, blockGridPosition );
+				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, HISTOGRAMS_N5_DATASET_NAME, blockGridPosition );
 				final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
 				final ListCursor< HashMap< Integer, Integer > > histogramsBlockImgCursor = histogramsBlockImg.cursor();
 				final long[] pixelPosition = new long[ blockGridPosition.length ];
@@ -421,7 +427,7 @@ public class HistogramsProvider implements Serializable
 
 	private String generateSliceHistogramsPath( final int scale, final int slice )
 	{
-		return histogramsPath + "/" + scale + "/" + slice + ".hist";
+		return PathResolver.get( histogramsPath, Integer.toString( scale ), Integer.toString( slice ) + ".hist" );
 	}
 
 	private int getNumSlices()
