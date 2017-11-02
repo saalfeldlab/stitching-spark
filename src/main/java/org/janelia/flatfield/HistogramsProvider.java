@@ -3,7 +3,6 @@ package org.janelia.flatfield;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.Serializable;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -15,7 +14,6 @@ import java.util.Map.Entry;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.spark.api.java.JavaPairRDD;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
 import org.janelia.dataaccess.DataProvider;
@@ -32,7 +30,6 @@ import org.janelia.stitching.TileLoader.TileType;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.MapSerializer;
 
 import net.imglib2.Cursor;
@@ -44,13 +41,11 @@ import net.imglib2.img.cell.CellGrid;
 import net.imglib2.img.list.ListCursor;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.img.list.ListLocalizingCursor;
-import net.imglib2.img.list.ListRandomAccess;
 import net.imglib2.img.list.WrappedListImg;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import scala.Tuple2;
 
@@ -186,43 +181,21 @@ public class HistogramsProvider implements Serializable
 					}
 
 					if ( ++done % 20 == 0 )
-						System.out.println( "Block min=" + Arrays.toString( blockIntervalMin ) + ", max=" + Arrays.toString( blockIntervalMax ) + ": processed " + done + " tiles" );
+						System.out.println( "Block min=" + Arrays.toString( Intervals.minAsLongArray( blockInterval ) ) + ", max=" + Arrays.toString( Intervals.maxAsLongArray( blockInterval ) ) + ": processed " + done + " tiles" );
 				}
 
-				System.out.println( "Block min=" + Arrays.toString( blockIntervalMin ) + ", max=" + Arrays.toString( blockIntervalMax ) + ": populated histograms" );
+				System.out.println( "Block min=" + Arrays.toString( Intervals.minAsLongArray( blockInterval ) ) + ", max=" + Arrays.toString( Intervals.maxAsLongArray( blockInterval ) ) + ": populated histograms" );
 
 				histogramsBlock.save();
 			} );
 	}
 
-	private void saveSliceHistograms( final DataProvider dataProvider, final int scale, final int slice, final HashMap[] hist ) throws IOException
-	{
-		final String path = generateSliceHistogramsPath( scale, slice );
-
-//		final Kryo kryo = kryoSerializer.newKryo();
-		final Kryo kryo = new Kryo();
-		final MapSerializer serializer = new MapSerializer();
-		serializer.setKeysCanBeNull( false );
-		serializer.setKeyClass( Integer.class, kryo.getSerializer( Integer.class ) );
-		serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
-		kryo.register( HashMap.class, serializer );
-
-		//try ( final Output output = kryoSerializer.newKryoOutput() )
-		//{
-		//	output.setOutputStream( os );
-
-		try ( final OutputStream os = dataProvider.getOutputStream( URI.create( path ) ) )
-		{
-			try ( final Output output = new Output( os ) )
-			{
-				kryo.writeObject( output, hist );
-			}
-		}
-	}
+	@SuppressWarnings( "unchecked" )
 	private ListImg< HashMap< Integer, Integer > > readSliceHistograms( final DataProvider dataProvider, final int slice ) throws IOException
 	{
 		return new ListImg<>( Arrays.asList( readSliceHistogramsArray( dataProvider, 0, slice ) ), new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } );
 	}
+	@SuppressWarnings( "rawtypes" )
 	private HashMap[] readSliceHistogramsArray( final DataProvider dataProvider, final int scale, final int slice ) throws IOException
 	{
 		System.out.println( "Loading slice " + slice );
@@ -388,57 +361,11 @@ public class HistogramsProvider implements Serializable
 					}
 				}
 
-				System.out.println( "Block min=" + Arrays.toString( blockIntervalMin ) + ", max=" + Arrays.toString( blockIntervalMax ) + ": converted slice histograms to N5" );
+				System.out.println( "Block min=" + Arrays.toString( Intervals.minAsLongArray( blockInterval ) ) + ", max=" + Arrays.toString( Intervals.maxAsLongArray( blockInterval ) ) + ": converted slice histograms to N5" );
 
 				histogramsBlock.save();
 			} );
 	}
-
-	private void loadHistograms()
-	{
-		final List< Integer > slices = new ArrayList<>();
-		for ( int slice = ( workingInterval.numDimensions() > 2 ? ( int ) workingInterval.min( 2 ) + 1 : 1 ); slice <= ( workingInterval.numDimensions() > 2 ? ( int ) workingInterval.max( 2 ) + 1 : 1 ); slice++ )
-			slices.add( slice );
-
-		System.out.println( "Opening " + slices.size() + " slice histogram files" );
-		final JavaRDD< Integer > rddSlices = sparkContext.parallelize( slices );
-
-		rddHistograms = rddSlices
-				.flatMapToPair( slice ->
-					{
-						final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
-						final RandomAccessibleInterval< HashMap< Integer, Integer > > sliceHistograms = readSliceHistograms( dataProviderLocal, slice );
-						final Interval sliceInterval = Intervals.createMinMax( workingInterval.min( 0 ), workingInterval.min( 1 ), workingInterval.max( 0 ), workingInterval.max( 1 ) );
-						final IntervalView< HashMap< Integer, Integer > > sliceHistogramsInterval = Views.offsetInterval( sliceHistograms, sliceInterval );
-						final ListImg< Tuple2< Long, HashMap< Integer, Integer > > > ret = new ListImg<>( Intervals.dimensionsAsLongArray( sliceHistogramsInterval ), null );
-
-						final Cursor< HashMap< Integer, Integer > > srcCursor = Views.iterable( sliceHistogramsInterval ).localizingCursor();
-						final ListRandomAccess< Tuple2< Long, HashMap< Integer, Integer > > > dstRandomAccess = ret.randomAccess();
-
-						final long[] workingDimensions = Intervals.dimensionsAsLongArray( workingInterval );
-
-						while ( srcCursor.hasNext() )
-						{
-							srcCursor.fwd();
-							dstRandomAccess.setPosition( srcCursor );
-							dstRandomAccess.set( new Tuple2<>(
-									IntervalIndexer.positionToIndex(
-											new long[] { srcCursor.getLongPosition( 0 ), srcCursor.getLongPosition( 1 ), slice - 1 - ( workingInterval.numDimensions() > 2 ? workingInterval.min( 2 ) : 0 ) },
-											workingDimensions ),
-									srcCursor.get() ) );
-						}
-						return ret.iterator();
-					} )
-				.mapValues( map ->
-					{
-						final Histogram histogram = new Histogram( histMinValue, histMaxValue, bins );
-						for ( final Entry< Integer, Integer > entry : map.entrySet() )
-							histogram.put( entry.getKey(), entry.getValue() );
-						return histogram;
-					} )
-				.persist( StorageLevel.MEMORY_ONLY_SER() );
-	}
-
 
 	public Histogram getReferenceHistogram()
 	{
