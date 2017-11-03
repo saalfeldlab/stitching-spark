@@ -143,7 +143,7 @@ public class HistogramsProvider implements Serializable
 				CompressionType.GZIP
 			);
 
-		sparkContext.parallelize( blockGridPositions ).foreach( blockGridPosition ->
+		sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ).foreach( blockGridPosition ->
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsPath ) );
@@ -255,7 +255,7 @@ public class HistogramsProvider implements Serializable
 			blockGridPositions.add( blockGridPosition );
 		}
 
-		rddHistograms = sparkContext.parallelize( blockGridPositions ) .flatMapToPair( blockGridPosition ->
+		rddHistograms = sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ) .flatMapToPair( blockGridPosition ->
 					{
 						final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 						final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsPath ) );
@@ -323,7 +323,7 @@ public class HistogramsProvider implements Serializable
 				);
 		}
 
-		sparkContext.parallelize( blockGridPositions ).foreach( blockGridPosition ->
+		sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ).foreach( blockGridPosition ->
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
