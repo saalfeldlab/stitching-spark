@@ -425,6 +425,11 @@ public class HistogramsProvider implements Serializable
 
 	private boolean allHistogramsReady() throws IOException, URISyntaxException
 	{
+		// check if histograms exist in newer block-based format
+		if ( dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) ).datasetExists( HISTOGRAMS_N5_DATASET_NAME ) )
+			return true;
+
+		// check if histograms exist in old slice-based format
 		for ( int slice = 1; slice <= getNumSlices(); slice++ )
 			if ( !dataProvider.fileExists( dataProvider.getUri( generateSliceHistogramsPath( 0, slice ) ) ) )
 				return false;
