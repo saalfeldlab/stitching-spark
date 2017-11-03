@@ -32,7 +32,11 @@ public class SerializableDataBlockWrapper< T extends Serializable >
 		}
 		else
 		{
-			dataBlock = datasetAttributes.getDataType().createDataBlock( datasetAttributes.getBlockSize(), gridPosition );
+			// compute the block size accounting for the border blocks that can be smaller than regular blocks
+			final int[] blockSize = new int[ datasetAttributes.getNumDimensions() ];
+			for ( int d = 0; d < blockSize.length; ++d )
+				blockSize[ d ] = ( int ) Math.min( datasetAttributes.getDimensions()[ d ] - gridPosition[ d ] * datasetAttributes.getBlockSize()[ d ], datasetAttributes.getBlockSize()[ d ] );
+			dataBlock = datasetAttributes.getDataType().createDataBlock( blockSize, gridPosition );
 		}
 	}
 
