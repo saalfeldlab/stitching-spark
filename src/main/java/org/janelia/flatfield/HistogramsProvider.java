@@ -233,8 +233,8 @@ public class HistogramsProvider implements Serializable
 		if ( rddHistograms == null )
 		{
 			// if the histograms are stored in the old format, convert them to the new N5 format first
-			if ( !dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) ).datasetExists( HISTOGRAMS_N5_DATASET_NAME ) )
-				convertHistogramsToN5();
+//			if ( !dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) ).datasetExists( HISTOGRAMS_N5_DATASET_NAME ) )
+			convertHistogramsToN5();
 
 			loadHistogramsN5();
 		}
@@ -311,18 +311,29 @@ public class HistogramsProvider implements Serializable
 			blockGridPositions.add( blockGridPosition );
 		}
 
-		dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) ).createDataset(
-				HISTOGRAMS_N5_DATASET_NAME,
-				fullTileSize,
-				blockSize,
-				DataType.SERIALIZABLE,
-				CompressionType.GZIP
-			);
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		if ( !n5.datasetExists( HISTOGRAMS_N5_DATASET_NAME ) )
+		{
+			n5.createDataset(
+					HISTOGRAMS_N5_DATASET_NAME,
+					fullTileSize,
+					blockSize,
+					DataType.SERIALIZABLE,
+					CompressionType.GZIP
+				);
+		}
 
 		sparkContext.parallelize( blockGridPositions ).foreach( blockGridPosition ->
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
+
+				if ( n5Local.readBlock( HISTOGRAMS_N5_DATASET_NAME, n5Local.getDatasetAttributes( HISTOGRAMS_N5_DATASET_NAME ), blockGridPosition ) != null )
+				{
+					System.out.println( "Skipping block at " + Arrays.toString( blockGridPosition ) + " (already exists)" );
+					return;
+				}
+				System.out.println( "Populating block at " + Arrays.toString( blockGridPosition ) + "..." );
 
 				final long[] blockPixelOffset = new long[ blockSize.length ];
 				for ( int d = 0; d < blockPixelOffset.length; ++d )
