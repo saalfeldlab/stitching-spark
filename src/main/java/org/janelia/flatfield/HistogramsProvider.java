@@ -125,7 +125,6 @@ public class HistogramsProvider implements Serializable
 			throw new NotImplementedException( "Backend storage not supported for tiles: " + tileType );
 		}
 
-		final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
 		final List< long[] > blockGridPositions = new ArrayList<>();
 		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
 		for ( int index = 0; index < Intervals.numElements( cellGrid.getGridDimensions() ); ++index )
@@ -135,8 +134,8 @@ public class HistogramsProvider implements Serializable
 			blockGridPositions.add( blockGridPosition );
 		}
 
-		dataProvider.createN5Writer( URI.create( histogramsPath ) ).createDataset(
-				channelDatasetPath,
+		dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) ).createDataset(
+				HISTOGRAMS_N5_DATASET_NAME,
 				fullTileSize,
 				blockSize,
 				DataType.SERIALIZABLE,
@@ -146,10 +145,10 @@ public class HistogramsProvider implements Serializable
 		sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ).foreach( blockGridPosition ->
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
-				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsPath ) );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
 
 				// initialize histograms data block
-				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, channelDatasetPath, blockGridPosition );
+				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, HISTOGRAMS_N5_DATASET_NAME, blockGridPosition );
 				final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
 				final ListCursor< HashMap< Integer, Integer > > histogramsBlockImgCursor = histogramsBlockImg.cursor();
 				while ( histogramsBlockImgCursor.hasNext() )
@@ -243,10 +242,8 @@ public class HistogramsProvider implements Serializable
 
 	private void loadHistogramsN5() throws IOException
 	{
-		final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
-
 		final List< long[] > blockGridPositions = new ArrayList<>();
-		final int[] blockSize = dataProvider.createN5Reader( URI.create( histogramsPath ) ).getDatasetAttributes( channelDatasetPath ).getBlockSize();
+		final int[] blockSize = dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) ).getDatasetAttributes( HISTOGRAMS_N5_DATASET_NAME ).getBlockSize();
 		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
 		for ( int index = 0; index < Intervals.numElements( cellGrid.getGridDimensions() ); ++index )
 		{
@@ -258,9 +255,9 @@ public class HistogramsProvider implements Serializable
 		rddHistograms = sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ) .flatMapToPair( blockGridPosition ->
 					{
 						final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
-						final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsPath ) );
+						final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
 
-						final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, channelDatasetPath, blockGridPosition );
+						final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, HISTOGRAMS_N5_DATASET_NAME, blockGridPosition );
 						final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
 
 						final long[] blockPixelOffset = new long[ blockSize.length ];
@@ -299,8 +296,6 @@ public class HistogramsProvider implements Serializable
 	{
 		final int[] blockSize = new int[ fullTileSize.length ];
 		Arrays.fill( blockSize, HISTOGRAMS_DEFAULT_BLOCK_SIZE );
-
-//		final String channelDatasetPath = TileLoader.getChannelN5DatasetPath( tiles[ 0 ] );
 
 		final List< long[] > blockGridPositions = new ArrayList<>();
 		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
