@@ -153,9 +153,14 @@ public class HistogramsProvider implements Serializable
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-
-				// initialize histograms data block
 				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, HISTOGRAMS_N5_DATASET_NAME, blockGridPosition );
+
+				if ( histogramsBlock.wasLoadedSuccessfully() )
+				{
+					System.out.println( "Skipping block at " + Arrays.toString( blockGridPosition ) + " (already exists)" );
+					return;
+				}
+
 				final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
 				final ListCursor< HashMap< Integer, Integer > > histogramsBlockImgCursor = histogramsBlockImg.cursor();
 				while ( histogramsBlockImgCursor.hasNext() )
@@ -258,9 +263,10 @@ public class HistogramsProvider implements Serializable
 					{
 						final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 						final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-
 						final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, HISTOGRAMS_N5_DATASET_NAME, blockGridPosition );
-						final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
+
+						if ( !histogramsBlock.wasLoadedSuccessfully() )
+							throw new PipelineExecutionException( "Data block at position " + Arrays.toString( blockGridPosition ) + " cannot be loaded" );
 
 						final long[] blockPixelOffset = new long[ blockSize.length ];
 						for ( int d = 0; d < blockPixelOffset.length; ++d )
@@ -268,6 +274,7 @@ public class HistogramsProvider implements Serializable
 
 						// TODO: when workingInterval is specified, add optimized version for loading only those blocks that fall within the desired interval
 						final List< Tuple2< Long, HashMap< Integer, Integer > > > ret = new ArrayList<>();
+						final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
 						final ListLocalizingCursor< HashMap< Integer, Integer > > histogramsBlockImgCursor = histogramsBlockImg.localizingCursor();
 						final long[] pixelPosition = new long[ blockSize.length ];
 						while ( histogramsBlockImgCursor.hasNext() )
@@ -324,13 +331,13 @@ public class HistogramsProvider implements Serializable
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
+				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, HISTOGRAMS_N5_DATASET_NAME, blockGridPosition );
 
-				if ( n5Local.readBlock( HISTOGRAMS_N5_DATASET_NAME, n5Local.getDatasetAttributes( HISTOGRAMS_N5_DATASET_NAME ), blockGridPosition ) != null )
+				if ( histogramsBlock.wasLoadedSuccessfully() )
 				{
 					System.out.println( "Skipping block at " + Arrays.toString( blockGridPosition ) + " (already exists)" );
 					return;
 				}
-				System.out.println( "Populating block at " + Arrays.toString( blockGridPosition ) + "..." );
 
 				final long[] blockPixelOffset = new long[ blockSize.length ];
 				for ( int d = 0; d < blockPixelOffset.length; ++d )
@@ -347,8 +354,7 @@ public class HistogramsProvider implements Serializable
 				// create a 2D interval to be processed in each slice
 				final Interval sliceInterval = new FinalInterval( new long[] { blockIntervalMin[ 0 ], blockIntervalMin[ 1 ] }, new long[] { blockIntervalMax[ 0 ], blockIntervalMax[ 1 ] } );
 
-				// initialize histograms data block
-				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, HISTOGRAMS_N5_DATASET_NAME, blockGridPosition );
+
 				final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
 				final ListCursor< HashMap< Integer, Integer > > histogramsBlockImgCursor = histogramsBlockImg.cursor();
 				final long[] pixelPosition = new long[ blockGridPosition.length ];

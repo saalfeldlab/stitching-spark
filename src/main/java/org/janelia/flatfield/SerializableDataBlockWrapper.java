@@ -17,33 +17,45 @@ public class SerializableDataBlockWrapper< T extends Serializable >
 {
 	private final N5Writer n5;
 	private final String pathName;
-	private final DataBlock< ? > dataBlock;
+	private DataBlock< T[] > dataBlock;
+	private boolean wasLoadedSuccessfully;
 
+	@SuppressWarnings( "unchecked" )
 	public SerializableDataBlockWrapper( final N5Writer n5, final String pathName, final long[] gridPosition ) throws IOException
 	{
 		this.n5 = n5;
 		this.pathName = pathName;
 
 		final DatasetAttributes datasetAttributes = n5.getDatasetAttributes( pathName );
-		final DataBlock< ? > loadedDataBlock = n5.readBlock( pathName, datasetAttributes, gridPosition );
-		if ( loadedDataBlock != null )
+		try
 		{
+			final DataBlock< T[] > loadedDataBlock = ( DataBlock< T[] > ) n5.readBlock( pathName, datasetAttributes, gridPosition );
+			wasLoadedSuccessfully = loadedDataBlock != null;
 			dataBlock = loadedDataBlock;
 		}
-		else
+		catch ( final IOException e )
+		{
+			wasLoadedSuccessfully = false;
+		}
+
+		if ( !wasLoadedSuccessfully )
 		{
 			// compute the block size accounting for the border blocks that can be smaller than regular blocks
 			final int[] blockSize = new int[ datasetAttributes.getNumDimensions() ];
 			for ( int d = 0; d < blockSize.length; ++d )
 				blockSize[ d ] = ( int ) Math.min( datasetAttributes.getDimensions()[ d ] - gridPosition[ d ] * datasetAttributes.getBlockSize()[ d ], datasetAttributes.getBlockSize()[ d ] );
-			dataBlock = datasetAttributes.getDataType().createDataBlock( blockSize, gridPosition );
+			this.dataBlock = ( DataBlock< T[] > ) datasetAttributes.getDataType().createDataBlock( blockSize, gridPosition );
 		}
+	}
+
+	public boolean wasLoadedSuccessfully()
+	{
+		return wasLoadedSuccessfully;
 	}
 
 	public WrappedListImg< T > wrap()
 	{
-		@SuppressWarnings( "unchecked" )
-		final T[] data = ( T[] ) dataBlock.getData();
+		final T[] data = dataBlock.getData();
 		final List< T > dataAsList = Arrays.asList( data );
 		final long[] blockDimensions = Intervals.dimensionsAsLongArray( new FinalDimensions( dataBlock.getSize() ) );
 		final WrappedListImg< T > listImg = new WrappedListImg<>( dataAsList, blockDimensions );
