@@ -98,8 +98,15 @@ public class HistogramsProvider implements Serializable
 
 		dataProviderType = dataProvider.getType();
 
-		if ( !allHistogramsReady() )
+		if ( sliceHistogramsExist() )
+		{
+			// if the histograms are stored in the old format, convert them to the new N5 format first
+			convertHistogramsToN5();
+		}
+		else
+		{
 			populateHistograms();
+		}
 	}
 
 	private < T extends NativeType< T > & RealType< T > > void populateHistograms() throws IOException, URISyntaxException
@@ -230,13 +237,8 @@ public class HistogramsProvider implements Serializable
 	public JavaPairRDD< Long, Histogram > getHistograms() throws IOException
 	{
 		if ( rddHistograms == null )
-		{
-			// if the histograms are stored in the old format, convert them to the new N5 format first
-//			if ( !dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) ).datasetExists( HISTOGRAMS_N5_DATASET_NAME ) )
-			convertHistogramsToN5();
-
 			loadHistogramsN5();
-		}
+
 		return rddHistograms;
 	}
 
@@ -423,12 +425,8 @@ public class HistogramsProvider implements Serializable
 	}
 
 
-	private boolean allHistogramsReady() throws IOException, URISyntaxException
+	private boolean sliceHistogramsExist() throws IOException, URISyntaxException
 	{
-		// check if histograms exist in newer block-based format
-		if ( dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) ).datasetExists( HISTOGRAMS_N5_DATASET_NAME ) )
-			return true;
-
 		// check if histograms exist in old slice-based format
 		for ( int slice = 1; slice <= getNumSlices(); slice++ )
 			if ( !dataProvider.fileExists( dataProvider.getUri( generateSliceHistogramsPath( 0, slice ) ) ) )
