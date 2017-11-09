@@ -57,6 +57,7 @@ public class HistogramsProvider implements Serializable
 	private static final double REFERENCE_HISTOGRAM_POINTS_PERCENT = 0.25;
 	private static final int HISTOGRAMS_DEFAULT_BLOCK_SIZE = 64;
 	private static final String HISTOGRAMS_N5_DATASET_NAME = "histograms-n5";
+	private static final String ALL_HISTOGRAMS_EXIST_KEY = "allHistogramsExist";
 
 	private transient final JavaSparkContext sparkContext;
 	private transient final DataProvider dataProvider;
@@ -152,6 +153,13 @@ public class HistogramsProvider implements Serializable
 					CompressionType.GZIP
 				);
 		}
+		else
+		{
+			// skip this step if the flag 'allHistogramsExist' is set
+			final Boolean allHistogramsExist = n5.getAttribute( HISTOGRAMS_N5_DATASET_NAME, ALL_HISTOGRAMS_EXIST_KEY, Boolean.class );
+			if ( allHistogramsExist != null && allHistogramsExist )
+				return;
+		}
 
 		sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ).foreach( blockGridPosition ->
 			{
@@ -209,6 +217,9 @@ public class HistogramsProvider implements Serializable
 
 				histogramsBlock.save();
 			} );
+
+		// mark all histograms as ready to skip block existence check and save time for subsequent runs
+		n5.setAttribute( HISTOGRAMS_N5_DATASET_NAME, ALL_HISTOGRAMS_EXIST_KEY, true );
 	}
 
 	@SuppressWarnings( "unchecked" )
