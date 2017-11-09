@@ -141,13 +141,17 @@ public class HistogramsProvider implements Serializable
 			blockGridPositions.add( blockGridPosition );
 		}
 
-		dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) ).createDataset(
-				HISTOGRAMS_N5_DATASET_NAME,
-				fullTileSize,
-				blockSize,
-				DataType.SERIALIZABLE,
-				CompressionType.GZIP
-			);
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		if ( !n5.datasetExists( HISTOGRAMS_N5_DATASET_NAME ) )
+		{
+			n5.createDataset(
+					HISTOGRAMS_N5_DATASET_NAME,
+					fullTileSize,
+					blockSize,
+					DataType.SERIALIZABLE,
+					CompressionType.GZIP
+				);
+		}
 
 		sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ).foreach( blockGridPosition ->
 			{
