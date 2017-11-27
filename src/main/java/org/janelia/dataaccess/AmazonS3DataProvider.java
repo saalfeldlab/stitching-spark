@@ -54,7 +54,6 @@ class AmazonS3DataProvider implements DataProvider
 
 		public S3ObjectOutputStream( final AmazonS3URI uri )
 		{
-	        super();
 	        this.uri = uri;
 	    }
 
@@ -68,13 +67,12 @@ class AmazonS3DataProvider implements DataProvider
 
 				final ObjectMetadata objectMetadata = new ObjectMetadata();
 				objectMetadata.setContentLength( bytes.length );
-
 				try ( final InputStream data = new ByteArrayInputStream( bytes ) )
 				{
 					s3.putObject( uri.getBucket(), uri.getKey(), data, objectMetadata );
 				}
-				super.close();
 
+				super.close();
 				closed = true;
 			}
 		}
