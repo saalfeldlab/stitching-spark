@@ -37,10 +37,10 @@ class CustomURLStreamHandlerFactory implements URLStreamHandlerFactory
 	@Override
 	public URLStreamHandler createURLStreamHandler( final String protocol )
 	{
-		if ( protocol.equals( s3Protocol ) )
+		if ( protocol.equalsIgnoreCase( s3Protocol ) )
 			return new S3URLStreamHandler( s3 );
 
-		if ( protocol.equals( googleCloudProtocol ) )
+		if ( protocol.equalsIgnoreCase( googleCloudProtocol ) )
 			return new GoogleCloudStorageURLStreamHandler( googleCloudStorage );
 
 		return null;

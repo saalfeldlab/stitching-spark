@@ -85,7 +85,7 @@ class GoogleCloudDataProvider implements DataProvider
 	public URI getUri( final String path ) throws URISyntaxException
 	{
 		final URI uri = new URI( path );
-		if ( googleCloudProtocol.equals( uri.getScheme() ) )
+		if ( googleCloudProtocol.equalsIgnoreCase( uri.getScheme() ) )
 			return uri;
 		return new URI( googleCloudProtocol, null, path );
 	}

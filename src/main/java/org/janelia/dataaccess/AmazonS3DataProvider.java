@@ -99,7 +99,7 @@ class AmazonS3DataProvider implements DataProvider
 	public URI getUri( final String path ) throws URISyntaxException
 	{
 		final URI uri = new URI( path );
-		if ( s3Protocol.equals( uri.getScheme() ) )
+		if ( s3Protocol.equalsIgnoreCase( uri.getScheme() ) )
 			return uri;
 		return new URI( s3Protocol, null, path );
 	}

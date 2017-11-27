@@ -85,13 +85,13 @@ public abstract class DataProviderFactory
 	{
 		final String protocol = uri.getScheme();
 
-		if ( protocol == null || protocol.equals( localFileProtocol ) )
+		if ( protocol == null || protocol.equalsIgnoreCase( localFileProtocol ) )
 			return createFSDataProvider();
 
-		if ( protocol.equals( s3Protocol ) )
+		if ( protocol.equalsIgnoreCase( s3Protocol ) )
 			return createAmazonS3DataProvider();
 
-		if ( protocol.equals( googleCloudProtocol ) )
+		if ( protocol.equalsIgnoreCase( googleCloudProtocol ) )
 			return createGoogleCloudDataProvider();
 
 		throw new NotImplementedException( "factory for protocol " + uri.getScheme() + " is not implemented" );
