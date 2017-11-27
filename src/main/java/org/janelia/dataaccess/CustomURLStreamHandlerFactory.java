@@ -5,6 +5,7 @@ import java.net.URLStreamHandler;
 import java.net.URLStreamHandlerFactory;
 
 import com.amazonaws.services.s3.AmazonS3;
+import com.google.cloud.storage.Storage;
 
 /**
  * Factory for all supported custom protocols.
@@ -17,17 +18,20 @@ import com.amazonaws.services.s3.AmazonS3;
 class CustomURLStreamHandlerFactory implements URLStreamHandlerFactory
 {
 	private static final String s3Protocol = "s3";
+	private static final String googleCloudProtocol = "gs";
 
 	private final AmazonS3 s3;
+	private final Storage googleCloudStorage;
 
-	private CustomURLStreamHandlerFactory( final AmazonS3 s3 )
+	private CustomURLStreamHandlerFactory( final AmazonS3 s3, final Storage googleCloudStorage )
 	{
 		this.s3 = s3;
+		this.googleCloudStorage = googleCloudStorage;
 	}
 
-	public synchronized static void init( final AmazonS3 s3 )
+	public synchronized static void init( final AmazonS3 s3, final Storage googleCloudStorage )
 	{
-		URL.setURLStreamHandlerFactory( new CustomURLStreamHandlerFactory( s3 ) );
+		URL.setURLStreamHandlerFactory( new CustomURLStreamHandlerFactory( s3, googleCloudStorage ) );
 	}
 
 	@Override
@@ -35,6 +39,10 @@ class CustomURLStreamHandlerFactory implements URLStreamHandlerFactory
 	{
 		if ( protocol.equals( s3Protocol ) )
 			return new S3URLStreamHandler( s3 );
+
+		if ( protocol.equals( googleCloudProtocol ) )
+			return new GoogleCloudStorageURLStreamHandler( googleCloudStorage );
+
 		return null;
 	}
 }

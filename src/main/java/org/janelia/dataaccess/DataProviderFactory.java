@@ -6,11 +6,14 @@ import org.apache.commons.lang.NotImplementedException;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
 
 public abstract class DataProviderFactory
 {
 	private static final String localFileProtocol = "file";
 	private static final String s3Protocol = "s3";
+	private static final String googleCloudProtocol = "gs";
 
 	private static boolean initializedCustomURLStreamHandlerFactory;
 
@@ -21,7 +24,7 @@ public abstract class DataProviderFactory
 	 */
 	public static DataProvider createFSDataProvider()
 	{
-		init( null );
+		init( null, null );
 		return new FSDataProvider();
 	}
 
@@ -34,7 +37,7 @@ public abstract class DataProviderFactory
 	 */
 	public static DataProvider createAmazonS3DataProvider( final AmazonS3 s3 )
 	{
-		init( s3 );
+		init( s3, null );
 		return new AmazonS3DataProvider( s3 );
 	}
 
@@ -50,6 +53,30 @@ public abstract class DataProviderFactory
 	}
 
 	/**
+	 * Constructs a Google Cloud Storage data provider
+	 * using a given {@link Storage} client.
+	 *
+	 * @param storage
+	 * @return
+	 */
+	public static DataProvider createGoogleCloudDataProvider( final Storage googleCloudStorage )
+	{
+		init( null, googleCloudStorage );
+		return new GoogleCloudDataProvider( googleCloudStorage );
+	}
+
+	/**
+	 * Constructs a Google Cloud Storage data provider
+	 * using the default {@link Storage} client.
+	 *
+	 * @return
+	 */
+	public static DataProvider createGoogleCloudDataProvider()
+	{
+		return createGoogleCloudDataProvider( StorageOptions.getDefaultInstance().getService() );
+	}
+
+	/**
 	 * Constructs an appropriate data provider based on the scheme of a given {@link URI}.
 	 *
 	 * @return
@@ -58,13 +85,14 @@ public abstract class DataProviderFactory
 	{
 		final String protocol = uri.getScheme();
 
-		System.out.println( "protocol: " + protocol);
-
 		if ( protocol == null || protocol.equals( localFileProtocol ) )
-			return DataProviderFactory.createFSDataProvider();
+			return createFSDataProvider();
 
 		if ( protocol.equals( s3Protocol ) )
-			return DataProviderFactory.createAmazonS3DataProvider();
+			return createAmazonS3DataProvider();
+
+		if ( protocol.equals( googleCloudProtocol ) )
+			return createGoogleCloudDataProvider();
 
 		throw new NotImplementedException( "factory for protocol " + uri.getScheme() + " is not implemented" );
 	}
@@ -82,18 +110,20 @@ public abstract class DataProviderFactory
 			return createFSDataProvider();
 		case AMAZON_S3:
 			return createAmazonS3DataProvider();
+		case GOOGLE_CLOUD:
+			return createGoogleCloudDataProvider();
 		default:
 			throw new NotImplementedException( "Data provider of type " + type + " is not implemented" );
 		}
 	}
 
-	private synchronized static void init( final AmazonS3 s3 )
+	private synchronized static void init( final AmazonS3 s3, final Storage googleCloudStorage )
 	{
 		if ( !initializedCustomURLStreamHandlerFactory )
 		{
 			initializedCustomURLStreamHandlerFactory = true;
-			if ( s3 != null )
-				CustomURLStreamHandlerFactory.init( s3 );
+			if ( s3 != null || googleCloudStorage != null )
+				CustomURLStreamHandlerFactory.init( s3, googleCloudStorage );
 		}
 	}
 }
