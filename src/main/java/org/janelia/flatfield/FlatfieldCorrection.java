@@ -142,7 +142,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args.inputFilePath() ) ) );
 		fullTileSize = getMinTileSize( tiles );
-		workingInterval = args.cropMinMaxInterval( fullTileSize );
+		workingInterval = args.cropMinMaxInterval( args.use2D() ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize );
 
 		System.out.println( "Working interval is at " + Arrays.toString( Intervals.minAsLongArray( workingInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsLongArray( workingInterval ) ) );
 
@@ -254,6 +254,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 //			return;
 //		}
 
+		System.out.println( "Running flatfield correction script in " + ( args.use2D() ? "2D" : "3D" ) + " mode" );
 
 		// FIXME: unify treemap and array histogram collectors
 //		final HistogramsProvider histogramsProvider = new HistogramsProvider(
@@ -265,7 +266,9 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				histogramsPath,
 				tiles,
 				fullTileSize,
-				args.histMinValue(), args.histMaxValue(), args.bins() );
+				args.use2D(),
+				args.histMinValue(), args.histMaxValue(), args.bins()
+			);
 //		if ( exit )
 //		{
 //			System.out.println( "Done" );

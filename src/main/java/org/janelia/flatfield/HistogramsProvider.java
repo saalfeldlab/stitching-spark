@@ -37,6 +37,7 @@ import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.IterableInterval;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.cell.CellGrid;
 import net.imglib2.img.list.ListCursor;
@@ -66,6 +67,7 @@ public class HistogramsProvider implements Serializable
 	private final Interval workingInterval;
 	private final String histogramsPath;
 	private final long[] fullTileSize;
+	private final boolean use2D;
 
 	private final String histogramsN5BasePath;
 
@@ -82,6 +84,7 @@ public class HistogramsProvider implements Serializable
 			final String histogramsPath,
 			final TileInfo[] tiles,
 			final long[] fullTileSize,
+			final boolean use2D,
 			final Double histMinValue, final Double histMaxValue, final int bins ) throws IOException, URISyntaxException
 	{
 		this.sparkContext = sparkContext;
@@ -90,6 +93,7 @@ public class HistogramsProvider implements Serializable
 		this.histogramsPath = histogramsPath;
 		this.tiles = tiles;
 		this.fullTileSize = fullTileSize;
+		this.use2D = use2D;
 
 		this.histMinValue = histMinValue;
 		this.histMaxValue = histMaxValue;
@@ -99,33 +103,35 @@ public class HistogramsProvider implements Serializable
 
 		dataProviderType = dataProvider.getType();
 
-		if ( sliceHistogramsExist() )
+		if ( !use2D && sliceHistogramsExist() )
 		{
 			// if the histograms are stored in the old format, convert them to the new N5 format first
 			convertHistogramsToN5();
 		}
 		else
 		{
-			populateHistograms();
+			populateHistogramsN5();
 		}
 	}
 
-	private < T extends NativeType< T > & RealType< T > > void populateHistograms() throws IOException, URISyntaxException
+	private < T extends NativeType< T > & RealType< T > > void populateHistogramsN5() throws IOException, URISyntaxException
 	{
-		System.out.println( "Populating histograms using hash maps..." );
+		System.out.println( "Populating histograms using n5 blocks of hash maps..." );
 
 		// check if tiles are single image files, or N5 datasets
 		final TileType tileType = TileLoader.getTileType( tiles[ 0 ], dataProvider );
 		// TODO: check that all tiles are of the same type
 
-		final int[] blockSize;
+		final long[] fieldOfViewSize = use2D ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize.clone();
+
+		final int[] blockSize = new int[ fieldOfViewSize.length ];
 		if ( tileType == TileType.N5_DATASET )
 		{
-			blockSize = TileLoader.getTileN5DatasetAttributes( tiles[ 0 ], dataProvider ).getBlockSize();
+			final int[] tileBlockSize = TileLoader.getTileN5DatasetAttributes( tiles[ 0 ], dataProvider ).getBlockSize();
+			System.arraycopy( tileBlockSize, 0, blockSize, 0, blockSize.length );
 		}
 		else if ( tileType == TileType.IMAGE_FILE )
 		{
-			blockSize = new int[ fullTileSize.length ];
 			Arrays.fill( blockSize, HISTOGRAMS_DEFAULT_BLOCK_SIZE );
 		}
 		else
@@ -134,7 +140,7 @@ public class HistogramsProvider implements Serializable
 		}
 
 		final List< long[] > blockGridPositions = new ArrayList<>();
-		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
+		final CellGrid cellGrid = new CellGrid( fieldOfViewSize, blockSize );
 		for ( int index = 0; index < Intervals.numElements( cellGrid.getGridDimensions() ); ++index )
 		{
 			final long[] blockGridPosition = new long[ cellGrid.numDimensions() ];
@@ -147,7 +153,7 @@ public class HistogramsProvider implements Serializable
 		{
 			n5.createDataset(
 					HISTOGRAMS_N5_DATASET_NAME,
-					fullTileSize,
+					fieldOfViewSize,
 					blockSize,
 					DataType.SERIALIZABLE,
 					CompressionType.GZIP
@@ -155,6 +161,10 @@ public class HistogramsProvider implements Serializable
 		}
 		else
 		{
+			// check the dimensionality of the existing histograms
+			if ( n5.getDatasetAttributes( HISTOGRAMS_N5_DATASET_NAME ).getNumDimensions() != fieldOfViewSize.length )
+				throw new RuntimeException( "histograms-n5 has different dimensionality than the field of view" );
+
 			// skip this step if the flag 'allHistogramsExist' is set
 			final Boolean allHistogramsExist = n5.getAttribute( HISTOGRAMS_N5_DATASET_NAME, ALL_HISTOGRAMS_EXIST_KEY, Boolean.class );
 			if ( allHistogramsExist != null && allHistogramsExist )
@@ -186,7 +196,7 @@ public class HistogramsProvider implements Serializable
 				for ( int d = 0; d < blockSize.length; ++d )
 				{
 					blockIntervalMin[ d ] = blockGridPosition[ d ] * blockSize[ d ];
-					blockIntervalMax[ d ] = Math.min( ( blockGridPosition[ d ] + 1 ) * blockSize[ d ], fullTileSize[ d ] ) - 1;
+					blockIntervalMax[ d ] = Math.min( ( blockGridPosition[ d ] + 1 ) * blockSize[ d ], fieldOfViewSize[ d ] ) - 1;
 				}
 				final Interval blockInterval = new FinalInterval( blockIntervalMin, blockIntervalMax );
 
@@ -195,17 +205,22 @@ public class HistogramsProvider implements Serializable
 				for ( final TileInfo tile : tiles )
 				{
 					final RandomAccessibleInterval< T > tileImg = TileLoader.loadTile( tile, dataProviderLocal );
-					final RandomAccessibleInterval< T > tileImgInterval = Views.offsetInterval( tileImg, blockInterval );
-					final IterableInterval< T > tileImgIterableInterval = Views.flatIterable( tileImgInterval );
-					if ( !tileImgIterableInterval.iterationOrder().equals( histogramsBlockImg.iterationOrder() ) )
-						throw new PipelineExecutionException( "iteration order is different for histograms block and tile interval" );
-
-					final Cursor< T > tileImgIntervalCursor = tileImgIterableInterval.cursor();
-					histogramsBlockImgCursor.reset();
-					while ( histogramsBlockImgCursor.hasNext() || tileImgIntervalCursor.hasNext() )
+					final Interval tileImgOffsetInterval = new FinalInterval(
+							new long[] { blockInterval.min( 0 ), blockInterval.min( 1 ), blockInterval.numDimensions() >= 3 ? blockInterval.min( 2 ) : tileImg.min( 2 ) },
+							new long[] { blockInterval.max( 0 ), blockInterval.max( 1 ), blockInterval.numDimensions() >= 3 ? blockInterval.max( 2 ) : tileImg.max( 2 ) }
+						);
+					final RandomAccessibleInterval< T > tileImgInterval = Views.offsetInterval( tileImg, tileImgOffsetInterval );
+					final IterableInterval< T > tileImgIterableInterval = Views.iterable( tileImgInterval );
+					final Cursor< T > tileImgIntervalCursor = tileImgIterableInterval.localizingCursor();
+					final RandomAccess< HashMap< Integer, Integer > > histogramsBlockImgRandomAccess = histogramsBlockImg.randomAccess();
+					final long[] tileImgPosition = new long[ tileImgIntervalCursor.numDimensions() ], histogramsBlockPosition = new long[ histogramsBlockImgRandomAccess.numDimensions() ];
+					while ( tileImgIntervalCursor.hasNext() )
 					{
 						final int key = ( int ) tileImgIntervalCursor.next().getRealDouble();
-						final HashMap< Integer, Integer > histogram = histogramsBlockImgCursor.next();
+						tileImgIntervalCursor.localize( tileImgPosition );
+						System.arraycopy( tileImgPosition, 0, histogramsBlockPosition, 0, histogramsBlockPosition.length );
+						histogramsBlockImgRandomAccess.setPosition( histogramsBlockPosition );
+						final HashMap< Integer, Integer > histogram = histogramsBlockImgRandomAccess.get();
 						histogram.put( key, histogram.getOrDefault( key, 0 ) + 1 );
 					}
 
@@ -264,9 +279,14 @@ public class HistogramsProvider implements Serializable
 
 	private void loadHistogramsN5() throws IOException
 	{
+		final long[] fieldOfViewSize = use2D ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize.clone();
+
 		final List< long[] > blockGridPositions = new ArrayList<>();
 		final int[] blockSize = dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) ).getDatasetAttributes( HISTOGRAMS_N5_DATASET_NAME ).getBlockSize();
-		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
+		if ( blockSize.length != fieldOfViewSize.length )
+			throw new RuntimeException( "histograms-n5 dataset has different dimensionality than the field of view" );
+
+		final CellGrid cellGrid = new CellGrid( fieldOfViewSize, blockSize );
 		for ( int index = 0; index < Intervals.numElements( cellGrid.getGridDimensions() ); ++index )
 		{
 			final long[] blockGridPosition = new long[ cellGrid.numDimensions() ];
@@ -301,7 +321,7 @@ public class HistogramsProvider implements Serializable
 							for ( int d = 0; d < pixelPosition.length; ++d )
 								pixelPosition[ d ] += blockPixelOffset[ d ];
 
-							final long pixelIndex = IntervalIndexer.positionToIndex( pixelPosition, fullTileSize );
+							final long pixelIndex = IntervalIndexer.positionToIndex( pixelPosition, fieldOfViewSize );
 							ret.add( new Tuple2<>( pixelIndex, histogramsBlockImgCursor.get() ) );
 						}
 						return ret.iterator();
