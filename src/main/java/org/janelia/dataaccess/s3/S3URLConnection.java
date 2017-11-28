@@ -1,4 +1,4 @@
-package org.janelia.dataaccess;
+package org.janelia.dataaccess.s3;
 
 import java.io.IOException;
 import java.io.InputStream;

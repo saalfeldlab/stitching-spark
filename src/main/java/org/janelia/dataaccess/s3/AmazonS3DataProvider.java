@@ -1,4 +1,4 @@
-package org.janelia.dataaccess;
+package org.janelia.dataaccess.s3;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.s3.N5AmazonS3;
@@ -45,7 +47,7 @@ import ij.ImagePlus;
  *
  * @author Igor Pisarev
  */
-class AmazonS3DataProvider implements DataProvider
+public class AmazonS3DataProvider implements DataProvider
 {
 	private class S3ObjectOutputStream extends ByteArrayOutputStream
 	{

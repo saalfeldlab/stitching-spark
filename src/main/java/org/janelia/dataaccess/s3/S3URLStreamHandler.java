@@ -1,4 +1,4 @@
-package org.janelia.dataaccess;
+package org.janelia.dataaccess.s3;
 
 import java.io.IOException;
 import java.net.URL;
@@ -7,7 +7,7 @@ import java.net.URLStreamHandler;
 
 import com.amazonaws.services.s3.AmazonS3;
 
-class S3URLStreamHandler extends URLStreamHandler
+public class S3URLStreamHandler extends URLStreamHandler
 {
 	private final AmazonS3 s3;
 

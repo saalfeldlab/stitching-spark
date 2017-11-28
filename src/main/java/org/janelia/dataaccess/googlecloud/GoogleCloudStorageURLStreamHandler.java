@@ -1,4 +1,4 @@
-package org.janelia.dataaccess;
+package org.janelia.dataaccess.googlecloud;
 
 import java.io.IOException;
 import java.net.URL;
@@ -7,7 +7,7 @@ import java.net.URLStreamHandler;
 
 import com.google.cloud.storage.Storage;
 
-class GoogleCloudStorageURLStreamHandler extends URLStreamHandler
+public class GoogleCloudStorageURLStreamHandler extends URLStreamHandler
 {
 	private final Storage storage;
 

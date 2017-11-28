@@ -4,6 +4,9 @@ import java.net.URL;
 import java.net.URLStreamHandler;
 import java.net.URLStreamHandlerFactory;
 
+import org.janelia.dataaccess.googlecloud.GoogleCloudStorageURLStreamHandler;
+import org.janelia.dataaccess.s3.S3URLStreamHandler;
+
 import com.amazonaws.services.s3.AmazonS3;
 import com.google.cloud.storage.Storage;
 

@@ -1,4 +1,4 @@
-package org.janelia.dataaccess;
+package org.janelia.dataaccess.googlecloud;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -18,6 +18,8 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageURI;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -37,7 +39,7 @@ import com.google.gson.GsonBuilder;
 import ij.IJ;
 import ij.ImagePlus;
 
-class GoogleCloudDataProvider implements DataProvider
+public class GoogleCloudDataProvider implements DataProvider
 {
 	private class BlobOutputStream extends ByteArrayOutputStream
 	{

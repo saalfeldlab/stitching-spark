@@ -1,4 +1,4 @@
-package org.janelia.dataaccess;
+package org.janelia.dataaccess.googlecloud;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
