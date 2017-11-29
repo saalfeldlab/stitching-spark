@@ -10,7 +10,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.Vector;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -220,11 +222,16 @@ public class StitchingOptimizer implements Serializable
 
 		final Broadcast< StitchingParameters > broadcastedStitchingParameters = sparkContext.broadcast( job.getParams() );
 
+		final boolean noLeaves = job.getArgs().noLeaves();
+
 		GlobalOptimizationPerformer.suppressOutput();
 
 		final List< OptimizationResult > optimizationResultList = new ArrayList<>( sparkContext.parallelize( optimizationParametersList, optimizationParametersList.size() ).map( optimizationParameters ->
 			{
 				final Vector< ComparePair > comparePairs = createComparePairs( shifts, optimizationParameters );
+
+				if ( noLeaves && hasLeaves( comparePairs ) )
+					return null;
 
 				int validPairs = 0;
 				for ( final ComparePair pair : comparePairs )
@@ -247,6 +254,21 @@ public class StitchingOptimizer implements Serializable
 
 		GlobalOptimizationPerformer.restoreOutput();
 		broadcastedStitchingParameters.destroy();
+
+		if ( noLeaves )
+		{
+			final int sizeBefore = optimizationResultList.size();
+			optimizationResultList.removeAll( Collections.singleton( null ) );
+			final int sizeAfter = optimizationResultList.size();
+			System.out.println( "" );
+			System.out.println( "-----------" );
+			System.out.println( "no leaves mode ON" );
+			System.out.println( "" );
+			System.out.println( "pairs before: " + sizeBefore );
+			System.out.println( "pairs after: " + sizeAfter );
+			System.out.println( "-----------" );
+			System.out.println( "" );
+		}
 
 		Collections.sort( optimizationResultList );
 
@@ -305,5 +327,27 @@ public class StitchingOptimizer implements Serializable
 		}
 
 		return comparePairs;
+	}
+
+	private boolean hasLeaves( final Vector< ComparePair > comparePairs )
+	{
+		final Map< Integer, Set< Integer > > connections = new TreeMap<>();
+		for ( final ComparePair comparePair : comparePairs )
+		{
+			if ( !comparePair.getIsValidOverlap() )
+				continue;
+
+			final int[] ind = new int[] { comparePair.getTile1().getImpId(), comparePair.getTile2().getImpId() };
+			for ( int i = 0; i < 2; ++i )
+			{
+				if ( !connections.containsKey( ind[ i ] ) )
+					connections.put( ind[ i ], new TreeSet<>() );
+				connections.get( ind[ i ] ).add( ind[ ( i + 1 ) % 2 ] );
+			}
+		}
+		for ( final Set< Integer > value : connections.values() )
+			if ( value.size() <= 1 )
+				return true;
+		return false;
 	}
 }

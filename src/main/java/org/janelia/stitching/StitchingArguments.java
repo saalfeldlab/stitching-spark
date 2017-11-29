@@ -65,6 +65,10 @@ public class StitchingArguments implements Serializable {
 
 	private RestitchingMode restitchingMode = null;
 
+	@Option(name = "--noleaves", required = false,
+			usage = "Optimize tile configurations that don't contain any leaves (thus all edges are properly constrained)")
+	private boolean noLeaves = false;
+
 	@Option(name = "--overlaps", required = false,
 			usage = "Export overlaps channel based on which connections between tiles have been used for final stitching")
 	private boolean exportOverlaps = false;
@@ -136,6 +140,7 @@ public class StitchingArguments implements Serializable {
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurSigma() { return blurSigma; }
 	public boolean useAllPairs() { return allPairs; }
+	public boolean noLeaves() { return noLeaves; }
 	public boolean exportOverlaps() { return exportOverlaps; }
 	public boolean blending() { return blending; }
 
