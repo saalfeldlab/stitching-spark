@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 
 import org.janelia.saalfeldlab.n5.N5;
@@ -87,7 +88,8 @@ class FSDataProvider implements DataProvider
 	{
 		Files.copy(
 				getPath( uriSrc ),
-				getPath( uriDst )
+				getPath( uriDst ),
+				StandardCopyOption.REPLACE_EXISTING
 			);
 	}
 
