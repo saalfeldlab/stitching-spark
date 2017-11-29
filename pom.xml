@@ -233,6 +233,12 @@
 						</filter>
 					</filters>
 					<!-- Additional configuration. -->
+					<relocations>
+						<relocation>
+							<pattern>com.google</pattern>
+							<shadedPattern>org.janelia.saalfeldlab.com.google</shadedPattern>
+						</relocation>
+					</relocations>
 				</configuration>
 				<!-- binds by default to package phase -->
 				<executions>
