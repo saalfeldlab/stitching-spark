@@ -378,15 +378,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		for ( final String channelPath : job.getArgs().inputTileConfigurations() )
 		{
 			final String channelPathNoExt = channelPath.lastIndexOf( '.' ) != -1 ? channelPath.substring( 0, channelPath.lastIndexOf( '.' ) ) : channelPath;
-			// use it as a folder with the input file's name
-			flatfieldCorrectionForChannels.add(
-					FlatfieldCorrection.loadCorrectionImages(
-							dataProvider,
-							channelPathNoExt + "-flatfield/S.tif",
-							channelPathNoExt + "-flatfield/T.tif",
-							job.getDimensionality()
-						)
-				);
+			flatfieldCorrectionForChannels.add( FlatfieldCorrection.loadCorrectionImages( dataProvider, channelPathNoExt, job.getDimensionality() ) );
 		}
 		final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
 
