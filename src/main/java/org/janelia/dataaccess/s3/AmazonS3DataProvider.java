@@ -232,29 +232,37 @@ public class AmazonS3DataProvider implements DataProvider
 	@Override
 	public N5Reader createN5Reader( final URI baseUri ) throws IOException
 	{
-		return N5AmazonS3.openS3Reader( s3, decodeS3Uri( baseUri ).getBucket() );
+		return N5AmazonS3.openS3Reader( s3, getBucketName( baseUri ) );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri ) throws IOException
 	{
-		return N5AmazonS3.openS3Writer( s3, decodeS3Uri( baseUri ).getBucket() );
+		return N5AmazonS3.openS3Writer( s3, getBucketName( baseUri ) );
 	}
 
 	@Override
 	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5AmazonS3.openS3Reader( s3, decodeS3Uri( baseUri ).getBucket(), gsonBuilder );
+		return N5AmazonS3.openS3Reader( s3, getBucketName( baseUri ), gsonBuilder );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5AmazonS3.openS3Writer( s3, decodeS3Uri( baseUri ).getBucket(), gsonBuilder );
+		return N5AmazonS3.openS3Writer( s3, getBucketName( baseUri ), gsonBuilder );
 	}
 
 	public static AmazonS3URI decodeS3Uri( final URI uri ) throws IOException
 	{
 		return new AmazonS3URI( URLDecoder.decode( uri.toString(), StandardCharsets.UTF_8.name() ) );
+	}
+
+	private String getBucketName( final URI baseUri ) throws IOException
+	{
+		final AmazonS3URI uri = decodeS3Uri( baseUri );
+		if ( uri.getKey() != null && !uri.getKey().isEmpty() )
+			throw new IllegalArgumentException( "baseUri should be a link to a bucket" );
+		return uri.getBucket();
 	}
 }

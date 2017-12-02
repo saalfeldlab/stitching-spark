@@ -16,6 +16,7 @@ import org.apache.commons.lang.NotImplementedException;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
+import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
@@ -70,6 +71,7 @@ public class HistogramsProvider implements Serializable
 	private final boolean use2D;
 
 	private final String histogramsN5BasePath;
+	private final String histogramsDataset;
 
 	final Double histMinValue, histMaxValue;
 	final int bins;
@@ -99,9 +101,19 @@ public class HistogramsProvider implements Serializable
 		this.histMaxValue = histMaxValue;
 		this.bins = bins;
 
-		histogramsN5BasePath = PathResolver.getParent( histogramsPath );
-
 		dataProviderType = dataProvider.getType();
+
+		if ( dataProviderType == DataProviderType.FILESYSTEM )
+		{
+			histogramsN5BasePath = PathResolver.getParent( histogramsPath );
+			histogramsDataset = HISTOGRAMS_N5_DATASET_NAME;
+		}
+		else
+		{
+			final CloudURI cloudUri = new CloudURI( URI.create( histogramsPath ) );
+			histogramsN5BasePath = DataProviderFactory.createBucketUri( cloudUri.getType(), cloudUri.getBucket() ).toString();
+			histogramsDataset = PathResolver.get( cloudUri.getKey(), HISTOGRAMS_N5_DATASET_NAME );
+		}
 
 		if ( !use2D && sliceHistogramsExist() )
 		{
@@ -149,10 +161,10 @@ public class HistogramsProvider implements Serializable
 		}
 
 		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
-		if ( !n5.datasetExists( HISTOGRAMS_N5_DATASET_NAME ) )
+		if ( !n5.datasetExists( histogramsDataset ) )
 		{
 			n5.createDataset(
-					HISTOGRAMS_N5_DATASET_NAME,
+					histogramsDataset,
 					fieldOfViewSize,
 					blockSize,
 					DataType.SERIALIZABLE,
@@ -162,11 +174,11 @@ public class HistogramsProvider implements Serializable
 		else
 		{
 			// check the dimensionality of the existing histograms
-			if ( n5.getDatasetAttributes( HISTOGRAMS_N5_DATASET_NAME ).getNumDimensions() != fieldOfViewSize.length )
+			if ( n5.getDatasetAttributes( histogramsDataset ).getNumDimensions() != fieldOfViewSize.length )
 				throw new RuntimeException( "histograms-n5 has different dimensionality than the field of view" );
 
 			// skip this step if the flag 'allHistogramsExist' is set
-			final Boolean allHistogramsExist = n5.getAttribute( HISTOGRAMS_N5_DATASET_NAME, ALL_HISTOGRAMS_EXIST_KEY, Boolean.class );
+			final Boolean allHistogramsExist = n5.getAttribute( histogramsDataset, ALL_HISTOGRAMS_EXIST_KEY, Boolean.class );
 			if ( allHistogramsExist != null && allHistogramsExist )
 				return;
 		}
@@ -175,7 +187,7 @@ public class HistogramsProvider implements Serializable
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, HISTOGRAMS_N5_DATASET_NAME, blockGridPosition );
+				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
 
 				if ( histogramsBlock.wasLoadedSuccessfully() )
 				{
@@ -234,7 +246,7 @@ public class HistogramsProvider implements Serializable
 			} );
 
 		// mark all histograms as ready to skip block existence check and save time for subsequent runs
-		n5.setAttribute( HISTOGRAMS_N5_DATASET_NAME, ALL_HISTOGRAMS_EXIST_KEY, true );
+		n5.setAttribute( histogramsDataset, ALL_HISTOGRAMS_EXIST_KEY, true );
 	}
 
 	@SuppressWarnings( "unchecked" )
@@ -282,7 +294,7 @@ public class HistogramsProvider implements Serializable
 		final long[] fieldOfViewSize = use2D ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize.clone();
 
 		final List< long[] > blockGridPositions = new ArrayList<>();
-		final int[] blockSize = dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) ).getDatasetAttributes( HISTOGRAMS_N5_DATASET_NAME ).getBlockSize();
+		final int[] blockSize = dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) ).getDatasetAttributes( histogramsDataset ).getBlockSize();
 		if ( blockSize.length != fieldOfViewSize.length )
 			throw new RuntimeException( "histograms-n5 dataset has different dimensionality than the field of view" );
 
@@ -298,7 +310,7 @@ public class HistogramsProvider implements Serializable
 					{
 						final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 						final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-						final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, HISTOGRAMS_N5_DATASET_NAME, blockGridPosition );
+						final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
 
 						if ( !histogramsBlock.wasLoadedSuccessfully() )
 							throw new PipelineExecutionException( "Data block at position " + Arrays.toString( blockGridPosition ) + " cannot be loaded" );
@@ -351,10 +363,10 @@ public class HistogramsProvider implements Serializable
 		}
 
 		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
-		if ( !n5.datasetExists( HISTOGRAMS_N5_DATASET_NAME ) )
+		if ( !n5.datasetExists( histogramsDataset ) )
 		{
 			n5.createDataset(
-					HISTOGRAMS_N5_DATASET_NAME,
+					histogramsDataset,
 					fullTileSize,
 					blockSize,
 					DataType.SERIALIZABLE,
@@ -366,7 +378,7 @@ public class HistogramsProvider implements Serializable
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, HISTOGRAMS_N5_DATASET_NAME, blockGridPosition );
+				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
 
 				if ( histogramsBlock.wasLoadedSuccessfully() )
 				{

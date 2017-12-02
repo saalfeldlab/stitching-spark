@@ -5,6 +5,7 @@ import java.net.URI;
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.googlecloud.GoogleCloudDataProvider;
 import org.janelia.dataaccess.s3.AmazonS3DataProvider;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessFactory.DataAccessType;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -117,6 +118,25 @@ public abstract class DataProviderFactory
 		default:
 			throw new NotImplementedException( "Data provider of type " + type + " is not implemented" );
 		}
+	}
+
+	public static URI createBucketUri( final DataAccessType type, final String bucketName )
+	{
+		final String protocol;
+		switch ( type )
+		{
+		case AMAZON_S3:
+			protocol = s3Protocol;
+			break;
+		case GOOGLE_CLOUD:
+			protocol = googleCloudProtocol;
+			break;
+		case FILESYSTEM:
+			throw new IllegalArgumentException( "Not supported for filesystem storage" );
+		default:
+			throw new NotImplementedException( "Not implemented for type " + type );
+		}
+		return URI.create( protocol + "://" + bucketName + "/" );
 	}
 
 	private synchronized static void init( final AmazonS3 s3, final Storage googleCloudStorage )

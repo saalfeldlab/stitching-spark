@@ -200,24 +200,32 @@ public class GoogleCloudDataProvider implements DataProvider
 	@Override
 	public N5Reader createN5Reader( final URI baseUri ) throws IOException
 	{
-		return N5GoogleCloudStorage.openCloudStorageReader( storage, new GoogleCloudStorageURI( baseUri ).getBucket() );
+		return N5GoogleCloudStorage.openCloudStorageReader( storage, getBucketName( baseUri ) );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri ) throws IOException
 	{
-		return N5GoogleCloudStorage.openCloudStorageWriter( storage, new GoogleCloudStorageURI( baseUri ).getBucket() );
+		return N5GoogleCloudStorage.openCloudStorageWriter( storage, getBucketName( baseUri ) );
 	}
 
 	@Override
 	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5GoogleCloudStorage.openCloudStorageReader( storage, new GoogleCloudStorageURI( baseUri ).getBucket(), gsonBuilder );
+		return N5GoogleCloudStorage.openCloudStorageReader( storage, getBucketName( baseUri ), gsonBuilder );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5GoogleCloudStorage.openCloudStorageWriter( storage, new GoogleCloudStorageURI( baseUri ).getBucket(), gsonBuilder );
+		return N5GoogleCloudStorage.openCloudStorageWriter( storage, getBucketName( baseUri ), gsonBuilder );
+	}
+
+	private String getBucketName( final URI baseUri )
+	{
+		final GoogleCloudStorageURI uri = new GoogleCloudStorageURI( baseUri );
+		if ( uri.getKey() != null && !uri.getKey().isEmpty() )
+			throw new IllegalArgumentException( "baseUri should be a link to a bucket" );
+		return uri.getBucket();
 	}
 }
