@@ -65,7 +65,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	private static final int SCALE_LEVEL_MIN_PIXELS = 1;
 	private static final int AVERAGE_SKIP_SLICES = 5;
 
-	private final String basePath, histogramsPath, solutionPath;
+	private final String basePath, solutionPath;
 
 	private transient final JavaSparkContext sparkContext;
 	private transient final TileInfo[] tiles;
@@ -154,9 +154,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		System.out.println( "Working interval is at " + Arrays.toString( Intervals.minAsLongArray( workingInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsLongArray( workingInterval ) ) );
 
 		basePath = args.inputFilePath().substring( 0, args.inputFilePath().lastIndexOf( "." ) ) + flatfieldFolderSuffix;
-		final String outputPath = PathResolver.get( basePath, args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr() );
-		histogramsPath = PathResolver.get( basePath, "histograms" );
-		solutionPath = PathResolver.get( outputPath, "solution" );
+		solutionPath = PathResolver.get( basePath, args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr(), "solution" );
 
 		// check if all tiles have the same size
 		for ( final TileInfo tile : tiles )
@@ -247,7 +245,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				sparkContext,
 				dataProvider,
 				workingInterval,
-				histogramsPath,
+				basePath,
 				tiles,
 				fullTileSize,
 				args.use2D(),

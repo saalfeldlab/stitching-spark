@@ -66,7 +66,6 @@ public class HistogramsProvider implements Serializable
 	private final DataProviderType dataProviderType;
 	private final TileInfo[] tiles;
 	private final Interval workingInterval;
-	private final String histogramsPath;
 	private final long[] fullTileSize;
 	private final boolean use2D;
 
@@ -83,7 +82,7 @@ public class HistogramsProvider implements Serializable
 			final JavaSparkContext sparkContext,
 			final DataProvider dataProvider,
 			final Interval workingInterval,
-			final String histogramsPath,
+			final String basePath,
 			final TileInfo[] tiles,
 			final long[] fullTileSize,
 			final boolean use2D,
@@ -92,7 +91,6 @@ public class HistogramsProvider implements Serializable
 		this.sparkContext = sparkContext;
 		this.dataProvider = dataProvider;
 		this.workingInterval = workingInterval;
-		this.histogramsPath = histogramsPath;
 		this.tiles = tiles;
 		this.fullTileSize = fullTileSize;
 		this.use2D = use2D;
@@ -105,12 +103,12 @@ public class HistogramsProvider implements Serializable
 
 		if ( dataProviderType == DataProviderType.FILESYSTEM )
 		{
-			histogramsN5BasePath = PathResolver.getParent( histogramsPath );
+			histogramsN5BasePath = basePath;
 			histogramsDataset = HISTOGRAMS_N5_DATASET_NAME;
 		}
 		else
 		{
-			final CloudURI cloudUri = new CloudURI( URI.create( histogramsPath ) );
+			final CloudURI cloudUri = new CloudURI( URI.create( basePath ) );
 			histogramsN5BasePath = DataProviderFactory.createBucketUri( cloudUri.getType(), cloudUri.getBucket() ).toString();
 			histogramsDataset = PathResolver.get( cloudUri.getKey(), HISTOGRAMS_N5_DATASET_NAME );
 		}
@@ -489,7 +487,10 @@ public class HistogramsProvider implements Serializable
 
 	private String generateSliceHistogramsPath( final int scale, final int slice )
 	{
-		return PathResolver.get( histogramsPath, Integer.toString( scale ), Integer.toString( slice ) + ".hist" );
+		if ( !histogramsDataset.endsWith( "-n5" ) )
+			throw new RuntimeException( "wrong path" );
+
+		return PathResolver.get( histogramsN5BasePath, histogramsDataset.substring( 0, histogramsDataset.lastIndexOf( "-n5" ) ), Integer.toString( scale ), Integer.toString( slice ) + ".hist" );
 	}
 
 	private int getNumSlices()
