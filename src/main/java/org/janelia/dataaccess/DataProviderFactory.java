@@ -86,18 +86,7 @@ public abstract class DataProviderFactory
 	 */
 	public static DataProvider createByURI( final URI uri )
 	{
-		final String protocol = uri.getScheme();
-
-		if ( protocol == null || protocol.equalsIgnoreCase( localFileProtocol ) )
-			return createFSDataProvider();
-
-		if ( protocol.equalsIgnoreCase( s3Protocol ) )
-			return createAmazonS3DataProvider();
-
-		if ( protocol.equalsIgnoreCase( googleCloudProtocol ) )
-			return createGoogleCloudDataProvider();
-
-		throw new NotImplementedException( "factory for protocol " + uri.getScheme() + " is not implemented" );
+		return createByType( getTypeByURI( uri ) );
 	}
 
 	/**
@@ -118,6 +107,22 @@ public abstract class DataProviderFactory
 		default:
 			throw new NotImplementedException( "Data provider of type " + type + " is not implemented" );
 		}
+	}
+
+	public static DataProviderType getTypeByURI( final URI uri )
+	{
+		final String protocol = uri.getScheme();
+
+		if ( protocol == null || protocol.equalsIgnoreCase( localFileProtocol ) )
+			return DataProviderType.FILESYSTEM;
+
+		if ( protocol.equalsIgnoreCase( s3Protocol ) )
+			return DataProviderType.AMAZON_S3;
+
+		if ( protocol.equalsIgnoreCase( googleCloudProtocol ) )
+			return DataProviderType.GOOGLE_CLOUD;
+
+		throw new NotImplementedException( "factory for protocol " + uri.getScheme() + " is not implemented" );
 	}
 
 	public static URI createBucketUri( final DataAccessType type, final String bucketName )

@@ -12,7 +12,10 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
+import org.janelia.saalfeldlab.googlecloud.GoogleCloudOAuth;
+import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageClient;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -23,6 +26,9 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import com.esotericsoftware.kryo.Kryo;
+import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
+import com.google.auth.oauth2.AccessToken;
+import com.google.cloud.storage.Storage;
 
 import ij.ImagePlus;
 import net.imglib2.RandomAccessibleInterval;
@@ -33,6 +39,73 @@ import scala.Tuple2;
 
 public class TilesToN5Converter
 {
+	private static class CloudN5WriterSupplier implements N5WriterSupplier
+	{
+		private static final long serialVersionUID = -1199787780776971335L;
+
+		private final URI n5Uri;
+		private final DataProviderType type;
+
+		private final AccessToken accessToken;
+		private final String refreshToken;
+		private final String clientId;
+		private final String clientSecret;
+
+		public CloudN5WriterSupplier( final URI n5Uri ) throws IOException
+		{
+			this.n5Uri = n5Uri;
+			type = DataProviderFactory.getTypeByURI( n5Uri );
+
+			if ( type == DataProviderType.GOOGLE_CLOUD )
+			{
+				final GoogleCloudOAuth oauth = new GoogleCloudOAuth(
+						Arrays.asList( GoogleCloudStorageClient.StorageScope.READ_WRITE ),
+						"n5-viewer-google-cloud-oauth2",  // TODO: create separate application?
+						TilesToN5Converter.class.getResourceAsStream("/googlecloud_client_secrets.json")
+					);
+
+				accessToken = oauth.getAccessToken();
+				refreshToken = oauth.getRefreshToken();
+				final GoogleClientSecrets clientSecrets = oauth.getClientSecrets();
+				clientId = clientSecrets.getDetails().getClientId();
+				clientSecret = clientSecrets.getDetails().getClientSecret();
+			}
+			else
+			{
+				accessToken = null;
+				refreshToken = null;
+				clientId = null;
+				clientSecret = null;
+			}
+		}
+
+		@Override
+		public N5Writer get() throws IOException
+		{
+			if ( type == DataProviderType.GOOGLE_CLOUD )
+			{
+				final GoogleClientSecrets.Details clientSecretsDetails = new GoogleClientSecrets.Details();
+				clientSecretsDetails.setClientId( clientId );
+				clientSecretsDetails.setClientSecret( clientSecret );
+				final GoogleClientSecrets clientSecrets = new GoogleClientSecrets();
+				clientSecrets.setInstalled( clientSecretsDetails );
+
+				final GoogleCloudStorageClient storageClient = new GoogleCloudStorageClient(
+						accessToken,
+						clientSecrets,
+						refreshToken
+					);
+
+				final Storage storage = storageClient.create();
+				return DataProviderFactory.createGoogleCloudDataProvider( storage ).createN5Writer( n5Uri );
+			}
+			else
+			{
+				return DataProviderFactory.createByType( type ).createN5Writer( n5Uri );
+			}
+		}
+	}
+
 	/**
 	 * Converts a stack of TIFF images to N5 breaking the images down into cells
 	 * with the block size in Z adjusted to the pixel resolution of the data.
@@ -110,12 +183,12 @@ public class TilesToN5Converter
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 			) )
 		{
-			final DataProvider tileConfigDataProvider = DataProviderFactory.createByURI( URI.create( parsedArgs.getInputChannelsPath().get( 0 ) ) );
 			final Map< String, TileInfo[] > tilesChannels = new LinkedHashMap<>();
 			for ( final String inputPath : parsedArgs.getInputChannelsPath() )
 			{
 				final String channelName = getChannelName( inputPath );
-				final TileInfo[] channelTiles = TileInfoJSONProvider.loadTilesConfiguration( tileConfigDataProvider.getJsonReader( URI.create( inputPath ) ) );
+				final DataProvider inputDataProvider = DataProviderFactory.createByURI( URI.create( inputPath ) );
+				final TileInfo[] channelTiles = TileInfoJSONProvider.loadTilesConfiguration( inputDataProvider.getJsonReader( URI.create( inputPath ) ) );
 				tilesChannels.put( channelName, channelTiles );
 			}
 
@@ -136,7 +209,8 @@ public class TilesToN5Converter
 				final String channelName = getChannelName( inputPath );
 				final TileInfo[] newChannelTiles = newTiles.get( channelName );
 				final String newConfigPath = Utils.addFilenameSuffix( inputPath, "-converted-n5" );
-				TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, tileConfigDataProvider.getJsonWriter( URI.create( newConfigPath ) ) );
+				final DataProvider outputDataProvider = DataProviderFactory.createByURI( n5Uri );
+				TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, outputDataProvider.getJsonWriter( URI.create( newConfigPath ) ) );
 			}
 		}
 
@@ -158,7 +232,7 @@ public class TilesToN5Converter
 		private List< String > inputChannelsPath;
 
 		@Option(name = "-o", aliases = { "--n5OutputPath" }, required = true,
-				usage = "Path to an N5 output container (can be a filesystem path or an Amazon S3 link).")
+				usage = "Path to an N5 output container (can be a filesystem path, an Amazon S3 link, or a Google Cloud link).")
 		private String n5OutputPath;
 
 		@Option(name = "-b", aliases = { "--blockSize" }, required = false,
