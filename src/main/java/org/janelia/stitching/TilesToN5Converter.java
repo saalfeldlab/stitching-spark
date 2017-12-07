@@ -83,8 +83,7 @@ public class TilesToN5Converter
 			}
 		}
 
-		@Override
-		public N5Writer get() throws IOException
+		public DataProvider getDataProvider()
 		{
 			if ( type == DataProviderType.GOOGLE_CLOUD )
 			{
@@ -101,11 +100,35 @@ public class TilesToN5Converter
 					);
 
 				final Storage storage = storageClient.create();
-				return DataProviderFactory.createGoogleCloudDataProvider( storage ).createN5Writer( n5Uri );
+				return DataProviderFactory.createGoogleCloudDataProvider( storage );
 			}
 			else
 			{
-				return DataProviderFactory.createByType( type ).createN5Writer( n5Uri );
+				return DataProviderFactory.createByType( type );
+			}
+		}
+
+		@Override
+		public N5Writer get() throws IOException
+		{
+			if ( type == DataProviderType.GOOGLE_CLOUD )
+			{
+				final DataProvider googleCloudDataProvider = getDataProvider();
+				try
+				{
+					return googleCloudDataProvider.createN5Writer( n5Uri );
+				}
+				catch ( final Exception e )
+				{
+					if ( e instanceof IOException )
+						throw e;
+					else
+						throw new RuntimeException( "Please create the desired output Google Cloud bucket first." );
+				}
+			}
+			else
+			{
+				return getDataProvider().createN5Writer( n5Uri );
 			}
 		}
 	}
@@ -197,23 +220,23 @@ public class TilesToN5Converter
 			}
 
 			final URI n5Uri = URI.create( parsedArgs.getN5OutputPath() );
-			final N5WriterSupplier n5Supplier = () -> DataProviderFactory.createByURI( n5Uri ).createN5Writer( n5Uri );
+			final CloudN5WriterSupplier cloudN5WriterSupplier = new CloudN5WriterSupplier( n5Uri );
 
 			final Map< String, TileInfo[] > newTiles = convertTiffToN5(
 					sparkContext,
 					parsedArgs.getN5OutputPath(),
-					n5Supplier,
+					cloudN5WriterSupplier,
 					tilesChannels,
 					parsedArgs.getBlockSize(),
 					parsedArgs.getN5Compression()
 				);
 
+			final DataProvider outputDataProvider = cloudN5WriterSupplier.getDataProvider();
 			for ( final String inputPath : parsedArgs.getInputChannelsPath() )
 			{
 				final String channelName = getChannelName( inputPath );
 				final TileInfo[] newChannelTiles = newTiles.get( channelName );
-				final String newConfigPath = Utils.addFilenameSuffix( inputPath, "-converted-n5" );
-				final DataProvider outputDataProvider = DataProviderFactory.createByURI( n5Uri );
+				final String newConfigPath = PathResolver.get( n5Uri.toString(), Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-converted-n5" ) );
 				TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, outputDataProvider.getJsonWriter( URI.create( newConfigPath ) ) );
 			}
 		}
