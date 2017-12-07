@@ -15,6 +15,7 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudOAuth;
+import org.janelia.saalfeldlab.googlecloud.GoogleCloudResourceManagerClient;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageClient;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -59,7 +60,10 @@ public class TilesToN5Converter
 			if ( type == DataProviderType.GOOGLE_CLOUD )
 			{
 				final GoogleCloudOAuth oauth = new GoogleCloudOAuth(
-						Arrays.asList( GoogleCloudStorageClient.StorageScope.READ_WRITE ),
+						Arrays.asList(
+								GoogleCloudResourceManagerClient.ProjectsScope.READ_ONLY,
+								GoogleCloudStorageClient.StorageScope.READ_WRITE
+							),
 						"n5-viewer-google-cloud-oauth2",  // TODO: create separate application?
 						TilesToN5Converter.class.getResourceAsStream("/googlecloud_client_secrets.json")
 					);
