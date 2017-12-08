@@ -48,7 +48,6 @@ import net.imglib2.converter.RealFloatConverter;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgFactory;
-import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.interpolation.randomaccess.FloorInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.RealViews;
@@ -63,6 +62,7 @@ import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsNullable;
 import net.imglib2.util.Pair;
+import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import scala.Tuple2;
@@ -243,12 +243,12 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 				}
 				final LinearIntensityMap< DoubleType > transform = new LinearIntensityMap< >( ArrayImgs.doubles( unrolledCoeffs, Conversions.toLongArray( unrolledCoeffsDim ) ) );
 
-				final ImagePlus imp = dataProviderLocal.loadImage( URI.create( tile.getFilePath() ) );
-				final ImagePlusImg< T, ? > r = ImagePlusImgs.from( imp );
-				transform.run( r );
+				final RandomAccessibleInterval< T > src = TileLoader.loadTile( tile, dataProviderLocal );
+				final ImagePlusImg< T, ? > dst = new ImagePlusImgFactory< T >().create( src, Util.getTypeFromInterval( src ) );
+				transform.run( dst );
 
 				tile.setFilePath( destFolder + "/transformed_" + PathResolver.getFileName( tile.getFilePath() ) );
-				final ImagePlus transformed = r.getImagePlus();
+				final ImagePlus transformed = dst.getImagePlus();
 				Utils.workaroundImagePlusNSlices( transformed );
 				dataProviderLocal.saveImage( transformed, URI.create( tile.getFilePath() ) );
 				return tile;
@@ -269,8 +269,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		return sparkContext.parallelize( tiles ).map( tile ->
 			{
 				final DataProvider dataProviderLocal = job.getDataProvider();
-				final ImagePlus imp = dataProviderLocal.loadImage( URI.create( tile.getFilePath() ) );
-				final RandomAccessibleInterval< T > image = ImagePlusImgs.from( imp );
+				final RandomAccessibleInterval< T > image = TileLoader.loadTile( tile, dataProviderLocal );
 				final Cursor< T > cursor = Views.iterable( image ).cursor();
 				double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
 				while ( cursor.hasNext() )
@@ -290,8 +289,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		return sparkContext.parallelize( tiles ).mapToPair( tile ->
 			{
 				final DataProvider dataProviderLocal = job.getDataProvider();
-				final ImagePlus imp = dataProviderLocal.loadImage( URI.create( tile.getFilePath() ) );
-				final RandomAccessibleInterval< T > image = ImagePlusImgs.from( imp );
+				final RandomAccessibleInterval< T > image = TileLoader.loadTile( tile, dataProviderLocal );
 
 				// calculate dimensions of downsampled image
 				final long[] downsampledImageSize = new long[ image.numDimensions() ];
@@ -299,7 +297,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 					downsampledImageSize[ d ] = image.dimension( d ) / DOWNSAMPLING_FACTOR;
 
 				// downsample the image
-				final RandomAccessibleInterval< T > downsampledImage = new ImagePlusImgFactory< T >().create( downsampledImageSize, ( T ) ImageType.valueOf( imp.getType() ).getType().createVariable() );
+				final RandomAccessibleInterval< T > downsampledImage = new ImagePlusImgFactory< T >().create( downsampledImageSize, Util.getTypeFromInterval( image ).createVariable() );
 				final int[] downsamplingFactors = new int[ downsampledImage.numDimensions() ];
 				Arrays.fill( downsamplingFactors, DOWNSAMPLING_FACTOR );
 				Downsample.downsample( image, downsampledImage, downsamplingFactors );
@@ -332,8 +330,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		return sparkContext.parallelize( tiles ).mapToPair( tile ->
 			{
 				final DataProvider dataProviderLocal = job.getDataProvider();
-				final ImagePlus imp = dataProviderLocal.loadImage( URI.create( tile.getFilePath() ) );
-				final RandomAccessibleInterval< T > image = ImagePlusImgs.from( imp );
+				final RandomAccessibleInterval< T > image = TileLoader.loadTile( tile, dataProviderLocal );
 
 				// calculate dimensions of the downsampled image
 				final long[] downsampledImageSize = new long[ image.numDimensions() ];
@@ -341,7 +338,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 					downsampledImageSize[ d ] = image.dimension( d ) / DOWNSAMPLING_FACTOR;
 
 				// downsample the image
-				final RandomAccessibleInterval< T > downsampledImage = new ImagePlusImgFactory< T >().create( downsampledImageSize, image.randomAccess().get().createVariable() );
+				final RandomAccessibleInterval< T > downsampledImage = new ImagePlusImgFactory< T >().create( downsampledImageSize, Util.getTypeFromInterval( image ).createVariable() );
 				final int[] downsamplingFactors = new int[ downsampledImage.numDimensions() ];
 				Arrays.fill( downsamplingFactors, DOWNSAMPLING_FACTOR );
 				Downsample.downsample( image, downsampledImage, downsamplingFactors );
@@ -377,8 +374,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 		for ( int i = 0; i < 2; ++i )
 		{
 			// load the image
-			final ImagePlus imp = dataProvider.loadImage( URI.create( tilePairArr[ i ].getFilePath() ) );
-			final RandomAccessibleInterval< T > rawImage = ImagePlusImgs.from( imp );
+			final RandomAccessibleInterval< T > rawImage = TileLoader.loadTile( tilePairArr[ i ], dataProvider );
 
 			// convert it to float to retain precision after downsampling
 			final RandomAccessibleInterval< FloatType > image = Views.interval( Converters.convert( rawImage, new RealFloatConverter<>(), new FloatType() ), rawImage );

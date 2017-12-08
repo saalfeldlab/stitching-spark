@@ -46,6 +46,7 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
+import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
@@ -598,18 +599,19 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							throw new PipelineExecutionException( pairOfTiles + ": different indexes for the same stage position " + Utils.getTileCoordinatesString( tileInfo ) );
 
 						// FIXME: throw exception in case some image files are missing (or, check for missing files beforehand)
-						final ImagePlus imp = dataProviderLocal.loadImage( URI.create( tileInfo.getFilePath() ) );
-						if ( imp == null )
-							throw new PipelineExecutionException( "Image file does not exist: " + tileInfo.getFilePath() );
+						final RandomAccessibleInterval< T > img = TileLoader.loadTile( tileInfo, dataProviderLocal );
+						if ( img == null )
+							throw new PipelineExecutionException( "Cannot load tile image: " + tileInfo.getFilePath() );
+
+						final T type = Util.getTypeFromInterval( img );
 //						if ( imp != null )
 						{
 							// warn if image type and/or size do not match metadata
-							if ( !ImageType.valueOf( imp.getType() ).equals( tileInfo.getType() ) )
-								throw new PipelineExecutionException( String.format( "Image type %s does not match the value from metadata %s", ImageType.valueOf( imp.getType() ), tileInfo.getType() ) );
-							if ( !Arrays.equals( Conversions.toLongArray( Utils.getImagePlusDimensions( imp ) ), tileInfo.getSize() ) )
-								throw new PipelineExecutionException( String.format( "Image size %s does not match the value from metadata %s", Arrays.toString( Utils.getImagePlusDimensions( imp ) ), Arrays.toString( tileInfo.getSize() ) ) );
+							if ( !type.getClass().equals( tileInfo.getType().getType().getClass() ) )
+								throw new PipelineExecutionException( String.format( "Image type %s does not match the value from metadata %s", type.getClass().getName(), tileInfo.getType() ) );
+							if ( !Arrays.equals( Intervals.dimensionsAsLongArray( img ), tileInfo.getSize() ) )
+								throw new PipelineExecutionException( String.format( "Image size %s does not match the value from metadata %s", Arrays.toString( Intervals.dimensionsAsLongArray( img ) ), Arrays.toString( tileInfo.getSize() ) ) );
 
-							final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
 							final RandomAccessibleInterval< T > imgCrop = Views.interval( img, overlaps[ j ] );
 
 							final RandomAccessibleInterval< FloatType > sourceInterval;
@@ -631,7 +633,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							while ( dstCursor.hasNext() || srcCursor.hasNext() )
 								dstCursor.next().add( srcCursor.next() );
 
-							imp.close();
 							++channelsUsed;
 						}
 					}
