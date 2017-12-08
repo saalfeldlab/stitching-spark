@@ -143,7 +143,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					if ( stitchedTiles.length < previousStitchedTiles.length || ( stitchedTiles.length == previousStitchedTiles.length && usedPairs.size() <= previousUsedPairs.size() ) )
 					{
 						// mark the last solution as not used because it is worse than from the previous iteration
-						dataProvider.moveFile(
+						dataProvider.moveFolder(
 								URI.create( PathResolver.get( basePath, iterationDirname ) ),
 								URI.create( PathResolver.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) ) )
 							);

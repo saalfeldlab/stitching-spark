@@ -21,6 +21,7 @@ import java.util.List;
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderType;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.s3.N5AmazonS3;
@@ -134,7 +135,7 @@ public class AmazonS3DataProvider implements DataProvider
 			objectsListing = s3.listObjectsV2( listObjectsRequest );
 			final List< String > objectsToDelete = new ArrayList<>();
 			for ( final S3ObjectSummary object : objectsListing.getObjectSummaries() )
-				objectsToDelete.add(object.getKey());
+				objectsToDelete.add( object.getKey() );
 
 			if ( !objectsToDelete.isEmpty() )
 			{
@@ -159,10 +160,48 @@ public class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
+	public void copyFolder( final URI uriSrc, final URI uriDst ) throws IOException
+	{
+		final AmazonS3URI s3UriSrc = decodeS3Uri( uriSrc );
+		final AmazonS3URI s3UriDst = decodeS3Uri( uriDst );
+
+		final String prefix = s3UriSrc.getKey().endsWith( "/" ) ? s3UriSrc.getKey() : s3UriSrc.getKey() + "/";
+		final ListObjectsV2Request listObjectsRequest = new ListObjectsV2Request()
+				.withBucketName( s3UriSrc.getBucket() )
+				.withPrefix( prefix );
+		ListObjectsV2Result objectsListing;
+		do
+		{
+			objectsListing = s3.listObjectsV2( listObjectsRequest );
+			for ( final S3ObjectSummary object : objectsListing.getObjectSummaries() )
+			{
+				final String objectPath = object.getKey();
+				if ( !objectPath.startsWith( prefix ) )
+					throw new RuntimeException( "requested prefix does not match with actual prefix" );
+				final String objectRelativePath = objectPath.substring( prefix.length() );
+				final String objectNewPath = PathResolver.get( s3UriDst.getKey(), objectRelativePath );
+				s3.copyObject(
+						s3UriSrc.getBucket(), objectPath,
+						s3UriDst.getBucket(), objectNewPath
+					);
+			}
+			listObjectsRequest.setContinuationToken( objectsListing.getNextContinuationToken() );
+		}
+		while ( objectsListing.isTruncated() );
+	}
+
+	@Override
 	public void moveFile( final URI uriSrc, final URI uriDst ) throws IOException
 	{
 		copyFile( uriSrc, uriDst );
 		deleteFile( uriSrc );
+	}
+
+	@Override
+	public void moveFolder( final URI uriSrc, final URI uriDst ) throws IOException
+	{
+		copyFolder( uriSrc, uriDst );
+		deleteFolder( uriSrc );
 	}
 
 	@Override

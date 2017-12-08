@@ -20,6 +20,7 @@ import java.util.List;
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderType;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageURI;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -113,10 +114,43 @@ public class GoogleCloudDataProvider implements DataProvider
 	}
 
 	@Override
+	public void copyFolder( final URI uriSrc, final URI uriDst ) throws IOException
+	{
+		final GoogleCloudStorageURI googleCloudUriSrc = new GoogleCloudStorageURI( uriSrc );
+		final GoogleCloudStorageURI googleCloudUriDst = new GoogleCloudStorageURI( uriDst );
+
+		final String prefix = googleCloudUriSrc.getKey().endsWith( "/" ) ? googleCloudUriSrc.getKey() : googleCloudUriSrc.getKey() + "/";
+		final Page< Blob > blobListing = storage.list( googleCloudUriSrc.getBucket(), BlobListOption.prefix( prefix ) );
+		for ( final Iterator< Blob > blobIterator = blobListing.iterateAll().iterator(); blobIterator.hasNext(); )
+		{
+			final BlobId blobId = blobIterator.next().getBlobId();
+
+			final String objectPath = blobId.getName();
+			if ( !objectPath.startsWith( prefix ) )
+				throw new RuntimeException( "requested prefix does not match with actual prefix" );
+			final String objectRelativePath = objectPath.substring( prefix.length() );
+			final String objectNewPath = PathResolver.get( googleCloudUriDst.getKey(), objectRelativePath );
+
+			final CopyRequest request = CopyRequest.newBuilder()
+					.setSource( blobId )
+					.setTarget( BlobId.of( googleCloudUriDst.getBucket(), objectNewPath ) )
+					.build();
+			storage.copy( request ).getResult();
+		}
+	}
+
+	@Override
 	public void moveFile( final URI uriSrc, final URI uriDst ) throws IOException
 	{
 		copyFile( uriSrc, uriDst );
 		deleteFile( uriSrc );
+	}
+
+	@Override
+	public void moveFolder( final URI uriSrc, final URI uriDst ) throws IOException
+	{
+		copyFolder( uriSrc, uriDst );
+		deleteFolder( uriSrc );
 	}
 
 	@Override
