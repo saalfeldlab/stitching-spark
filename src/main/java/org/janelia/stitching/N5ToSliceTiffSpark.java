@@ -2,13 +2,13 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Paths;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
@@ -52,9 +52,9 @@ public class N5ToSliceTiffSpark
 		final int scaleLevel = binned ? SCALE_LEVEL_BINNED : SCALE_LEVEL;
 		System.out.println( "Using scale level " + scaleLevel + " to generate slice TIFFs" );
 
-		final String outBaseFolder = Paths.get( n5Path ).getParent().toString();
+		final String outBaseFolder = PathResolver.getParent( n5Path );
 		final String outFolder = "slice-tiff" + ( binned ? "-binned" : "" );
-		final String outputPath = Paths.get( outBaseFolder, outFolder ).toString();
+		final String outputPath = PathResolver.get( outBaseFolder, outFolder );
 		System.out.println( "Output path: " + outputPath );
 		System.out.println( "Tiff compression: none" );
 
@@ -74,7 +74,7 @@ public class N5ToSliceTiffSpark
 					continue;
 
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
-				final String outputChannelPath = Paths.get( outputPath, "ch" + channel ).toString();
+				final String outputChannelPath = PathResolver.get( outputPath, "ch" + channel );
 				N5SliceTiffConverter.convertToSliceTiff(
 						sparkContext,
 						() -> {

@@ -1,7 +1,6 @@
 package org.janelia.stitching;
 
 import java.io.File;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -10,6 +9,7 @@ import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.util.Conversions;
 
 import ij.IJ;
@@ -60,18 +60,9 @@ public class Utils {
 		return ret.toString();
 	}
 
-	public static String getAbsoluteImagePath( final StitchingJob job, final TileInfo tile )
-	{
-		String filePath = tile.getFilePath();
-		if ( !Paths.get( filePath ).isAbsolute() )
-			filePath = Paths.get( job.getBaseFolder(), filePath ).toString();
-		return filePath;
-	}
-
 	public static ImageCollectionElement createElement( final StitchingJob job, final TileInfo tile ) throws Exception
 	{
-		final File file = new File( job == null ? tile.getFilePath() : getAbsoluteImagePath( job, tile) );
-		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
+		final ImageCollectionElement e = new ImageCollectionElement( new File( tile.getFilePath() ), tile.getIndex() );
 		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.numDimensions() );
 		e.setModel( TileModelFactory.createOffsetModel( tile ) );
@@ -200,7 +191,7 @@ public class Utils {
 
 	public static int[] getTileCoordinates( final TileInfo tile ) throws Exception
 	{
-		return getTileCoordinates( Paths.get( tile.getFilePath() ).getFileName().toString() );
+		return getTileCoordinates( PathResolver.getFileName( tile.getFilePath() ) );
 	}
 	public static int[] getTileCoordinates( final String filename ) throws Exception
 	{
@@ -221,7 +212,7 @@ public class Utils {
 	}
 	public static String getTileCoordinatesString( final TileInfo tile ) throws Exception
 	{
-		return getTileCoordinatesString( Paths.get( tile.getFilePath() ).getFileName().toString() );
+		return getTileCoordinatesString( PathResolver.getFileName( tile.getFilePath() ) );
 	}
 	public static String getTileCoordinatesString( final String filename ) throws Exception
 	{
@@ -249,7 +240,7 @@ public class Utils {
 
 	public static long getTileTimestamp( final TileInfo tile ) throws Exception
 	{
-		return getTileTimestamp( Paths.get( tile.getFilePath() ).getFileName().toString() );
+		return getTileTimestamp( PathResolver.getFileName( tile.getFilePath() ) );
 	}
 	public static long getTileTimestamp( final String filename ) throws Exception
 	{

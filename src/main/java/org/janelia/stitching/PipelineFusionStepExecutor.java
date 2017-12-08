@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -16,6 +15,7 @@ import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -81,7 +81,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		String baseExportPath = null;
 		for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
 		{
-			final String inputFolderPath = Paths.get( inputFilePath ).getParent().toString();
+			final String inputFolderPath = PathResolver.getParent( inputFilePath );
 			if ( baseExportPath == null )
 			{
 				baseExportPath = inputFolderPath;
@@ -89,12 +89,12 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			else if ( !baseExportPath.equals( inputFolderPath ) )
 			{
 				// go one level upper since channels are stored in individual subfolders
-				baseExportPath = Paths.get( inputFolderPath ).getParent().toString();
+				baseExportPath = PathResolver.getParent( inputFolderPath );
 				break;
 			}
 		}
 
-		baseExportPath = Paths.get( baseExportPath, "export.n5" + overlapsPathSuffix ).toString();
+		baseExportPath = PathResolver.get( baseExportPath, "export.n5" + overlapsPathSuffix );
 
 		// FIXME: allow it for now
 //		if ( Files.exists( Paths.get( baseExportPath ) ) )
@@ -250,7 +250,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final Map< Integer, Set< Integer > > pairwiseConnectionsMap = new HashMap<>();
 		try
 		{
-			final String pairwiseShiftsPath = Paths.get( channelPath ).getParent().resolve( "pairwise-stitched.json" ).toString();
+			final String pairwiseShiftsPath = PathResolver.get( PathResolver.getParent( channelPath ), "pairwise-stitched.json" );
 			final List< SerializablePairWiseStitchingResult[] > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 			for ( final SerializablePairWiseStitchingResult[] pairwiseShiftMulti : pairwiseShifts )
 			{

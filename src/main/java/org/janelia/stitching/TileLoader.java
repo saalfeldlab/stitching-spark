@@ -44,7 +44,7 @@ public class TileLoader
 
 	public static String getChannelN5DatasetPath( final TileInfo tile )
 	{
-		final String n5Path  = PathResolver.getParent( PathResolver.getParent( tile.getFilePath() ) );
+		final String n5Path = PathResolver.getParent( PathResolver.getParent( tile.getFilePath() ) );
 		final String tileDatasetPath = Paths.get( n5Path ).relativize( Paths.get( tile.getFilePath() ) ).toString();
 		return tileDatasetPath;
 	}

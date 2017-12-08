@@ -5,7 +5,6 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.URI;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -18,6 +17,7 @@ import java.util.Vector;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.PathResolver;
 
 import ij.ImagePlus;
 import mpicbg.models.Tile;
@@ -110,9 +110,9 @@ public class StitchingOptimizer implements Serializable
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 
-		final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString();
+		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
 		final String iterationDirname = "iter" + iteration;
-		final String pairwiseShiftsPath = Paths.get( basePath, iterationDirname, "pairwise.json" ).toString();
+		final String pairwiseShiftsPath = PathResolver.get( basePath, iterationDirname, "pairwise.json" );
 
 		// FIXME: skip if solution already exists?
 //		if ( Files.exists( Paths.get( Utils.addFilenameSuffix( pairwiseShiftsPath, "-used" ) ) ) )
@@ -120,8 +120,7 @@ public class StitchingOptimizer implements Serializable
 
 		final List< SerializablePairWiseStitchingResult[] > shifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 
-
-		try ( final OutputStream logOut = dataProvider.getOutputStream( URI.create( Paths.get( basePath, iterationDirname, "optimizer.txt" ).toString() ) ) )
+		try ( final OutputStream logOut = dataProvider.getOutputStream( URI.create( PathResolver.get( basePath, iterationDirname, "optimizer.txt" ) ) ) )
 		{
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
@@ -168,11 +167,11 @@ public class StitchingOptimizer implements Serializable
 					TileOperations.translateTilesToOriginReal( tilesToSave );
 
 					// save final tiles configuration
-					final String stitchedConfigFile = Paths.get(
+					final String stitchedConfigFile = PathResolver.get(
 							basePath,
 							iterationDirname,
-							Utils.addFilenameSuffix( Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getFileName().toString(), "-stitched" )
-						).toString();
+							Utils.addFilenameSuffix( PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( channel ) ), "-stitched" )
+						);
 					TileInfoJSONProvider.saveTilesConfiguration( tilesToSave, dataProvider.getJsonWriter( URI.create( stitchedConfigFile ) ) );
 				}
 
@@ -206,7 +205,7 @@ public class StitchingOptimizer implements Serializable
 					}
 				}
 
-				final String pairwiseInputFile = Paths.get( basePath, iterationDirname, "pairwise.json" ).toString();
+				final String pairwiseInputFile = PathResolver.get( basePath, iterationDirname, "pairwise.json" );
 				TileInfoJSONProvider.savePairwiseShiftsMulti( finalPairwiseShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( pairwiseInputFile, "-stitched" ) ) ) );
 				TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( pairwiseInputFile, "-used" ) ) ) );
 			}

@@ -3,7 +3,6 @@ package org.janelia.stitching;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -19,6 +18,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.util.LongAccumulator;
 import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.stitching.StitchingArguments.RestitchingMode;
@@ -91,10 +91,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			for ( int iteration = 0; ; ++iteration )
 			{
 				// check if number of stitched tiles has increased compared to the previous iteration
-				final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString();
-				final String filename = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getFileName().toString();
+				final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
+				final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
 				final String iterationDirname = "iter" + iteration;
-				final String stitchedTilesFilepath = Paths.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) ).toString();
+				final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 
 				if ( !dataProvider.fileExists( URI.create( stitchedTilesFilepath ) ) )
 				{
@@ -131,11 +131,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				{
 					final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 
-					final String previousStitchedTilesFilepath = Paths.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) ).toString();
+					final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 					final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
 
-					final String usedPairsFilepath = Paths.get( basePath, iterationDirname, "pairwise-used.json" ).toString();
-					final String previousUsedPairsFilepath = Paths.get( basePath, previousIterationDirname, "pairwise-used.json" ).toString();
+					final String usedPairsFilepath = PathResolver.get( basePath, iterationDirname, "pairwise-used.json" );
+					final String previousUsedPairsFilepath = PathResolver.get( basePath, previousIterationDirname, "pairwise-used.json" );
 					final List< SerializablePairWiseStitchingResult[] > usedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( usedPairsFilepath ) ) );
 					final List< SerializablePairWiseStitchingResult[] > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( previousUsedPairsFilepath ) ) );
 
@@ -143,8 +143,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					{
 						// mark the last solution as not used because it is worse than from the previous iteration
 						dataProvider.moveFile(
-								URI.create( Paths.get( basePath, iterationDirname ).toString() ),
-								URI.create( Paths.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) ).toString() )
+								URI.create( PathResolver.get( basePath, iterationDirname ) ),
+								URI.create( PathResolver.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) ) )
 							);
 						copyFinalSolution( iteration - 1 );
 						System.out.println( "Stopping on iteration " + iteration + ": the new solution (n=" + stitchedTiles.length + ") is not greater than the previous solution (n=" + previousStitchedTiles.length + "). Input tiles n=" + stageTiles.length );
@@ -166,17 +166,17 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final DataProvider dataProvider = job.getDataProvider();
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
-			final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getParent().toString();
-			final String filename = Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getFileName().toString();
+			final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( channel ) );
+			final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( channel ) );
 			final String iterationDirname = "iter" + fromIteration;
-			final String stitchedTilesFilepath = Paths.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) ).toString();
-			final String finalTilesFilepath = Paths.get( basePath, Utils.addFilenameSuffix( filename, "-final" ) ).toString();
+			final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
+			final String finalTilesFilepath = PathResolver.get( basePath, Utils.addFilenameSuffix( filename, "-final" ) );
 			dataProvider.copyFile( URI.create( stitchedTilesFilepath ), URI.create( finalTilesFilepath ) );
 
 			if ( channel == 0 )
 				dataProvider.copyFile(
-						URI.create( Paths.get( basePath, iterationDirname, "optimizer.txt" ).toString() ),
-						URI.create( Paths.get( basePath, "optimizer-final.txt" ).toString() )
+						URI.create( PathResolver.get( basePath, iterationDirname, "optimizer.txt" ) ),
+						URI.create( PathResolver.get( basePath, "optimizer-final.txt" ) )
 					);
 		}
 	}
@@ -185,17 +185,17 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 
-		final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString();
+		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
 		final String iterationDirname = "iter" + iteration;
 		final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 		final String pairwiseFilename = "pairwise.json";
 
-		final String pairwisePath = Paths.get( basePath, iterationDirname, pairwiseFilename ).toString();
+		final String pairwisePath = PathResolver.get( basePath, iterationDirname, pairwiseFilename );
 
 		if ( iteration == 0 )
 		{
 			// use the pairwise file from the previous run in the old mode if exists
-			final String oldPairwiseFile = Paths.get( basePath, pairwiseFilename ).toString();
+			final String oldPairwiseFile = PathResolver.get( basePath, pairwiseFilename );
 			if ( dataProvider.fileExists( URI.create( oldPairwiseFile ) ) )
 				dataProvider.moveFile( URI.create( oldPairwiseFile ), URI.create( pairwisePath ) );
 		}
@@ -207,7 +207,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				// use pairwise-used from the previous iteration, so they will not be restitched
 				if ( !dataProvider.fileExists( URI.create( pairwisePath ) ) )
 					dataProvider.copyFile(
-							URI.create( Paths.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) ).toString() ),
+							URI.create( PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) ) ),
 							URI.create( pairwisePath )
 						);
 			}
@@ -315,14 +315,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 		else
 		{
-			final String statsTileConfigurationPath = iteration == 0 ? null : Paths.get(
+			final String statsTileConfigurationPath = iteration == 0 ? null : PathResolver.get(
 					basePath,
 					previousIterationDirname,
-					Utils.addFilenameSuffix(
-							Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getFileName().toString(),
-							"-stitched"
-						)
-				).toString();
+					Utils.addFilenameSuffix( PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) ), "-stitched" )
+				);
 
 			// Initiate the computation
 			final List< SerializablePairWiseStitchingResult[] > adjacentShiftsMulti = computePairwiseShifts( pendingOverlappingTiles, statsTileConfigurationPath );

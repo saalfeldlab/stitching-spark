@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,6 +10,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
@@ -64,11 +64,11 @@ public class N5ToMIPsSpark
 		final int scaleLevel = binned ? SCALE_LEVEL_BINNED : SCALE_LEVEL;
 		System.out.println( "Using scale level " + scaleLevel + " to generate MIPs" );
 
-		final String outBaseFolder = Paths.get( n5Path ).getParent().toString();
+		final String outBaseFolder = PathResolver.getParent( n5Path );
 		final String slicingSuffix = ( slicing != null ? "-" + arrayToString( slicing ) : "" );
 		final String binnedSuffix = ( binned ? "-binned" : "" );
 		final String outFolder = "MIP" + slicingSuffix + binnedSuffix;
-		final String outputPath = Paths.get( outBaseFolder, outFolder ).toString();
+		final String outputPath = PathResolver.get( outBaseFolder, outFolder );
 		System.out.println( "Output path: " + outputPath );
 
 		final DataProvider dataProvider = DataProviderFactory.createByURI( URI.create( n5Path ) );
@@ -93,7 +93,7 @@ public class N5ToMIPsSpark
 			for ( int channel = 0; channel < channelsCellDimensions.size(); ++channel )
 			{
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
-				final String outputChannelPath = Paths.get( outputPath, "ch" + channel ).toString();
+				final String outputChannelPath = PathResolver.get( outputPath, "ch" + channel );
 				final int[] cellDimensions = channelsCellDimensions.get( channel );
 				final int[] mipStepsCells = new int[ cellDimensions.length ];
 				for ( int d = 0; d < mipStepsCells.length; ++d )

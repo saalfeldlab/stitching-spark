@@ -3,7 +3,6 @@ package org.janelia.stitching;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -15,6 +14,7 @@ import java.util.TreeMap;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.histogram.Histogram;
 import org.janelia.histogram.HistogramMatching;
 import org.janelia.intensity.LinearIntensityMap;
@@ -247,7 +247,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 				final ImagePlusImg< T, ? > r = ImagePlusImgs.from( imp );
 				transform.run( r );
 
-				tile.setFilePath( destFolder + "/transformed_" + Paths.get( tile.getFilePath() ).getFileName().toString() );
+				tile.setFilePath( destFolder + "/transformed_" + PathResolver.getFileName( tile.getFilePath() ) );
 				final ImagePlus transformed = r.getImagePlus();
 				Utils.workaroundImagePlusNSlices( transformed );
 				dataProviderLocal.saveImage( transformed, URI.create( tile.getFilePath() ) );
