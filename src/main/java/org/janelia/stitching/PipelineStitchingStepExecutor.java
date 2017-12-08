@@ -219,24 +219,28 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		// Try to load precalculated shifts for some pairs of tiles
 		final List< SerializablePairWiseStitchingResult[] > pairwiseShiftsMulti = new ArrayList<>();
-		try
+
+		if ( dataProvider.fileExists( URI.create( pairwisePath ) ) )
 		{
-			System.out.println( "try to load pairwise results from disk" );
-			pairwiseShiftsMulti.addAll( TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( pairwisePath ) ) ) );
-		}
-		catch ( final FileNotFoundException e )
-		{
-			System.out.println( "Pairwise results file not found" );
-		}
-		catch ( final NullPointerException e )
-		{
-			System.out.println( "Pairwise results file is malformed" );
-			e.printStackTrace();
-			throw e;
-		}
-		catch ( final IOException e )
-		{
-			e.printStackTrace();
+			try
+			{
+				System.out.println( "try to load pairwise results from disk" );
+				pairwiseShiftsMulti.addAll( TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( pairwisePath ) ) ) );
+			}
+			catch ( final FileNotFoundException e )
+			{
+				System.out.println( "Pairwise results file not found" );
+			}
+			catch ( final NullPointerException e )
+			{
+				System.out.println( "Pairwise results file is malformed" );
+				e.printStackTrace();
+				throw e;
+			}
+			catch ( final IOException e )
+			{
+				e.printStackTrace();
+			}
 		}
 
 		// remove redundant pairs (that are not contained in the given overlappingTiles list)
