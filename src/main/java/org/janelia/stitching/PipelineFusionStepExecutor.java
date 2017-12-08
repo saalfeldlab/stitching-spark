@@ -227,14 +227,15 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				final CellGrid cellGrid = new CellGrid( dimensions, cellSize );
 				cellGrid.getCellPosition( biggerCellOffsetCoordinates, biggerCellGridPosition );
 
-				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
-							job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
-							tilesWithinCell,
-							biggerCellBox,
-							broadcastedFlatfieldCorrection.value(),
-							broadcastedPairwiseConnectionsMap.value() );
-
 				final DataProvider dataProviderLocal = job.getDataProvider();
+				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
+						dataProviderLocal,
+						job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
+						tilesWithinCell,
+						biggerCellBox,
+						broadcastedFlatfieldCorrection.value(),
+						broadcastedPairwiseConnectionsMap.value()
+					);
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( n5ExportPath ) );
 				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridPosition );
 			}

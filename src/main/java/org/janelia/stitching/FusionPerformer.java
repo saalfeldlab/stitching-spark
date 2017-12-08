@@ -8,11 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.janelia.dataaccess.DataProvider;
 import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 
 import bdv.export.Downsample;
-import ij.IJ;
-import ij.ImagePlus;
 import net.imglib2.Cursor;
 import net.imglib2.Dimensions;
 import net.imglib2.FinalInterval;
@@ -27,7 +26,6 @@ import net.imglib2.converter.RealFloatConverter;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgFactory;
-import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.AbstractTranslation;
@@ -55,23 +53,25 @@ public class FusionPerformer
 	private final static double FRACTION_BLENDED = 0.2;
 
 	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseTilesWithinCell(
+			final DataProvider dataProvider,
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval ) throws Exception
 	{
-		return fuseTilesWithinCell( mode, tilesWithinCell, targetInterval, null );
+		return fuseTilesWithinCell( dataProvider, mode, tilesWithinCell, targetInterval, null );
 	}
 
 	public static <
 		T extends RealType< T > & NativeType< T >,
 		U extends RealType< U > & NativeType< U > >
 	ImagePlusImg< T, ? > fuseTilesWithinCell(
+			final DataProvider dataProvider,
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
 			final RandomAccessiblePairNullable< U, U > flatfield ) throws Exception
 	{
-		return fuseTilesWithinCell( mode, tilesWithinCell, targetInterval, flatfield, null );
+		return fuseTilesWithinCell( dataProvider, mode, tilesWithinCell, targetInterval, flatfield, null );
 	}
 
 	public static <
@@ -79,6 +79,7 @@ public class FusionPerformer
 		U extends RealType< U > & NativeType< U >,
 		R extends RealType< R > & NativeType< R > >
 	ImagePlusImg< T, ? > fuseTilesWithinCell(
+			final DataProvider dataProvider,
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
@@ -88,9 +89,9 @@ public class FusionPerformer
 		switch ( mode )
 		{
 		case MAX_MIN_DISTANCE:
-			return fuseTilesWithinCellUsingMaxMinDistance( tilesWithinCell, targetInterval, flatfield, pairwiseConnectionsMap );
+			return fuseTilesWithinCellUsingMaxMinDistance( dataProvider, tilesWithinCell, targetInterval, flatfield, pairwiseConnectionsMap );
 		case BLENDING:
-			return fuseTilesWithinCellUsingBlending( tilesWithinCell, targetInterval, flatfield, pairwiseConnectionsMap );
+			return fuseTilesWithinCellUsingBlending( dataProvider, tilesWithinCell, targetInterval, flatfield, pairwiseConnectionsMap );
 		default:
 			throw new RuntimeException( "Unknown fusion mode" );
 		}
@@ -102,6 +103,7 @@ public class FusionPerformer
 		U extends RealType< U > & NativeType< U >,
 		R extends RealType< R > & NativeType< R > >
 	ImagePlusImg< T, ? > fuseTilesWithinCellUsingBlending(
+			final DataProvider dataProvider,
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
 			final RandomAccessiblePairNullable< U, U > flatfield,
@@ -135,9 +137,6 @@ public class FusionPerformer
 			System.out.println( "Loading tile image " + tile.getFilePath() );
 			final Dimensions tileDimensions = tile.getBoundaries();
 
-			final ImagePlus imp = IJ.openImage( tile.getFilePath() );
-			Utils.workaroundImagePlusNSlices( imp );
-
 			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
 					new FinalRealInterval( tile.getPosition(), tile.getMax() ),
 					targetInterval );
@@ -157,7 +156,7 @@ public class FusionPerformer
 			final Interval intersectionIntervalInTargetInterval = new FinalInterval( minIntersectionInTargetInterval, maxIntersectionInTargetInterval );
 			final Translation translation = new Translation( offset );
 
-			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
+			final RandomAccessibleInterval< T > rawTile = TileLoader.loadTile( tile, dataProvider );
 			final RandomAccessibleInterval< R > convertedTile = ( RandomAccessibleInterval ) Converters.convert( rawTile, new RealFloatConverter<>(), new FloatType() );
 			final RandomAccessible< R > extendedTile = Views.extendBorder( convertedTile );
 			final RealRandomAccessible< R > interpolatedTile = Views.interpolate( extendedTile, new NLinearInterpolatorFactory<>() );
@@ -303,6 +302,7 @@ public class FusionPerformer
 		U extends RealType< U > & NativeType< U >,
 		R extends RealType< R > & NativeType< R > >
 	ImagePlusImg< T, ? > fuseTilesWithinCellUsingMaxMinDistance(
+			final DataProvider dataProvider,
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
 			final RandomAccessiblePairNullable< U, U > flatfield,
@@ -337,9 +337,6 @@ public class FusionPerformer
 		{
 			System.out.println( "Loading tile image " + tile.getFilePath() );
 
-			final ImagePlus imp = IJ.openImage( tile.getFilePath() );
-			Utils.workaroundImagePlusNSlices( imp );
-
 			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
 					new FinalRealInterval( tile.getPosition(), tile.getMax() ),
 					targetInterval );
@@ -359,7 +356,7 @@ public class FusionPerformer
 			final Interval intersectionIntervalInTargetInterval = new FinalInterval( minIntersectionInTargetInterval, maxIntersectionInTargetInterval );
 			final Translation translation = new Translation( offset );
 
-			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
+			final RandomAccessibleInterval< T > rawTile = TileLoader.loadTile( tile, dataProvider );
 			final RandomAccessibleInterval< R > convertedTile = ( RandomAccessibleInterval ) Converters.convert( rawTile, new RealFloatConverter<>(), new FloatType() );
 			final RandomAccessible< R > extendedTile = Views.extendBorder( convertedTile );
 			final RealRandomAccessible< R > interpolatedTile = Views.interpolate( extendedTile, new NLinearInterpolatorFactory<>() );
@@ -456,6 +453,7 @@ public class FusionPerformer
 	 * It uses simple pixel copying strategy then downsamples the resulting image.
 	 */
 	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseTilesWithinCellSimpleWithDownsampling(
+			final DataProvider dataProvider,
 			final List< TileInfo > tiles,
 			final TileInfo cell,
 			final int[] downsampleFactors ) throws Exception
@@ -466,7 +464,7 @@ public class FusionPerformer
 
 		cell.setType( imageType );
 		final T type = ( T ) imageType.getType();
-		final ImagePlusImg< T, ? > fusedImg = fuseSimple( tiles, cell, type );
+		final ImagePlusImg< T, ? > fusedImg = fuseSimple( dataProvider, tiles, cell, type );
 
 		final long[] outDimensions = new long[ cell.numDimensions() ];
 		for ( int d = 0; d < outDimensions.length; d++ )
@@ -480,7 +478,11 @@ public class FusionPerformer
 
 
 	@SuppressWarnings( "unchecked" )
-	private static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseSimple( final List< TileInfo > tiles, final TileInfo cell, final T type ) throws Exception
+	private static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseSimple(
+			final DataProvider dataProvider,
+			final List< TileInfo > tiles,
+			final TileInfo cell,
+			final T type ) throws Exception
 	{
 		//System.out.println( "Fusing tiles within cell #" + cell.getIndex() + " of size " + Arrays.toString( cell.getSize() )+"..." );
 
@@ -493,19 +495,13 @@ public class FusionPerformer
 		{
 			//System.out.println( "Loading tile image " + tile.getFilePath() );
 
-			final ImagePlus imp = IJ.openImage( tile.getFilePath() );
-			Utils.workaroundImagePlusNSlices( imp );
-
-			if ( imp == null )
-				throw new Exception( "Can't open image: " + tile.getFilePath() );
-
 			final Boundaries tileBoundaries = tile.getBoundaries();
 			final FinalInterval intersection = IntervalsNullable.intersect( new FinalInterval( tileBoundaries.getMin(), tileBoundaries.getMax() ), cellImg );
 
 			if ( intersection == null )
 				throw new IllegalArgumentException( "tilesWithinCell contains a tile that doesn't intersect with the target interval" );
 
-			final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
+			final RandomAccessibleInterval< T > rawTile = TileLoader.loadTile( tile, dataProvider );
 			final RandomAccessibleInterval< T > correctedDimTile = rawTile.numDimensions() < cell.numDimensions() ? Views.stack( rawTile ) : rawTile;
 			final RealRandomAccessible< T > interpolatedTile = Views.interpolate( Views.extendBorder( correctedDimTile ), new NLinearInterpolatorFactory<>() );
 
