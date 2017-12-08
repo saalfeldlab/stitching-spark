@@ -5,7 +5,6 @@ import java.net.URI;
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.googlecloud.GoogleCloudDataProvider;
 import org.janelia.dataaccess.s3.AmazonS3DataProvider;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessFactory.DataAccessType;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -125,7 +124,7 @@ public abstract class DataProviderFactory
 		throw new NotImplementedException( "factory for protocol " + uri.getScheme() + " is not implemented" );
 	}
 
-	public static URI createBucketUri( final DataAccessType type, final String bucketName )
+	public static URI createBucketUri( final DataProviderType type, final String bucketName )
 	{
 		final String protocol;
 		switch ( type )

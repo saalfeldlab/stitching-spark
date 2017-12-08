@@ -12,6 +12,7 @@ import java.util.TreeMap;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
@@ -77,31 +78,51 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		final String overlapsPathSuffix = job.getArgs().exportOverlaps() ? "-overlaps" : "";
 
-		// determine the best location for storing the export files (near the tile configurations by default)
-		String baseExportPath = null;
-		for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
-		{
-			final String inputFolderPath = PathResolver.getParent( inputFilePath );
-			if ( baseExportPath == null )
-			{
-				baseExportPath = inputFolderPath;
-			}
-			else if ( !baseExportPath.equals( inputFolderPath ) )
-			{
-				// go one level upper since channels are stored in individual subfolders
-				baseExportPath = PathResolver.getParent( inputFolderPath );
-				break;
-			}
-		}
+		final DataProvider dataProvider = job.getDataProvider();
+		final DataProviderType dataProviderType = dataProvider.getType();
 
-		baseExportPath = PathResolver.get( baseExportPath, "export.n5" + overlapsPathSuffix );
+		// determine the best location for storing the export files (near the tile configurations by default)
+		// for cloud backends, the export is stored in a separate bucket to be compatible with n5-viewer
+		String baseExportPath = null;
+		if ( dataProviderType == DataProviderType.FILESYSTEM )
+		{
+			for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+			{
+				final String inputFolderPath = PathResolver.getParent( inputFilePath );
+				if ( baseExportPath == null )
+				{
+					baseExportPath = inputFolderPath;
+				}
+				else if ( !baseExportPath.equals( inputFolderPath ) )
+				{
+					// go one level upper since channels are stored in individual subfolders
+					baseExportPath = PathResolver.getParent( inputFolderPath );
+					break;
+				}
+			}
+			baseExportPath = PathResolver.get( baseExportPath, "export.n5" + overlapsPathSuffix );
+		}
+		else
+		{
+			for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+			{
+				final String bucket = new CloudURI( URI.create( inputFilePath ) ).getBucket();
+				if ( baseExportPath == null )
+				{
+					baseExportPath = bucket;
+				}
+				else if ( !baseExportPath.equals( bucket ) )
+				{
+					throw new PipelineExecutionException( "cannot generate export bucket name" );
+				}
+			}
+			final String exportBucket = baseExportPath + "-export-n5" + overlapsPathSuffix;
+			baseExportPath = DataProviderFactory.createBucketUri( dataProviderType, exportBucket ).toString();
+		}
 
 		// FIXME: allow it for now
 //		if ( Files.exists( Paths.get( baseExportPath ) ) )
 //			throw new PipelineExecutionException( "Export path already exists: " + baseExportPath );
-
-		final DataProvider dataProvider = job.getDataProvider();
-		final DataProviderType dataProviderType = dataProvider.getType();
 
 		final String n5ExportPath = baseExportPath;
 		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ), N5ExportMetadata.getGsonBuilder() );
