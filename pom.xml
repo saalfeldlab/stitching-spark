@@ -237,6 +237,9 @@
 						<relocation>
 							<pattern>com.google</pattern>
 							<shadedPattern>org.janelia.saalfeldlab.com.google</shadedPattern>
+							<excludes>
+								<exclude>com.google.api.client.auth.oauth2.StoredCredential</exclude>
+							</excludes>
 						</relocation>
 					</relocations>
 				</configuration>
