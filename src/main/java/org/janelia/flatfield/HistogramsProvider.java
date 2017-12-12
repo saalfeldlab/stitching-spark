@@ -215,10 +215,21 @@ public class HistogramsProvider implements Serializable
 				for ( final TileInfo tile : tiles )
 				{
 					final RandomAccessibleInterval< T > tileImg = TileLoader.loadTile( tile, dataProviderLocal );
-					final Interval tileImgOffsetInterval = new FinalInterval(
-							new long[] { blockInterval.min( 0 ), blockInterval.min( 1 ), blockInterval.numDimensions() >= 3 ? blockInterval.min( 2 ) : tileImg.min( 2 ) },
-							new long[] { blockInterval.max( 0 ), blockInterval.max( 1 ), blockInterval.numDimensions() >= 3 ? blockInterval.max( 2 ) : tileImg.max( 2 ) }
-						);
+					final Interval tileImgOffsetInterval;
+					if ( tileImg.numDimensions() == 3 )
+					{
+						tileImgOffsetInterval = new FinalInterval(
+								new long[] { blockInterval.min( 0 ), blockInterval.min( 1 ), blockInterval.numDimensions() >= 3 ? blockInterval.min( 2 ) : tileImg.min( 2 ) },
+								new long[] { blockInterval.max( 0 ), blockInterval.max( 1 ), blockInterval.numDimensions() >= 3 ? blockInterval.max( 2 ) : tileImg.max( 2 ) }
+							);
+					}
+					else
+					{
+						tileImgOffsetInterval = new FinalInterval(
+								new long[] { blockInterval.min( 0 ), blockInterval.min( 1 ) },
+								new long[] { blockInterval.max( 0 ), blockInterval.max( 1 ) }
+							);
+					}
 					final RandomAccessibleInterval< T > tileImgInterval = Views.offsetInterval( tileImg, tileImgOffsetInterval );
 					final IterableInterval< T > tileImgIterableInterval = Views.iterable( tileImgInterval );
 					final Cursor< T > tileImgIntervalCursor = tileImgIterableInterval.localizingCursor();
