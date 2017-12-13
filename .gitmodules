@@ -1,4 +1,4 @@
 [submodule "flintstone"]
-	path = scripts/spark-janelia/flintstone
+	path = startup-scripts/spark-janelia/flintstone
 	url = https://github.com/saalfeldlab/flintstone.git
 	branch = master
