@@ -104,6 +104,29 @@ public class ParseTilesImageList
 		{
 			final List< TilePair > adjacentPairsDim = FilterAdjacentShifts.filterAdjacentPairs( overlappingPairs, d );
 
+			if ( !adjacentPairsDim.isEmpty() )
+			{
+				double minOverlap = Double.POSITIVE_INFINITY, maxOverlap = Double.NEGATIVE_INFINITY, avgOverlap = 0;
+				for ( final TilePair pair : adjacentPairsDim )
+				{
+					final double overlap = tileSize[ d ] - Math.abs( pair.getB().getPosition( d ) - pair.getA().getPosition( d ) );
+					minOverlap = Math.min( overlap, minOverlap );
+					maxOverlap = Math.max( overlap, maxOverlap );
+					avgOverlap += overlap;
+				}
+				avgOverlap /= adjacentPairsDim.size();
+				System.out.println( String.format( "Overlaps for [%c] adjacent pairs: min=%d, max=%d, avg=%d",
+						new char[] { 'x', 'y', 'z' }[ d ],
+						Math.round( minOverlap ),
+						Math.round( maxOverlap ),
+						Math.round( avgOverlap )
+					) + " (" + Math.round( avgOverlap / tileSize[ d ] * 100 ) + "% of tile size)" );
+			}
+			else
+			{
+				System.out.println( String.format( "No overlapping adjacent pairs in [%c]", new char[] { 'x', 'y', 'z' }[ d ] ) );
+			}
+
 			// verify against grid coordinates
 			final Set< TilePair > adjacentPairsDimSet = new HashSet<>( adjacentPairsDim );
 			for ( final TilePair pair : overlappingPairs )
@@ -121,22 +144,6 @@ public class ParseTilesImageList
 			}
 			if ( !adjacentPairsDimSet.isEmpty() )
 				throw new RuntimeException( "some extra pairs have been added that are not adjacent in the grid" );
-
-			double minOverlap = Double.POSITIVE_INFINITY, maxOverlap = Double.NEGATIVE_INFINITY, avgOverlap = 0;
-			for ( final TilePair pair : adjacentPairsDim )
-			{
-				final double overlap = tileSize[ d ] - Math.abs( pair.getB().getPosition( d ) - pair.getA().getPosition( d ) );
-				minOverlap = Math.min( overlap, minOverlap );
-				maxOverlap = Math.max( overlap, maxOverlap );
-				avgOverlap += overlap;
-			}
-			avgOverlap /= adjacentPairsDim.size();
-			System.out.println( String.format( "Overlaps for [%c] adjacent pairs: min=%d, max=%d, avg=%d",
-					new char[] { 'x', 'y', 'z' }[ d ],
-					Math.round( minOverlap ),
-					Math.round( maxOverlap ),
-					Math.round( avgOverlap )
-				) + " (" + Math.round( avgOverlap / tileSize[ d ] * 100 ) + "% of tile size)" );
 		}
 		System.out.println();
 
@@ -144,5 +151,7 @@ public class ParseTilesImageList
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 		for ( final int channel : tiles.keySet() )
 			TileInfoJSONProvider.saveTilesConfiguration( tiles.get( channel ).toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( URI.create( Paths.get( baseOutputFolder, channel + "nm.json" ).toString() ) ) );
+
+		System.out.println( "Done" );
 	}
 }
