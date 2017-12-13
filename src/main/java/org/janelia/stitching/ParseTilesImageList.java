@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -11,6 +12,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.analysis.CheckConnectedGraphs;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 
@@ -138,7 +141,8 @@ public class ParseTilesImageList
 		System.out.println();
 
 		// finally save the configurations as JSON files
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 		for ( final int channel : tiles.keySet() )
-			TileInfoJSONProvider.saveTilesConfiguration( tiles.get( channel ).toArray( new TileInfo[ 0 ] ), Paths.get( baseOutputFolder, channel + "nm.json" ).toString() );
+			TileInfoJSONProvider.saveTilesConfiguration( tiles.get( channel ).toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( URI.create( Paths.get( baseOutputFolder, channel + "nm.json" ).toString() ) ) );
 	}
 }

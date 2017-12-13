@@ -1,8 +1,11 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.Boundaries;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -19,10 +22,12 @@ public class CompareOverlap
 {
 	public static void main( final String[] args ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		String filename = args[ 0 ];
 		final int i1 = Integer.parseInt( args[ 1 ] ), i2 = Integer.parseInt( args[ 2 ] );
 		System.out.println( "Tiles " + i1 + " and " + i2 + ":" );
-		TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( filename );
+		TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( filename ) ) );
 		ArrayList< TileInfo > twoTiles = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			if ( tile.getIndex() == i1 || tile.getIndex() == i2 )
@@ -43,7 +48,7 @@ public class CompareOverlap
 
 
 		filename = Utils.addFilenameSuffix( Utils.removeFilenameSuffix( filename, "_full" ), "_shifted" );
-		tiles = TileInfoJSONProvider.loadTilesConfiguration( filename );
+		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( filename ) ) );
 		TileOperations.translateTilesToOrigin( tiles );
 		twoTiles = new ArrayList<>();
 		for ( final TileInfo tile : tiles )

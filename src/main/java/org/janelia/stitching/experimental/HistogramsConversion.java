@@ -12,11 +12,14 @@ import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.util.concurrent.MultithreadedExecutor;
@@ -80,8 +83,10 @@ public class HistogramsConversion implements Serializable
 		V extends TreeMap< Short, Integer > >
 	void run() throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		try {
-			tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilepath );
+			tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( inputFilepath ) ) );
 		} catch (final IOException e) {
 			e.printStackTrace();
 			return;

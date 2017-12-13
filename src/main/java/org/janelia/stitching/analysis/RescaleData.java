@@ -1,7 +1,10 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.nio.file.Paths;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.ImageType;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -22,8 +25,10 @@ public class RescaleData {
 
 	public static void main( final String[] args ) throws Exception
 	{
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args [ 0 ] );
-		final TileInfo[] deconTiles = TileInfoJSONProvider.loadTilesConfiguration( args [ 1 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final TileInfo[] deconTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) );
 		final int tileIndex = 1;
 		final TileInfo tile = tiles[ tileIndex ];
 		final TileInfo deconTile = deconTiles[ tileIndex ];

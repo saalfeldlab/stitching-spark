@@ -16,7 +16,7 @@ import net.imglib2.SerializableFinalInterval;
 public class FlatfieldCorrectionArguments
 {
 	@Option(name = "-i", aliases = { "--input" }, required = true,
-			usage = "Path to a tile configuration JSON file")
+			usage = "Path/link to a tile configuration JSON file")
 	private String inputFilePath;
 
 	@Option(name = "--crop", required = false,
@@ -38,6 +38,10 @@ public class FlatfieldCorrectionArguments
 	@Option(name = "--max", required = false,
 			usage = "Max value of a histogram")
 	private double histMaxValue = 500;
+
+	@Option(name = "--2d", required = false,
+			usage = "Estimate 2D flatfield (slices are used as additional data points)")
+	private boolean use2D = false;
 
 
 	private boolean parsedSuccessfully = false;
@@ -65,6 +69,7 @@ public class FlatfieldCorrectionArguments
 	public Double histMinValue() { return histMinValue; }
 	public Double histMaxValue() { return histMaxValue; }
 	public String cropMinMaxIntervalStr() { return cropMinMaxInterval; };
+	public boolean use2D() { return use2D; }
 
 	public Interval cropMinMaxInterval( final long[] fullTileSize )
 	{

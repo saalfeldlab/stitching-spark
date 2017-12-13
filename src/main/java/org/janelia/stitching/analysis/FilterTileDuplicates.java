@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -7,6 +8,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -17,7 +20,9 @@ public class FilterTileDuplicates
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 		System.out.println( "Total number of tiles = " + tiles.length );
 
 		// build a map of tile coordinates to find duplicates
@@ -73,7 +78,7 @@ public class FilterTileDuplicates
 		else
 		{
 			System.out.println( String.format("Removed %d duplicated tiles out of %d tiles", tiles.length - retainedTiles.size(), tiles.length ) );
-			TileInfoJSONProvider.saveTilesConfiguration( retainedTiles.toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( args[ 0 ], "_retained" ) );
+			TileInfoJSONProvider.saveTilesConfiguration( retainedTiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 0 ], "_retained" ) ) ) );
 		}
 	}
 }

@@ -10,6 +10,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -20,6 +21,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
 import org.apache.spark.api.java.JavaPairRDD;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -131,8 +134,10 @@ public class IlluminationCorrectionLocal
 
 	public void run() throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		try {
-			tiles = TileInfoJSONProvider.loadTilesConfiguration( inputFilepath );
+			tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( inputFilepath ) ) );
 			N = tiles.length;
 		} catch (final IOException e) {
 			e.printStackTrace();

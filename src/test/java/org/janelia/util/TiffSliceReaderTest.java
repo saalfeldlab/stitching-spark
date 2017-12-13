@@ -1,5 +1,6 @@
 package org.janelia.util;
 
+import java.io.IOException;
 import java.util.Random;
 
 import org.junit.Assert;
@@ -19,18 +20,18 @@ public class TiffSliceReaderTest
 	final Random rnd = new Random();
 
 //	@Test
-	public void testUnsignedShort()
+	public void testUnsignedShort() throws IOException
 	{
 		test( "/nrs/saalfeld/igor/test-images/unsigned-short.tif" );
 	}
 
 //	@Test
-	public void testFloat()
+	public void testFloat() throws IOException
 	{
 		test( "/nrs/saalfeld/igor/test-images/float.tif" );
 	}
 
-	private < T extends NativeType< T > & RealType< T > > void test( final String path )
+	private < T extends NativeType< T > & RealType< T > > void test( final String path ) throws IOException
 	{
 		System.out.println( "[TiffSliceReaderTest] Opening " + path + "..." );
 		final ImagePlus impFull = ImageImporter.openImage( path );

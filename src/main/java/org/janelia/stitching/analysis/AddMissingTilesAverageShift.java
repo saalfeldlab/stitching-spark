@@ -1,8 +1,8 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +11,8 @@ import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
@@ -37,12 +39,14 @@ public class AddMissingTilesAverageShift
 
 	public static void main( final String[] args ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		// Read inputs
-		final TreeMap< Integer, TileInfo > tilesInfoOriginal = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] ) );
-		final TreeMap< Integer, TileInfo > tilesInfoFinal = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] ) );
+		final TreeMap< Integer, TileInfo > tilesInfoOriginal = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) ) );
+		final TreeMap< Integer, TileInfo > tilesInfoFinal = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) ) );
 
 		parseCoordinates( tilesInfoOriginal.values() );
-		
+
 		// Translate original tiles set into the relative coordinate space of any tile that is present in the final set
 		final int pivotTile = tilesInfoFinal.firstKey();
 		final double[] offset = new double[ tilesInfoFinal.get( pivotTile ).numDimensions() ];
@@ -58,7 +62,7 @@ public class AddMissingTilesAverageShift
 
 		// Start adding missing tiles one by one
 		for ( final TileInfo tileToAdd : missingTilesInfo.values() )
-		{			
+		{
 			final TreeMap< Integer, List< TileInfo > > tilesAround = new TreeMap<>();
 			for ( final TileInfo tile : tilesInfoFinal.values() )
 			{
@@ -81,28 +85,28 @@ public class AddMissingTilesAverageShift
 
 				level = entry.getKey();
 				count += entry.getValue().size();
-				
-				if ( count > 1 )					
+
+				if ( count > 1 )
 					break;
 			}
-			
+
 			for ( int d = 0; d < estimatedShift.length; d++ )
 				estimatedShift[ d ] /= count;
-			
+
 			//System.out.println( "level: " + (level==tilesAround.firstKey().intValue() ? level+"     " : Arrays.toString(new int[] {tilesAround.firstKey().intValue(), level} ))  + "   " + count + " neighbors,  " + (count<10?" ":"") + Arrays.toString(estimatedShift) );
-			
+
 			for ( int d = 0; d < estimatedShift.length; d++ )
 				tileToAdd.setPosition( d, tileToAdd.getPosition(d) + estimatedShift[ d ] );
 		}
 
 		tilesInfoFinal.putAll( missingTilesInfo );
 		System.out.println( tilesInfoFinal.size() == tilesInfoOriginal.size() ? "Size OK" : "Size mismatch" );
-		
+
 		TileOperations.translateTilesToOrigin( tilesInfoFinal.values().toArray( new TileInfo[ 0 ] ) );
 		//for ( final TileInfo tileFinal : tilesInfoFinal.values() )
 		//	System.out.println( (missingTilesInfo.containsKey(tileFinal.getIndex())?"***":"") + Arrays.toString(tileFinal.getPosition()));
-		
-		TileInfoJSONProvider.saveTilesConfiguration( tilesInfoFinal.values().toArray( new TileInfo[ 0 ] ), Utils.addFilenameSuffix( args[ 1 ], "_all" ) );
+
+		TileInfoJSONProvider.saveTilesConfiguration( tilesInfoFinal.values().toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 1 ], "_all" ) ) ) );
 
 		System.out.println( "Done" );
 	}

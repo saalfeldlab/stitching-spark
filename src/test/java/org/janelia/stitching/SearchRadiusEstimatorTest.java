@@ -1,6 +1,7 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -14,6 +15,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.MultithreadedExecutor;
@@ -376,11 +379,13 @@ public class SearchRadiusEstimatorTest
 //	@Test
 	public void testTiles2D() throws PipelineExecutionException, InterruptedException, ImgLibException, IOException, ExecutionException
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		final int width = 1200;
 		final int height = 1200;
 
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" );
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" ) ) );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
 		final int dx = 0, dy = 1;
@@ -577,12 +582,14 @@ public class SearchRadiusEstimatorTest
 //	@Test
 	public void testTiles3D() throws PipelineExecutionException, InterruptedException, ImgLibException, IOException, ExecutionException
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		final int width = 600;
 		final int height = 600;
 		final int depth = 600;
 
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" );
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" ) ) );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
 		final double[] estimationWindowSize = new double[ 3 ];
@@ -710,8 +717,10 @@ public class SearchRadiusEstimatorTest
 //	@Test
 	public void testCombinedEllipseError3D() throws PipelineExecutionException, IOException
 	{
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" ) ) );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
 		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles );
@@ -820,9 +829,11 @@ public class SearchRadiusEstimatorTest
 //	@Test
 	public void testCombinedEllipseError2D() throws Exception
 	{
-		final TileInfo[] stageTiles3d = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/sample1_c2/automated-stitching/restitching-incremental/ch0.json" );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] stageTiles3d = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/sample1_c2/automated-stitching/restitching-incremental/ch0.json" ) ) );
 		//final TileInfo[] stitchedTiles3d = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" );
-		final TileInfo[] stitchedTiles3d = TileInfoJSONProvider.loadTilesConfiguration( "/nrs/saalfeld/igor/sample1_c2/automated-stitching/restitching-incremental/iter12/ch0-stitched.json" );
+		final TileInfo[] stitchedTiles3d = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/sample1_c2/automated-stitching/restitching-incremental/iter12/ch0-stitched.json" ) ) );
 
 		// list all Z grid coordinates to randomly choose XY plane
 		final Map< Integer, int[] > stageTilesCoordinatesMap = Utils.getTilesCoordinatesMap( stageTiles3d );
@@ -1544,8 +1555,10 @@ public class SearchRadiusEstimatorTest
 //	@Test
 	public void testCombinedEllipse3D() throws Exception
 	{
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( "/groups/betzig/betziglab/4Stephan/160727_Sample2_C3/Stitch_Igor/restitching/restitching-covariance/ch0.json" );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( "/groups/betzig/betziglab/4Stephan/160727_Sample2_C3/Stitch_Igor/restitching/ch0-final.json" );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/groups/betzig/betziglab/4Stephan/160727_Sample2_C3/Stitch_Igor/restitching/restitching-covariance/ch0.json" ) ) );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/groups/betzig/betziglab/4Stephan/160727_Sample2_C3/Stitch_Igor/restitching/ch0-final.json" ) ) );
 
 		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles );
 		System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( estimator.getEstimationWindowSize() ) ) + " --" );

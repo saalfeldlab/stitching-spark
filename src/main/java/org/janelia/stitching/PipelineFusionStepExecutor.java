@@ -1,7 +1,7 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
-import java.nio.file.Paths;
+import java.net.URI;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -12,12 +12,16 @@ import java.util.TreeMap;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.dataaccess.CloudURI;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.saalfeldlab.n5.CompressionType;
-import org.janelia.saalfeldlab.n5.DataType;
-import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
+import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5DownsamplingSpark;
 import org.janelia.stitching.FusionPerformer.FusionMode;
@@ -74,30 +78,54 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		final String overlapsPathSuffix = job.getArgs().exportOverlaps() ? "-overlaps" : "";
 
-		// determine the best location for storing the export files (near the tile configurations by default)
-		String baseExportPath = null;
-		for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
-		{
-			final String inputFolderPath = Paths.get( inputFilePath ).getParent().toString();
-			if ( baseExportPath == null )
-			{
-				baseExportPath = inputFolderPath;
-			}
-			else if ( !baseExportPath.equals( inputFolderPath ) )
-			{
-				// go one level upper since channels are stored in individual subfolders
-				baseExportPath = Paths.get( inputFolderPath ).getParent().toString();
-				break;
-			}
-		}
+		final DataProvider dataProvider = job.getDataProvider();
+		final DataProviderType dataProviderType = dataProvider.getType();
 
-		baseExportPath = Paths.get( baseExportPath, "export.n5" + overlapsPathSuffix ).toString();
+		// determine the best location for storing the export files (near the tile configurations by default)
+		// for cloud backends, the export is stored in a separate bucket to be compatible with n5-viewer
+		String baseExportPath = null;
+		if ( dataProviderType == DataProviderType.FILESYSTEM )
+		{
+			for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+			{
+				final String inputFolderPath = PathResolver.getParent( inputFilePath );
+				if ( baseExportPath == null )
+				{
+					baseExportPath = inputFolderPath;
+				}
+				else if ( !baseExportPath.equals( inputFolderPath ) )
+				{
+					// go one level upper since channels are stored in individual subfolders
+					baseExportPath = PathResolver.getParent( inputFolderPath );
+					break;
+				}
+			}
+			baseExportPath = PathResolver.get( baseExportPath, "export.n5" + overlapsPathSuffix );
+		}
+		else
+		{
+			for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+			{
+				final String bucket = new CloudURI( URI.create( inputFilePath ) ).getBucket();
+				if ( baseExportPath == null )
+				{
+					baseExportPath = bucket;
+				}
+				else if ( !baseExportPath.equals( bucket ) )
+				{
+					throw new PipelineExecutionException( "cannot generate export bucket name" );
+				}
+			}
+			final String exportBucket = baseExportPath + "-export-n5" + overlapsPathSuffix;
+			baseExportPath = DataProviderFactory.createBucketUri( dataProviderType, exportBucket ).toString();
+		}
 
 		// FIXME: allow it for now
 //		if ( Files.exists( Paths.get( baseExportPath ) ) )
 //			throw new PipelineExecutionException( "Export path already exists: " + baseExportPath );
 
-		final N5Writer n5 = N5.openFSWriter( baseExportPath );
+		final String n5ExportPath = baseExportPath;
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ), N5ExportMetadata.getGsonBuilder() );
 
 		int[][] downsamplingFactors = null;
 
@@ -125,8 +153,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// prepare flatfield correction images
 			// use it as a folder with the input file's name
 			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
-					absoluteChannelPathNoExt + "-flatfield/S.tif",
-					absoluteChannelPathNoExt + "-flatfield/T.tif",
+					dataProvider,
+					absoluteChannelPathNoExt,
 					job.getDimensionality()
 				);
 			if ( flatfieldCorrection != null )
@@ -138,12 +166,17 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// Generate export of the first scale level
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( fullScaleOutputPath ) )
-				fuse( baseExportPath, fullScaleOutputPath, job.getTiles( channel ) );
+				fuse( n5ExportPath, fullScaleOutputPath, job.getTiles( channel ) );
 
 			// Generate lower scale levels
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
-				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic( sparkContext, baseExportPath, fullScaleOutputPath, new FinalVoxelDimensions( "um", voxelDimensions ) );
+				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic(
+						sparkContext,
+						() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( n5ExportPath ) ),
+						fullScaleOutputPath,
+						new FinalVoxelDimensions( "um", voxelDimensions )
+					);
 
 			broadcastedPairwiseConnectionsMap.destroy();
 			broadcastedFlatfieldCorrection.destroy();
@@ -155,7 +188,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		for ( int s = 0; s < downsamplingFactors.length; ++s )
 			scalesDouble[ s ] = Conversions.toDoubleArray( downsamplingFactors[ s ] );
 
-		final N5ExportMetadata exportMetadata = new N5ExportMetadata( baseExportPath );
+		final N5ExportMetadataWriter exportMetadata = N5ExportMetadata.openForWriting( n5 );
 		exportMetadata.setDefaultScales( scalesDouble );
 		exportMetadata.setDefaultPixelResolution( new FinalVoxelDimensions( "um", voxelDimensions ) );
 	}
@@ -169,8 +202,9 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		return cellSize;
 	}
 
-	private void fuse( final String baseExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
+	private void fuse( final String n5ExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
 	{
+		final DataProvider dataProvider = job.getDataProvider();
 		final int[] cellSize = getOptimalCellSize();
 
 		final Boundaries boundingBox;
@@ -190,7 +224,14 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		final List< TileInfo > biggerCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );
 
-		N5.openFSWriter( baseExportPath ).createDataset( fullScaleOutputPath, Intervals.dimensionsAsLongArray( boundingBox ), cellSize, getN5DataType( tiles[ 0 ].getType() ), CompressionType.GZIP );
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ) );
+		n5.createDataset(
+				fullScaleOutputPath,
+				Intervals.dimensionsAsLongArray( boundingBox ),
+				cellSize,
+				N5Utils.dataType( ( T ) tiles[ 0 ].getType().getType() ),
+				CompressionType.GZIP
+			);
 
 		sparkContext.parallelize( biggerCells, biggerCells.size() ).foreach( biggerCell ->
 			{
@@ -207,32 +248,19 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				final CellGrid cellGrid = new CellGrid( dimensions, cellSize );
 				cellGrid.getCellPosition( biggerCellOffsetCoordinates, biggerCellGridPosition );
 
+				final DataProvider dataProviderLocal = job.getDataProvider();
 				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
-							job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
-							tilesWithinCell,
-							biggerCellBox,
-							broadcastedFlatfieldCorrection.value(),
-							broadcastedPairwiseConnectionsMap.value() );
-
-				final N5Writer n5Local = N5.openFSWriter( baseExportPath );
+						dataProviderLocal,
+						job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
+						tilesWithinCell,
+						biggerCellBox,
+						broadcastedFlatfieldCorrection.value(),
+						broadcastedPairwiseConnectionsMap.value()
+					);
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( n5ExportPath ) );
 				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridPosition );
 			}
 		);
-	}
-
-	private DataType getN5DataType( final ImageType imageType )
-	{
-		switch ( imageType )
-		{
-		case GRAY8:
-			return DataType.UINT8;
-		case GRAY16:
-			return DataType.UINT16;
-		case GRAY32:
-			return DataType.FLOAT32;
-		default:
-			return null;
-		}
 	}
 
 	private Map< Integer, Set< Integer > > getPairwiseConnectionsMap( final String channelPath ) throws PipelineExecutionException
@@ -240,10 +268,12 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		if ( !job.getArgs().exportOverlaps() )
 			return null;
 
+		final DataProvider dataProvider = job.getDataProvider();
 		final Map< Integer, Set< Integer > > pairwiseConnectionsMap = new HashMap<>();
 		try
 		{
-			final List< SerializablePairWiseStitchingResult[] > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( Paths.get( channelPath ).getParent().resolve( "pairwise-stitched.json" ).toString() );
+			final String pairwiseShiftsPath = PathResolver.get( PathResolver.getParent( channelPath ), "pairwise-stitched.json" );
+			final List< SerializablePairWiseStitchingResult[] > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 			for ( final SerializablePairWiseStitchingResult[] pairwiseShiftMulti : pairwiseShifts )
 			{
 				final SerializablePairWiseStitchingResult pairwiseShift = pairwiseShiftMulti[ 0 ];

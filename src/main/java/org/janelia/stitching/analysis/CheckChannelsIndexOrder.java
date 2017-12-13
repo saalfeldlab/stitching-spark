@@ -1,11 +1,14 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 
@@ -13,9 +16,11 @@ public class CheckChannelsIndexOrder
 {
 	public static void main(final String[] args) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		final List< TileInfo[] > channels = new ArrayList<>();
 		for (final String s : args)
-			channels.add( TileInfoJSONProvider.loadTilesConfiguration(s) );
+			channels.add( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( s ) ) ) );
 
 		final int n = channels.get(0).length;
 		for (int c = 0; c < channels.size(); c++ )

@@ -1,6 +1,7 @@
 package org.janelia.stitching.analysis;
 
 import java.io.File;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -8,6 +9,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -28,13 +31,15 @@ public class AddMissingTilesMultichannel
 {
 	public static void main( final String[] args ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		// Read inputs
 		final TreeMap< Integer, TileInfo >[] tilesFinal = new TreeMap[ 2 ];
 		final List< SerializablePairWiseStitchingResult >[] shifts = new List[ 2 ];
 		for ( int ch = 0; ch < 2; ch++ )
-			tilesFinal[ ch ] = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( args[ ch ] ) );
+			tilesFinal[ ch ] = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ ch ] ) ) ) );
 		for ( int ch = 0; ch < 2; ch++ )
-			shifts[ ch ] = TileInfoJSONProvider.loadPairwiseShifts( args[ tilesFinal.length + ch ] );
+			shifts[ ch ] = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ tilesFinal.length + ch ] ) ) );
 
 		// Find "tile indices offset" between corresponding tiles across channels
 		final int tilesPerChannel = Utils.createTilesMap( shifts[ 0 ], false ).size();

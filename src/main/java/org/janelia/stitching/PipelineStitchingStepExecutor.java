@@ -2,8 +2,7 @@ package org.janelia.stitching;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -18,12 +17,13 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.util.LongAccumulator;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.stitching.StitchingArguments.RestitchingMode;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.Conversions;
-import org.janelia.util.ImageImporter;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
@@ -46,6 +46,7 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
+import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
@@ -69,13 +70,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	@Override
 	public void run() throws PipelineExecutionException
 	{
-		final int[] imagesMissing = new int[ job.getChannels() ];
-		for ( int channel = 0; channel < job.getChannels(); ++channel )
-			for ( final TileInfo tile : job.getTiles( channel ) )
-				if ( !Files.exists( Paths.get( tile.getFilePath() ) ) )
-					++imagesMissing[ channel ];
-		for ( int channel = 0; channel < job.getChannels(); ++channel )
-			System.out.println( imagesMissing[ channel ] + " images out of " + job.getTiles( channel ).length + " are missing in channel " + channel );
+		final DataProvider dataProvider = job.getDataProvider();
 
 		final List< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles( 0 ) );
 		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
@@ -97,12 +92,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			for ( int iteration = 0; ; ++iteration )
 			{
 				// check if number of stitched tiles has increased compared to the previous iteration
-				final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString();
-				final String filename = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getFileName().toString();
+				final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
+				final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
 				final String iterationDirname = "iter" + iteration;
-				final String stitchedTilesFilepath = Paths.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) ).toString();
+				final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 
-				if ( !Files.exists( Paths.get( stitchedTilesFilepath ) ) )
+				if ( !dataProvider.fileExists( URI.create( stitchedTilesFilepath ) ) )
 				{
 					System.out.println( "************** Iteration " + iteration + " **************" );
 					preparePairwiseShiftsMulti( overlappingTiles, iteration );
@@ -115,7 +110,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 				// check if number of stitched tiles has increased compared to the previous iteration
 				final TileInfo[] stageTiles = job.getTiles( 0 );
-				final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( stitchedTilesFilepath );
+				final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( stitchedTilesFilepath ) ) );
 
 				// TODO: test and keep if works or remove (currently generates worse solutions)
 				// find new pairs using new solution for predicting positions of the excluded (missing) tiles
@@ -137,18 +132,21 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				{
 					final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 
-					final String previousStitchedTilesFilepath = Paths.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) ).toString();
-					final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( previousStitchedTilesFilepath );
+					final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
+					final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
 
-					final String usedPairsFilepath = Paths.get( basePath, iterationDirname, "pairwise-used.json" ).toString();
-					final String previousUsedPairsFilepath = Paths.get( basePath, previousIterationDirname, "pairwise-used.json" ).toString();
-					final List< SerializablePairWiseStitchingResult[] > usedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( usedPairsFilepath );
-					final List< SerializablePairWiseStitchingResult[] > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( previousUsedPairsFilepath );
+					final String usedPairsFilepath = PathResolver.get( basePath, iterationDirname, "pairwise-used.json" );
+					final String previousUsedPairsFilepath = PathResolver.get( basePath, previousIterationDirname, "pairwise-used.json" );
+					final List< SerializablePairWiseStitchingResult[] > usedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( usedPairsFilepath ) ) );
+					final List< SerializablePairWiseStitchingResult[] > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( previousUsedPairsFilepath ) ) );
 
 					if ( stitchedTiles.length < previousStitchedTiles.length || ( stitchedTiles.length == previousStitchedTiles.length && usedPairs.size() <= previousUsedPairs.size() ) )
 					{
 						// mark the last solution as not used because it is worse than from the previous iteration
-						Files.move( Paths.get( basePath, iterationDirname ), Paths.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) ) );
+						dataProvider.moveFolder(
+								URI.create( PathResolver.get( basePath, iterationDirname ) ),
+								URI.create( PathResolver.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) ) )
+							);
 						copyFinalSolution( iteration - 1 );
 						System.out.println( "Stopping on iteration " + iteration + ": the new solution (n=" + stitchedTiles.length + ") is not greater than the previous solution (n=" + previousStitchedTiles.length + "). Input tiles n=" + stageTiles.length );
 						break;
@@ -166,36 +164,41 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 	private void copyFinalSolution( final int fromIteration ) throws IOException
 	{
+		final DataProvider dataProvider = job.getDataProvider();
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
-			final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getParent().toString();
-			final String filename = Paths.get( job.getArgs().inputTileConfigurations().get( channel ) ).getFileName().toString();
+			final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( channel ) );
+			final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( channel ) );
 			final String iterationDirname = "iter" + fromIteration;
-			final String stitchedTilesFilepath = Paths.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) ).toString();
-			final String finalTilesFilepath = Paths.get( basePath, Utils.addFilenameSuffix( filename, "-final" ) ).toString();
-			Files.copy( Paths.get( stitchedTilesFilepath ), Paths.get( finalTilesFilepath ) );
+			final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
+			final String finalTilesFilepath = PathResolver.get( basePath, Utils.addFilenameSuffix( filename, "-final" ) );
+			dataProvider.copyFile( URI.create( stitchedTilesFilepath ), URI.create( finalTilesFilepath ) );
 
 			if ( channel == 0 )
-				Files.copy( Paths.get( basePath, iterationDirname, "optimizer.txt" ), Paths.get( basePath, "optimizer-final.txt" ) );
+				dataProvider.copyFile(
+						URI.create( PathResolver.get( basePath, iterationDirname, "optimizer.txt" ) ),
+						URI.create( PathResolver.get( basePath, "optimizer-final.txt" ) )
+					);
 		}
 	}
 
 	private void preparePairwiseShiftsMulti( final List< TilePair > overlappingTiles, final int iteration ) throws PipelineExecutionException, IOException
 	{
-		final String basePath = Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getParent().toString();
+		final DataProvider dataProvider = job.getDataProvider();
+
+		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
 		final String iterationDirname = "iter" + iteration;
 		final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 		final String pairwiseFilename = "pairwise.json";
 
-		Paths.get( basePath, iterationDirname ).toFile().mkdirs();
-
-		final String pairwisePath = Paths.get( basePath, iterationDirname, pairwiseFilename ).toString();
+		final String pairwisePath = PathResolver.get( basePath, iterationDirname, pairwiseFilename );
 
 		if ( iteration == 0 )
 		{
 			// use the pairwise file from the previous run in the old mode if exists
-			if ( Files.exists( Paths.get( basePath, pairwiseFilename ) ) )
-				Files.move( Paths.get( basePath, pairwiseFilename ), Paths.get( pairwisePath ) );
+			final String oldPairwiseFile = PathResolver.get( basePath, pairwiseFilename );
+			if ( dataProvider.fileExists( URI.create( oldPairwiseFile ) ) )
+				dataProvider.moveFile( URI.create( oldPairwiseFile ), URI.create( pairwisePath ) );
 		}
 		else
 		{
@@ -203,8 +206,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			{
 				System.out.println( "Restitching only excluded pairs" );
 				// use pairwise-used from the previous iteration, so they will not be restitched
-				if ( !Files.exists( Paths.get( pairwisePath ) ) )
-					Files.copy( Paths.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) ), Paths.get( pairwisePath ) );
+				if ( !dataProvider.fileExists( URI.create( pairwisePath ) ) )
+					dataProvider.copyFile(
+							URI.create( PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) ) ),
+							URI.create( pairwisePath )
+						);
 			}
 			else
 			{
@@ -214,24 +220,28 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		// Try to load precalculated shifts for some pairs of tiles
 		final List< SerializablePairWiseStitchingResult[] > pairwiseShiftsMulti = new ArrayList<>();
-		try
+
+		if ( dataProvider.fileExists( URI.create( pairwisePath ) ) )
 		{
-			System.out.println( "try to load pairwise results from disk" );
-			pairwiseShiftsMulti.addAll( TileInfoJSONProvider.loadPairwiseShiftsMulti( pairwisePath ) );
-		}
-		catch ( final FileNotFoundException e )
-		{
-			System.out.println( "Pairwise results file not found" );
-		}
-		catch ( final NullPointerException e )
-		{
-			System.out.println( "Pairwise results file is malformed" );
-			e.printStackTrace();
-			throw e;
-		}
-		catch ( final IOException e )
-		{
-			e.printStackTrace();
+			try
+			{
+				System.out.println( "try to load pairwise results from disk" );
+				pairwiseShiftsMulti.addAll( TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( pairwisePath ) ) ) );
+			}
+			catch ( final FileNotFoundException e )
+			{
+				System.out.println( "Pairwise results file not found" );
+			}
+			catch ( final NullPointerException e )
+			{
+				System.out.println( "Pairwise results file is malformed" );
+				e.printStackTrace();
+				throw e;
+			}
+			catch ( final IOException e )
+			{
+				e.printStackTrace();
+			}
 		}
 
 		// remove redundant pairs (that are not contained in the given overlappingTiles list)
@@ -269,7 +279,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 			// resave the new file if something has changed
 			if ( pairsRemoved != 0 )
-				TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, pairwisePath );
+				TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, dataProvider.getJsonWriter( URI.create( pairwisePath ) ) );
 		}
 
 		// find only pairs that need to be computed
@@ -310,14 +320,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 		else
 		{
-			final String statsTileConfigurationPath = iteration == 0 ? null : Paths.get(
+			final String statsTileConfigurationPath = iteration == 0 ? null : PathResolver.get(
 					basePath,
 					previousIterationDirname,
-					Utils.addFilenameSuffix(
-							Paths.get( job.getArgs().inputTileConfigurations().get( 0 ) ).getFileName().toString(),
-							"-stitched"
-						)
-				).toString();
+					Utils.addFilenameSuffix( PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) ), "-stitched" )
+				);
 
 			// Initiate the computation
 			final List< SerializablePairWiseStitchingResult[] > adjacentShiftsMulti = computePairwiseShifts( pendingOverlappingTiles, statsTileConfigurationPath );
@@ -325,7 +332,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 			try {
 				System.out.println( "Stitched all tiles pairwise, store this information on disk.." );
-				TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, pairwisePath );
+				TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, dataProvider.getJsonWriter( URI.create( pairwisePath ) ) );
 			} catch ( final IOException e ) {
 				e.printStackTrace();
 			}
@@ -335,9 +342,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	/**
 	 * Computes the best possible pairwise shifts between every pair of tiles on a Spark cluster.
 	 * It uses phase correlation for measuring similarity between two images.
+	 * @throws IOException
 	 */
-	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< SerializablePairWiseStitchingResult[] > computePairwiseShifts( final List< TilePair > overlappingTiles, final String statsTileConfigurationPath ) throws PipelineExecutionException
+	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< SerializablePairWiseStitchingResult[] > computePairwiseShifts( final List< TilePair > overlappingTiles, final String statsTileConfigurationPath ) throws PipelineExecutionException, IOException
 	{
+		final DataProvider dataProvider = job.getDataProvider();
+
 		// try to load the stitched tile configuration from the previous iteration
 		final TileSearchRadiusEstimator searchRadiusEstimator;
 		if ( statsTileConfigurationPath != null )
@@ -345,7 +355,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			System.out.println( "=== Building prediction model based on previous stitching solution ===" );
 			try
 			{
-				final TileInfo[] statsTiles = TileInfoJSONProvider.loadTilesConfiguration( statsTileConfigurationPath );
+				final TileInfo[] statsTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( statsTileConfigurationPath ) ) );
 				System.out.println( "-- Creating search radius estimator using " + job.getTiles( 0 ).length + " stage tiles and " + statsTiles.length + " stitched tiles --" );
 				searchRadiusEstimator = new TileSearchRadiusEstimator( job.getTiles( 0 ), statsTiles );
 				System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( searchRadiusEstimator.getEstimationWindowSize() ) ) + " --" );
@@ -370,14 +380,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		for ( final String channelPath : job.getArgs().inputTileConfigurations() )
 		{
 			final String channelPathNoExt = channelPath.lastIndexOf( '.' ) != -1 ? channelPath.substring( 0, channelPath.lastIndexOf( '.' ) ) : channelPath;
-			// use it as a folder with the input file's name
-			flatfieldCorrectionForChannels.add(
-					FlatfieldCorrection.loadCorrectionImages(
-							channelPathNoExt + "-flatfield/S.tif",
-							channelPathNoExt + "-flatfield/T.tif",
-							job.getDimensionality()
-						)
-				);
+			flatfieldCorrectionForChannels.add( FlatfieldCorrection.loadCorrectionImages( dataProvider, channelPathNoExt, job.getDimensionality() ) );
 		}
 		final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
 
@@ -417,6 +420,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final JavaRDD< TilePair > rdd = sparkContext.parallelize( overlappingTiles, overlappingTiles.size() );
 		final JavaRDD< SerializablePairWiseStitchingResult[] > pairwiseStitching = rdd.map( pairOfTiles ->
 			{
+				final DataProvider dataProviderLocal = job.getDataProvider();
+
 				// stats
 				final TileSearchRadiusEstimator localSearchRadiusEstimator = broadcastedSearchRadiusEstimator.value();
 				final SearchRadius searchRadius;
@@ -594,18 +599,19 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							throw new PipelineExecutionException( pairOfTiles + ": different indexes for the same stage position " + Utils.getTileCoordinatesString( tileInfo ) );
 
 						// FIXME: throw exception in case some image files are missing (or, check for missing files beforehand)
-						final ImagePlus imp = ImageImporter.openImage( tileInfo.getFilePath() );
-						if ( imp == null )
-							throw new PipelineExecutionException( "Image file does not exist: " + tileInfo.getFilePath() );
+						final RandomAccessibleInterval< T > img = TileLoader.loadTile( tileInfo, dataProviderLocal );
+						if ( img == null )
+							throw new PipelineExecutionException( "Cannot load tile image: " + tileInfo.getFilePath() );
+
+						final T type = Util.getTypeFromInterval( img );
 //						if ( imp != null )
 						{
 							// warn if image type and/or size do not match metadata
-							if ( !ImageType.valueOf( imp.getType() ).equals( tileInfo.getType() ) )
-								throw new PipelineExecutionException( String.format( "Image type %s does not match the value from metadata %s", ImageType.valueOf( imp.getType() ), tileInfo.getType() ) );
-							if ( !Arrays.equals( Conversions.toLongArray( Utils.getImagePlusDimensions( imp ) ), tileInfo.getSize() ) )
-								throw new PipelineExecutionException( String.format( "Image size %s does not match the value from metadata %s", Arrays.toString( Utils.getImagePlusDimensions( imp ) ), Arrays.toString( tileInfo.getSize() ) ) );
+							if ( !type.getClass().equals( tileInfo.getType().getType().getClass() ) )
+								throw new PipelineExecutionException( String.format( "Image type %s does not match the value from metadata %s", type.getClass().getName(), tileInfo.getType() ) );
+							if ( !Arrays.equals( Intervals.dimensionsAsLongArray( img ), tileInfo.getSize() ) )
+								throw new PipelineExecutionException( String.format( "Image size %s does not match the value from metadata %s", Arrays.toString( Intervals.dimensionsAsLongArray( img ) ), Arrays.toString( tileInfo.getSize() ) ) );
 
-							final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
 							final RandomAccessibleInterval< T > imgCrop = Views.interval( img, overlaps[ j ] );
 
 							final RandomAccessibleInterval< FloatType > sourceInterval;
@@ -627,7 +633,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							while ( dstCursor.hasNext() || srcCursor.hasNext() )
 								dstCursor.next().add( srcCursor.next() );
 
-							imp.close();
 							++channelsUsed;
 						}
 					}

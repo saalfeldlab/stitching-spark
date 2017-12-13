@@ -2,9 +2,12 @@ package org.janelia.stitching.analysis;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.TreeSet;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
@@ -29,8 +32,10 @@ public class CompareOverlaps
 {
 	public static void main( final String[] args ) throws FileNotFoundException, IOException
 	{
-		final TileInfo[] tilesOrig = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
-		final TileInfo[] tilesMod  = TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tilesOrig = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final TileInfo[] tilesMod  = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) );
 
 		TileOperations.translateTilesToOrigin( tilesOrig );
 		TileOperations.translateTilesToOrigin( tilesMod  );

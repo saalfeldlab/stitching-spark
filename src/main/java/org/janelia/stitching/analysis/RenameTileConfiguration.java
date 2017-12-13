@@ -1,10 +1,13 @@
 package org.janelia.stitching.analysis;
 
 import java.io.File;
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -17,8 +20,10 @@ public class RenameTileConfiguration
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final TileInfo[] tilesOrig = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
-		final TileInfo[] tilesToRename = TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tilesOrig = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final TileInfo[] tilesToRename = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) );
 		final String suffix = args.length > 2 ? args[ 2 ] : "";
 
 		if ( tilesOrig.length != tilesToRename.length )
@@ -42,7 +47,7 @@ public class RenameTileConfiguration
 			tilesToRename[ i ].setFilePath( newPath );
 		}
 
-		TileInfoJSONProvider.saveTilesConfiguration( tilesToRename, Utils.addFilenameSuffix( args[ 1 ], "_renamed" ) );
+		TileInfoJSONProvider.saveTilesConfiguration( tilesToRename, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 1 ], "_renamed" ) ) ) );
 
 		System.out.println( "Done" );
 	}

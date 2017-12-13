@@ -8,7 +8,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.histogram.Histogram;
-import org.janelia.histogram.HistogramsMatching;
+import org.janelia.histogram.HistogramMatching;
 
 import mpicbg.models.Affine1D;
 import mpicbg.models.AffineModel1D;
@@ -102,7 +102,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 				final long[] position = new long[ size.length ];
 				IntervalIndexer.indexToPosition( tuple._1(), size, position );
 
-				final List< PointMatch > matches = HistogramsMatching.generateHistogramMatches( tuple._2(), referenceHistogram );
+				final List< PointMatch > matches = HistogramMatching.generateHistogramMatches( tuple._2(), referenceHistogram );
 
 				// apply the offsets to the pointmatch values
 //				final double[] offset = new double[] { getMedianValue( tuple._2() ), referenceHistogramOffset };

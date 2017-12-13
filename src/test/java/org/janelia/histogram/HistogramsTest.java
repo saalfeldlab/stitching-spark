@@ -179,7 +179,7 @@ public class HistogramsTest
 	private List< PointMatch > generateHistogramMatches( final Histogram hist1, final Histogram hist2 )
 	{
 		Assert.assertTrue( Math.abs( hist1.getQuantityTotal() - hist2.getQuantityTotal() ) < EPSILON );
-		return HistogramsMatching.generateHistogramMatches( hist1, hist2 );
+		return HistogramMatching.generateHistogramMatches( hist1, hist2 );
 	}
 
 	private double[][] matchesToArrays( final List< PointMatch > matches )

@@ -1,28 +1,33 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
-public class ChooseRandomShiftsSubset 
+public class ChooseRandomShiftsSubset
 {
-	public static void main( String[] args ) throws Exception
+	public static void main( final String[] args ) throws Exception
 	{
-		List<SerializablePairWiseStitchingResult> origShifts = TileInfoJSONProvider.loadPairwiseShifts(args[0]);
-		ArrayList<SerializablePairWiseStitchingResult> finalShifts = new ArrayList<>();
-		double prob = 0.01;
-		Random rnd = new Random();
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final List<SerializablePairWiseStitchingResult> origShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[0] ) ) );
+		final ArrayList<SerializablePairWiseStitchingResult> finalShifts = new ArrayList<>();
+		final double prob = 0.01;
+		final Random rnd = new Random();
 		int origCount = 0, finalCount = 0;
-		for ( SerializablePairWiseStitchingResult shift : origShifts )
+		for ( final SerializablePairWiseStitchingResult shift : origShifts )
 		{
 			if ( shift.getIsValidOverlap() )
 			{
 				origCount++;
-				
+
 				if ( rnd.nextDouble() > prob )
 				{
 					shift.setIsValidOverlap( false );
@@ -38,9 +43,9 @@ public class ChooseRandomShiftsSubset
 				finalShifts.add(shift);
 			}
 		}
-		
+
 		System.out.println( "origCount="+origCount );
 		System.out.println( "finalCount="+finalCount );
-		TileInfoJSONProvider.savePairwiseShifts(finalShifts, Utils.addFilenameSuffix(args[0], "_subset"));
+		TileInfoJSONProvider.savePairwiseShifts( finalShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix(args[0], "_subset") ) ) );
 	}
 }

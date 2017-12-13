@@ -3,6 +3,7 @@ package org.janelia.stitching.analysis;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -11,6 +12,8 @@ import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -221,7 +224,9 @@ public class ThresholdEstimation
 
 	public static void main( final String[] args ) throws Exception
 	{
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 
 		final List< SerializablePairWiseStitchingResult > validShifts = new ArrayList<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )

@@ -6,7 +6,7 @@ import java.util.List;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 
-public class HistogramsMatching
+public class HistogramMatching
 {
 	public static List< PointMatch > generateHistogramMatches( final Histogram hist1, final Histogram hist2 )
 	{

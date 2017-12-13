@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -9,6 +10,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.Boundaries;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -24,7 +27,9 @@ public class FilterAdjacentShifts
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 		final String dimStr = args.length > 1 ? args[ 1 ] : "";
 		if ( !dimStr.isEmpty() && !dimStr.equals( "x" ) && !dimStr.equals("y") && !dimStr.equals( "z" ) )
 			throw new Exception( "Unknown value" );
@@ -163,7 +168,7 @@ public class FilterAdjacentShifts
 
 
 		System.out.println( "There are " + adjacentShifts.size() + " adjacent shifts of " + validShifts );
-		TileInfoJSONProvider.savePairwiseShifts( shifts, Utils.addFilenameSuffix( args[ 0 ], "_adj" + (!dimStr.isEmpty()?"-"+dimStr:"" ) ) );
+		TileInfoJSONProvider.savePairwiseShifts( shifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 0 ], "_adj" + (!dimStr.isEmpty()?"-"+dimStr:"" ) ) ) ) );
 
 		System.out.println( "Done" );
 	}

@@ -1,10 +1,13 @@
 package org.janelia.stitching.analysis;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
@@ -18,8 +21,10 @@ public class FilterStageCoordinates
 	// For extracting Z sections
 	public static void main( final String[] args ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		final int d = 2;
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( args[ 0 ] );
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 		final List< Pair< TileInfo, int[] > > tileCoords = Utils.getTilesCoordinates( Utils.createTilesMap( shifts, true ).values().toArray( new TileInfo[ 0 ] ) );
 		System.out.println("There are "+tileCoords.size()+" tiles and " + shifts.size() + " pairwise shifts");
 
@@ -54,8 +59,8 @@ public class FilterStageCoordinates
 			System.out.println("There are "+tilesDesired.length+" desired tiles and " + shiftsDesired.size() + " desired pairwise shifts");
 
 			final String newConfigPath = Utils.addFilenameSuffix(args[0], "_"+z+"z" ) ;
-			TileInfoJSONProvider.saveTilesConfiguration( tilesDesired, newConfigPath );
-			TileInfoJSONProvider.savePairwiseShifts( shiftsDesired, Utils.addFilenameSuffix(newConfigPath, "_pairwise") );
+			TileInfoJSONProvider.saveTilesConfiguration( tilesDesired, dataProvider.getJsonWriter( URI.create( newConfigPath ) ) );
+			TileInfoJSONProvider.savePairwiseShifts( shiftsDesired, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix(newConfigPath, "_pairwise") ) ) );
 		}
 	}
 

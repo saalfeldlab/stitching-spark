@@ -1,5 +1,6 @@
 package org.janelia.stitching.experimental;
 
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
@@ -7,6 +8,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -36,8 +39,10 @@ public class LoGTest {
 
 	public static void main( final String[] args ) throws Exception
 	{
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		input = args[0];
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration(input);
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( input ) ) );
 		run_dog_nd( tiles[ 0 ], 0.5 );
 	}
 

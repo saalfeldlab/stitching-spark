@@ -1,6 +1,7 @@
 package org.janelia.util;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,6 +9,8 @@ import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.util.concurrent.MultithreadedExecutor;
@@ -22,9 +25,11 @@ public class TiffSliceReaderBenchmark
 
 	public static void main( final String[] args ) throws IOException, InterruptedException, ExecutionException
 	{
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( args[ 0 ] );
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 		System.out.println( "tiles count = " + tiles.length );
-		final TileInfo[] tiles1 = args.length > 1 ? TileInfoJSONProvider.loadTilesConfiguration( args[ 1 ] ) : null;
+		final TileInfo[] tiles1 = args.length > 1 ? TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) ) : null;
 		testImagesCount = Math.min( 10, tiles.length );
 		repeats = 5;
 
@@ -71,7 +76,12 @@ public class TiffSliceReaderBenchmark
 					long elapsed = System.nanoTime();
 					final int sliceToOpen = /*slice*/ rnd.nextInt( ( int ) tiles[ 0 ].getSize( 2 ) ) + 1;
 					System.out.println( "  Opening " + Paths.get( forOpening.get( i ).getFilePath() + ( repeat == 0 ? "" : " - iter " + repeat ) )  + ( slice != null ? " at slice " + sliceToOpen : "" ) );
-					final ImagePlus imp = slice != null ? TiffSliceReader.readSlice( forOpening.get( i ).getFilePath(), sliceToOpen ) : IJ.openImage( forOpening.get( i ).getFilePath() );
+					ImagePlus imp;
+					try {
+						imp = slice != null ? TiffSliceReader.readSlice( forOpening.get( i ).getFilePath(), sliceToOpen ) : IJ.openImage( forOpening.get( i ).getFilePath() );
+					} catch (final IOException e) {
+						throw new RuntimeException( e );
+					}
 					imp.close();
 					elapsed = System.nanoTime() - elapsed;
 					System.out.println( ( ( forOpening.get( i ).equals( forOpening.get( 0 ) ) && i != 0 ) ? "****" : "" ) + "took " + elapsed/1e9 + "s, " + counter.decrementAndGet() + " images left" );

@@ -1,10 +1,11 @@
 package org.janelia.flatfield;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Serializable;
-import java.nio.file.Paths;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
@@ -12,6 +13,9 @@ import java.util.TreeMap;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldSolution;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.ModelType;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
@@ -22,7 +26,6 @@ import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
 import org.kohsuke.args4j.CmdLineException;
 
-import ij.IJ;
 import ij.ImagePlus;
 import net.imglib2.Cursor;
 import net.imglib2.FinalDimensions;
@@ -51,25 +54,30 @@ import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 import scala.Tuple2;
 
-
 public class FlatfieldCorrection implements Serializable, AutoCloseable
 {
 	private static final long serialVersionUID = -8987192045944606043L;
 
+	public static final String flatfieldFolderSuffix = "-flatfield";
+	public static final String scalingTermFilename = "S.tif";
+	public static final String translationTermFilename = "T.tif";
+
 	private static final int SCALE_LEVEL_MIN_PIXELS = 1;
 	private static final int AVERAGE_SKIP_SLICES = 5;
 
-	private final String basePath, histogramsPath, solutionPath;
+	private final String basePath, solutionPath;
 
 	private transient final JavaSparkContext sparkContext;
 	private transient final TileInfo[] tiles;
+
+	private final DataProvider dataProvider;
 
 	private final long[] fullTileSize;
 	private final Interval workingInterval;
 
 	private final FlatfieldCorrectionArguments args;
 
-	public static void main( final String[] args ) throws CmdLineException, IOException
+	public static void main( final String[] args ) throws CmdLineException, IOException, URISyntaxException
 	{
 		final FlatfieldCorrectionArguments argsParsed = new FlatfieldCorrectionArguments( args );
 		if ( !argsParsed.parsedSuccessfully() )
@@ -83,24 +91,34 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePairNullable< U, U > loadCorrectionImages( final String sPath, final String tPath, final int dimensionality )
+	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePairNullable< U, U > loadCorrectionImages(
+			final DataProvider dataProvider,
+			final String basePath,
+			final int dimensionality ) throws IOException
 	{
+		final String scalingTermPath = PathResolver.get( basePath + flatfieldFolderSuffix, scalingTermFilename );
+		final String translationTermPath = PathResolver.get( basePath + flatfieldFolderSuffix, translationTermFilename );
+
 		System.out.println( "Loading flat-field components:" );
-		System.out.println( "  " + sPath );
-		System.out.println( "  " + tPath );
+		System.out.println( "  " + scalingTermPath );
+		System.out.println( "  " + translationTermPath );
 
-		final ImagePlus sImp = ImageImporter.openImage( sPath );
-		final ImagePlus tImp = ImageImporter.openImage( tPath );
-		if ( sImp == null || tImp == null )
+		if ( !dataProvider.fileExists( URI.create( scalingTermPath ) ) || !dataProvider.fileExists( URI.create( translationTermPath ) ) )
+		{
+			System.out.println( "  -- Flat-field images do not exist" );
 			return null;
+		}
 
-		final RandomAccessibleInterval< U > sImg = ImagePlusImgs.from( sImp );
-		final RandomAccessibleInterval< U > tImg = ImagePlusImgs.from( tImp );
+		final ImagePlus scalingTermImp = dataProvider.loadImage( URI.create( scalingTermPath ) );
+		final ImagePlus translationTermImp = dataProvider.loadImage( URI.create( translationTermPath ) );
 
-		final RandomAccessible< U > sImgExtended = ( sImg.numDimensions() < dimensionality ? Views.extendBorder( Views.stack( sImg ) ) : sImg );
-		final RandomAccessible< U > tImgExtended = ( tImg.numDimensions() < dimensionality ? Views.extendBorder( Views.stack( tImg ) ) : tImg );
+		final RandomAccessibleInterval< U > scalingTermImg = ImagePlusImgs.from( scalingTermImp );
+		final RandomAccessibleInterval< U > translationTermImg = ImagePlusImgs.from( translationTermImp );
 
-		return new RandomAccessiblePairNullable<>( sImgExtended, tImgExtended );
+		final RandomAccessible< U > scalingTermImgExtended = ( scalingTermImg.numDimensions() < dimensionality ? Views.extendBorder( Views.stack( scalingTermImg ) ) : scalingTermImg );
+		final RandomAccessible< U > translationTermImgExtended = ( translationTermImg.numDimensions() < dimensionality ? Views.extendBorder( Views.stack( translationTermImg ) ) : translationTermImg );
+
+		return new RandomAccessiblePairNullable<>( scalingTermImgExtended, translationTermImgExtended );
 	}
 
 	public static <
@@ -123,20 +141,20 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 
 
-	public FlatfieldCorrection( final FlatfieldCorrectionArguments args ) throws IOException
+	public FlatfieldCorrection( final FlatfieldCorrectionArguments args ) throws IOException, URISyntaxException
 	{
 		this.args = args;
 
-		tiles = TileInfoJSONProvider.loadTilesConfiguration( args.inputFilePath() );
+		this.dataProvider = DataProviderFactory.createByURI( new URI( args.inputFilePath() ) );
+
+		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args.inputFilePath() ) ) );
 		fullTileSize = getMinTileSize( tiles );
-		workingInterval = args.cropMinMaxInterval( fullTileSize );
+		workingInterval = args.cropMinMaxInterval( args.use2D() ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize );
 
 		System.out.println( "Working interval is at " + Arrays.toString( Intervals.minAsLongArray( workingInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsLongArray( workingInterval ) ) );
 
-		basePath = args.inputFilePath().substring( 0, args.inputFilePath().lastIndexOf( "." ) ) + "-flatfield";
-		final String outputPath = basePath + "/" + ( args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr() );
-		histogramsPath = basePath + "/" + "histograms";
-		solutionPath = outputPath + "/" + "solution";
+		basePath = args.inputFilePath().substring( 0, args.inputFilePath().lastIndexOf( "." ) ) + flatfieldFolderSuffix;
+		solutionPath = PathResolver.get( basePath, args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr(), "solution" );
 
 		// check if all tiles have the same size
 		for ( final TileInfo tile : tiles )
@@ -214,49 +232,25 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 
 	public < A extends AffineGet & AffineSet, T extends NativeType< T > & RealType< T >, V extends TreeMap< Short, Integer > >
-	void run() throws FileNotFoundException
+	void run() throws IOException, URISyntaxException
 	{
 		long elapsed = System.nanoTime();
 
 		System.out.println( "Working with stack of size " + tiles.length );
 		System.out.println( "Output directory: " + solutionPath );
 
+		System.out.println( "Running flatfield correction script in " + ( args.use2D() ? "2D" : "3D" ) + " mode" );
 
-//		final Tuple2< Double, Double > stackMinMax = getStackMinMax( tiles );
-//		System.out.println( "Stack values: min = " + stackMinMax._1() + ", max = " + stackMinMax._2() );
-//		if ( stackMinMax != null )
-//		{
-//			final Histogram stackHistogram = binStack( tiles, stackMinMax._1(), stackMinMax._2(), 10000 );
-//			final String stackHistogramFilepath = Paths.get( solutionPath ).getParent().toString() + "/stackHistogram.txt";
-//			Paths.get( stackHistogramFilepath ).getParent().toFile().mkdirs();
-//			try ( final PrintWriter writer = new PrintWriter( stackHistogramFilepath ) )
-//			{
-//				for ( int i = 0; i < stackHistogram.getNumBins(); ++i )
-//					writer.println( stackHistogram.get( i ) );
-//			}
-//			System.out.println( "--------------" );
-//			System.out.println( "Saved stack histogram" );
-//			System.out.println( "quantityTotal = " + stackHistogram.getQuantityTotal() + ", lessThanMin = " + stackHistogram.getQuantityLessThanMin() + ", greaterThanMax = " + stackHistogram.getQuantityGreaterThanMax() );
-//			System.out.println( "--------------" );
-//			return;
-//		}
-
-
-		// FIXME: unify treemap and array histogram collectors
-//		final HistogramsProvider histogramsProvider = new HistogramsProvider(
-//		final boolean exit = !Files.exists( Paths.get( histogramsPath ) );
 		final HistogramsProvider histogramsProvider = new HistogramsProvider(
 				sparkContext,
+				dataProvider,
 				workingInterval,
-				histogramsPath,
+				basePath,
 				tiles,
 				fullTileSize,
-				args.histMinValue(), args.histMaxValue(), args.bins() );
-//		if ( exit )
-//		{
-//			System.out.println( "Done" );
-//			return;
-//		}
+				args.use2D(),
+				args.histMinValue(), args.histMaxValue(), args.bins()
+			);
 
 		System.out.println( "Loading histograms.." );
 		System.out.println( "Specified intensity range: min=" + args.histMinValue() + ", max=" + args.histMaxValue() );
@@ -272,13 +266,15 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		System.out.println();
 
 		// save the reference histogram to file so one can plot it
-		final String referenceHistogramFilepath = basePath + "/referenceHistogram-min_" + ( int ) Math.round( args.histMinValue().doubleValue() ) + ",max_" + ( int ) Math.round( args.histMaxValue().doubleValue() ) + ".txt";
-		Paths.get( referenceHistogramFilepath ).getParent().toFile().mkdirs();
-		try ( final PrintWriter writer = new PrintWriter( referenceHistogramFilepath ) )
+		final String referenceHistogramFilepath = PathResolver.get( basePath, "referenceHistogram-min_" + ( int ) Math.round( args.histMinValue().doubleValue() ) + ",max_" + ( int ) Math.round( args.histMaxValue().doubleValue() ) + ".txt" );
+		try ( final OutputStream out = dataProvider.getOutputStream( URI.create( referenceHistogramFilepath ) ) )
 		{
-			// (x)BinValue (y)Frequency
-			for ( int i = 0; i < referenceHistogram.getNumBins(); ++i )
-				writer.println( referenceHistogram.getBinValue( i ) + " " + referenceHistogram.get( i ) );
+			try ( final PrintWriter writer = new PrintWriter( out ) )
+			{
+				writer.println( "BinValue Frequency");
+				for ( int i = 0; i < referenceHistogram.getNumBins(); ++i )
+					writer.println( referenceHistogram.getBinValue( i ) + " " + referenceHistogram.get( i ) );
+			}
 		}
 
 		// Define the transform and calculate the image size on each scale level
@@ -367,7 +363,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 					downsampledSolution = solution;
 				}
 
-				saveSolution( iter, scale, solution );
+				saveSolution( dataProvider, iter, scale, solution );
 			}
 
 			lastSolution = downsampledSolution;
@@ -375,7 +371,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 			if ( iter % 2 == 0 && lastSolution.getB().numDimensions() > 2 )
 			{
 				final RandomAccessibleInterval< DoubleType > averageTranslationalComponent = averageSolutionComponent( lastSolution.getB() );
-				saveSolutionComponent( iter, 0, averageTranslationalComponent, "T_avg" );
+				saveSolutionComponent( dataProvider, iter, 0, averageTranslationalComponent, Utils.addFilenameSuffix( translationTermFilename, "_avg" ) );
 
 				lastSolution = new ValuePair<>(
 						lastSolution.getA(),
@@ -387,20 +383,20 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > unpivotedSolution = FlatfieldCorrectionSolver.unpivotSolution(
 				new FlatfieldSolution( lastSolution, offsets ) );
 
-		saveSolutionComponent( iterations - 1, 0, unpivotedSolution.getA(), "S_offset" );
-		saveSolutionComponent( iterations - 1, 0, unpivotedSolution.getB(), "T_offset" );
+		saveSolutionComponent( dataProvider, iterations - 1, 0, unpivotedSolution.getA(), Utils.addFilenameSuffix( scalingTermFilename, "_offset" ) );
+		saveSolutionComponent( dataProvider, iterations - 1, 0, unpivotedSolution.getB(), Utils.addFilenameSuffix( translationTermFilename, "_offset" ) );
 
 		// save final solution to the main folder for this channel
 		{
-			final ImagePlus sImp = ImageJFunctions.wrap( unpivotedSolution.getA(), "S" );
-			Utils.workaroundImagePlusNSlices( sImp );
-			IJ.saveAsTiff( sImp, basePath + "/" + sImp.getTitle() + ".tif" );
+			final ImagePlus sImp = ImageJFunctions.wrap( unpivotedSolution.getA(), scalingTermFilename );
+			final String sImpPath = PathResolver.get( basePath, scalingTermFilename );
+			dataProvider.saveImage( sImp, URI.create( sImpPath ) );
 		}
 
 		{
-			final ImagePlus tImp = ImageJFunctions.wrap( unpivotedSolution.getB(), "T" );
-			Utils.workaroundImagePlusNSlices( tImp );
-			IJ.saveAsTiff( tImp, basePath + "/" + tImp.getTitle() + ".tif" );
+			final ImagePlus tImp = ImageJFunctions.wrap( unpivotedSolution.getB(), translationTermFilename );
+			final String tImpPath = PathResolver.get( basePath, translationTermFilename );
+			dataProvider.saveImage( tImp, URI.create( tImpPath ) );
 		}
 
 
@@ -409,7 +405,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		try
 		{
 			System.out.println( "Cleaning up temporary files..." );
-			Utils.deleteFolder( Paths.get( solutionPath ).getParent() );
+			final String folderToDelete = PathResolver.getParent( solutionPath );
+			dataProvider.deleteFolder( URI.create( folderToDelete ) );
 		}
 		catch ( final IOException e )
 		{
@@ -472,24 +469,28 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	private void saveSolution( final int iteration, final int scale, final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution )
+	private void saveSolution(
+			final DataProvider dataProvider,
+			final int iteration,
+			final int scale,
+			final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution ) throws IOException
 	{
 		if ( solution.getA() != null )
-			saveSolutionComponent( iteration, scale, solution.getA(), "S" );
+			saveSolutionComponent( dataProvider, iteration, scale, solution.getA(), scalingTermFilename );
 
 		if ( solution.getB() != null )
-			saveSolutionComponent( iteration, scale, solution.getB(), "T" );
+			saveSolutionComponent( dataProvider, iteration, scale, solution.getB(), translationTermFilename );
 	}
 
-	private void saveSolutionComponent( final int iteration, final int scale, final RandomAccessibleInterval< DoubleType > solutionComponent, final String title )
+	private void saveSolutionComponent(
+			final DataProvider dataProvider,
+			final int iteration,
+			final int scale,
+			final RandomAccessibleInterval< DoubleType > solutionComponent, final String filename ) throws IOException
 	{
-		final String path = solutionPath + "/iter" + iteration + "/" + scale + "/" + title + ".tif";
-
-		Paths.get( path ).getParent().toFile().mkdirs();
-
-		final ImagePlus imp = ImageJFunctions.wrap( solutionComponent, title );
-		Utils.workaroundImagePlusNSlices( imp );
-		IJ.saveAsTiff( imp, path );
+		final ImagePlus imp = ImageJFunctions.wrap( solutionComponent, filename );
+		final String path = PathResolver.get( solutionPath, "iter" + iteration, Integer.toString( scale ), filename );
+		dataProvider.saveImage( imp, URI.create( path ) );
 	}
 
 

@@ -220,7 +220,16 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			final String[] fileList = imagesBaseDir.list( fileNameChannelFilter );
 			for ( final String fileName : fileList )
 			{
-				final String coordinates = Utils.getTileCoordinatesString( fileName );
+				final String coordinates;
+				try
+				{
+					coordinates = Utils.getTileCoordinatesString( fileName );
+				}
+				catch ( final Exception e )
+				{
+					continue;
+				}
+
 				if ( !channelCoordinatesToTiles.get( channel ).containsKey( coordinates ) && coordinatesToPosition.containsKey( coordinates ) )
 				{
 					final TileInfo newTile = new TileInfo();
