@@ -12,8 +12,6 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Random;
 
-import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.CompressionType;
@@ -76,28 +74,18 @@ public class TilesToN5Test
 		final String n5Path = tempDir.resolve( "n5-test" ).toString();
 		final String datasetPath = "test-channel";
 
-		final TileInfo newTile;
+		final Map< String, TileInfo[] > newTiles = TilesToN5Converter.convertTiffToN5(
+				n5Path,
+				() -> N5.openFSWriter( n5Path ),
+				Collections.singletonMap( datasetPath, tiles ),
+				blockSize,
+				CompressionType.GZIP
+			);
 
-		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
-				.setMaster( "local" )
-				.setAppName( "TilesToN5Test" )
-				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
-			) )
-		{
-			final Map< String, TileInfo[] > newTiles = TilesToN5Converter.convertTiffToN5(
-					sparkContext,
-					n5Path,
-					() -> N5.openFSWriter( n5Path ),
-					Collections.singletonMap( datasetPath, tiles ),
-					blockSize,
-					CompressionType.GZIP
-				);
+		Assert.assertEquals( datasetPath, newTiles.keySet().iterator().next() );
 
-			Assert.assertEquals( datasetPath, newTiles.keySet().iterator().next() );
-
-			newTile = newTiles.values().iterator().next()[ 0 ];
-			Assert.assertEquals( Paths.get( n5Path, datasetPath, impFilename ).toString(), newTile.getFilePath() );
-		}
+		final TileInfo newTile = newTiles.values().iterator().next()[ 0 ];
+		Assert.assertEquals( Paths.get( n5Path, datasetPath, impFilename ).toString(), newTile.getFilePath() );
 
 		System.out.println( "Loading N5 cell export from:" + Paths.get( n5Path, datasetPath ).toString() );
 
@@ -170,28 +158,18 @@ public class TilesToN5Test
 		final String s3Link = new AmazonS3URI( "s3://" + n5Bucket + "/" ).toString();
 		final String datasetPath = "test-channel";
 
-		final TileInfo newTile;
+		final Map< String, TileInfo[] > newTiles = TilesToN5Converter.convertTiffToN5(
+				s3Link,
+				() -> N5AmazonS3.openS3Writer( n5Bucket ),
+				Collections.singletonMap( datasetPath, tiles ),
+				blockSize,
+				CompressionType.GZIP
+			);
 
-		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
-				.setMaster( "local" )
-				.setAppName( "TilesToN5Test" )
-				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
-			) )
-		{
-			final Map< String, TileInfo[] > newTiles = TilesToN5Converter.convertTiffToN5(
-					sparkContext,
-					s3Link,
-					() -> N5AmazonS3.openS3Writer( n5Bucket ),
-					Collections.singletonMap( datasetPath, tiles ),
-					blockSize,
-					CompressionType.GZIP
-				);
+		Assert.assertEquals( datasetPath, newTiles.keySet().iterator().next() );
 
-			Assert.assertEquals( datasetPath, newTiles.keySet().iterator().next() );
-
-			newTile = newTiles.values().iterator().next()[ 0 ];
-			Assert.assertEquals( PathResolver.get( s3Link, datasetPath, impFilename ), newTile.getFilePath() );
-		}
+		final TileInfo newTile = newTiles.values().iterator().next()[ 0 ];
+		Assert.assertEquals( PathResolver.get( s3Link, datasetPath, impFilename ), newTile.getFilePath() );
 
 		System.out.println( "Loading N5 cell export from:" + PathResolver.get( s3Link, datasetPath ) );
 
