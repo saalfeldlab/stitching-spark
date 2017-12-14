@@ -34,7 +34,8 @@ public class FusionPerformer
 	public static enum FusionMode
 	{
 		MAX_MIN_DISTANCE,
-		BLENDING
+		BLENDING,
+		MAX_INTENSITY
 	}
 
 	private static abstract class FusionStrategy< T extends RealType< T > & NativeType< T > >
@@ -200,6 +201,34 @@ public class FusionPerformer
 		}
 	}
 
+	private static class MaxIntensityStrategy< T extends RealType< T > & NativeType< T > > extends FusionStrategy< T >
+	{
+		private Cursor< T > outCursor;
+
+		public MaxIntensityStrategy( final Interval targetInterval, final T type )
+		{
+			super( targetInterval, type );
+		}
+
+		@Override
+		public void setCursors( final Interval intersectionIntervalInTargetInterval )
+		{
+			outCursor = Views.flatIterable( Views.interval( out, intersectionIntervalInTargetInterval ) ).cursor();
+		}
+
+		@Override
+		public void moveCursorsForward()
+		{
+			outCursor.fwd();
+		}
+
+		@Override
+		public void updateValue( final TileInfo tile, final RealLocalizable pointInsideTile, final T value )
+		{
+			outCursor.get().setReal( Math.max( outCursor.get().getRealDouble(), value.getRealDouble() ) );
+		}
+	}
+
 
 	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseTilesWithinCell(
 			final FusionMode mode,
@@ -261,6 +290,9 @@ public class FusionPerformer
 			break;
 		case BLENDING:
 			fusionStrategy = new BlendingStrategy<>( targetInterval, type );
+			break;
+		case MAX_INTENSITY:
+			fusionStrategy = new MaxIntensityStrategy<>( targetInterval, type );
 			break;
 		default:
 			throw new RuntimeException( "Unknown fusion mode" );

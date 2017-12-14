@@ -179,7 +179,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 		final Map< Integer, Interval > transformedTilesBoundingBoxes = new HashMap<>();
 		for ( final TileInfo tile : tiles )
-			transformedTilesBoundingBoxes.put( tile.getIndex(), new FinalInterval( TileOperations.estimateBoundingBox( tile ) ) );
+			transformedTilesBoundingBoxes.put( tile.getIndex(), TileOperations.estimateBoundingBox( tile ) );
 
 		final Interval fullBoundingBox = TileOperations.getCollectionBoundaries( transformedTilesBoundingBoxes.values() );
 		final long[] offset = Intervals.minAsLongArray( fullBoundingBox );
@@ -236,8 +236,16 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				for ( final Integer tileIndex : tileIndexesWithinCell )
 					tilesWithinCell.add( broadcastedTilesMap.value().get( tileIndex ) );
 
+				final FusionMode fusionMode;
+				if ( args.blending() )
+					fusionMode = FusionMode.BLENDING;
+				else if ( args.maxIntensity() )
+					fusionMode = FusionMode.MAX_INTENSITY;
+				else
+					fusionMode = FusionMode.MAX_MIN_DISTANCE;
+
 				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
-						args.blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
+						fusionMode,
 						tilesWithinCell,
 						biggerCellBox,
 						broadcastedFlatfieldCorrection.value(),

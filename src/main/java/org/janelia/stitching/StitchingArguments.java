@@ -77,6 +77,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Export the dataset using blending strategy instead of hardcut (max.min.distance)")
 	private boolean blending = false;
 
+	@Option(name = "--maxintensity", required = false,
+			usage = "Export the dataset using max intensity strategy instead of hardcut (max.min.distance)")
+	private boolean maxIntensity = false;
+
 	@Option(name = "-s", aliases = { "--split" }, required = false,
 			usage = "Number of parts the overlap is split in along every 'long' edge")
 	private int splitOverlapParts = 2;
@@ -119,6 +123,9 @@ public class StitchingArguments implements Serializable {
 			else
 				throw new IllegalArgumentException( "Invalid restitching mode. Possible values are: 'restitching-full' or 'restitching-incremental'" );
 		}
+
+		if ( blending && maxIntensity )
+			throw new IllegalArgumentException( "fusion strategy specified incorrectly" );
 	}
 
 	protected StitchingArguments() { }
@@ -154,6 +161,7 @@ public class StitchingArguments implements Serializable {
 	public boolean useAllPairs() { return allPairs; }
 	public boolean exportOverlaps() { return exportOverlaps; }
 	public boolean blending() { return blending; }
+	public boolean maxIntensity() { return maxIntensity; }
 	public int splitOverlapParts() { return splitOverlapParts; }
 
 	public boolean stitchOnly() { return stitchOnly; }
