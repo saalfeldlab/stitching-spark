@@ -1,5 +1,6 @@
 package org.janelia.dataaccess;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
@@ -22,6 +23,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
 
@@ -38,9 +40,9 @@ import ij.ImagePlus;
 class FSDataProvider implements DataProvider
 {
 	@Override
-	public DataProviderType getType()
+	public DataAccessType getType()
 	{
-		return DataProviderType.FILESYSTEM;
+		return DataAccessType.FILESYSTEM;
 	}
 
 	@Override
@@ -53,6 +55,12 @@ class FSDataProvider implements DataProvider
 	public boolean fileExists( final URI uri )
 	{
 		return Files.exists( getPath( uri ) );
+	}
+
+	@Override
+	public void createFolder( final URI uri ) throws IOException
+	{
+		new File( uri.toString() ).mkdirs();
 	}
 
 	@Override

@@ -1,9 +1,8 @@
 package org.janelia.stitching;
 
-import java.io.Serializable;
-
 import net.imglib2.RealInterval;
 import net.imglib2.RealPositionable;
+import net.imglib2.realtransform.AffineTransform3D;
 
 /**
  * Represents tile image metadata.
@@ -11,9 +10,7 @@ import net.imglib2.RealPositionable;
  * @author Igor Pisarev
  */
 
-public class TileInfo implements Cloneable, Serializable, RealInterval {
-
-	private static final long serialVersionUID = -3986869827110711078L;
+public class TileInfo implements Cloneable, RealInterval {
 
 	private ImageType type;
 	private Integer index;
@@ -21,6 +18,10 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 	private double[] position;
 	private long[] size;
 	private double[] pixelResolution;
+
+	private TileInfo originalTile;
+
+	private AffineTransform3D transform;
 
 	public TileInfo( final int dim ) {
 		position = new double[ dim ];
@@ -113,6 +114,22 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 		this.index = index;
 	}
 
+	public AffineTransform3D getTransform() {
+		return transform;
+	}
+
+	public void setTransform( final AffineTransform3D transform ) {
+		this.transform = transform;
+	}
+
+	public TileInfo getOriginalTile() {
+		return originalTile;
+	}
+
+	public void setOriginalTile( final TileInfo originalTile ) {
+		this.originalTile = originalTile;
+	}
+
 	public boolean isNull() {
 		return file == null;
 	}
@@ -140,6 +157,8 @@ public class TileInfo implements Cloneable, Serializable, RealInterval {
 		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );
 		newTile.setPixelResolution( pixelResolution == null ? null : pixelResolution.clone() );
+		newTile.setTransform( transform == null ? null : transform.copy() );
+		newTile.setOriginalTile( originalTile == null ? null : originalTile.clone() );
 		return newTile;
 	}
 

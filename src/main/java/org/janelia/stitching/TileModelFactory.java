@@ -1,8 +1,11 @@
 package org.janelia.stitching;
 
+import mpicbg.models.AffineModel3D;
+import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.Model;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
+import net.imglib2.realtransform.AffineTransform3D;
 
 /**
  * Convenience class for creating default {@link Model} which is required by stitching procedure.
@@ -12,6 +15,9 @@ import mpicbg.models.TranslationModel3D;
  */
 
 public class TileModelFactory {
+
+	private static final double REGULARIZER_SIMILARITY = 0.1;
+	private static final double REGULARIZER_TRANSLATION = 0.1;
 
 	/**
 	 * @return default translational model initialized to origin
@@ -35,6 +41,36 @@ public class TileModelFactory {
 		final TileInfo tile = new TileInfo( dim );
 		tile.setPosition( offset );
 		return createModel( dim, tile );
+	}
+
+	public static < M extends Model< M > > M createAffineModel( final TileInfo tile ) throws Exception
+	{
+		if ( tile.numDimensions() != 3 )
+			throw new Exception( "3d only" );
+
+		// initialize the model with the known tile transform
+		final AffineTransform3D tileTransform = TileOperations.getTileTransform( tile );
+		final AffineModel3D affineModel = new AffineModel3D();
+		affineModel.set(
+				tileTransform.get(0, 0), tileTransform.get(0, 1), tileTransform.get(0, 2), tileTransform.get(0, 3),
+				tileTransform.get(1, 0), tileTransform.get(1, 1), tileTransform.get(1, 2), tileTransform.get(1, 3),
+				tileTransform.get(2, 0), tileTransform.get(2, 1), tileTransform.get(2, 2), tileTransform.get(2, 3)
+			);
+
+		/*return ( M ) new InterpolatedAffineModel3D<>(
+				affineModel,
+				new InterpolatedAffineModel3D<>(
+						new SimilarityModel3D(),
+						new TranslationModel3D(),
+						REGULARIZER_TRANSLATION
+					),
+				REGULARIZER_SIMILARITY
+			);*/
+		return ( M ) new InterpolatedAffineModel3D<>(
+				affineModel,
+				new TranslationModel3D(),
+				REGULARIZER_TRANSLATION
+			);
 	}
 
 	private static < M extends Model< M > > M createModel( final int dim, final TileInfo tile ) throws Exception {

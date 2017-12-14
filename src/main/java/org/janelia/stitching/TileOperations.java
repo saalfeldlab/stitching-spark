@@ -2,7 +2,12 @@ package org.janelia.stitching;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.function.LongConsumer;
 
 import net.imglib2.Dimensions;
@@ -11,6 +16,7 @@ import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 
@@ -29,7 +35,7 @@ public class TileOperations
 	 * The padded interval cannot exceed the outer space boundaries (e.g., 0 and {@code outerDimensions}-1), so in this case the remainder is applied towards the other side.
 	 * If the resulting interval has reached the outer space size (0, {@code outerDimensions}-1), the rest of the remaining padding is ignored.
 	 */
-	public static Boundaries padInterval( final Boundaries interval, final Dimensions outerDimensions, final long[] padding )
+	public static Interval padInterval( final Interval interval, final Dimensions outerDimensions, final long[] padding )
 	{
 		final long[] paddedMin = new long[ interval.numDimensions() ], paddedMax = new long[ interval.numDimensions() ];
 		for ( int d = 0; d < interval.numDimensions(); d++ )
@@ -46,7 +52,7 @@ public class TileOperations
 					paddedMin[ d ] = Math.max( paddedMin[ d ] - remainder, 0 );
 			}
 		}
-		return new Boundaries( paddedMin, paddedMax );
+		return new FinalInterval( paddedMin, paddedMax );
 	}
 
 	// TODO: remove as it duplicates Intervals.smallestContainingInterval() functionality
@@ -195,6 +201,15 @@ public class TileOperations
 		return tilesWithinSubregion;
 	}
 
+	public static Set< Integer > findTilesWithinSubregion( final Map< Integer, ? extends Interval > tiles, final Interval subregion )
+	{
+		final Set< Integer > tilesWithinSubregion = new HashSet<>();
+		for ( final Entry< Integer, ? extends Interval > entry : tiles.entrySet() )
+			if ( TileOperations.overlap( entry.getValue(), subregion ) )
+				tilesWithinSubregion.add( entry.getKey() );
+		return tilesWithinSubregion;
+	}
+
 	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final RealInterval subregion )
 	{
 		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
@@ -232,6 +247,31 @@ public class TileOperations
 		}
 
 		return boundaries;
+	}
+	/**
+	 * @return an integer bounding box of a collection of tiles
+	 */
+	public static Interval getCollectionBoundaries( final Collection< ? extends Interval > boxes )
+	{
+		if ( boxes.isEmpty() )
+			return null;
+
+		final int dim = boxes.iterator().next().numDimensions();
+
+		final long[] min = new long[ dim ], max = new long[ dim ];
+		Arrays.fill( min, Long.MAX_VALUE );
+		Arrays.fill( max, Long.MIN_VALUE );
+
+		for ( final Interval box : boxes )
+		{
+			for ( int d = 0; d < dim; d++ )
+			{
+				min[ d ] = Math.min( box.min( d ), min[ d ] );
+				max[ d ] = Math.max( box.max( d ), max[ d ] );
+			}
+		}
+
+		return new FinalInterval( min, max );
 	}
 	/**
 	 * @return a real bounding box of a collection of tiles
@@ -288,6 +328,43 @@ public class TileOperations
 	}
 
 	/**
+	 * Returns tile transform, that is its affine transform if not null, or translation transform to the position of the tile otherwise.
+	 */
+	public static AffineTransform3D getTileTransform( final TileInfo tile )
+	{
+		final AffineTransform3D ret;
+		if ( tile.getTransform() != null )
+		{
+			ret = tile.getTransform();
+		}
+		else
+		{
+			ret = new AffineTransform3D();
+			ret.setTranslation( tile.getPosition() );
+		}
+		return ret;
+	}
+
+	/**
+	 * Estimates the bounding box of a transformed (or shifted) tile.
+	 *
+	 * FIXME: to be consistent with an affine transformation or a real shift vector, {@link TileInfo#getBoundaries()} should be changed from rounding to extending
+	 * to the smallest containing interval
+	 */
+	public static Interval estimateBoundingBox( final TileInfo tile )
+	{
+		if ( tile.getTransform() == null )
+			return tile.getBoundaries();
+
+		final double[] tileMax = new double[ tile.numDimensions() ];
+		for ( int d = 0; d < tileMax.length; ++d )
+			tileMax[ d ] = tile.getSize( d ) - 1;
+		final RealInterval tileRealBoundsAtZero = new FinalRealInterval( new double[ tile.numDimensions() ], tileMax );
+		final RealInterval estimatedRealBounds = tile.getTransform().estimateBounds( tileRealBoundsAtZero );
+		return Intervals.smallestContainingInterval( estimatedRealBounds );
+	}
+
+	/**
 	 * Applies a user-defined {@code function} for each pixel of an {@code interval} defined within a larger {@code space}.
 	 */
 	public static void forEachPixel( final Interval interval, final Dimensions space, final LongConsumer function )
@@ -327,7 +404,7 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping cubes with a side length of {@code subregionSize}.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
-	public static ArrayList< TileInfo > divideSpaceBySize( final Boundaries space, final int subregionSize )
+	public static ArrayList< TileInfo > divideSpaceBySize( final Interval space, final int subregionSize )
 	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
 		Arrays.fill( subregionDimsArr, subregionSize );
@@ -338,7 +415,7 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping tiles with exactly {@code subregionsCountPerDim} tiles for each dimension.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
-	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int subregionsCountPerDim )
+	public static ArrayList< TileInfo > divideSpaceByCount( final Interval space, final int subregionsCountPerDim )
 	{
 		final int[] subregionsCountPerDimArr = new int[ space.numDimensions() ];
 		Arrays.fill( subregionsCountPerDimArr, subregionsCountPerDim );
@@ -349,7 +426,7 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping tiles with exactly {@code subregionsCountPerDim} tiles specified for each dimension separately.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
-	public static ArrayList< TileInfo > divideSpaceByCount( final Boundaries space, final int[] subregionsCountPerDim )
+	public static ArrayList< TileInfo > divideSpaceByCount( final Interval space, final int[] subregionsCountPerDim )
 	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
 		final int[] sizePlusOneCount = new int[ space.numDimensions() ];
@@ -365,12 +442,12 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping tiles of a specified size.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
-	public static ArrayList< TileInfo > divideSpace( final Boundaries space, final Dimensions subregionDims )
+	public static ArrayList< TileInfo > divideSpace( final Interval space, final Dimensions subregionDims )
 	{
 		return divideSpace( space, subregionDims, new int[ space.numDimensions() ] );
 	}
 
-	private static ArrayList< TileInfo > divideSpace( final Boundaries space, final Dimensions subregionDims, final int[] sizePlusOneCount )
+	private static ArrayList< TileInfo > divideSpace( final Interval space, final Dimensions subregionDims, final int[] sizePlusOneCount )
 	{
 		final ArrayList< TileInfo > subregions = new ArrayList<>();
 		divideSpaceRecursive( space, subregionDims, sizePlusOneCount, subregions, new TileInfo( space.numDimensions() ), 0 );
@@ -378,7 +455,7 @@ public class TileOperations
 			subregions.get( i ).setIndex( i );
 		return subregions;
 	}
-	private static void divideSpaceRecursive( final Boundaries space, final Dimensions subregionDims, final int[] sizePlusOneCount, final List< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
+	private static void divideSpaceRecursive( final Interval space, final Dimensions subregionDims, final int[] sizePlusOneCount, final List< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
 	{
 		if ( currDim == space.numDimensions() )
 		{

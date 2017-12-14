@@ -1,23 +1,15 @@
 package org.janelia.stitching;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 
-import org.apache.commons.io.IOUtils;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.dataaccess.DataProviderType;
-
-import com.google.gson.Gson;
-
-import mpicbg.stitching.StitchingParameters;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 
 /**
  * Represents input parameters and customizations for tweaking the stitching/fusing procedure.
@@ -40,11 +32,11 @@ public class StitchingJob implements Serializable {
 	private static final long serialVersionUID = 2619120742300093982L;
 
 	private transient DataProvider dataProvider;
-	private final DataProviderType dataProviderType;
+	private final DataAccessType dataAccessType;
 
 	private final EnumSet< PipelineStep > pipeline;
 	private StitchingArguments args;
-	private transient StitchingParameters params;
+	private SerializableStitchingParameters params;
 	private final String baseFolder;
 
 	private String saveFolder;
@@ -57,7 +49,7 @@ public class StitchingJob implements Serializable {
 		this.args = args;
 
 		dataProvider = DataProviderFactory.createByURI( URI.create( args.inputTileConfigurations().get( 0 ) ) );
-		dataProviderType = dataProvider.getType();
+		dataAccessType = dataProvider.getType();
 
 		pipeline = setUpPipeline( args );
 
@@ -89,14 +81,14 @@ public class StitchingJob implements Serializable {
 	public synchronized DataProvider getDataProvider()
 	{
 		if ( dataProvider == null )
-			dataProvider = DataProviderFactory.createByType( dataProviderType );
+			dataProvider = DataProviderFactory.createByType( dataAccessType );
 		return dataProvider;
 	}
 
 	public StitchingArguments getArgs() { return args; }
 
-	public StitchingParameters getParams() { return params; }
-	public void setParams( final StitchingParameters params ) { this.params = params; }
+	public SerializableStitchingParameters getParams() { return params; }
+	public void setParams( final SerializableStitchingParameters params ) { this.params = params; }
 
 	public int getChannels() {
 		return args.inputTileConfigurations().size();
@@ -180,16 +172,5 @@ public class StitchingJob implements Serializable {
 					tiles[ i ].setIndex( i );
 			}
 		}
-	}
-
-
-	// TODO: pull request for making StitchingParameters serializable, then remove it
-	private void writeObject( final ObjectOutputStream stream ) throws IOException {
-		stream.defaultWriteObject();
-		stream.write( new Gson().toJson( params ).getBytes() );
-	}
-	private void readObject( final ObjectInputStream stream ) throws IOException, ClassNotFoundException {
-		stream.defaultReadObject();
-		params = new Gson().fromJson( IOUtils.toString(stream), StitchingParameters.class );
 	}
 }

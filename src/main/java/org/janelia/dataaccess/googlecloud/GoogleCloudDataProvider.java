@@ -19,11 +19,11 @@ import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.DataProvider;
-import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageURI;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.googlecloud.N5GoogleCloudStorage;
 import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
@@ -79,9 +79,9 @@ public class GoogleCloudDataProvider implements DataProvider
 	}
 
 	@Override
-	public DataProviderType getType()
+	public DataAccessType getType()
 	{
-		return DataProviderType.GOOGLE_CLOUD;
+		return DataAccessType.GOOGLE_CLOUD;
 	}
 
 	@Override
@@ -99,6 +99,12 @@ public class GoogleCloudDataProvider implements DataProvider
 		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( uri );
 		final Blob blob = storage.get( BlobId.of( googleCloudUri.getBucket(), googleCloudUri.getKey() ) );
 		return blob != null && blob.exists();
+	}
+
+	@Override
+	public void createFolder( final URI uri ) throws IOException
+	{
+		// folders are reflected by the object key structure, so no need to create them explicitly
 	}
 
 	@Override

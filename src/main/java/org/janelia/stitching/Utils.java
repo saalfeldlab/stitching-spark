@@ -60,18 +60,24 @@ public class Utils {
 		return ret.toString();
 	}
 
-	public static ImageCollectionElement createElement( final StitchingJob job, final TileInfo tile ) throws Exception
+	public static ImageCollectionElement createElementTranslationModel( final TileInfo tile ) throws Exception
 	{
-		final ImageCollectionElement e = new ImageCollectionElement( new File( tile.getFilePath() ), tile.getIndex() );
+		final File file = new File( tile.getFilePath() );
+		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
 		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.numDimensions() );
 		e.setModel( TileModelFactory.createOffsetModel( tile ) );
 		return e;
 	}
 
-	public static ImageCollectionElement createElement( final TileInfo tile ) throws Exception
+	public static ImageCollectionElement createElementAffineModel( final TileInfo tile ) throws Exception
 	{
-		return createElement( null, tile );
+		final File file = new File( tile.getFilePath() );
+		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
+		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
+		e.setDimensionality( tile.numDimensions() );
+		e.setModel( TileModelFactory.createAffineModel( tile ) );
+		return e;
 	}
 
 	public static void workaroundImagePlusNSlices( final ImagePlus imp )

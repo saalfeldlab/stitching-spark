@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -10,31 +11,32 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.Vector;
+import java.util.concurrent.ExecutionException;
 
 import mpicbg.models.ErrorStatistic;
-import mpicbg.models.Point;
+import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.InterpolatedAffineModel3D;
+import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
+import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
 import mpicbg.models.TileUtil;
-import mpicbg.stitching.ComparePair;
+import mpicbg.models.TranslationModel3D;
 import mpicbg.stitching.ImagePlusTimePoint;
-import mpicbg.stitching.PointMatchStitching;
-import mpicbg.stitching.StitchingParameters;
-import stitching.utils.Log;
 
 
 // based on the GlobalOptimization class from the original Fiji's Stitching plugin repository
 public class GlobalOptimizationPerformer
 {
-	public interface TileConfigurationObserver
-	{
-		public void configurationUpdated( final GlobalOptimizationPerformer self, final ArrayList< ImagePlusTimePoint > tiles );
-	}
+	// --- FIXME: test translation-only solution
+	private static final double DAMPNESS_FACTOR = 0.9;
+//	private static final double DAMPNESS_FACTOR = 1;
+	private static final double REGULARIZER_TRANSLATION = 0.1;
 
-	public static boolean ignoreZ = false;
+	public Map< Integer, Tile< ? > > lostTiles = null;
 
-	public Set< Tile<?> > lostTiles = null;
+	public int replacedTilesTranslation = 0, replacedTilesSimilarity = 0;
 
 	static private final java.io.PrintStream originalOut, suppressedOut;
 	static
@@ -90,536 +92,292 @@ public class GlobalOptimizationPerformer
 	}
 
 	public ArrayList< ImagePlusTimePoint > optimize(
-			final Vector< ComparePair > pairs,
-			final StitchingParameters params )
+			final Vector< ComparePointPair > comparePointPairs,
+			final SerializableStitchingParameters params ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
 	{
-		return optimize( pairs, params, null, null, null );
-	}
-	public ArrayList< ImagePlusTimePoint > optimize(
-			final Vector< ComparePair > pairs,
-			final StitchingParameters params,
-			final TileConfigurationObserver observer )
-	{
-		return optimize( pairs, params, observer, null, null );
+		return optimize( comparePointPairs, params, null );
 	}
 
 	public ArrayList< ImagePlusTimePoint > optimize(
-			final Vector< ComparePair > pairs,
-			final StitchingParameters params,
-			final TileConfigurationObserver observer,
-			final PrintWriter logWriter )
+			final Vector< ComparePointPair > comparePointPairs,
+			final SerializableStitchingParameters params,
+			final PrintWriter logWriter ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
 	{
-		return optimize( pairs, params, observer, logWriter, null );
-	}
+		final Set< Tile< ? > > tilesSet = new HashSet<>();
 
-	public ArrayList< ImagePlusTimePoint > optimize(
-			final Vector< ComparePair > pairs,
-			final StitchingParameters params,
-			final TileConfigurationObserver observer,
-			final PrintWriter logWriter,
-			final Map< Integer, Map< Integer, ComparePair > > anotherChannel )
-	{
-		/*final Set< Integer > tilesPerChannel = new HashSet< Integer >();
-		for ( final ComparePair pair : pairs )
-			for ( final int index : new int[] { pair.getTile1().getImpId(), pair.getTile2().getImpId() } )
-				tilesPerChannel.add( index );
-		System.out.println( "GlobalOptimization: Tiles per channel = " + tilesPerChannel.size() );*/
+		int pairsAdded = 0;
 
-
-		// cache full pairs set (valid+invalid)
-		final Vector< ComparePair > fullPairsSet = new Vector< >();
-		fullPairsSet.addAll( pairs );
-		if ( anotherChannel != null )
-			for ( final Map< Integer, ComparePair > entryVal : anotherChannel.values() )
-				for ( final ComparePair val : entryVal.values() )
-					fullPairsSet.addElement( val );
-
-		// cache the first channel
-		final Vector< ComparePair > firstChannel = new Vector< >();
-		for ( final ComparePair pair : pairs )
-			if ( pair.getIsValidOverlap() )
-				firstChannel.add( pair );
-
-		pairs.clear();
-		pairs.addAll( firstChannel );
-
-		// Add another channel pairs to the main set
-		if ( anotherChannel != null )
-			for ( final Map< Integer, ComparePair > entryVal : anotherChannel.values() )
-				for ( final ComparePair val : entryVal.values() )
-					if ( val.getIsValidOverlap() )
-						pairs.addElement( val );
-
-		// create a set of bad identity connections
-		final Set< Integer > badIdentityConnections = new HashSet< >();
-
-
-		Map< Integer, Tile< ? > > firstChannelTilesSet = null, firstChannelTilesSetPrev = null;
-		Map< Integer, Tile< ? > > anotherChannelTilesSet = null, anotherChannelTilesSetPrev = null;
-
-
-		System.out.println( "First channel pairs count = " + firstChannel.size() );
-		System.out.println( "Total pairs count = " + pairs.size() );
-
-
-		boolean redo;
-		TileConfiguration tc;
-		int itersCount = 0;
-		do
+		for ( final ComparePointPair comparePointPair : comparePointPairs )
 		{
-			redo = false;
-			//final ArrayList< Tile< ? > > tiles = new ArrayList< Tile< ? > >();
-			final Set< Tile< ? > > tilesSet = new HashSet< >();
-
-			//final int good=0,bad=0;
-			//final float smallestGoodWeight=1;
-
-			int pairsAdded = 0;
-
-			for ( final ComparePair pair : pairs )
+			if ( comparePointPair.getIsValidOverlap() )
 			{
-				if ( /*pair.getCrossCorrelation() >= params.regThreshold && */pair.getIsValidOverlap() )
+				++pairsAdded;
+
+				final Tile< ? > t1 = comparePointPair.getTile1();
+				final Tile< ? > t2 = comparePointPair.getTile2();
+
+				final float weight = comparePointPair.getCrossCorrelation();
+
+				t1.addMatch( new PointMatch( comparePointPair.getPointPair().getA(), comparePointPair.getPointPair().getB(), weight ) );
+				t2.addMatch( new PointMatch( comparePointPair.getPointPair().getB(), comparePointPair.getPointPair().getA(), weight ) );
+
+				t1.addConnectedTile( t2 );
+				t2.addConnectedTile( t1 );
+
+				tilesSet.add( t1 );
+				tilesSet.add( t2 );
+			}
+		}
+
+
+
+		// check if there are enough point matches
+		{
+			final Set< Tile< ? > > newTilesSet = new HashSet<>();
+			for ( final Tile< ? > tile : tilesSet )
+			{
+				if ( tile.getMatches().size() < tile.getModel().getMinNumMatches() )
 				{
-
-					pairsAdded++;
-
-
-
-					/*if (pair.getCrossCorrelation() >= Float.MAX_VALUE)
+					final Tile< ? > replacementTile = new ImagePlusTimePoint(
+							( ( ImagePlusTimePoint ) tile ).getImagePlus(),
+							( ( ImagePlusTimePoint ) tile ).getImpId(),
+							( ( ImagePlusTimePoint ) tile ).getTimePoint(),
+							new TranslationModel3D(),
+							null
+						);
+					replacementTile.addMatches( tile.getMatches() );
+					for ( final Tile< ? > connectedTile : tile.getConnectedTiles() )
 					{
-						pair.setIsValidOverlap( false );
-						continue;
-					}*/
-
-
-
-
-
-					final Tile t1 = pair.getTile1();
-					final Tile t2 = pair.getTile2();
-
-					Point p1, p2;
-
-					if ( params.dimensionality == 3 )
-					{
-						// the transformations that map each tile into the relative global coordinate system (that's why the "-")
-						p1 = new Point( new double[]{ 0,0,0 } );
-
-						if ( ignoreZ )
-							p2 = new Point( new double[]{ -pair.getRelativeShift()[ 0 ], -pair.getRelativeShift()[ 1 ], 0 } );
-						else
-							p2 = new Point( new double[]{ -pair.getRelativeShift()[ 0 ], -pair.getRelativeShift()[ 1 ], -pair.getRelativeShift()[ 2 ] } );
+						// don't use removeConnectedTile() because it "overdoes" it by removing point matches from both sides which we would like to preserve
+						connectedTile.getConnectedTiles().remove( tile );
+						connectedTile.addConnectedTile( replacementTile );
+						replacementTile.addConnectedTile( connectedTile );
 					}
-					else
-					{
-						p1 = new Point( new double[]{ 0, 0 } );
-						p2 = new Point( new double[]{ -pair.getRelativeShift()[ 0 ], -pair.getRelativeShift()[ 1 ] } );
-					}
-
-					final float weight = pair.getCrossCorrelation();
-					/*final float weight = ( pair.getCrossCorrelation() < Float.MAX_VALUE - 2 ? pair.getCrossCorrelation() : ( float ) 0.1 );
-					if (weight >= 0.15)
-					{
-						good++;
-						smallestGoodWeight = Math.min( weight, smallestGoodWeight );
-					}
-					else {
-						bad++;
-					}*/
-
-					t1.addMatch( new PointMatchStitching( p1, p2, weight, pair ) );
-					t2.addMatch( new PointMatchStitching( p2, p1, weight, pair ) );
-
-
-
-
-
-					/*final int ind1 = Math.min( ((ImagePlusTimePoint)t1).getImpId(), ((ImagePlusTimePoint)t2).getImpId() );
-					final int ind2 = Math.max( ((ImagePlusTimePoint)t1).getImpId(), ((ImagePlusTimePoint)t2).getImpId() );
-					if ( anotherChannel != null && anotherChannel.containsKey( ind1 ) && anotherChannel.get( ind1 ).containsKey( ind2 ) )
-					{
-						additionalMatches++;
-						final ComparePair anotherChannelPair = anotherChannel.get( ind1 ).get( ind2 );
-						if ( params.dimensionality == 3 )
-						{
-							// the transformations that map each tile into the relative global coordinate system (that's why the "-")
-							p1 = new Point( new double[]{ 0,0,0 } );
-
-							if ( ignoreZ )
-								p2 = new Point( new double[]{ -anotherChannelPair.getRelativeShift()[ 0 ], -anotherChannelPair.getRelativeShift()[ 1 ], 0 } );
-							else
-								p2 = new Point( new double[]{ -anotherChannelPair.getRelativeShift()[ 0 ], -anotherChannelPair.getRelativeShift()[ 1 ], -anotherChannelPair.getRelativeShift()[ 2 ] } );
-						}
-						else
-						{
-							p1 = new Point( new double[]{ 0, 0 } );
-							p2 = new Point( new double[]{ -anotherChannelPair.getRelativeShift()[ 0 ], -anotherChannelPair.getRelativeShift()[ 1 ] } );
-						}
-
-						t1.addMatch( new PointMatchStitching( p1, p2, anotherChannelPair.getCrossCorrelation(), pair ) );
-						t2.addMatch( new PointMatchStitching( p2, p1, anotherChannelPair.getCrossCorrelation(), pair ) );
-					}
-					else
-					{
-						System.out.println( "Where is another channel???" );
-					}*/
-
-
-
-
-
-
-
-					t1.addConnectedTile( t2 );
-					t2.addConnectedTile( t1 );
-
-					/*if (!tilesSet.contains(t1))
-					{
-						tilesSet.add( t1 );
-						tiles.add( t1 );
-					}
-
-					if (!tilesSet.contains(t2))
-					{
-						tilesSet.add( t2 );
-						tiles.add( t2 );
-					}*/
-
-					tilesSet.add( t1 );
-					tilesSet.add( t2 );
-
-					pair.setIsValidOverlap( true );
+					newTilesSet.add( replacementTile );
+					++replacedTilesTranslation;
 				}
 				else
 				{
-					pair.setIsValidOverlap( false );
+					newTilesSet.add( tile );
 				}
 			}
 
+			// --- FIXME: test translation-only solution
+//			if ( replacedTilesTranslation != 0 )
+//				throw new RuntimeException( "shouldn't happen" );
 
-			System.out.println( "Pairs above the threshold: " + pairsAdded );
-
-
-			firstChannelTilesSet = new TreeMap< >();
-			// construct first channel tiles set
-			for ( final ComparePair pair : firstChannel )
-				if ( pair.getIsValidOverlap() )
-					for ( final ImagePlusTimePoint img : new ImagePlusTimePoint[] { pair.getTile1(), pair.getTile2() } )
-						firstChannelTilesSet.put( img.getImpId(), img );
-			System.out.println( "firstChannelTilesSet size = " + firstChannelTilesSet.size() );
-
-			if ( logWriter != null )
-				logWriter.println( "Tiles after thresholding: " + firstChannelTilesSet.size() );
-
-			// check what we've lost
-			if ( firstChannelTilesSetPrev != null )
-			{
-				final Set< Integer > lostTilesOnLastIteration = new HashSet< >( firstChannelTilesSetPrev.keySet() );
-				lostTilesOnLastIteration.removeAll( firstChannelTilesSet.keySet() );
-				if ( !lostTilesOnLastIteration.isEmpty() )
-					System.out.println( "-- Lost some tiles for channel 0: " + lostTilesOnLastIteration + " --" );
-			}
-			firstChannelTilesSetPrev = firstChannelTilesSet;
-
-			anotherChannelTilesSet = new TreeMap< >();
-			if ( anotherChannel != null )
-			{
-				// Construct another channel tiles set
-				for ( final Entry< Integer, Map< Integer, ComparePair > > entry : anotherChannel.entrySet() )
-				{
-					for ( final Entry< Integer, ComparePair > valEntry : entry.getValue().entrySet() )
-					{
-						if ( !valEntry.getValue().getIsValidOverlap() )
-							continue;
-
-						final int[] ids = new int[] { entry.getKey(), valEntry.getKey() };
-						final ImagePlusTimePoint[] imgs =
-								valEntry.getValue().getTile1().getImpId() < valEntry.getValue().getTile2().getImpId() ?
-										new ImagePlusTimePoint[] { valEntry.getValue().getTile1(), valEntry.getValue().getTile2() } :
-											new ImagePlusTimePoint[] { valEntry.getValue().getTile2(), valEntry.getValue().getTile1() };
-
-										for ( int j = 0; j < 2; j++ )
-											anotherChannelTilesSet.put( ids[ j ], imgs[ j ] );
-					}
-				}
-				System.out.println( "anotherChannelTilesSet size = " + anotherChannelTilesSet.size() );
-
-				// check what we've lost
-				if ( anotherChannelTilesSetPrev != null )
-				{
-					final Set< Integer > lostTilesOnLastIteration = new HashSet< >( anotherChannelTilesSetPrev.keySet() );
-					lostTilesOnLastIteration.removeAll( anotherChannelTilesSet.keySet() );
-					final Set< Integer > lostTilesOnLastIterationOffsetIndices = new HashSet< >();
-					for ( final Integer key : lostTilesOnLastIteration )
-						lostTilesOnLastIterationOffsetIndices.add( ((ImagePlusTimePoint)anotherChannelTilesSetPrev.get( key )).getImpId() );
-					if ( !lostTilesOnLastIterationOffsetIndices.isEmpty() )
-						System.out.println( "-- Lost some tiles for channel 1: " + lostTilesOnLastIterationOffsetIndices + " --" );
-				}
-				anotherChannelTilesSetPrev = anotherChannelTilesSet;
-
-				// Add identity matches
-				int identityMatches=0;
-				for ( final Entry< Integer, Tile< ? > > entry : firstChannelTilesSet.entrySet() )
-				{
-					if ( anotherChannelTilesSet.containsKey( entry.getKey() ) && !badIdentityConnections.contains( entry.getKey() ) )
-					{
-						identityMatches++;
-
-						final Point p1 = new Point( new double[ params.dimensionality ] );
-						final Point p2 = new Point( new double[ params.dimensionality ] );
-
-						final Tile t1 = entry.getValue();
-						final Tile t2 = anotherChannelTilesSet.get( entry.getKey() );
-
-						final FakeComparePair fakePair = new FakeComparePair((ImagePlusTimePoint)t1,(ImagePlusTimePoint)t2);
-
-						t1.addMatch( new PointMatchStitching( p1, p2, ( float ) 0.1, fakePair ) );
-						t2.addMatch( new PointMatchStitching( p2, p1, ( float ) 0.1, fakePair ) );
-
-						t1.addConnectedTile( t2 );
-						t2.addConnectedTile( t1 );
-					}
-				}
-				System.out.println( "Added " + identityMatches + " identity matches" );
-			}
-
-			if ( tilesSet.isEmpty() )
-				return null;
-
-			// trash everything but the largest graph
-			final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
-			Log.info( "Number of tile graphs = " + graphs.size() );
-
-			if ( logWriter != null )
-			{
-				logWriter.println();
-				logWriter.println( "Tile graphs: " + graphs.size() );
-			}
-
-			int largestGraphSize = 0;
-			int largestGraphId = -1;
-			int graphSizesSum = 0;
-
-			final TreeMap< Integer, Integer > graphSizeToCount = new TreeMap<>();
-
-			for ( int i = 0; i < graphs.size(); ++i )
-			{
-				final int graphSize = graphs.get( i ).size();
-
-				graphSizesSum += graphSize;
-
-				if ( graphSize > largestGraphSize )
-				{
-					largestGraphSize = graphSize;
-					largestGraphId = i;
-				}
-
-				graphSizeToCount.put( graphSize, graphSizeToCount.getOrDefault( graphSize, 0 ) + 1 );
-			}
-
-			for ( final Entry< Integer, Integer > entry : graphSizeToCount.descendingMap().entrySet() )
-			{
-				System.out.println("   " + entry.getKey() + " tiles: " + entry.getValue() + " graphs" );
-				if ( logWriter != null )
-					logWriter.println( "   " + entry.getKey() + " tiles: " + entry.getValue() + " graphs" );
-			}
-
-			final ArrayList< Tile< ? > > largestGraph = new ArrayList< >();
-			largestGraph.addAll( graphs.get( largestGraphId ) );
 			tilesSet.clear();
-			tilesSet.addAll( largestGraph );
-
-			System.out.println( "Using the largest graph of size " + largestGraphSize + " (throwing away " + ( graphSizesSum - largestGraphSize ) + " tiles from smaller graphs)" );
-			if ( logWriter != null )
-				logWriter.println(  "Using the largest graph of size " + largestGraphSize + " (throwing away " + ( graphSizesSum - largestGraphSize ) + " tiles from smaller graphs)" );
-			remainingGraphSize = largestGraphSize;
+			tilesSet.addAll( newTilesSet );
+		}
 
 
-			tc = new TileConfiguration();
-			tc.addTiles( tilesSet );
+		// FIXME: don't consider configurations where some affine models have been replaced by translation models
+		if ( replacedTilesTranslation != 0 )
+			return null;
 
-			// find a useful fixed tile
-			for ( final Tile<?> tile : tilesSet )
-				if ( tile.getConnectedTiles().size() > 0 )
-				{
-					tc.fixTile( tile );
-					break;
-				}
 
-			//Log.info(" tiles size =" + tiles.size());
-			//Log.info(" tc.getTiles() size =" + tc.getTiles().size());
+		// --- FIXME: test translation-only solution
+		// instead of pre-aligning, apply the models of the approximate tile transforms to the point matches
+		for ( final Tile< ? > tile : tilesSet )
+			tile.apply();
 
-			final ArrayList< Set< Tile< ? > > > graphsDebug = Tile.identifyConnectedGraphs( tilesSet );
-			final ArrayList< Integer > graphsSize = new ArrayList<>();
-			graphSizesSum = 0;
-			for ( final Set< Tile< ? > > graph : graphsDebug )
+
+		// --- FIXME: test translation-only solution
+		// check if the point matches are on the same plane (AffineModel3D will throw IllDefinedPointsException in this case), fall back to SimilarityModel3D
+		{
+			final Set< Tile< ? > > newTilesSet = new HashSet<>();
+			for ( final Tile< ? > tile : tilesSet )
 			{
-				graphsSize.add( graph.size() );
-				graphSizesSum += graph.size();
-			}
-			Collections.sort( graphsSize );
-			Collections.reverse( graphsSize );
-			System.out.println( "Tiles total = " + tc.getTiles().size() + ",   graphs=" + graphsDebug.size() + ",   sum="+graphSizesSum );
-			System.out.println( graphsSize );
-
-			try
-			{
-				final boolean needSuppressingAndRestoringOutput = System.out != suppressedOut;
-				if ( needSuppressingAndRestoringOutput )
-					suppressOutput();
-
-				long elapsed = System.nanoTime();
-
-				final int iterations = 2000;
-				tc.preAlign();
-
-				TileUtil.optimizeConcurrently(
-						new ErrorStatistic( iterations + 1 ),
-						10,
-						iterations,
-						iterations,
-						1.f,
-						tc,
-						tc.getTiles(),
-						tc.getFixedTiles(),
-						1 // single-threaded because run with different configurations in parallel using Spark
-					);
-
-				elapsed = System.nanoTime() - elapsed;
-
-				if ( needSuppressingAndRestoringOutput )
-					restoreOutput();
-
-				System.out.println("Optimization round took " + elapsed/1e9 + "s" );
-
-				// Notify the observer that the configuration has been updated
-				if ( observer != null )
+				if ( tile.getModel() instanceof TranslationModel3D )
 				{
-					lostTiles = new HashSet<>();
-					for ( final ComparePair pair : fullPairsSet )
-						for ( final ImagePlusTimePoint t : new ImagePlusTimePoint[] { pair.getTile1(), pair.getTile2() } )
-							lostTiles.add( t );
-					for ( final Tile< ? > t : tc.getTiles() )
-						lostTiles.remove( t );
-
-					final ArrayList< ImagePlusTimePoint > updatedTilesConfiguration = new ArrayList< >();
-					for ( final Tile< ? > t : tc.getTiles() )
-						updatedTilesConfiguration.add( (ImagePlusTimePoint)t );
-					Collections.sort( updatedTilesConfiguration );
-					observer.configurationUpdated( this, updatedTilesConfiguration );
+					newTilesSet.add( tile );
 				}
-
-
-				final double avgError = tc.getError();
-				final double maxError = tc.getMaxError();
-
-				itersCount++;
-
-
-				final List< Double > errors = new ArrayList<>();
-
-				double longestDisplacement = 0;
-				PointMatch worstMatch = null;
-
-				// new way of finding biggest error to look for the largest displacement
-				for ( final Tile t : tc.getTiles() )
+				else
 				{
-					for ( final PointMatch p :  (Set< PointMatch >)t.getMatches() )
+					final double[] mins = new double[ 3 ], maxs = new double[ 3 ];
+					Arrays.fill( mins, Double.POSITIVE_INFINITY );
+					Arrays.fill( maxs, Double.NEGATIVE_INFINITY );
+					for ( final PointMatch pointMatch : tile.getMatches() )
 					{
-						final double error = p.getDistance();
-						errors.add( error );
-						if ( longestDisplacement < error )
+						final double[] coords = pointMatch.getP1().getL();
+						for ( int d = 0; d < 3; ++d )
 						{
-							longestDisplacement = error;
-							worstMatch = p;
+							mins[ d ] = Math.min( coords[ d ], mins[ d ] );
+							maxs[ d ] = Math.max( coords[ d ], maxs[ d ] );
 						}
 					}
-				}
 
-				Log.info( "Max pairwise match displacement: " + longestDisplacement );
-				Log.info( "avgError (avg tile displacement) = " + avgError + ",  maxError (max tile displacement) = " + maxError );
+					boolean samePlane = false;
+					for ( int d = 0; d < 3; ++d )
+						if ( Math.abs( maxs[ d ] - mins[ d ] ) < 1e-8 )
+							samePlane = true;
 
-				if ( logWriter != null )
-				{
-					logWriter.println();
-					logWriter.println( String.format( "avg error: %.2fpx", avgError ) );
-					logWriter.println( String.format( "max error: %.2fpx", maxError ) );
-				}
-				avgDisplacement = avgError;
-				maxDisplacement = maxError;
-
-
-				Collections.sort( errors );
-				Collections.reverse( errors );
-
-//				try ( final PrintWriter writer = new PrintWriter( "error_stats.txt" ) )
-//				{
-//					for ( final double error : errors )
-//						writer.println( error );
-//				}
-
-
-				// FIXME: hack
-				if ( false )
-
-				// FIXME: another hack to change the termination condition
-//				if ( avgError > params.relativeThreshold || maxError > params.absoluteThreshold )
-
-				// original
-//				if ( avgError * params.relativeThreshold < maxError || maxError > params.absoluteThreshold )
-
-				{
-					final ComparePair pair = ((PointMatchStitching)worstMatch).getPair();
-
-					Log.info( "Identified link between " + pair.getImagePlus1().getTitle() + "[" + pair.getTile1().getTimePoint() + "] and " +
-							pair.getImagePlus2().getTitle() + "[" + pair.getTile2().getTimePoint() + "] (R=" + pair.getCrossCorrelation() +") to be bad. Reoptimizing.");
-
-
-					// removing identity connection
-					if ( ((PointMatchStitching)worstMatch).getPair() instanceof FakeComparePair )
+					if ( samePlane )
 					{
-						final int ind1 = ((PointMatchStitching)worstMatch).getPair().getTile1().getImpId();
-						final int ind2 = ((ImagePlusTimePoint)anotherChannelTilesSet.get( ind1 )).getImpId();
-
-						if ( ind2 != ((PointMatchStitching)worstMatch).getPair().getTile2().getImpId() )
+						final Tile< ? > replacementTile = new ImagePlusTimePoint(
+								( ( ImagePlusTimePoint ) tile ).getImagePlus(),
+								( ( ImagePlusTimePoint ) tile ).getImpId(),
+								( ( ImagePlusTimePoint ) tile ).getTimePoint(),
+								new InterpolatedAffineModel3D<>(
+										new SimilarityModel3D(),
+										new TranslationModel3D(),
+										REGULARIZER_TRANSLATION
+									),
+								null
+							);
+						replacementTile.addMatches( tile.getMatches() );
+						for ( final Tile< ? > connectedTile : tile.getConnectedTiles() )
 						{
-							System.out.println( "Indices mismatch in identity connection!" );
-							System.out.println( "tile1: " + ((PointMatchStitching)worstMatch).getPair().getTile1().getImpId() );
-							System.out.println( "tile2: " + ((PointMatchStitching)worstMatch).getPair().getTile2().getImpId() );
+							// don't use removeConnectedTile() because it "overdoes" it by removing point matches from both sides which we would like to preserve
+							connectedTile.getConnectedTiles().remove( tile );
+							connectedTile.addConnectedTile( replacementTile );
+							replacementTile.addConnectedTile( connectedTile );
 						}
-						badIdentityConnections.add( ind1 );
+						newTilesSet.add( replacementTile );
+						++replacedTilesSimilarity;
 					}
 					else
 					{
-						((PointMatchStitching)worstMatch).getPair().setIsValidOverlap( false );
-					}
-
-					redo = true;
-
-					for ( final Tile< ? > t : tilesSet )
-					{
-						t.getConnectedTiles().clear();
-						t.getMatches().clear();
+						newTilesSet.add( tile );
 					}
 				}
 			}
-			catch ( final Exception e )
+			tilesSet.clear();
+			tilesSet.addAll( newTilesSet );
+		}
+
+
+
+		writeLog( logWriter, "Pairs above the threshold: " + pairsAdded + ", pairs total = " + comparePointPairs.size() );
+
+		if ( tilesSet.isEmpty() )
+			return null;
+
+		// trash everything but the largest graph
+		final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
+		writeLog( logWriter, "Number of tile graphs = " + graphs.size() );
+
+		int largestGraphSize = 0;
+		int largestGraphId = -1;
+		int graphSizesSum = 0;
+
+		final TreeMap< Integer, Integer > graphSizeToCount = new TreeMap<>();
+
+		for ( int i = 0; i < graphs.size(); ++i )
+		{
+			final int graphSize = graphs.get( i ).size();
+
+			graphSizesSum += graphSize;
+
+			if ( graphSize > largestGraphSize )
 			{
-				Log.error( "Cannot compute global optimization: " + e, e );
+				largestGraphSize = graphSize;
+				largestGraphId = i;
+			}
+
+			graphSizeToCount.put( graphSize, graphSizeToCount.getOrDefault( graphSize, 0 ) + 1 );
+		}
+
+		for ( final Entry< Integer, Integer > entry : graphSizeToCount.descendingMap().entrySet() )
+			writeLog( logWriter, "   " + entry.getKey() + " tiles: " + entry.getValue() + " graphs" );
+
+		final ArrayList< Tile< ? > > largestGraph = new ArrayList< >();
+		largestGraph.addAll( graphs.get( largestGraphId ) );
+		tilesSet.clear();
+		tilesSet.addAll( largestGraph );
+
+		writeLog( logWriter, "Using the largest graph of size " + largestGraphSize + " (throwing away " + ( graphSizesSum - largestGraphSize ) + " tiles from smaller graphs)" );
+		remainingGraphSize = largestGraphSize;
+
+		final TileConfiguration tc = new TileConfiguration();
+		tc.addTiles( tilesSet );
+
+		// find a useful fixed tile
+		for ( final Tile<?> tile : tilesSet )
+			if ( tile.getConnectedTiles().size() > 0 )
+			{
+				tc.fixTile( tile );
+				break;
+			}
+
+		final ArrayList< Set< Tile< ? > > > graphsDebug = Tile.identifyConnectedGraphs( tilesSet );
+		final ArrayList< Integer > graphsSize = new ArrayList<>();
+		graphSizesSum = 0;
+		for ( final Set< Tile< ? > > graph : graphsDebug )
+		{
+			graphsSize.add( graph.size() );
+			graphSizesSum += graph.size();
+		}
+		Collections.sort( graphsSize );
+		Collections.reverse( graphsSize );
+		writeLog( logWriter, "Tiles total = " + tc.getTiles().size() + ",   graphs=" + graphsDebug.size() + ",   sum="+graphSizesSum + ", " + graphsSize );
+
+		// --- FIXME: test translation-only solution
+		// instead of pre-aligning, we use the known transform for each tile and apply to point matches
+//		tc.preAlign();
+
+		final int iterations = 5000;
+
+		long elapsed = System.nanoTime();
+
+		TileUtil.optimizeConcurrently(
+				new ErrorStatistic( iterations + 1 ),
+				10,
+				iterations,
+				iterations,
+				DAMPNESS_FACTOR,
+				tc,
+				tc.getTiles(),
+				tc.getFixedTiles(),
+				1 // single-threaded because run with different configurations in parallel using Spark
+			);
+
+		elapsed = System.nanoTime() - elapsed;
+
+		writeLog( logWriter, "Optimization round took " + elapsed/1e9 + "s" );
+
+		final double avgError = tc.getError();
+		final double maxError = tc.getMaxError();
+
+
+		final List< Double > errors = new ArrayList<>();
+
+		double longestDisplacement = 0;
+		PointMatch worstMatch = null;
+
+		// new way of finding biggest error to look for the largest displacement
+		for ( final Tile t : tc.getTiles() )
+		{
+			for ( final PointMatch p :  (Set< PointMatch >)t.getMatches() )
+			{
+				final double error = p.getDistance();
+				errors.add( error );
+				if ( longestDisplacement < error )
+				{
+					longestDisplacement = error;
+					worstMatch = p;
+				}
 			}
 		}
-		while(redo);
 
-		System.out.println( "*** Global optimization made " + itersCount + " iterations ***" );
+		writeLog( logWriter, "" );
+		writeLog( logWriter, "Max pairwise match displacement: " + longestDisplacement );
+		writeLog( logWriter, String.format( "avg error: %.2fpx", avgError ) );
+		writeLog( logWriter, String.format( "max error: %.2fpx", maxError ) );
+
+		avgDisplacement = avgError;
+		maxDisplacement = maxError;
 
 
+		Collections.sort( errors );
+		Collections.reverse( errors );
 
-		lostTiles = new HashSet<>();
-		for ( final ComparePair pair : fullPairsSet )
-			for ( final ImagePlusTimePoint t : new ImagePlusTimePoint[] { pair.getTile1(), pair.getTile2() } )
-				lostTiles.add( t );
+		lostTiles = new TreeMap<>();
+		for ( final ComparePointPair comparePointPair : comparePointPairs )
+			for ( final ImagePlusTimePoint t : new ImagePlusTimePoint[] { comparePointPair.getTile1(), comparePointPair.getTile2() } )
+				lostTiles.put( t.getImpId(), t );
 		for ( final Tile< ? > t : tc.getTiles() )
-			lostTiles.remove( t );
+			lostTiles.remove( ( ( ImagePlusTimePoint ) t ).getImpId() );
 		System.out.println( "Tiles lost: " + lostTiles.size() );
 
 
@@ -630,77 +388,13 @@ public class GlobalOptimizationPerformer
 
 		Collections.sort( imageInformationList );
 
-
-
-
-
-		// Create a helper lookup structure
-		/*final Map< Integer, Integer > anotherToFirst = new HashMap< Integer, Integer >();
-		for ( final Entry< Integer, Tile< ? > > entry : anotherChannelTilesSet.entrySet() )
-			anotherToFirst.put( ((ImagePlusTimePoint)entry.getValue()).getImpId(), entry.getKey() );
-
-		// Fix existing tiles
-		for ( final Tile< ? > t : tc.getTiles() )
-			tc.fixTile( t );
-		// Add lost tiles one by one
-		final Set<Tile<?>> lostTilesFirstChannel = new HashSet<Tile<?>>();
-		final Set<Tile<?>> lostTilesAnotherChannel = new HashSet<Tile<?>>();
-		for ( final Tile<?> lostTile : lostTiles )
-		{
-			if ( firstChannelTilesSet.containsKey( ((ImagePlusTimePoint)lostTile).getImpId() ) )
-				lostTilesFirstChannel.add( lostTile );
-			else
-				//if ( anotherChannelTilesSet.containsKey( ((ImagePlusTimePoint)lostTile).getImpId() ) )
-				lostTilesAnotherChannel.add( lostTile ); // must be another channel tile
-		}
-
-		// First, add tiles that are present for one of the channels but are missing for the another one
-		final List< Integer > lostOnlyForFirstChannel = new ArrayList< Integer >();
-		for ( final Tile<?> tile : lostTilesFirstChannel )
-			if ( !lostTilesAnotherChannel.contains( anotherChannelTilesSet.get( ((ImagePlusTimePoint)tile).getImpId() ) ) )
-				lostOnlyForFirstChannel.add( ((ImagePlusTimePoint)tile).getImpId() );
-		System.out.println( "lostOnlyForFirstChannel: " + lostOnlyForFirstChannel.size() );
-
-		// Same vice versa
-		final List< Integer > lostOnlyForAnotherChannel = new ArrayList< Integer >();
-		for ( final Tile<?> tile : lostTilesAnotherChannel )
-			if ( !lostTilesFirstChannel.contains( firstChannelTilesSet.get( anotherToFirst.get( ((ImagePlusTimePoint)tile).getImpId() ) ) ) )
-				lostOnlyForAnotherChannel.add( ((ImagePlusTimePoint)tile).getImpId() );
-		System.out.println( "lostOnlyForAnotherChannel: " + lostOnlyForAnotherChannel.size() );*/
-
-
-
-		/*while ( !lostTilesFirstChannel.isEmpty() )
-		{
-			// TODO: strategy of choosing the lost tile (ordering them by a number of matches)
-			final Tile<?> tileFirstChannel = lostTilesFirstChannel.toArray( new Tile[0] )[ 0 ];
-			lostTilesFirstChannel.remove( tileFirstChannel );
-			if ( anotherChannel != null )
-			{
-				final Tile<?> tileAnotherChannel = anotherChannelTilesSet.get( ((ImagePlusTimePoint)tileFirstChannel).getImpId() );
-				lostTilesAnotherChannel.remove( tileFirstChannel );
-			}
-		}*/
-
-
-
-
-
-
-
-
-
-
 		return imageInformationList;
 	}
-}
 
-
-
-class FakeComparePair extends ComparePair
-{
-	public FakeComparePair( final ImagePlusTimePoint impA, final ImagePlusTimePoint impB )
+	private void writeLog( final PrintWriter logWriter, final String log )
 	{
-		super( impA, impB );
+		if ( logWriter != null )
+			logWriter.println( log );
+		System.out.println( log );
 	}
 }

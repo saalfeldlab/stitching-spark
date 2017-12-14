@@ -10,6 +10,7 @@ import java.net.URISyntaxException;
 
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 
 import com.google.gson.GsonBuilder;
 
@@ -22,11 +23,12 @@ import ij.ImagePlus;
  */
 public interface DataProvider
 {
-	public DataProviderType getType();
+	public DataAccessType getType();
 
 	public URI getUri( final String path ) throws URISyntaxException;
 
 	public boolean fileExists( final URI uri ) throws IOException;
+	public void createFolder( final URI uri ) throws IOException;
 
 	public void copyFile( final URI uriSrc, final URI uriDst ) throws IOException;
 	public void copyFolder( final URI uriSrc, final URI uriDst ) throws IOException;

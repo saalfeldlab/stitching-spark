@@ -19,12 +19,12 @@ import org.apache.spark.storage.StorageLevel;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.histogram.Histogram;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.stitching.PipelineExecutionException;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileLoader;
@@ -63,7 +63,7 @@ public class HistogramsProvider implements Serializable
 
 	private transient final JavaSparkContext sparkContext;
 	private transient final DataProvider dataProvider;
-	private final DataProviderType dataProviderType;
+	private final DataAccessType dataAccessType;
 	private final TileInfo[] tiles;
 	private final Interval workingInterval;
 	private final long[] fullTileSize;
@@ -99,9 +99,9 @@ public class HistogramsProvider implements Serializable
 		this.histMaxValue = histMaxValue;
 		this.bins = bins;
 
-		dataProviderType = dataProvider.getType();
+		dataAccessType = dataProvider.getType();
 
-		if ( dataProviderType == DataProviderType.FILESYSTEM )
+		if ( dataAccessType == DataAccessType.FILESYSTEM )
 		{
 			histogramsN5BasePath = basePath;
 			histogramsDataset = HISTOGRAMS_N5_DATASET_NAME;
@@ -183,7 +183,7 @@ public class HistogramsProvider implements Serializable
 
 		sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ).foreach( blockGridPosition ->
 			{
-				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
 				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
 
@@ -317,7 +317,7 @@ public class HistogramsProvider implements Serializable
 
 		rddHistograms = sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ) .flatMapToPair( blockGridPosition ->
 					{
-						final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
+						final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 						final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
 						final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
 
@@ -385,7 +385,7 @@ public class HistogramsProvider implements Serializable
 
 		sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ).foreach( blockGridPosition ->
 			{
-				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
 				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
 

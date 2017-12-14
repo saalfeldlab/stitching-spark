@@ -20,10 +20,10 @@ import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.DataProvider;
-import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.s3.N5AmazonS3;
 import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
@@ -93,9 +93,9 @@ public class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
-	public DataProviderType getType()
+	public DataAccessType getType()
 	{
-		return DataProviderType.AMAZON_S3;
+		return DataAccessType.AMAZON_S3;
 	}
 
 	@Override
@@ -112,6 +112,12 @@ public class AmazonS3DataProvider implements DataProvider
 	{
 		final AmazonS3URI s3Uri = decodeS3Uri( uri );
 		return s3.doesObjectExist( s3Uri.getBucket(), s3Uri.getKey() );
+	}
+
+	@Override
+	public void createFolder( final URI uri ) throws IOException
+	{
+		// folders are reflected by the object key structure, so no need to create them explicitly
 	}
 
 	@Override

@@ -22,14 +22,20 @@ public class SearchRadiusEstimator implements Serializable
 
 	private final Map< Integer, double[] > stageValues, stitchedValues;
 	private final double[] estimationWindowSize;
+	private final double searchRadiusMultiplier;
 
 	private final KDTree< Integer > tree;
 
-	public SearchRadiusEstimator( final Map< Integer, double[] > stageValues, final Map< Integer, double[] > stitchedValues, final double[] estimationWindowSize )
+	public SearchRadiusEstimator(
+			final Map< Integer, double[] > stageValues,
+			final Map< Integer, double[] > stitchedValues,
+			final double[] estimationWindowSize,
+			final double searchRadiusMultiplier )
 	{
 		this.stageValues = stageValues;
 		this.stitchedValues = stitchedValues;
 		this.estimationWindowSize = estimationWindowSize;
+		this.searchRadiusMultiplier = searchRadiusMultiplier;
 
 		final List< Integer > stageSubsetIndexes = new ArrayList<>();
 		final List< RealLocalizable > stageSubsetPositions = new ArrayList<>();
@@ -157,7 +163,9 @@ public class SearchRadiusEstimator implements Serializable
 			}
 		}
 
-		return new SearchRadius( meanValues, covarianceMatrix, pointIndexes, stagePosition );
+		System.out.println( "Using searchRadiusMultiplier=" + searchRadiusMultiplier + " to stretch the error ellipse with respect to standard deviation" );
+
+		return new SearchRadius( searchRadiusMultiplier, meanValues, covarianceMatrix, pointIndexes, stagePosition );
 	}
 
 	private Interval getEstimationWindow( final double[] stagePosition )
@@ -176,24 +184,6 @@ public class SearchRadiusEstimator implements Serializable
 		return estimationWindowSize.length;
 	}
 
-	@Deprecated
-	public ErrorEllipse getCombinedErrorEllipse( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius )
-	{
-		// translate the mean to the relative coordinate system of the fixed tile
-		final double[] combinedEllipseCenter = new double[ numDimensions() ];
-		for ( int d = 0; d < combinedEllipseCenter.length; ++d )
-			combinedEllipseCenter[ d ] = movingSearchRadius.getEllipseCenter()[ d ] - ( fixedSearchRadius.getEllipseCenter()[ d ] - fixedSearchRadius.getStagePosition()[ d ] );
-
-		// calculate sum of the eigen vectors representing two error ellipses to obtain a combined error ellipse
-		final double[][] combinedUncertaintyVectors = new double[ combinedEllipseCenter.length ][ combinedEllipseCenter.length ];
-		for ( int dRow = 0; dRow < combinedEllipseCenter.length; ++dRow )
-			for ( int dCol = 0; dCol < combinedEllipseCenter.length; ++dCol )
-				combinedUncertaintyVectors[ dRow ][ dCol ] = fixedSearchRadius.getUncertaintyVectors()[ dRow ][ dCol ] + movingSearchRadius.getUncertaintyVectors()[ dRow ][ dCol ];
-//				combinedUncertaintyVectors[ dRow ][ dCol ] = Math.sqrt( Math.pow( fixedSearchRadius.getUncertaintyVectors()[ dRow ][ dCol ], 2 ) + Math.pow( movingSearchRadius.getUncertaintyVectors()[ dRow ][ dCol ], 2 ) );
-
-		return new ErrorEllipse( combinedEllipseCenter, combinedUncertaintyVectors );
-	}
-
 	public SearchRadius getCombinedCovariancesSearchRadius( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius ) throws PipelineExecutionException
 	{
 		final double[][] combinedOffsetsCovarianceMatrix = new double[ numDimensions() ][ numDimensions() ];
@@ -210,6 +200,6 @@ public class SearchRadiusEstimator implements Serializable
 		combinedPointIndexesSet.addAll( movingSearchRadius.getUsedPointsIndexes() );
 		final List< Integer > combinedPointIndexes = new ArrayList<>( combinedPointIndexesSet );
 
-		return new SearchRadius( combinedOffsetsMeanValues, combinedOffsetsCovarianceMatrix, combinedPointIndexes, movingSearchRadius.getStagePosition() );
+		return new SearchRadius( searchRadiusMultiplier, combinedOffsetsMeanValues, combinedOffsetsCovarianceMatrix, combinedPointIndexes, movingSearchRadius.getStagePosition() );
 	}
 }

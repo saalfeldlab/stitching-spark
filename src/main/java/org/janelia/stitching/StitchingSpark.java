@@ -9,8 +9,6 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.stitching.StitchingJob.PipelineStep;
 
-import mpicbg.stitching.StitchingParameters;
-
 /**
  * Driver class for running stitching jobs on a Spark cluster.
  *
@@ -59,7 +57,7 @@ public class StitchingSpark implements Serializable, AutoCloseable
 			System.exit( 2 );
 		}
 
-		final StitchingParameters params = new StitchingParameters();
+		final SerializableStitchingParameters params = new SerializableStitchingParameters();
 		params.channel1 = 1;
 		params.channel2 = 1;
 		params.checkPeaks = 10;

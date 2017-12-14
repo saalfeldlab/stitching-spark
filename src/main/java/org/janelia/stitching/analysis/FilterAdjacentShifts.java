@@ -19,6 +19,12 @@ import org.janelia.stitching.TileOperations;
 import org.janelia.stitching.TilePair;
 import org.janelia.stitching.Utils;
 
+import net.imglib2.Dimensions;
+import net.imglib2.FinalDimensions;
+import net.imglib2.Interval;
+import net.imglib2.util.Pair;
+import net.imglib2.util.ValuePair;
+
 /**
  * @author Igor Pisarev
  */
@@ -175,42 +181,61 @@ public class FilterAdjacentShifts
 
 
 
+	public static boolean isAdjacent( final Dimensions tileDimensions, final Interval overlap, final int dim )
+	{
+		return isAdjacent( tileDimensions, overlap, new Integer( dim ) );
+	}
+
+	/**
+	 * Considers two intervals adjacent based on their overlap if the intersection has at least (numDimensions-1) sides that are more than 50% of their dimensions)
+	 *
+	 * @param tileDimensions
+	 * @param overlap
+	 * @return
+	 */
+	public static boolean isAdjacent( final Dimensions tileDimensions, final Interval overlap )
+	{
+		return isAdjacent( tileDimensions, overlap, null );
+	}
+	private static boolean isAdjacent( final Dimensions tileDimensions, final Interval overlap, final Integer dim )
+	{
+		final List< Integer > shortEdgeDims = new ArrayList<>();
+		for ( int d = 0; d < overlap.numDimensions(); d++ )
+			if ( overlap.dimension( d ) < tileDimensions.dimension( d ) / 2 )
+				shortEdgeDims.add( d );
+
+		if ( dim == null )
+			return shortEdgeDims.size() <= 1;
+		else
+			return shortEdgeDims.size() == 1 && dim.equals( shortEdgeDims.get( 0 ) );
+	}
+
 	public static List< TilePair > filterAdjacentPairs( final List< TilePair > overlappingPairs, final int dim )
 	{
 		return filterAdjacentPairs( overlappingPairs, new Integer( dim ) );
 	}
-
 	public static List< TilePair > filterAdjacentPairs( final List< TilePair > overlappingPairs )
 	{
 		return filterAdjacentPairs( overlappingPairs, null );
 	}
-
 	private static List< TilePair > filterAdjacentPairs( final List< TilePair > overlappingPairs, final Integer dim )
 	{
 		final List< TilePair > adjacentPairs = new ArrayList<>();
 		for ( final TilePair pair : overlappingPairs )
 		{
-			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( pair.getA(), pair.getB() );
-
-			final List< Integer > shortEdgeDims = new ArrayList<>();
-			for ( int d = 0; d < overlap.numDimensions(); d++ )
-			{
-				final int maxPossibleOverlap = ( int ) Math.min( pair.getA().getSize( d ), pair.getB().getSize( d ) );
-				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
-					shortEdgeDims.add( d );
-			}
-
-			if ( dim == null )
-			{
-				if ( shortEdgeDims.size() <= 1 )
-					adjacentPairs.add( pair );
-			}
-			else
-			{
-				if ( shortEdgeDims.size() == 1 && dim.equals( shortEdgeDims.get( 0 ) ) )
-					adjacentPairs.add( pair );
-			}
+			final Dimensions maxPossibleOverlap = getMaxPossibleOverlap( new ValuePair<>( pair.getA().getBoundaries(), pair.getB().getBoundaries() ) );
+			final Interval overlap = TileOperations.getOverlappingRegionGlobal( pair.getA(), pair.getB() );
+			if ( isAdjacent( maxPossibleOverlap, overlap, dim ) )
+				adjacentPairs.add( pair );
 		}
 		return adjacentPairs;
+	}
+
+	public static Dimensions getMaxPossibleOverlap( final Pair< Dimensions, Dimensions > tilePairDimensions )
+	{
+		final long[] maxPossibleOverlap = new long[ Math.max( tilePairDimensions.getA().numDimensions(), tilePairDimensions.getB().numDimensions() ) ];
+		for ( int d = 0; d < maxPossibleOverlap.length; d++ )
+			maxPossibleOverlap[ d ] = Math.min( tilePairDimensions.getA().dimension( d ), tilePairDimensions.getB().dimension( d ) );
+		return new FinalDimensions( maxPossibleOverlap );
 	}
 }

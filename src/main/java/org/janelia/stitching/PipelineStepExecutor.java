@@ -22,6 +22,6 @@ public abstract class PipelineStepExecutor implements Serializable
 		this.job = job;
 		this.sparkContext = sparkContext;
 	}
-	
+
 	public abstract void run() throws PipelineExecutionException;
 }

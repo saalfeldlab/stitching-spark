@@ -21,6 +21,7 @@ import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.MultithreadedExecutor;
 import org.junit.Assert;
+import org.junit.Test;
 import org.ojalgo.matrix.BasicMatrix.Builder;
 import org.ojalgo.matrix.PrimitiveMatrix;
 
@@ -45,6 +46,7 @@ import net.imglib2.util.ValuePair;
 
 public class SearchRadiusEstimatorTest
 {
+	private final static double SEARCH_RADIUS_MULTIPLIER = 3;
 	private final static double EPSILON = 1e-3;
 
 	final Random rnd = new Random();
@@ -66,17 +68,68 @@ public class SearchRadiusEstimatorTest
 		}
 		final double[] estimationWindowSize = new double[ offsets.get( 0 ).length ];
 		Arrays.fill( estimationWindowSize, 1e10 );
-		return new SearchRadiusEstimator( stage, stitched, estimationWindowSize );
+		return new SearchRadiusEstimator( stage, stitched, estimationWindowSize, SEARCH_RADIUS_MULTIPLIER );
 	}
 
-//	@Test
+	private double getVectorLength( final double[] vector )
+	{
+		double s = 0;
+		for ( int d = 0; d < vector.length; ++d )
+			s += vector[ d ] * vector[ d ];
+		return Math.sqrt( s );
+	}
+
+	@Test
+	public void testSphereSearchRadius() throws PipelineExecutionException
+	{
+		final double[] offsetsMeanValues = new double[] { 100, 200, 300 };
+		final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
+		final double sphereRadiusPixels = 50;
+		final SearchRadius searchRadius = new SearchRadius( sphereRadiusPixels, offsetsMeanValues, offsetsCovarianceMatrix );
+
+		Assert.assertArrayEquals( new double[] { 100, 200, 300 }, searchRadius.getEllipseCenter(), EPSILON );
+		Assert.assertArrayEquals( new double[] { sphereRadiusPixels, sphereRadiusPixels, sphereRadiusPixels }, searchRadius.getEllipseRadius(), EPSILON );
+
+		Assert.assertArrayEquals( new double[] { 1, 1, 1 }, searchRadius.getEigenValues(), EPSILON );
+
+		Assert.assertArrayEquals( new double[] { 1, 0, 0 }, searchRadius.getEigenVectors()[ 0 ], EPSILON );
+		Assert.assertArrayEquals( new double[] { 0, 1, 0 }, searchRadius.getEigenVectors()[ 1 ], EPSILON );
+		Assert.assertArrayEquals( new double[] { 0, 0, 1 }, searchRadius.getEigenVectors()[ 2 ], EPSILON );
+
+		final Interval boundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
+		Assert.assertArrayEquals( new long[] {  50, 150, 250 }, Intervals.minAsLongArray( boundingBox ) );
+		Assert.assertArrayEquals( new long[] { 150, 250, 350 }, Intervals.maxAsLongArray( boundingBox ) );
+
+		Assert.assertTrue( searchRadius.testPoint( 100, 200, 300 ) );
+		Assert.assertTrue( searchRadius.testPoint( 51, 200, 300 ) );
+		Assert.assertTrue( searchRadius.testPoint( 149, 200, 300 ) );
+		Assert.assertTrue( searchRadius.testPoint( 100, 151, 300 ) );
+		Assert.assertTrue( searchRadius.testPoint( 100, 249, 300 ) );
+		Assert.assertTrue( searchRadius.testPoint( 100, 200, 251 ) );
+		Assert.assertTrue( searchRadius.testPoint( 100, 200, 349 ) );
+
+		Assert.assertFalse( searchRadius.testPoint( 50, 150, 250 ) );
+		Assert.assertFalse( searchRadius.testPoint( 50, 150, 350 ) );
+		Assert.assertFalse( searchRadius.testPoint( 50, 250, 250 ) );
+		Assert.assertFalse( searchRadius.testPoint( 50, 250, 350 ) );
+		Assert.assertFalse( searchRadius.testPoint( 150, 150, 250 ) );
+		Assert.assertFalse( searchRadius.testPoint( 150, 150, 350 ) );
+		Assert.assertFalse( searchRadius.testPoint( 150, 250, 250 ) );
+		Assert.assertFalse( searchRadius.testPoint( 150, 250, 350 ) );
+	}
+
+
+	@Test
 	public void testEigen() throws PipelineExecutionException
 	{
-		final SearchRadius radius = new SearchRadius( new double[ 3 ], new double[][] {
-				new double[] { 88.5333, -33.6, -5.33333 },
-				new double[] { -33.6, 15.4424, 2.66667 },
-				new double[] { -5.33333, 2.66667, 0.484848 }
-			} );
+		final SearchRadius radius = new SearchRadius(
+				SEARCH_RADIUS_MULTIPLIER,
+				new double[ 3 ],
+				new double[][] {
+					new double[] { 88.5333, -33.6, -5.33333 },
+					new double[] { -33.6, 15.4424, 2.66667 },
+					new double[] { -5.33333, 2.66667, 0.484848 } }
+			);
 
 		final double[] eigenValues = radius.getEigenValues();
 
@@ -111,6 +164,10 @@ public class SearchRadiusEstimatorTest
 		Assert.assertArrayEquals( new double[] { 0.0298783, 0.233007, -0.972016 }, eigenVectorsSorted[ 0 ], EPSILON );
 		Assert.assertArrayEquals( new double[] { 0.366347, 0.902228, 0.227538   }, eigenVectorsSorted[ 1 ], EPSILON );
 		Assert.assertArrayEquals( new double[] { -0.929998, 0.362894, 0.0584043 }, eigenVectorsSorted[ 2 ], EPSILON );
+
+		Assert.assertEquals( 1.0, getVectorLength( eigenVectorsSorted[ 0 ] ), EPSILON );
+		Assert.assertEquals( 1.0, getVectorLength( eigenVectorsSorted[ 1 ] ), EPSILON );
+		Assert.assertEquals( 1.0, getVectorLength( eigenVectorsSorted[ 2 ] ), EPSILON );
 	}
 
 //	@Test
@@ -419,7 +476,7 @@ public class SearchRadiusEstimatorTest
 		final double[] estimationWindowSize = new double[ 2 ];
 		Arrays.fill( estimationWindowSize, 1e10 );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles/*, estimationWindowSize*/ );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles/*, estimationWindowSize*/, SEARCH_RADIUS_MULTIPLIER );
 		final SearchRadius radius = estimator.getSearchRadiusWithinEstimationWindow( testStageTile );
 
 		// test exhaustive search against KD-tree search
@@ -597,7 +654,7 @@ public class SearchRadiusEstimatorTest
 
 		final TileInfo testStageTile = stageTiles[ rnd.nextInt( stageTiles.length ) ];
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles/*, estimationWindowSize*/ );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles/*, estimationWindowSize*/, SEARCH_RADIUS_MULTIPLIER );
 		final SearchRadius radius = estimator.getSearchRadiusWithinEstimationWindow( testStageTile );
 
 		// test exhaustive search against KD-tree search
@@ -723,7 +780,7 @@ public class SearchRadiusEstimatorTest
 		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
 
 		final List< TilePair > overlappingTilePairs = TileOperations.findOverlappingTiles( stageTiles );
 		TilePair tilePair = null;
@@ -740,7 +797,7 @@ public class SearchRadiusEstimatorTest
 		}
 		System.out.println( "Found overlapping tile pair with neighborhood: fixedTile=" + fixedTileSearchRadius.getUsedPointsIndexes().size() + " points, movingTile=" + movingTileSearchRadius.getUsedPointsIndexes().size() + " points" );
 
-		final ErrorEllipse combinedErrorEllipse = estimator.getCombinedErrorEllipse( fixedTileSearchRadius, movingTileSearchRadius );
+		final SearchRadius combinedErrorEllipse = estimator.getCombinedCovariancesSearchRadius( fixedTileSearchRadius, movingTileSearchRadius );
 
 		final Interval fixedTileSearchRadiusBoundingBox = Intervals.smallestContainingInterval( fixedTileSearchRadius.getBoundingBox() );
 		final Interval movingTileSearchRadiusBoundingBox = Intervals.smallestContainingInterval( movingTileSearchRadius.getBoundingBox() );
@@ -888,7 +945,7 @@ public class SearchRadiusEstimatorTest
 		System.out.println( "Chosen Z index = " + zCoordChosen );
 		System.out.println( "2d Stage tiles = " + stageTiles.length + ", 2d stitched tiles = " + stitchedTiles.length );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
 		System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( estimator.getEstimationWindowSize() ) ) + " --" );
 
 		final List< TilePair > overlappingTilePairs = FilterAdjacentShifts.filterAdjacentPairs( TileOperations.findOverlappingTiles( stageTiles ) );
@@ -1334,22 +1391,8 @@ public class SearchRadiusEstimatorTest
 					}
 				}
 
-				// Find adjusted overlapping regionsfor both tiles
-				final Pair< Interval, Interval > adjustedOverlaps = PipelineStitchingStepExecutor.adjustOverlappingRegion( tilePair, combinedSearchRadius );
-				// test it against simpler implementation
-				{
-					final Pair< Interval, Interval > adjustedOverlapsTest = adjustOverlapRegion_test( tilePair, new ValuePair<>( fixedTileSearchRadius, movingTileSearchRadius ), combinedSearchRadius );
-//					Assert.assertArrayEquals( Intervals.minAsLongArray( adjustedOverlaps.getA() ), Intervals.minAsLongArray( adjustedOverlapsTest.getA() ) );
-//					Assert.assertArrayEquals( Intervals.maxAsLongArray( adjustedOverlaps.getA() ), Intervals.maxAsLongArray( adjustedOverlapsTest.getA() ) );
-//					Assert.assertArrayEquals( Intervals.minAsLongArray( adjustedOverlaps.getB() ), Intervals.minAsLongArray( adjustedOverlapsTest.getB() ) );
-//					Assert.assertArrayEquals( Intervals.maxAsLongArray( adjustedOverlaps.getB() ), Intervals.maxAsLongArray( adjustedOverlapsTest.getB() ) );
-					System.out.println();
-					System.out.println( "Method1 min1=" + Arrays.toString( Intervals.minAsLongArray( adjustedOverlaps.getA() ) ) + ", Method2 min1=" + Arrays.toString( Intervals.minAsLongArray( adjustedOverlapsTest.getA() ) ) );
-					System.out.println( "Method1 max1=" + Arrays.toString( Intervals.maxAsLongArray( adjustedOverlaps.getA() ) ) + ", Method2 max1=" + Arrays.toString( Intervals.maxAsLongArray( adjustedOverlapsTest.getA() ) ) );
-					System.out.println( "Method1 min2=" + Arrays.toString( Intervals.minAsLongArray( adjustedOverlaps.getB() ) ) + ", Method2 min2=" + Arrays.toString( Intervals.minAsLongArray( adjustedOverlapsTest.getB() ) ) );
-					System.out.println( "Method1 max2=" + Arrays.toString( Intervals.maxAsLongArray( adjustedOverlaps.getB() ) ) + ", Method2 max2=" + Arrays.toString( Intervals.maxAsLongArray( adjustedOverlapsTest.getB() ) ) );
-					System.out.println();
-				}
+				// Find adjusted overlapping region for both tiles
+				final Pair< Interval, Interval > adjustedOverlaps = adjustOverlapRegion( tilePair, new ValuePair<>( fixedTileSearchRadius, movingTileSearchRadius ), combinedSearchRadius );
 
 				// Draw adjusted overlap contour for the fixed tile
 				{
@@ -1560,7 +1603,7 @@ public class SearchRadiusEstimatorTest
 		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/groups/betzig/betziglab/4Stephan/160727_Sample2_C3/Stitch_Igor/restitching/restitching-covariance/ch0.json" ) ) );
 		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/groups/betzig/betziglab/4Stephan/160727_Sample2_C3/Stitch_Igor/restitching/ch0-final.json" ) ) );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
 		System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( estimator.getEstimationWindowSize() ) ) + " --" );
 
 		final List< TilePair > overlappingTilePairs = FilterAdjacentShifts.filterAdjacentPairs( TileOperations.findOverlappingTiles( stageTiles ) );
@@ -2121,7 +2164,7 @@ public class SearchRadiusEstimatorTest
 	}
 
 
-	private Pair< Interval, Interval > adjustOverlapRegion_test( final TilePair tilePair, final Pair< SearchRadius, SearchRadius > searchRadiusesPair, final SearchRadius combinedSearchRadius )
+	private Pair< Interval, Interval > adjustOverlapRegion( final TilePair tilePair, final Pair< SearchRadius, SearchRadius > searchRadiusesPair, final SearchRadius combinedSearchRadius )
 	{
 		// adjust the ROI to capture the search radius entirely
 		// try all corners of the bounding box of the search radius and use the largest overlaps

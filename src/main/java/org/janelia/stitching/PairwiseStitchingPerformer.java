@@ -51,14 +51,16 @@ public class PairwiseStitchingPerformer
 		numThreads = n;
 	}
 
-	public static SerializablePairWiseStitchingResult[] stitchPairwise( final ImagePlus imp1, final ImagePlus imp2,
-			Roi roi1, Roi roi2, final int[] roiZ1, final int[] roiZ2,
-			final int timepoint1, final int timepoint2, final StitchingParameters params, final int numHighestPeaks,
+	public static SerializablePairWiseStitchingResult[] stitchPairwise(
+			final ImagePlus imp1, final ImagePlus imp2, final int timepoint1, final int timepoint2,
+			final SerializableStitchingParameters params, final int numHighestPeaks,
 			final PointValidator searchRadiusPointValidator, final OffsetConverter offsetConverter )
 	{
 		SerializablePairWiseStitchingResult[] result = null;
-		roi1 = getOnlyRectangularRoi( roi1 );
-		roi2 = getOnlyRectangularRoi( roi2 );
+
+		// legacy
+		final Roi roi1 = null, roi2 = null;
+		final int[] roiZ1 = null, roiZ2 = null;
 
 		// can both images be wrapped into imglib without copying
 		final boolean canWrap = !StitchingParameters.alwaysCopy && canWrapIntoImgLib( imp1, roi1, params.channel1 ) && canWrapIntoImgLib( imp2, roi2, params.channel2 )
@@ -205,7 +207,8 @@ public class PairwiseStitchingPerformer
 	}
 
 	public static < T extends RealType<T>, S extends RealType<S> > SerializablePairWiseStitchingResult[] performStitching(
-			final Image<T> img1, final Image<S> img2, final StitchingParameters params, final int numHighestPeaks,
+			final Image<T> img1, final Image<S> img2,
+			final SerializableStitchingParameters params, final int numHighestPeaks,
 			final PointValidator searchRadiusPointValidator, final OffsetConverter offsetConverter )
 	{
 		if ( img1 == null )
@@ -225,7 +228,8 @@ public class PairwiseStitchingPerformer
 		}
 
 		final SerializablePairWiseStitchingResult[] result = computePhaseCorrelation(
-				img1, img2, params.checkPeaks, params.subpixelAccuracy, numHighestPeaks,
+				img1, img2,
+				params.checkPeaks, params.subpixelAccuracy, numHighestPeaks,
 				searchRadiusPointValidator, offsetConverter
 			);
 
@@ -233,7 +237,8 @@ public class PairwiseStitchingPerformer
 	}
 
 	public static < T extends RealType<T>, S extends RealType<S> > SerializablePairWiseStitchingResult[] computePhaseCorrelation(
-			final Image<T> img1, final Image<S> img2, final int numPeaks, final boolean subpixelAccuracy, final int numHighestPeaks,
+			final Image<T> img1, final Image<S> img2,
+			final int numPeaks, final boolean subpixelAccuracy, final int numHighestPeaks,
 			final PointValidator searchRadiusPointValidator, final OffsetConverter offsetConverter )
 	{
 		final PhaseCorrelation< T, S > phaseCorr = new PhaseCorrelation<>( img1, img2 );

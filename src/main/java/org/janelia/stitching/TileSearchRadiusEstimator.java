@@ -24,12 +24,12 @@ public class TileSearchRadiusEstimator implements Serializable
 	private final SearchRadiusEstimator estimator;
 	private final double[] stitchedTilesOffset;
 
-	public TileSearchRadiusEstimator( final TileInfo[] stageTiles, final TileInfo[] stitchedTiles )
+	public TileSearchRadiusEstimator( final TileInfo[] stageTiles, final TileInfo[] stitchedTiles, final double searchRadiusMultiplier )
 	{
-		this( stageTiles, stitchedTiles, null );
+		this( stageTiles, stitchedTiles, null, searchRadiusMultiplier );
 	}
 
-	public TileSearchRadiusEstimator( final TileInfo[] stageTiles, final TileInfo[] stitchedTiles, final double[] estimationWindowSizeNullable )
+	public TileSearchRadiusEstimator( final TileInfo[] stageTiles, final TileInfo[] stitchedTiles, final double[] estimationWindowSizeNullable, final double searchRadiusMultiplier )
 	{
 		stageTilesMap = Utils.createTilesMap( stageTiles );
 		stitchedTilesMap = Utils.createTilesMap( stitchedTiles );
@@ -44,7 +44,7 @@ public class TileSearchRadiusEstimator implements Serializable
 		for ( final Entry< Integer, TileInfo > stitchedEntry : stitchedTilesMap.entrySet() )
 			stitchedValues.put( stitchedEntry.getKey(), getOffsetCoordinates( stitchedEntry.getValue().getPosition(), stitchedTilesOffset ) );
 
-		estimator = new SearchRadiusEstimator( stageValues, stitchedValues, estimationWindowSize );
+		estimator = new SearchRadiusEstimator( stageValues, stitchedValues, estimationWindowSize, searchRadiusMultiplier );
 
 		tileOffsets = new HashMap<>();
 		for ( final Entry< Integer, double[] > stitchedEntry : stitchedValues.entrySet() )
@@ -92,12 +92,6 @@ public class TileSearchRadiusEstimator implements Serializable
 	public SearchRadius getSearchRadiusTreeUsingKNearestNeighbors( final TileInfo tile, final int numNearestNeighbors ) throws PipelineExecutionException
 	{
 		return estimator.getSearchRadiusTreeUsingKNearestNeighbors( getStagePosition( tile ), numNearestNeighbors );
-	}
-
-	@Deprecated
-	public ErrorEllipse getCombinedErrorEllipse( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius )
-	{
-		return estimator.getCombinedErrorEllipse( fixedSearchRadius, movingSearchRadius );
 	}
 
 	public SearchRadius getCombinedCovariancesSearchRadius( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius ) throws PipelineExecutionException

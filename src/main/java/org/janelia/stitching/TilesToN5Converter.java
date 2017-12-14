@@ -11,13 +11,13 @@ import java.util.concurrent.ExecutionException;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudOAuth;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudResourceManagerClient;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageClient;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5WriterSupplier;
 import org.janelia.util.ImageImporter;
@@ -43,7 +43,7 @@ public class TilesToN5Converter
 		private static final long serialVersionUID = -1199787780776971335L;
 
 		private final URI n5Uri;
-		private final DataProviderType type;
+		private final DataAccessType type;
 
 		private final AccessToken accessToken;
 		private final String refreshToken;
@@ -55,7 +55,7 @@ public class TilesToN5Converter
 			this.n5Uri = n5Uri;
 			type = DataProviderFactory.getTypeByURI( n5Uri );
 
-			if ( type == DataProviderType.GOOGLE_CLOUD )
+			if ( type == DataAccessType.GOOGLE_CLOUD )
 			{
 				final GoogleCloudOAuth oauth = new GoogleCloudOAuth(
 						Arrays.asList(
@@ -83,7 +83,7 @@ public class TilesToN5Converter
 
 		public DataProvider getDataProvider()
 		{
-			if ( type == DataProviderType.GOOGLE_CLOUD )
+			if ( type == DataAccessType.GOOGLE_CLOUD )
 			{
 				final GoogleClientSecrets.Details clientSecretsDetails = new GoogleClientSecrets.Details();
 				clientSecretsDetails.setClientId( clientId );
@@ -109,7 +109,7 @@ public class TilesToN5Converter
 		@Override
 		public N5Writer get() throws IOException
 		{
-			if ( type == DataProviderType.GOOGLE_CLOUD )
+			if ( type == DataAccessType.GOOGLE_CLOUD )
 			{
 				final DataProvider googleCloudDataProvider = getDataProvider();
 				try
