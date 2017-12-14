@@ -220,7 +220,7 @@ public class FilterAdjacentShifts
 		{
 			final Dimensions maxPossibleOverlap = getMaxPossibleOverlap( new ValuePair<>( pair.getA().getBoundaries(), pair.getB().getBoundaries() ) );
 			final Interval overlap = TileOperations.getOverlappingRegionGlobal( pair.getA(), pair.getB() );
-			if ( isAdjacent( maxPossibleOverlap, overlap ) )
+			if ( isAdjacent( maxPossibleOverlap, overlap, dim ) )
 				adjacentPairs.add( pair );
 		}
 		return adjacentPairs;
