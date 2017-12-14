@@ -92,8 +92,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
 
 		// find pairs of tile boxes that overlap by more than 50% when transformed into relative coordinate space of the fixed original tile
-		final List< TilePair > overlappingBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes );
-		System.out.println( "Overlapping box pairs count = " + overlappingBoxes.size() );
+		// --- FIXME: don't extract overlapping pairs to save time for test run
+		final List< TilePair > overlappingBoxes = /*null;*/SplitTileOperations.findOverlappingTileBoxes( tileBoxes );
+		//System.out.println( "Overlapping box pairs count = " + overlappingBoxes.size() );
 
 		final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );
 		try
@@ -479,6 +480,14 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		System.out.println( "Processing " + overlappingBoxes.size() + " pairs..." );
 
+		final boolean tilesHaveAffineTransform;
+		{
+			boolean tilesHaveAffineTransformHelper = false;
+			for ( final TilePair tileBoxPair : overlappingBoxes )
+				tilesHaveAffineTransformHelper |= tileBoxPair.getA().getOriginalTile().getTransform() != null || tileBoxPair.getB().getOriginalTile().getTransform() != null;
+			tilesHaveAffineTransform = tilesHaveAffineTransformHelper;
+		}
+
 		final LongAccumulator notEnoughNeighborsWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 		final LongAccumulator noOverlapWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
@@ -487,8 +496,17 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			{
 				System.out.println( "Processing tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
 
-				if ( tileBoxPair.getA().getOriginalTile().getTransform() == null || tileBoxPair.getB().getOriginalTile().getTransform() == null )
-					throw new RuntimeException( "serialization issue: affine transform of original tile is not serialized" );
+				// verify serialization of affine transforms
+				if ( tilesHaveAffineTransform )
+				{
+					if ( tileBoxPair.getA().getOriginalTile().getTransform() == null || tileBoxPair.getB().getOriginalTile().getTransform() == null )
+						throw new RuntimeException( "serialization issue: affine transform of original tile is not serialized" );
+				}
+				else
+				{
+					if ( tileBoxPair.getA().getOriginalTile().getTransform() != null || tileBoxPair.getB().getOriginalTile().getTransform() != null )
+						throw new RuntimeException( "shouldn't happen" );
+				}
 
 				final Interval movingBoxInFixedSpace = SplitTileOperations.transformMovingTileBox( tileBoxPair );
 

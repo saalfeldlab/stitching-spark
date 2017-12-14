@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -12,8 +13,10 @@ import java.util.TreeMap;
 import java.util.Vector;
 
 import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
+import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
 import mpicbg.models.TranslationModel3D;
@@ -23,11 +26,14 @@ import mpicbg.stitching.ImagePlusTimePoint;
 // based on the GlobalOptimization class from the original Fiji's Stitching plugin repository
 public class GlobalOptimizationPerformer
 {
+	// --- FIXME: test translation-only solution
 	private static final double DAMPNESS_FACTOR = 0.9;
+//	private static final double DAMPNESS_FACTOR = 1;
+	private static final double REGULARIZER_TRANSLATION = 0.1;
 
 	public Map< Integer, Tile< ? > > lostTiles = null;
 
-	public int replacedTiles = 0;
+	public int replacedTilesTranslation = 0, replacedTilesSimilarity = 0;
 
 	static private final java.io.PrintStream originalOut, suppressedOut;
 	static
@@ -120,6 +126,8 @@ public class GlobalOptimizationPerformer
 			}
 		}
 
+
+
 		// check if there are enough point matches
 		{
 			final Set< Tile< ? > > newTilesSet = new HashSet<>();
@@ -143,16 +151,99 @@ public class GlobalOptimizationPerformer
 						replacementTile.addConnectedTile( connectedTile );
 					}
 					newTilesSet.add( replacementTile );
-					++replacedTiles;
+					++replacedTilesTranslation;
 				}
 				else
 				{
 					newTilesSet.add( tile );
 				}
 			}
+
+			// --- FIXME: test translation-only solution
+//			if ( replacedTilesTranslation != 0 )
+//				throw new RuntimeException( "shouldn't happen" );
+
 			tilesSet.clear();
 			tilesSet.addAll( newTilesSet );
 		}
+
+
+		// FIXME: don't consider configurations where some affine models have been replaced by translation models
+		if ( replacedTilesTranslation != 0 )
+			return null;
+
+
+		// --- FIXME: test translation-only solution
+		// instead of pre-aligning, apply the models of the approximate tile transforms to the point matches
+		for ( final Tile< ? > tile : tilesSet )
+			tile.apply();
+
+
+		// --- FIXME: test translation-only solution
+		// check if the point matches are on the same plane (AffineModel3D will throw IllDefinedPointsException in this case), fall back to SimilarityModel3D
+		{
+			final Set< Tile< ? > > newTilesSet = new HashSet<>();
+			for ( final Tile< ? > tile : tilesSet )
+			{
+				if ( tile.getModel() instanceof TranslationModel3D )
+				{
+					newTilesSet.add( tile );
+				}
+				else
+				{
+					final double[] mins = new double[ 3 ], maxs = new double[ 3 ];
+					Arrays.fill( mins, Double.POSITIVE_INFINITY );
+					Arrays.fill( maxs, Double.NEGATIVE_INFINITY );
+					for ( final PointMatch pointMatch : tile.getMatches() )
+					{
+						final double[] coords = pointMatch.getP1().getL();
+						for ( int d = 0; d < 3; ++d )
+						{
+							mins[ d ] = Math.min( coords[ d ], mins[ d ] );
+							maxs[ d ] = Math.max( coords[ d ], maxs[ d ] );
+						}
+					}
+
+					boolean samePlane = false;
+					for ( int d = 0; d < 3; ++d )
+						if ( Math.abs( maxs[ d ] - mins[ d ] ) < 1e-8 )
+							samePlane = true;
+
+					if ( samePlane )
+					{
+						final Tile< ? > replacementTile = new ImagePlusTimePoint(
+								( ( ImagePlusTimePoint ) tile ).getImagePlus(),
+								( ( ImagePlusTimePoint ) tile ).getImpId(),
+								( ( ImagePlusTimePoint ) tile ).getTimePoint(),
+								new InterpolatedAffineModel3D<>(
+										new SimilarityModel3D(),
+										new TranslationModel3D(),
+										REGULARIZER_TRANSLATION
+									),
+								null
+							);
+						replacementTile.addMatches( tile.getMatches() );
+						for ( final Tile< ? > connectedTile : tile.getConnectedTiles() )
+						{
+							// don't use removeConnectedTile() because it "overdoes" it by removing point matches from both sides which we would like to preserve
+							connectedTile.getConnectedTiles().remove( tile );
+							connectedTile.addConnectedTile( replacementTile );
+							replacementTile.addConnectedTile( connectedTile );
+						}
+						newTilesSet.add( replacementTile );
+						++replacedTilesSimilarity;
+					}
+					else
+					{
+						newTilesSet.add( tile );
+					}
+				}
+			}
+			tilesSet.clear();
+			tilesSet.addAll( newTilesSet );
+		}
+
+
 
 		writeLog( logWriter, "Pairs above the threshold: " + pairsAdded + ", pairs total = " + comparePointPairs.size() );
 
@@ -221,7 +312,11 @@ public class GlobalOptimizationPerformer
 		long elapsed = System.nanoTime();
 
 		final int iterations = 5000;
-		tc.preAlign();
+
+		// --- FIXME: test translation-only solution
+		// instead of pre-aligning, we use the known transform for each tile and apply to point matches
+//		tc.preAlign();
+
 		tc.optimize( 10, iterations, iterations, DAMPNESS_FACTOR, 1 );
 		elapsed = System.nanoTime() - elapsed;
 

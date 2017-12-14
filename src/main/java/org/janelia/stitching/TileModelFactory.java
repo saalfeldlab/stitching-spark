@@ -1,12 +1,11 @@
 package org.janelia.stitching;
 
-import mpicbg.models.InterpolatedAffineModel2D;
+import mpicbg.models.AffineModel3D;
 import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.Model;
-import mpicbg.models.SimilarityModel2D;
-import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
+import net.imglib2.realtransform.AffineTransform3D;
 
 /**
  * Convenience class for creating default {@link Model} which is required by stitching procedure.
@@ -17,6 +16,7 @@ import mpicbg.models.TranslationModel3D;
 
 public class TileModelFactory {
 
+	private static final double REGULARIZER_SIMILARITY = 0.1;
 	private static final double REGULARIZER_TRANSLATION = 0.1;
 
 	/**
@@ -43,30 +43,34 @@ public class TileModelFactory {
 		return createModel( dim, tile );
 	}
 
-	public static < M extends Model< M > > M createSimilarityModel( final TileInfo tile ) throws Exception
+	public static < M extends Model< M > > M createAffineModel( final TileInfo tile ) throws Exception
 	{
-		switch ( tile.numDimensions() ) {
-		case 2:
-//			final SimilarityModel2D m2d = new SimilarityModel2D();
-//			return (M)m2d;
-			return ( M ) new InterpolatedAffineModel2D<>(
-					new SimilarityModel2D(),
-					new TranslationModel2D(),
-					REGULARIZER_TRANSLATION
-				);
+		if ( tile.numDimensions() != 3 )
+			throw new Exception( "3d only" );
 
-		case 3:
-//			final SimilarityModel3D m3d = new SimilarityModel3D();
-//			return (M)m3d;
-			return ( M ) new InterpolatedAffineModel3D<>(
-					new SimilarityModel3D(),
-					new TranslationModel3D(),
-					REGULARIZER_TRANSLATION
-				);
+		// initialize the model with the known tile transform
+		final AffineTransform3D tileTransform = TileOperations.getTileTransform( tile );
+		final AffineModel3D affineModel = new AffineModel3D();
+		affineModel.set(
+				tileTransform.get(0, 0), tileTransform.get(0, 1), tileTransform.get(0, 2), tileTransform.get(0, 3),
+				tileTransform.get(1, 0), tileTransform.get(1, 1), tileTransform.get(1, 2), tileTransform.get(1, 3),
+				tileTransform.get(2, 0), tileTransform.get(2, 1), tileTransform.get(2, 2), tileTransform.get(2, 3)
+			);
 
-		default:
-			throw new Exception( "Not supported" );
-		}
+		/*return ( M ) new InterpolatedAffineModel3D<>(
+				affineModel,
+				new InterpolatedAffineModel3D<>(
+						new SimilarityModel3D(),
+						new TranslationModel3D(),
+						REGULARIZER_TRANSLATION
+					),
+				REGULARIZER_SIMILARITY
+			);*/
+		return ( M ) new InterpolatedAffineModel3D<>(
+				affineModel,
+				new TranslationModel3D(),
+				REGULARIZER_TRANSLATION
+			);
 	}
 
 	private static < M extends Model< M > > M createModel( final int dim, final TileInfo tile ) throws Exception {

@@ -59,6 +59,8 @@ public class StitchingOptimizer implements Serializable
 		public final double maxDisplacement;
 		public final double avgDisplacement;
 
+		public final int replacedTilesSimilarity;
+
 		public OptimizationResult(
 				final List< ImagePlusTimePoint > optimized,
 				final double maxAllowedError,
@@ -67,7 +69,8 @@ public class StitchingOptimizer implements Serializable
 				final int remainingGraphSize,
 				final int remainingPairs,
 				final double avgDisplacement,
-				final double maxDisplacement )
+				final double maxDisplacement,
+				final int replacedTilesSimilarity )
 		{
 			this.optimized = optimized;
 			this.optimizationParameters = optimizationParameters;
@@ -75,6 +78,7 @@ public class StitchingOptimizer implements Serializable
 			this.remainingPairs = remainingPairs;
 			this.avgDisplacement = avgDisplacement;
 			this.maxDisplacement = maxDisplacement;
+			this.replacedTilesSimilarity = replacedTilesSimilarity;
 
 			final double remainingGraphToFullGraphRatio = ( double ) remainingGraphSize / fullGraphSize;
 			assert remainingGraphToFullGraphRatio >= 0 && remainingGraphToFullGraphRatio <= 0;
@@ -197,10 +201,12 @@ public class StitchingOptimizer implements Serializable
 
 				final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
 				GlobalOptimizationPerformer.suppressOutput();
-				final List< ImagePlusTimePoint > optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
+				final List< ImagePlusTimePoint > optimized;
+
+				optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
 
 				// ignore this configuration if for some tiles there are not enough matches
-				if ( optimizationPerformer.replacedTiles != 0 )
+				if ( optimizationPerformer.replacedTilesTranslation != 0 )
 					return null;
 
 				final OptimizationResult optimizationResult = new OptimizationResult(
@@ -211,7 +217,8 @@ public class StitchingOptimizer implements Serializable
 						optimizationPerformer.remainingGraphSize,
 						validPairs,
 						optimizationPerformer.avgDisplacement,
-						optimizationPerformer.maxDisplacement
+						optimizationPerformer.maxDisplacement,
+						optimizationPerformer.replacedTilesSimilarity
 					);
 				return optimizationResult;
 			}
@@ -223,13 +230,16 @@ public class StitchingOptimizer implements Serializable
 		optimizationResultList.removeAll( Collections.singleton( null ) );
 		Collections.sort( optimizationResultList );
 
+		if ( optimizationResultList.isEmpty() )
+			throw new RuntimeException( "No results available" );
+
 		if ( logWriter != null )
 		{
 			logWriter.println();
 			logWriter.println( "Scanning parameter space for the optimizer: min.cross.correlation and min.variance:" );
 			logWriter.println();
 			for ( final OptimizationResult optimizationResult : optimizationResultList )
-				logWriter.println( "score=" + optimizationResult.score + ", graph=" + optimizationResult.remainingGraphSize + ", pairs=" + optimizationResult.remainingPairs + ", avg.error=" + optimizationResult.avgDisplacement + ", max.error=" + optimizationResult.maxDisplacement + ";  cross.corr=" + optimizationResult.optimizationParameters.minCrossCorrelation + ", variance=" + optimizationResult.optimizationParameters.minVariance );
+				logWriter.println( "score=" + optimizationResult.score + ", graph=" + optimizationResult.remainingGraphSize + ", pairs=" + optimizationResult.remainingPairs + ", avg.error=" + optimizationResult.avgDisplacement + ", max.error=" + optimizationResult.maxDisplacement + ";  cross.corr=" + optimizationResult.optimizationParameters.minCrossCorrelation + ", variance=" + optimizationResult.optimizationParameters.minVariance + ";  tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity);
 		}
 
 		return optimizationResultList.get( 0 );
@@ -259,7 +269,9 @@ public class StitchingOptimizer implements Serializable
 				{
 					try
 					{
-						final ImageCollectionElement el = Utils.createElementSimilarityModel( originalTileInfo );
+						// --- FIXME: test translation-only solution
+						final ImageCollectionElement el = Utils.createElementAffineModel( originalTileInfo );
+//						final ImageCollectionElement el = Utils.createElementTranslationModel( originalTileInfo );
 						final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), (java.awt.Image)null );
 						final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
 						fakeTileImagesMap.put( originalTileInfo.getIndex(), fakeTile );
