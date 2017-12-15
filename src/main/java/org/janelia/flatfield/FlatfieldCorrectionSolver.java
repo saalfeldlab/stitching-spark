@@ -184,18 +184,26 @@ public class FlatfieldCorrectionSolver implements Serializable
 					break;
 				}
 
-				final R interpolatedRegularizer = ( R ) new InterpolatedAffineModel1D<>(
-						regularizerModel,
-						new IdentityModel(),
-						INTERPOLATION_LAMBDA_IDENTITY );
+//				final R interpolatedRegularizer = ( R ) new InterpolatedAffineModel1D<>(
+//						regularizerModel,
+//						new IdentityModel(),
+//						INTERPOLATION_LAMBDA_IDENTITY );
+//
+//				final M interpolatedModel = ( M ) ( modelFound ?
+//						new IndependentlyInterpolatedAffineModel1D<>(
+//								pivotedModel,
+//								interpolatedRegularizer,
+//								INTERPOLATION_LAMBDA_SCALING,
+//								INTERPOLATION_LAMBDA_TRANSLATION ) :
+//						interpolatedRegularizer );
 
 				final M interpolatedModel = ( M ) ( modelFound ?
 						new IndependentlyInterpolatedAffineModel1D<>(
 								pivotedModel,
-								interpolatedRegularizer,
+								regularizerModel,
 								INTERPOLATION_LAMBDA_SCALING,
 								INTERPOLATION_LAMBDA_TRANSLATION ) :
-						interpolatedRegularizer );
+							regularizerModel );
 
 				final double[] estimatedModelValues = new double[ 2 ];
 				interpolatedModel.toArray( estimatedModelValues );

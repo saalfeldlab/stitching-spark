@@ -20,7 +20,6 @@ import org.janelia.dataaccess.PathResolver;
 
 import ij.ImagePlus;
 import mpicbg.models.Affine3D;
-import mpicbg.models.Tile;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -271,8 +270,8 @@ public class StitchingOptimizer implements Serializable
 
 		// Create fake tile objects so that they don't hold any image data
 		// required by the GlobalOptimization
-		final TreeMap< Integer, Tile< ? > > fakeTileImagesMap = new TreeMap<>();
-		for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts)
+		final TreeMap< Integer, ImagePlusTimePoint > fakeTileImagesMap = new TreeMap<>();
+		for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts )
 		{
 			for ( final TileInfo originalTileInfo : new TilePair( tileBoxShift.getTilePair().getA().getOriginalTile(), tileBoxShift.getTilePair().getB().getOriginalTile() ).toArray() )
 			{
@@ -283,8 +282,8 @@ public class StitchingOptimizer implements Serializable
 						// --- FIXME: test translation-only solution
 						final ImageCollectionElement el = Utils.createElementAffineModel( originalTileInfo );
 //						final ImageCollectionElement el = Utils.createElementTranslationModel( originalTileInfo );
-						final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), (java.awt.Image)null );
-						final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
+						final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), ( java.awt.Image ) null );
+						final ImagePlusTimePoint fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
 						fakeTileImagesMap.put( originalTileInfo.getIndex(), fakeTile );
 					}
 					catch ( final Exception e )
@@ -300,8 +299,8 @@ public class StitchingOptimizer implements Serializable
 		for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts )
 		{
 			final ComparePointPair comparePointPair = new ComparePointPair(
-					( ImagePlusTimePoint ) fakeTileImagesMap.get( tileBoxShift.getTilePair().getA().getOriginalTile().getIndex() ),
-					( ImagePlusTimePoint ) fakeTileImagesMap.get( tileBoxShift.getTilePair().getB().getOriginalTile().getIndex() )
+					fakeTileImagesMap.get( tileBoxShift.getTilePair().getA().getOriginalTile().getIndex() ),
+					fakeTileImagesMap.get( tileBoxShift.getTilePair().getB().getOriginalTile().getIndex() )
 				);
 
 			comparePointPair.setPointPair( tileBoxShift.getPointPair() );

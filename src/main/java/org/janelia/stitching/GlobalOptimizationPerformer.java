@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -13,7 +12,6 @@ import java.util.TreeMap;
 import java.util.Vector;
 import java.util.concurrent.ExecutionException;
 
-import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.NotEnoughDataPointsException;
@@ -21,7 +19,6 @@ import mpicbg.models.PointMatch;
 import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
-import mpicbg.models.TileUtil;
 import mpicbg.models.TranslationModel3D;
 import mpicbg.stitching.ImagePlusTimePoint;
 
@@ -320,16 +317,12 @@ public class GlobalOptimizationPerformer
 
 		long elapsed = System.nanoTime();
 
-		TileUtil.optimizeConcurrently(
-				new ErrorStatistic( iterations + 1 ),
-				10,
+		tc.optimize(
+				10, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
 				iterations,
 				iterations,
 				DAMPNESS_FACTOR,
-				tc,
-				tc.getTiles(),
-				tc.getFixedTiles(),
-				1 // single-threaded because run with different configurations in parallel using Spark
+				1 // run on a single thread because multiple configurations are tested at once on Spark
 			);
 
 		elapsed = System.nanoTime() - elapsed;
@@ -339,26 +332,11 @@ public class GlobalOptimizationPerformer
 		final double avgError = tc.getError();
 		final double maxError = tc.getMaxError();
 
-
-		final List< Double > errors = new ArrayList<>();
-
-		double longestDisplacement = 0;
-		PointMatch worstMatch = null;
-
 		// new way of finding biggest error to look for the largest displacement
-		for ( final Tile t : tc.getTiles() )
-		{
-			for ( final PointMatch p :  (Set< PointMatch >)t.getMatches() )
-			{
-				final double error = p.getDistance();
-				errors.add( error );
-				if ( longestDisplacement < error )
-				{
-					longestDisplacement = error;
-					worstMatch = p;
-				}
-			}
-		}
+		double longestDisplacement = 0;
+		for ( final Tile< ? > t : tc.getTiles() )
+			for ( final PointMatch p :  t.getMatches() )
+				longestDisplacement = Math.max( p.getDistance(), longestDisplacement );
 
 		writeLog( logWriter, "" );
 		writeLog( logWriter, "Max pairwise match displacement: " + longestDisplacement );
@@ -367,10 +345,6 @@ public class GlobalOptimizationPerformer
 
 		avgDisplacement = avgError;
 		maxDisplacement = maxError;
-
-
-		Collections.sort( errors );
-		Collections.reverse( errors );
 
 		lostTiles = new TreeMap<>();
 		for ( final ComparePointPair comparePointPair : comparePointPairs )
