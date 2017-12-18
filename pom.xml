@@ -241,6 +241,10 @@
 								<exclude>com.google.api.client.auth.oauth2.StoredCredential</exclude>
 							</excludes>
 						</relocation>
+						<relocation>
+							<pattern>org.apache.commons.compress.utils.IOUtils</pattern>
+							<shadedPattern>org.janelia.saalfeldlab.org.apache.commons.compress.utils.IOUtils</shadedPattern>
+						</relocation>
 					</relocations>
 				</configuration>
 				<!-- binds by default to package phase -->
