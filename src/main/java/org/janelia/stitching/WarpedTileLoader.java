@@ -1,5 +1,6 @@
 package org.janelia.stitching;
 
+import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 import org.janelia.util.ImageImporter;
 
 import bdv.img.TpsTransformWrapper;
@@ -12,6 +13,8 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.converter.Converters;
+import net.imglib2.converter.RealConverter;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.RealViews;
@@ -23,6 +26,8 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.ByteType;
 import net.imglib2.util.ConstantUtils;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Util;
+import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
 public class WarpedTileLoader
@@ -34,17 +39,50 @@ public class WarpedTileLoader
 			final TileInfo slabTile,
 			final TpsTransformWrapper transform )
 	{
-		return load( slabMin, slabTile, transform, DEFAULT_PADDING );
+		return load( slabMin, slabTile, transform, DEFAULT_PADDING, null );
 	}
+
 	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > load(
 			final double[] slabMin,
 			final TileInfo slabTile,
 			final TpsTransformWrapper transform,
 			final long[] padding )
 	{
+		return load( slabMin, slabTile, transform, padding, null );
+	}
+
+	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > load(
+			final double[] slabMin,
+			final TileInfo slabTile,
+			final TpsTransformWrapper transform,
+			final RandomAccessiblePairNullable< U, U > flatfield )
+	{
+		return load( slabMin, slabTile, transform, DEFAULT_PADDING, flatfield );
+	}
+
+	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > load(
+			final double[] slabMin,
+			final TileInfo slabTile,
+			final TpsTransformWrapper transform,
+			final long[] padding,
+			final RandomAccessiblePairNullable< U, U > flatfield )
+	{
 		final ImagePlus imp = ImageImporter.openImage( slabTile.getFilePath() );
 		final RandomAccessibleInterval< T > rawTile = ImagePlusImgs.from( imp );
-		return warp( slabMin, slabTile, rawTile, transform, padding );
+
+		final RandomAccessibleInterval< T > source;
+		if ( flatfield != null )
+		{
+			final FlatfieldCorrectedRandomAccessible< T, U > flatfieldCorrectedImg = new FlatfieldCorrectedRandomAccessible<>( rawTile, flatfield.toRandomAccessiblePair() );
+			final RandomAccessible< T > correctedConvertedRandomAccessible = Converters.convert( flatfieldCorrectedImg, new RealConverter<>(), Util.getTypeFromInterval( rawTile ) );
+			source = Views.interval( correctedConvertedRandomAccessible, rawTile );
+		}
+		else
+		{
+			source = rawTile;
+		}
+
+		return warp( slabMin, slabTile, source, transform, padding );
 	}
 
 	public static Interval getBoundingBox(
@@ -54,6 +92,7 @@ public class WarpedTileLoader
 	{
 		return getBoundingBox( slabMin, slabTile, transform, DEFAULT_PADDING );
 	}
+
 	public static Interval getBoundingBox(
 			final double[] slabMin,
 			final TileInfo slabTile,

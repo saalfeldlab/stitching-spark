@@ -54,12 +54,13 @@ public class FusionPerformer
 		BLENDING
 	}
 
-	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingMaxMinDistance(
+	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingMaxMinDistance(
 			final Interval targetInterval,
 			final List< TileInfo > tilesWithinCell,
 			final Map< Integer, String > slabsMap,
 			final Map< String, double[] > slabsMin,
-			final Map< String, TpsTransformWrapper > slabsTransforms ) throws Exception
+			final Map< String, TpsTransformWrapper > slabsTransforms,
+			final RandomAccessiblePairNullable< U, U > flatfield ) throws Exception
 	{
 		final ImageType imageType = Utils.getImageType( tilesWithinCell );
 		if ( imageType == null )
@@ -78,7 +79,7 @@ public class FusionPerformer
 			final double[] slabMin = slabsMin.get( slab );
 			final TpsTransformWrapper slabTransform = slabsTransforms.get( slab );
 
-			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabMin, tile, slabTransform );
+			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabMin, tile, slabTransform, flatfield );
 
 			final FinalRealInterval intersection = IntervalsNullable.intersectReal( warpedTileImg, targetInterval );
 			if ( intersection == null )
@@ -182,12 +183,13 @@ public class FusionPerformer
 		return insideTile ? unwarpedLocalPositionPixels : null;
 	}
 
-	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingBlending(
+	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingBlending(
 			final Interval targetInterval,
 			final List< TileInfo > tilesWithinCell,
 			final Map< Integer, String > slabsMap,
 			final Map< String, double[] > slabsMin,
-			final Map< String, TpsTransformWrapper > slabsTransforms ) throws Exception
+			final Map< String, TpsTransformWrapper > slabsTransforms,
+			final RandomAccessiblePairNullable< U, U > flatfield ) throws Exception
 	{
 		final ImageType imageType = Utils.getImageType( tilesWithinCell );
 		if ( imageType == null )
@@ -205,7 +207,7 @@ public class FusionPerformer
 			final double[] slabMin = slabsMin.get( slab );
 			final TpsTransformWrapper slabTransform = slabsTransforms.get( slab );
 
-			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabsMin.get( slab ), tile, slabsTransforms.get( slab ) );
+			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabsMin.get( slab ), tile, slabsTransforms.get( slab ), flatfield );
 
 			final FinalRealInterval intersection = IntervalsNullable.intersectReal( warpedTileImg, targetInterval );
 			if ( intersection == null )
@@ -280,12 +282,13 @@ public class FusionPerformer
 	}
 
 
-	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingMaxIntensity(
+	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > ImagePlusImg< T, ? > fuseWarpedTilesWithinCellUsingMaxIntensity(
 			final Interval targetInterval,
 			final List< TileInfo > tilesWithinCell,
 			final Map< Integer, String > slabsMap,
 			final Map< String, double[] > slabsMin,
-			final Map< String, TpsTransformWrapper > slabsTransforms ) throws Exception
+			final Map< String, TpsTransformWrapper > slabsTransforms,
+			final RandomAccessiblePairNullable< U, U > flatfield ) throws Exception
 	{
 		final ImageType imageType = Utils.getImageType( tilesWithinCell );
 		if ( imageType == null )
@@ -298,7 +301,7 @@ public class FusionPerformer
 		{
 			final String slab = slabsMap.get( tile.getIndex() );
 
-			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabsMin.get( slab ), tile, slabsTransforms.get( slab ) );
+			final RandomAccessibleInterval< T > warpedTileImg = WarpedTileLoader.load( slabsMin.get( slab ), tile, slabsTransforms.get( slab ), flatfield );
 
 			final FinalRealInterval intersection = IntervalsNullable.intersectReal(
 					warpedTileImg,

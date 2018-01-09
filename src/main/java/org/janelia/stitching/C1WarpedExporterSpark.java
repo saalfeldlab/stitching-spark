@@ -18,16 +18,20 @@ public class C1WarpedExporterSpark
 {
 	public static void main( final String[] args ) throws IOException, PipelineExecutionException
 	{
+		final String flatfieldPath = args.length > 0 ? args[ 0 ] : null;
+
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "C1WarpedExport" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 			) )
 		{
-			run( sparkContext );
+			run( sparkContext, flatfieldPath );
 		}
 	}
 
-	private static < T extends NativeType< T > & RealType< T > > void run( final JavaSparkContext sparkContext ) throws IOException, PipelineExecutionException
+	private static < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > void run(
+			final JavaSparkContext sparkContext,
+			final String flatfieldPath ) throws IOException, PipelineExecutionException
 	{
 		final int outputCellSize = 128;
 		final double[] voxelDimensions = new double[] { 0.097, 0.097, 0.18 };
@@ -36,7 +40,7 @@ public class C1WarpedExporterSpark
 		final Map< String, double[] > slabsMin = new HashMap<>();
 		final Map< String, TpsTransformWrapper > slabsTransforms = new HashMap<>();
 
-		for ( int channel = 0; channel < 2; ++channel )
+		for ( int channel = 0; channel < C1WarpedMetadata.NUM_CHANNELS; ++channel )
 		{
 			final Map< String, TileInfo[] > slabsTiles = new HashMap<>();
 
@@ -61,14 +65,20 @@ public class C1WarpedExporterSpark
 			slabsTilesChannels.add( slabsTiles );
 		}
 
-		final WarpedExporter< T > exporter = new WarpedExporter<>(
+		if ( flatfieldPath != null )
+			System.out.println( "Exporting using flatfields from " + flatfieldPath );
+		else
+			System.out.println( "Exporting without flatfield correction" );
+
+		final WarpedExporter< T, U > exporter = new WarpedExporter<>(
 				sparkContext,
 				slabsTilesChannels,
 				slabsMin,
 				slabsTransforms,
 				voxelDimensions,
 				outputCellSize,
-				"/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/decon-warped-export"
+				"/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/decon-warped-export",
+				flatfieldPath
 			);
 
 //		final Interval subinterval = new FinalInterval( new long[] { 3000, 3000, 3000 }, new long[] { 3999, 3999, 3999 } );

@@ -13,6 +13,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.broadcast.Broadcast;
+import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.N5;
@@ -34,9 +36,10 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsHelper;
+import net.imglib2.view.RandomAccessiblePairNullable;
 import scala.Tuple2;
 
-public class WarpedExporter< T extends NativeType< T > & RealType< T > > implements Serializable
+public class WarpedExporter< T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > implements Serializable
 {
 	private static final long serialVersionUID = -3670611071620152571L;
 
@@ -49,8 +52,11 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T > > impleme
 	private final double[] voxelDimensions;
 	private final int outputCellSize;
 	private final String outputPath;
+	private final String flatfieldPath;
 
 	double[] normalizedVoxelDimensions;
+
+	Broadcast< RandomAccessiblePairNullable< U, U > > broadcastedFlatfieldCorrection;
 
 	transient Interval subinterval = null;
 
@@ -61,7 +67,8 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T > > impleme
 			final Map< String, TpsTransformWrapper > slabsTransforms,
 			final double[] voxelDimensions,
 			final int outputCellSize,
-			final String outputPath )
+			final String outputPath,
+			final String flatfieldPath )
 	{
 		this.sparkContext = sparkContext;
 		this.slabsTilesChannels = slabsTilesChannels;
@@ -70,6 +77,7 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T > > impleme
 		this.voxelDimensions = voxelDimensions;
 		this.outputCellSize = outputCellSize;
 		this.outputPath = outputPath;
+		this.flatfieldPath = flatfieldPath;
 	}
 
 	public void setSubInterval( final Interval subinterval )
@@ -108,13 +116,31 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T > > impleme
 
 			final String channelGroupPath = "c" + channel;
 			n5.createGroup( channelGroupPath );
-
 			final String fullScaleOutputPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, 0 );
+
+			// prepare flatfield correction images
+			// use it as a folder with the input file's name
+			if ( flatfieldPath != null )
+			{
+				final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
+						Paths.get( flatfieldPath, "ch" + channel + "-flatfield", "S.tif" ).toString(),
+						Paths.get( flatfieldPath, "ch" + channel + "-flatfield", "T.tif" ).toString(),
+						C1WarpedMetadata.NUM_DIMENSIONS
+					);
+				System.out.println( "[Flatfield correction] Broadcasting flatfield correction images" );
+				broadcastedFlatfieldCorrection = sparkContext.broadcast( flatfieldCorrection );
+			}
+			else
+			{
+				broadcastedFlatfieldCorrection = sparkContext.broadcast( null );
+			}
 
 			// Generate export of the first scale level
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( fullScaleOutputPath ) )
 				fuseWarp( baseExportPath, fullScaleOutputPath, slabsTilesChannels.get( channel ) );
+
+			broadcastedFlatfieldCorrection.destroy();
 
 			// Generate lower scale levels
 			// FIXME: remove. But it saves time for now
@@ -247,7 +273,8 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T > > impleme
 						tilesWithinCell,
 						slabsMap,
 						slabsMin,
-						slabsTransforms
+						slabsTransforms,
+						broadcastedFlatfieldCorrection.value()
 					);
 
 				final long[] biggerCellOffsetCoordinates = new long[ biggerCellBox.numDimensions() ];

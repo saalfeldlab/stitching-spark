@@ -18,6 +18,9 @@ import jitk.spline.ThinPlateR2LogRSplineKernelTransform;
 
 public class C1WarpedMetadata
 {
+	public static final int NUM_CHANNELS = 2;
+	public static final int NUM_DIMENSIONS = 3;
+
 	private static final Map< String, String > LANDMARKS;
 	static
 	{
@@ -51,7 +54,7 @@ public class C1WarpedMetadata
 	public static TpsTransformWrapper getTransform( final String slab ) throws IOException
 	{
 		if ( LANDMARKS.get( slab ) == null )
-			return new TpsTransformWrapper( 3 );
+			return new TpsTransformWrapper( NUM_DIMENSIONS );
 
 		final Path landmarksPath = Paths.get( LANDMARKS_DIR, LANDMARKS.get( slab ) );
 		final String data = new String( Files.readAllBytes( landmarksPath ) );
