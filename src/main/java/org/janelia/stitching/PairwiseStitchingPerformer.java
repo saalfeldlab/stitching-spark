@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Vector;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.commons.lang.NotImplementedException;
+
 import fiji.stacks.Hyperstack_rearranger;
 import ij.ImagePlus;
 import ij.gui.Roi;
@@ -242,10 +244,13 @@ public class PairwiseStitchingPerformer
 		phaseCorr.setInvestigateNumPeaks( numPeaks );
 
 		phaseCorr.setSearchRadiusPointValidator( searchRadiusPointValidator );
-		phaseCorr.setRoiToTileOffset( roiToTileOffset );
-		phaseCorr.setGlobalOffset( globalOffset );
-		phaseCorr.setStageOffset( stageOffset );
-		phaseCorr.setConfidenceInterval( confidenceIntervalMin, confidenceIntervalMax );
+
+//		phaseCorr.setRoiToTileOffset( roiToTileOffset );
+//		phaseCorr.setGlobalOffset( globalOffset );
+//		phaseCorr.setStageOffset( stageOffset );
+//		phaseCorr.setConfidenceInterval( confidenceIntervalMin, confidenceIntervalMax );
+		if ( roiToTileOffset != null || globalOffset != null || stageOffset != null || confidenceIntervalMin != null || confidenceIntervalMax != null )
+			throw new NotImplementedException();
 
 		if ( numThreads > 0 )
 		{
