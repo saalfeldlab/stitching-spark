@@ -70,6 +70,8 @@ public class C1WarpedExporterSpark
 		else
 			System.out.println( "Exporting without flatfield correction" );
 
+		final String outputPath = "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/warped-export" + ( flatfieldPath != null ? "-flatfield" : "" );
+
 		final WarpedExporter< T, U > exporter = new WarpedExporter<>(
 				sparkContext,
 				slabsTilesChannels,
@@ -77,7 +79,7 @@ public class C1WarpedExporterSpark
 				slabsTransforms,
 				voxelDimensions,
 				outputCellSize,
-				"/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/decon-warped-export",
+				outputPath,
 				flatfieldPath
 			);
 

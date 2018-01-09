@@ -43,7 +43,7 @@ public class C1WarpedMetadata
 		LANDMARKS.put( "17z", "ch0_17-16_serialized.txt" );
 		LANDMARKS.put( "18z", "ch0_18-17_serialized.txt" );
 	}
-	private static final String SLABS_DIR = "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/decon-export-slabs";
+	private static final String SLABS_DIR = "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/updated-config-paths";
 	private static final String LANDMARKS_DIR = "/groups/saalfeld/home/bogovicj/projects/igor_illumiation-correction/serialized_transforms";
 
 	public static Set< String > getSlabs()
@@ -64,7 +64,7 @@ public class C1WarpedMetadata
 
 	public static TileInfo[] getSlabTiles( final String slab, final int channel ) throws IOException
 	{
-		final Path slabPath = Paths.get( SLABS_DIR, slab, "ch" + channel + "-" + slab + "-final-decon.json" );
+		final Path slabPath = Paths.get( SLABS_DIR, slab, "ch" + channel + "-" + slab + "-final.json" );
 		return TileInfoJSONProvider.loadTilesConfiguration( slabPath.toString() );
 	}
 
