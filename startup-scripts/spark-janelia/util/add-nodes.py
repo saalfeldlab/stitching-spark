@@ -14,4 +14,4 @@ master_id = int(sys.argv[1])
 nodes = int(sys.argv[2])
 runtime = sys.argv[3] if len(sys.argv) > 3 else None
 
-subprocess.call([spark_janelia_path, 'add-workers', '-j', str(master_id), '-n', str(nodes), '-v', spark_version] + (['-t', runtime] if runtime is not None else None)
+subprocess.call([spark_janelia_path, 'add-workers', '-j', str(master_id), '-n', str(nodes), '-v', spark_version] + (['-t', runtime] if runtime is not None else None))
