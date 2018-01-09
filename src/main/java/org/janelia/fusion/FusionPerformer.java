@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.fusion;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -9,9 +9,11 @@ import java.util.Map;
 import java.util.Set;
 
 import org.janelia.dataaccess.DataProvider;
-import org.janelia.fusion.FusionMode;
-import org.janelia.fusion.FusionStrategy;
-import org.janelia.fusion.FusionStrategyFactory;
+import org.janelia.stitching.ImageType;
+import org.janelia.stitching.TileInfo;
+import org.janelia.stitching.TileOperations;
+import org.janelia.stitching.TransformedTileImageLoader;
+import org.janelia.stitching.Utils;
 
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
