@@ -4,7 +4,9 @@ import java.nio.file.Paths;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
+import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
 import org.janelia.saalfeldlab.n5.spark.N5SliceTiffConverter;
 import org.janelia.saalfeldlab.n5.spark.TiffUtils;
 
@@ -37,12 +39,18 @@ public class N5ToSliceTiffSpark
 
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf().setAppName( "ConvertN5ToSliceTIFF" ) ) )
 		{
-			final N5ExportMetadata exportMetadata = new N5ExportMetadata( n5Path );
+			final N5ExportMetadataReader exportMetadata = N5ExportMetadata.openForReading( N5.openFSReader( n5Path ) );
 			for ( int channel = 0; channel < exportMetadata.getNumChannels(); ++channel )
 			{
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
 				final String outputChannelPath = Paths.get( outputPath, "ch" + channel ).toString();
-				N5SliceTiffConverter.convertToSliceTiff( sparkContext, n5Path, n5DatasetPath, outputChannelPath, TiffUtils.TiffCompression.LZW );
+				N5SliceTiffConverter.convertToSliceTiff(
+						sparkContext,
+						() -> N5.openFSReader( n5Path ),
+						n5DatasetPath,
+						outputChannelPath,
+						TiffUtils.TiffCompression.LZW
+					);
 			}
 		}
 	}

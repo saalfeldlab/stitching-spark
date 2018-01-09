@@ -8,6 +8,7 @@ import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
+import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
 import org.janelia.saalfeldlab.n5.spark.N5MaxIntensityProjection;
 import org.janelia.saalfeldlab.n5.spark.TiffUtils;
 
@@ -71,7 +72,7 @@ public class N5ToMIPsSpark
 				.set( "spark.rdd.compress", "true" )
 			) )
 		{
-			final N5ExportMetadata exportMetadata = new N5ExportMetadata( n5Path );
+			final N5ExportMetadataReader exportMetadata = N5ExportMetadata.openForReading( N5.openFSReader( n5Path ) );
 			for ( int channel = 0; channel < exportMetadata.getNumChannels(); ++channel )
 			{
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
@@ -97,7 +98,7 @@ public class N5ToMIPsSpark
 
 				N5MaxIntensityProjection.createMaxIntensityProjection(
 						sparkContext,
-						n5Path,
+						() -> N5.openFSReader( n5Path ),
 						n5DatasetPath,
 						mipStepsCells,
 						outputChannelPath,

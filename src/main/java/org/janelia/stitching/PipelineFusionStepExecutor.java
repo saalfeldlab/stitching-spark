@@ -18,6 +18,7 @@ import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
+import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5DownsamplingSpark;
 import org.janelia.stitching.FusionPerformer.FusionMode;
@@ -75,29 +76,13 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final String overlapsPathSuffix = job.getArgs().exportOverlaps() ? "-overlaps" : "";
 
 		// determine the best location for storing the export files (near the tile configurations by default)
-		String baseExportPath = null;
-		for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
-		{
-			final String inputFolderPath = Paths.get( inputFilePath ).getParent().toString();
-			if ( baseExportPath == null )
-			{
-				baseExportPath = inputFolderPath;
-			}
-			else if ( !baseExportPath.equals( inputFolderPath ) )
-			{
-				// go one level upper since channels are stored in individual subfolders
-				baseExportPath = Paths.get( inputFolderPath ).getParent().toString();
-				break;
-			}
-		}
-
-		baseExportPath = Paths.get( baseExportPath, "export.n5" ).toString();
+		final String n5Path = determineN5Path();
 
 		// FIXME: allow it for now
 //		if ( Files.exists( Paths.get( baseExportPath ) ) )
 //			throw new PipelineExecutionException( "Export path already exists: " + baseExportPath );
 
-		final N5Writer n5 = N5.openFSWriter( baseExportPath );
+		final N5Writer n5 = N5.openFSWriter( n5Path );
 		if ( !overlapsPathSuffix.isEmpty() )
 			n5.createGroup( overlapsPathSuffix );
 
@@ -141,12 +126,17 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// Generate export of the first scale level
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( fullScaleOutputPath ) )
-				fuse( baseExportPath, fullScaleOutputPath, job.getTiles( channel ) );
+				fuse( n5Path, fullScaleOutputPath, job.getTiles( channel ) );
 
 			// Generate lower scale levels
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
-				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic( sparkContext, baseExportPath, fullScaleOutputPath, new FinalVoxelDimensions( "um", voxelDimensions ) );
+				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic(
+						sparkContext,
+						() -> N5.openFSWriter( n5Path ),
+						fullScaleOutputPath,
+						new FinalVoxelDimensions( "um", voxelDimensions )
+					);
 
 			broadcastedPairwiseConnectionsMap.destroy();
 			broadcastedFlatfieldCorrection.destroy();
@@ -158,7 +148,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		for ( int s = 0; s < downsamplingFactors.length; ++s )
 			scalesDouble[ s ] = Conversions.toDoubleArray( downsamplingFactors[ s ] );
 
-		final N5ExportMetadata exportMetadata = new N5ExportMetadata( baseExportPath );
+		final N5ExportMetadataWriter exportMetadata = N5ExportMetadata.openForWriting( N5.openFSWriter( n5Path ) );
 		exportMetadata.setDefaultScales( scalesDouble );
 		exportMetadata.setDefaultPixelResolution( new FinalVoxelDimensions( "um", voxelDimensions ) );
 	}
@@ -236,6 +226,28 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		default:
 			return null;
 		}
+	}
+
+	private String determineN5Path()
+	{
+		String baseExportPath = null;
+		for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+		{
+
+			final String inputFolderPath = Paths.get( inputFilePath ).getParent().toString();
+			if ( baseExportPath == null )
+			{
+				baseExportPath = inputFolderPath;
+			}
+			else if ( !baseExportPath.equals( inputFolderPath ) )
+			{
+				// go one level upper since channels are stored in individual subfolders
+				baseExportPath = Paths.get( inputFolderPath ).getParent().toString();
+				break;
+			}
+		}
+
+		return Paths.get( baseExportPath, "export.n5" ).toString();
 	}
 
 	private Map< Integer, Set< Integer > > getPairwiseConnectionsMap( final String channelPath ) throws PipelineExecutionException

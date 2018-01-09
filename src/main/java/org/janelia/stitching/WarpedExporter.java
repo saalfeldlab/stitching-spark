@@ -18,6 +18,7 @@ import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
+import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5DownsamplingSpark;
 import org.janelia.util.Conversions;
@@ -118,7 +119,12 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T > > impleme
 			// Generate lower scale levels
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
-				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic( sparkContext, baseExportPath, fullScaleOutputPath, new FinalVoxelDimensions( "um", voxelDimensions ) );
+				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic(
+						sparkContext,
+						() -> N5.openFSWriter( baseExportPath ),
+						fullScaleOutputPath,
+						new FinalVoxelDimensions( "um", voxelDimensions )
+					);
 		}
 
 		System.out.println( "All channels have been exported" );
@@ -127,7 +133,7 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T > > impleme
 		for ( int s = 0; s < downsamplingFactors.length; ++s )
 			scalesDouble[ s ] = Conversions.toDoubleArray( downsamplingFactors[ s ] );
 
-		final N5ExportMetadata exportMetadata = new N5ExportMetadata( baseExportPath );
+		final N5ExportMetadataWriter exportMetadata = N5ExportMetadata.openForWriting( N5.openFSWriter( baseExportPath ) );
 		exportMetadata.setDefaultScales( scalesDouble );
 		exportMetadata.setDefaultPixelResolution( new FinalVoxelDimensions( "um", voxelDimensions ) );
 	}
