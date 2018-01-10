@@ -113,28 +113,30 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T >, U extend
 			n5.createGroup( channelGroupPath );
 			final String fullScaleOutputPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, 0 );
 
-			// prepare flatfield correction images
-			// use it as a folder with the input file's name
-			if ( flatfieldPath != null )
-			{
-				final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
-						Paths.get( flatfieldPath, "ch" + channel + "-flatfield", "S.tif" ).toString(),
-						Paths.get( flatfieldPath, "ch" + channel + "-flatfield", "T.tif" ).toString(),
-						C1WarpedMetadata.NUM_DIMENSIONS
-					);
-				System.out.println( "[Flatfield correction] Broadcasting flatfield correction images" );
-				broadcastedFlatfieldCorrection = sparkContext.broadcast( flatfieldCorrection );
-			}
-			else
-			{
-				broadcastedFlatfieldCorrection = sparkContext.broadcast( null );
-			}
-
 			// Generate export of the first scale level
 			if ( !n5.datasetExists( fullScaleOutputPath ) )
+			{
+				// prepare flatfield correction images
+				// use it as a folder with the input file's name
+				if ( flatfieldPath != null )
+				{
+					final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
+							Paths.get( flatfieldPath, "ch" + channel + "-flatfield", "S.tif" ).toString(),
+							Paths.get( flatfieldPath, "ch" + channel + "-flatfield", "T.tif" ).toString(),
+							C1WarpedMetadata.NUM_DIMENSIONS
+						);
+					System.out.println( "[Flatfield correction] Broadcasting flatfield correction images" );
+					broadcastedFlatfieldCorrection = sparkContext.broadcast( flatfieldCorrection );
+				}
+				else
+				{
+					broadcastedFlatfieldCorrection = sparkContext.broadcast( null );
+				}
+
 				fuseWarp( baseExportPath, fullScaleOutputPath, slabsTilesChannels.get( channel ) );
 
-			broadcastedFlatfieldCorrection.destroy();
+				broadcastedFlatfieldCorrection.destroy();
+			}
 
 			// Generate lower scale levels
 			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
