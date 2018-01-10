@@ -1,6 +1,8 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -47,6 +49,10 @@ public class C1WarpedExporterSpark
 			for ( final String slab : C1WarpedMetadata.getSlabs() )
 			{
 				final TileInfo[] slabTiles = C1WarpedMetadata.getSlabTiles( slab, channel );
+
+				for ( final TileInfo tile : slabTiles )
+					if ( !Files.exists( Paths.get( tile.getFilePath() ) ) )
+						throw new PipelineExecutionException( "Tile " + tile.getIndex() + " in ch" + channel + " cannot be found: " + tile.getFilePath() );
 
 				// set default pixel resolution if null
 				for ( final TileInfo tile : slabTiles )
