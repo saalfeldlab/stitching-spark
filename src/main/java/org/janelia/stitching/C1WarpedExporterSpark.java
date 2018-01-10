@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -70,6 +71,16 @@ public class C1WarpedExporterSpark
 
 			slabsTilesChannels.add( slabsTiles );
 		}
+
+		System.out.println();
+		for ( int channel = 0; channel < slabsTilesChannels.size(); ++channel )
+		{
+			int numTiles = 0;
+			for ( final Entry< String, TileInfo[] > entry : slabsTilesChannels.get( channel ).entrySet() )
+				numTiles += entry.getValue().length;
+			System.out.println( "ch" + channel + ": " + numTiles + " tiles" );
+		}
+		System.out.println();
 
 		if ( flatfieldPath != null )
 			System.out.println( "Exporting using flatfields from " + flatfieldPath );
