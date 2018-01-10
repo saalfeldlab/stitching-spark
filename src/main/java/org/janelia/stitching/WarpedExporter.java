@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -98,10 +97,6 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T >, U extend
 	private void runImpl() throws PipelineExecutionException, IOException
 	{
 		final String baseExportPath = Paths.get( outputPath, "export.n5" ).toString();
-
-		if ( Files.exists( Paths.get( baseExportPath ) ) )
-			throw new PipelineExecutionException( "Export path already exists: " + baseExportPath );
-
 		final N5Writer n5 = N5.openFSWriter( baseExportPath );
 
 		int[][] downsamplingFactors = null;
@@ -136,14 +131,12 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T >, U extend
 			}
 
 			// Generate export of the first scale level
-			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( fullScaleOutputPath ) )
 				fuseWarp( baseExportPath, fullScaleOutputPath, slabsTilesChannels.get( channel ) );
 
 			broadcastedFlatfieldCorrection.destroy();
 
 			// Generate lower scale levels
-			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
 				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic(
 						sparkContext,
