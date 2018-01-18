@@ -24,7 +24,8 @@ import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageURI;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
-import org.janelia.saalfeldlab.n5.googlecloud.N5GoogleCloudStorage;
+import org.janelia.saalfeldlab.n5.googlecloud.N5GoogleCloudStorageReader;
+import org.janelia.saalfeldlab.n5.googlecloud.N5GoogleCloudStorageWriter;
 import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
 
@@ -240,25 +241,25 @@ public class GoogleCloudDataProvider implements DataProvider
 	@Override
 	public N5Reader createN5Reader( final URI baseUri ) throws IOException
 	{
-		return N5GoogleCloudStorage.openCloudStorageReader( storage, getBucketName( baseUri ) );
+		return new N5GoogleCloudStorageReader( storage, getBucketName( baseUri ) );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri ) throws IOException
 	{
-		return N5GoogleCloudStorage.openCloudStorageWriter( storage, getBucketName( baseUri ) );
+		return new N5GoogleCloudStorageWriter( storage, getBucketName( baseUri ) );
 	}
 
 	@Override
 	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5GoogleCloudStorage.openCloudStorageReader( storage, getBucketName( baseUri ), gsonBuilder );
+		return new N5GoogleCloudStorageReader( storage, getBucketName( baseUri ), gsonBuilder );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5GoogleCloudStorage.openCloudStorageWriter( storage, getBucketName( baseUri ), gsonBuilder );
+		return new N5GoogleCloudStorageWriter( storage, getBucketName( baseUri ), gsonBuilder );
 	}
 
 	private String getBucketName( final URI baseUri )

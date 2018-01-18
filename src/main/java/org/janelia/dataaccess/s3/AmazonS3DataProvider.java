@@ -24,7 +24,8 @@ import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
-import org.janelia.saalfeldlab.n5.s3.N5AmazonS3;
+import org.janelia.saalfeldlab.n5.s3.N5AmazonS3Reader;
+import org.janelia.saalfeldlab.n5.s3.N5AmazonS3Writer;
 import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
 
@@ -277,25 +278,25 @@ public class AmazonS3DataProvider implements DataProvider
 	@Override
 	public N5Reader createN5Reader( final URI baseUri ) throws IOException
 	{
-		return N5AmazonS3.openS3Reader( s3, getBucketName( baseUri ) );
+		return new N5AmazonS3Reader( s3, getBucketName( baseUri ) );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri ) throws IOException
 	{
-		return N5AmazonS3.openS3Writer( s3, getBucketName( baseUri ) );
+		return new N5AmazonS3Writer( s3, getBucketName( baseUri ) );
 	}
 
 	@Override
 	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5AmazonS3.openS3Reader( s3, getBucketName( baseUri ), gsonBuilder );
+		return new N5AmazonS3Reader( s3, getBucketName( baseUri ), gsonBuilder );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5AmazonS3.openS3Writer( s3, getBucketName( baseUri ), gsonBuilder );
+		return new N5AmazonS3Writer( s3, getBucketName( baseUri ), gsonBuilder );
 	}
 
 	public static AmazonS3URI decodeS3Uri( final URI uri ) throws IOException

@@ -21,8 +21,8 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.histogram.Histogram;
-import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.stitching.PipelineExecutionException;
@@ -166,7 +166,7 @@ public class HistogramsProvider implements Serializable
 					fieldOfViewSize,
 					blockSize,
 					DataType.SERIALIZABLE,
-					CompressionType.GZIP
+					new GzipCompression()
 				);
 		}
 		else
@@ -379,7 +379,7 @@ public class HistogramsProvider implements Serializable
 					fullTileSize,
 					blockSize,
 					DataType.SERIALIZABLE,
-					CompressionType.GZIP
+					new GzipCompression()
 				);
 		}
 

@@ -19,7 +19,7 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.fusion.FusionPerformer;
-import org.janelia.saalfeldlab.n5.CompressionType;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
@@ -230,7 +230,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				dimensions,
 				cellSize,
 				N5Utils.dataType( ( T ) tiles[ 0 ].getType().getType() ),
-				CompressionType.GZIP
+				new GzipCompression()
 			);
 
 		// use the size of the tile as a bigger cell to minimize the number of loads for each image

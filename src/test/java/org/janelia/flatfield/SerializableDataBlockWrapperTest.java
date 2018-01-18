@@ -3,10 +3,15 @@ package org.janelia.flatfield;
 import java.io.IOException;
 import java.util.Random;
 
-import org.janelia.saalfeldlab.n5.CompressionType;
+import org.janelia.saalfeldlab.n5.Bzip2Compression;
+import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.DataType;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.Lz4Compression;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.RawCompression;
+import org.janelia.saalfeldlab.n5.XzCompression;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -29,10 +34,21 @@ public class SerializableDataBlockWrapperTest
 
 	protected static N5Writer n5;
 
+	protected Compression[] getCompressions() {
+
+		return new Compression[] {
+				new RawCompression(),
+				new Bzip2Compression(),
+				new GzipCompression(),
+				new Lz4Compression(),
+				new XzCompression()
+			};
+	}
+
 	@BeforeClass
 	public static void setUpBeforeClass() throws IOException
 	{
-		n5 = N5.openFSWriter( testDirPath );
+		n5 = new N5FSWriter( testDirPath );
 	}
 
 	@AfterClass
@@ -44,10 +60,10 @@ public class SerializableDataBlockWrapperTest
 	@Test
 	public void testSerializableTypeString() throws IOException {
 
-		for (final CompressionType compressionType : CompressionType.values()) {
-			System.out.println("Testing " + compressionType + " serializable type with String");
+		for (final Compression compression : getCompressions()) {
+			System.out.println("Testing " + compression.getType() + " serializable type with String");
 			try {
-				n5.createDataset(datasetName, dimensions, blockSize, DataType.SERIALIZABLE, compressionType);
+				n5.createDataset(datasetName, dimensions, blockSize, DataType.SERIALIZABLE, compression);
 				final SerializableDataBlockWrapper< String > dataBlockWrapper = new SerializableDataBlockWrapper<>( n5, datasetName, new long[]{0, 0, 0} );
 				final WrappedListImg< String > dataBlockWrapped = dataBlockWrapper.wrap();
 				final ListCursor< String > dataBlockCursor = dataBlockWrapped.cursor();

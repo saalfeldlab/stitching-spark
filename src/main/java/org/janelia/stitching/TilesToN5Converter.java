@@ -15,7 +15,8 @@ import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudOAuth;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudResourceManagerClient;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageClient;
-import org.janelia.saalfeldlab.n5.CompressionType;
+import org.janelia.saalfeldlab.n5.Compression;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -154,7 +155,7 @@ public class TilesToN5Converter
 			final N5WriterSupplier n5Supplier,
 			final Map< String, TileInfo[] > tilesChannels,
 			final int blockSize,
-			final CompressionType n5Compression ) throws IOException
+			final Compression n5Compression ) throws IOException
 	{
 		final int dimensionality = tilesChannels.values().iterator().next()[ 0 ].numDimensions();
 
@@ -235,7 +236,7 @@ public class TilesToN5Converter
 				cloudN5WriterSupplier,
 				tilesChannels,
 				parsedArgs.getBlockSize(),
-				parsedArgs.getN5Compression()
+				new GzipCompression()
 			);
 
 		final DataProvider outputDataProvider = cloudN5WriterSupplier.getDataProvider();
@@ -272,10 +273,6 @@ public class TilesToN5Converter
 				usage = "Output block size.")
 		private int blockSize = 64;
 
-		@Option(name = "-c", aliases = { "--n5Compression" }, required = false,
-				usage = "N5 compression.")
-		private CompressionType n5Compression = CompressionType.GZIP;
-
 		private boolean parsedSuccessfully = false;
 
 		public Arguments( final String... args ) throws IllegalArgumentException
@@ -298,6 +295,5 @@ public class TilesToN5Converter
 		public List< String > getInputChannelsPath() { return inputChannelsPath; }
 		public String getN5OutputPath() { return n5OutputPath; }
 		public int getBlockSize() { return blockSize; }
-		public CompressionType getN5Compression() { return n5Compression; }
 	}
 }
