@@ -126,7 +126,7 @@ public class HistogramsProvider implements Serializable
 
 	private < T extends NativeType< T > & RealType< T > > void populateHistogramsN5() throws IOException, URISyntaxException
 	{
-		System.out.println( "Populating histograms using n5 blocks of hash maps..." );
+		System.out.println( "Binning the input stack and saving as N5 blocks..." );
 
 		// check if tiles are single image files, or N5 datasets
 		final TileType tileType = TileLoader.getTileType( tiles[ 0 ], dataProvider );
@@ -185,7 +185,7 @@ public class HistogramsProvider implements Serializable
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
+				final SerializableDataBlockWrapper< Histogram > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
 
 				if ( histogramsBlock.wasLoadedSuccessfully() )
 				{
@@ -193,13 +193,15 @@ public class HistogramsProvider implements Serializable
 					return;
 				}
 
-				final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
-				final ListCursor< HashMap< Integer, Integer > > histogramsBlockImgCursor = histogramsBlockImg.cursor();
+				final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
+				final ListCursor< Histogram > histogramsBlockImgCursor = histogramsBlockImg.cursor();
 				while ( histogramsBlockImgCursor.hasNext() )
 				{
 					histogramsBlockImgCursor.fwd();
-					histogramsBlockImgCursor.set( new HashMap<>() );
+					histogramsBlockImgCursor.set( new Histogram( histMinValue, histMaxValue, bins ) );
 				}
+				final RandomAccess< Histogram > histogramsBlockImgRandomAccess = histogramsBlockImg.randomAccess();
+				final long[] histogramsBlockPosition = new long[ histogramsBlockImgRandomAccess.numDimensions() ];
 
 				// create an interval to be processed in each tile image
 				final long[] blockIntervalMin = new long[ blockSize.length ], blockIntervalMax = new long[ blockSize.length ];
@@ -233,16 +235,15 @@ public class HistogramsProvider implements Serializable
 					final RandomAccessibleInterval< T > tileImgInterval = Views.offsetInterval( tileImg, tileImgOffsetInterval );
 					final IterableInterval< T > tileImgIterableInterval = Views.iterable( tileImgInterval );
 					final Cursor< T > tileImgIntervalCursor = tileImgIterableInterval.localizingCursor();
-					final RandomAccess< HashMap< Integer, Integer > > histogramsBlockImgRandomAccess = histogramsBlockImg.randomAccess();
-					final long[] tileImgPosition = new long[ tileImgIntervalCursor.numDimensions() ], histogramsBlockPosition = new long[ histogramsBlockImgRandomAccess.numDimensions() ];
+					final long[] tileImgPosition = new long[ tileImgIntervalCursor.numDimensions() ];
 					while ( tileImgIntervalCursor.hasNext() )
 					{
-						final int key = ( int ) tileImgIntervalCursor.next().getRealDouble();
+						final double key = tileImgIntervalCursor.next().getRealDouble();
 						tileImgIntervalCursor.localize( tileImgPosition );
 						System.arraycopy( tileImgPosition, 0, histogramsBlockPosition, 0, histogramsBlockPosition.length );
 						histogramsBlockImgRandomAccess.setPosition( histogramsBlockPosition );
-						final HashMap< Integer, Integer > histogram = histogramsBlockImgRandomAccess.get();
-						histogram.put( key, histogram.getOrDefault( key, 0 ) + 1 );
+						final Histogram histogram = histogramsBlockImgRandomAccess.get();
+						histogram.put( key );
 					}
 
 					if ( ++done % 20 == 0 )
