@@ -7,21 +7,21 @@ import java.util.List;
 
 import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.N5Reader;
 
 import net.imglib2.FinalDimensions;
 import net.imglib2.img.list.WrappedListImg;
 import net.imglib2.util.Intervals;
 
-public class SerializableDataBlockWrapper< T extends Serializable >
+abstract public class AbstractWrappedSerializableDataBlockReader< N5 extends N5Reader, T extends Serializable >
 {
-	private final N5Writer n5;
-	private final String pathName;
-	private DataBlock< T[] > dataBlock;
-	private boolean wasLoadedSuccessfully;
+	protected final N5 n5;
+	protected final String pathName;
+	protected DataBlock< T[] > dataBlock;
+	protected boolean wasLoadedSuccessfully;
 
 	@SuppressWarnings( "unchecked" )
-	public SerializableDataBlockWrapper( final N5Writer n5, final String pathName, final long[] gridPosition ) throws IOException
+	public AbstractWrappedSerializableDataBlockReader( final N5 n5, final String pathName, final long[] gridPosition ) throws IOException
 	{
 		this.n5 = n5;
 		this.pathName = pathName;
@@ -60,11 +60,5 @@ public class SerializableDataBlockWrapper< T extends Serializable >
 		final long[] blockDimensions = Intervals.dimensionsAsLongArray( new FinalDimensions( dataBlock.getSize() ) );
 		final WrappedListImg< T > listImg = new WrappedListImg<>( dataAsList, blockDimensions );
 		return listImg;
-	}
-
-	public void save() throws IOException
-	{
-		final DatasetAttributes datasetAttributes = n5.getDatasetAttributes( pathName );
-		n5.writeBlock( pathName, datasetAttributes, dataBlock );
 	}
 }
