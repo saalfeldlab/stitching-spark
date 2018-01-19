@@ -444,10 +444,25 @@ public class HistogramsProvider implements Serializable
 	public Histogram getReferenceHistogram()
 	{
 		if ( referenceHistogram == null )
-			referenceHistogram = estimateReferenceHistogram( REFERENCE_HISTOGRAM_POINTS_PERCENT );
+		{
+			referenceHistogram = estimateReferenceHistogram(
+					sparkContext,
+					dataProvider, dataAccessType,
+					histogramsN5BasePath, histogramsDataset,
+					fieldOfViewSize, blockSize,
+					REFERENCE_HISTOGRAM_POINTS_PERCENT,
+					histMinValue, histMaxValue, bins
+				);
+		}
 		return referenceHistogram;
 	}
-	public Histogram estimateReferenceHistogram( final double medianPointsPercent )
+	public static Histogram estimateReferenceHistogram(
+			final JavaSparkContext sparkContext,
+			final DataProvider dataProvider, final DataAccessType dataAccessType,
+			final String histogramsN5BasePath, final String histogramsDataset,
+			final long[] fieldOfViewSize, final int[] blockSize,
+			final double medianPointsPercent,
+			final double histMinValue, final double histMaxValue, final int bins )
 	{
 		final long numPixels = Intervals.numElements( fieldOfViewSize );
 		final long numMedianPoints = Math.round( numPixels * medianPointsPercent );
