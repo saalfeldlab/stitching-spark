@@ -23,7 +23,7 @@ import net.imglib2.img.list.ListCursor;
 import net.imglib2.img.list.WrappedListImg;
 import net.imglib2.view.Views;
 
-public class SerializableDataBlockWrapperTest
+public class WrappedSerializableDataBlockReaderWriterTest
 {
 	static private String testDirPath = System.getProperty("user.home") + "/tmp/n5-test";
 	static private final String datasetName = "/test/group/dataset";
@@ -64,7 +64,7 @@ public class SerializableDataBlockWrapperTest
 			System.out.println("Testing " + compression.getType() + " serializable type with String");
 			try {
 				n5.createDataset(datasetName, dimensions, blockSize, DataType.SERIALIZABLE, compression);
-				final SerializableDataBlockWrapper< String > dataBlockWrapper = new SerializableDataBlockWrapper<>( n5, datasetName, new long[]{0, 0, 0} );
+				final WrappedSerializableDataBlockWriter< String > dataBlockWrapper = new WrappedSerializableDataBlockWriter<>( n5, datasetName, new long[]{0, 0, 0} );
 				final WrappedListImg< String > dataBlockWrapped = dataBlockWrapper.wrap();
 				final ListCursor< String > dataBlockCursor = dataBlockWrapped.cursor();
 				while ( dataBlockCursor.hasNext() )
@@ -77,7 +77,7 @@ public class SerializableDataBlockWrapperTest
 				}
 				dataBlockWrapper.save();
 
-				final SerializableDataBlockWrapper< String > loadedDataBlockWrapper = new SerializableDataBlockWrapper<>( n5, datasetName, new long[]{0, 0, 0} );
+				final WrappedSerializableDataBlockReader< String > loadedDataBlockWrapper = new WrappedSerializableDataBlockReader<>( n5, datasetName, new long[]{0, 0, 0} );
 				final RandomAccessibleInterval< String > loadedDataBlockWrapped = loadedDataBlockWrapper.wrap();
 				final Cursor< String > loadedDataBlockPlainCursor = Views.flatIterable( loadedDataBlockWrapped ).cursor();
 				final Cursor< String > dataBlockPlainCursor = Views.flatIterable( dataBlockWrapped ).cursor();
