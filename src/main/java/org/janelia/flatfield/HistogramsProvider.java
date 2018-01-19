@@ -72,8 +72,8 @@ public class HistogramsProvider implements Serializable
 	private final String histogramsN5BasePath;
 	private final String histogramsDataset;
 
-	final Double histMinValue, histMaxValue;
-	final int bins;
+	private final double histMinValue, histMaxValue;
+	private final int bins;
 
 	private transient JavaPairRDD< Long, Histogram > rddHistograms;
 	private transient Histogram referenceHistogram;
@@ -86,7 +86,7 @@ public class HistogramsProvider implements Serializable
 			final TileInfo[] tiles,
 			final long[] fullTileSize,
 			final boolean use2D,
-			final Double histMinValue, final Double histMaxValue, final int bins ) throws IOException, URISyntaxException
+			final double histMinValue, final double histMaxValue, final int bins ) throws IOException, URISyntaxException
 	{
 		this.sparkContext = sparkContext;
 		this.dataProvider = dataProvider;
