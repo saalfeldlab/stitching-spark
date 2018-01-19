@@ -186,7 +186,7 @@ public class HistogramsMapProvider implements Serializable
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
+				final WrappedSerializableDataBlockWriter< HashMap< Integer, Integer > > histogramsBlock = new WrappedSerializableDataBlockWriter<>( n5Local, histogramsDataset, blockGridPosition );
 
 				if ( histogramsBlock.wasLoadedSuccessfully() )
 				{
@@ -320,7 +320,7 @@ public class HistogramsMapProvider implements Serializable
 					{
 						final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 						final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-						final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
+						final WrappedSerializableDataBlockWriter< HashMap< Integer, Integer > > histogramsBlock = new WrappedSerializableDataBlockWriter<>( n5Local, histogramsDataset, blockGridPosition );
 
 						if ( !histogramsBlock.wasLoadedSuccessfully() )
 							throw new PipelineExecutionException( "Data block at position " + Arrays.toString( blockGridPosition ) + " cannot be loaded" );
@@ -388,7 +388,7 @@ public class HistogramsMapProvider implements Serializable
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-				final SerializableDataBlockWrapper< HashMap< Integer, Integer > > histogramsBlock = new SerializableDataBlockWrapper<>( n5Local, histogramsDataset, blockGridPosition );
+				final WrappedSerializableDataBlockWriter< HashMap< Integer, Integer > > histogramsBlock = new WrappedSerializableDataBlockWriter<>( n5Local, histogramsDataset, blockGridPosition );
 
 				if ( histogramsBlock.wasLoadedSuccessfully() )
 				{
