@@ -18,7 +18,7 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrection;
-import org.janelia.saalfeldlab.n5.CompressionType;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
@@ -230,7 +230,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				Intervals.dimensionsAsLongArray( boundingBox ),
 				cellSize,
 				N5Utils.dataType( ( T ) tiles[ 0 ].getType().getType() ),
-				CompressionType.GZIP
+				new GzipCompression()
 			);
 
 		sparkContext.parallelize( biggerCells, biggerCells.size() ).foreach( biggerCell ->

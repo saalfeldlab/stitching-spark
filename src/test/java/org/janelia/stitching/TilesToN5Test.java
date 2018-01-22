@@ -14,12 +14,13 @@ import java.util.Random;
 
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.saalfeldlab.n5.CompressionType;
-import org.janelia.saalfeldlab.n5.N5;
-import org.janelia.saalfeldlab.n5.s3.N5AmazonS3;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
+import org.janelia.saalfeldlab.n5.s3.N5AmazonS3Writer;
 import org.junit.Assert;
 import org.junit.Test;
 
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.AmazonS3URI;
 
 import ij.IJ;
@@ -76,10 +77,10 @@ public class TilesToN5Test
 
 		final Map< String, TileInfo[] > newTiles = TilesToN5Converter.convertTiffToN5(
 				n5Path,
-				() -> N5.openFSWriter( n5Path ),
+				() -> new N5FSWriter( n5Path ),
 				Collections.singletonMap( datasetPath, tiles ),
 				blockSize,
-				CompressionType.GZIP
+				new GzipCompression()
 			);
 
 		Assert.assertEquals( datasetPath, newTiles.keySet().iterator().next() );
@@ -110,7 +111,7 @@ public class TilesToN5Test
 			fail( "processed less pixels than contained in the image" );
 
 		System.out.println( "All checks passed, removing temp data..." );
-		N5.openFSWriter( tempDir.toString() ).remove();
+		new N5FSWriter( tempDir.toString() ).remove();
 
 		System.out.println( "OK" );
 	}
@@ -153,17 +154,17 @@ public class TilesToN5Test
 		final String n5Bucket = "test-bucket-n5";
 
 		// make sure old data are cleaned up if there was a failed run
-		N5AmazonS3.openS3Writer( n5Bucket ).remove();
+		new N5AmazonS3Writer( AmazonS3ClientBuilder.standard().build(), n5Bucket ).remove();
 
 		final String s3Link = new AmazonS3URI( "s3://" + n5Bucket + "/" ).toString();
 		final String datasetPath = "test-channel";
 
 		final Map< String, TileInfo[] > newTiles = TilesToN5Converter.convertTiffToN5(
 				s3Link,
-				() -> N5AmazonS3.openS3Writer( n5Bucket ),
+				() -> new N5AmazonS3Writer( AmazonS3ClientBuilder.standard().build(), n5Bucket ),
 				Collections.singletonMap( datasetPath, tiles ),
 				blockSize,
-				CompressionType.GZIP
+				new GzipCompression()
 			);
 
 		Assert.assertEquals( datasetPath, newTiles.keySet().iterator().next() );
@@ -194,8 +195,8 @@ public class TilesToN5Test
 			fail( "processed less pixels than contained in the image" );
 
 		System.out.println( "All checks passed, removing temp data..." );
-		N5.openFSWriter( tempDir.toString() ).remove();
-		N5AmazonS3.openS3Writer( n5Bucket ).remove();
+		new N5FSWriter( tempDir.toString() ).remove();
+		new N5AmazonS3Writer( AmazonS3ClientBuilder.standard().build(), n5Bucket ).remove();
 
 		System.out.println( "OK" );
 	}

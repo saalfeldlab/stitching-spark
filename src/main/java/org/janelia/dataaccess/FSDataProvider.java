@@ -19,7 +19,8 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.stitching.Utils;
@@ -157,25 +158,25 @@ class FSDataProvider implements DataProvider
 	@Override
 	public N5Reader createN5Reader( final URI baseUri ) throws IOException
 	{
-		return N5.openFSReader( getCanonicalPathString( baseUri ) );
+		return new N5FSReader( getCanonicalPathString( baseUri ) );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri ) throws IOException
 	{
-		return N5.openFSWriter( getCanonicalPathString( baseUri ) );
+		return new N5FSWriter( getCanonicalPathString( baseUri ) );
 	}
 
 	@Override
 	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5.openFSReader( getCanonicalPathString( baseUri ), gsonBuilder );
+		return new N5FSReader( getCanonicalPathString( baseUri ), gsonBuilder );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return N5.openFSWriter( getCanonicalPathString( baseUri ), gsonBuilder );
+		return new N5FSWriter( getCanonicalPathString( baseUri ), gsonBuilder );
 	}
 
 	private static boolean createDirs( final URI uri )
