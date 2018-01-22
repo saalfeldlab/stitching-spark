@@ -5,12 +5,21 @@ The code is based on the Stitching plugin for Fiji https://github.com/fiji/Stitc
 
 ## Usage
 
+### 0. Prerequisites
+
+Build the required dependencies that have been specifically patched for this application:
+
+```bash
+git clone -b serializable-new https://github.com/igorpisarev/n5.git
+mvn clean install -f n5
+```
+
 ### 1. Building the package
 
 Clone the repository with submodules:
 
 ```bash
-git clone --recursive https://github.com/saalfeldlab/stitching-spark.git 
+git clone --recursive https://github.com/saalfeldlab/stitching-spark.git
 ```
 
 The application can be executed on Janelia cluster or locally. Build the package for the desired execution environment:
