@@ -9,6 +9,6 @@ public class WrappedSerializableDataBlockReader< T extends Serializable > extend
 {
 	public WrappedSerializableDataBlockReader( final N5Reader n5, final String pathName, final long[] gridPosition ) throws IOException
 	{
-		super( n5, pathName, gridPosition );
+		super( n5, pathName, gridPosition, OpenMode.READ );
 	}
 }
