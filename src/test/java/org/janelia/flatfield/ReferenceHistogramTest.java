@@ -39,7 +39,7 @@ public class ReferenceHistogramTest
 	{
 		sparkContext = new JavaSparkContext( new SparkConf()
 				.setMaster( "local" )
-				.setAppName( "TestReferenceHistogram" )
+				.setAppName( "ReferenceHistogramTest" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" ) );
 	}
 
@@ -121,19 +121,19 @@ public class ReferenceHistogramTest
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 		final DataAccessType dataAccessType = DataAccessType.FILESYSTEM;
 
-		final long[] fieldOfViewSize = new long[] { 1, 1, histograms.size() };
+		final long[] dimensions = new long[] { 1, 1, histograms.size() };
 		final int[] blockSize = new int[] { 1, 1, histograms.size() / 2 };
 
 		// save histograms first
 		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
 		n5.createDataset(
 				histogramsDataset,
-				fieldOfViewSize,
+				dimensions,
 				blockSize,
 				DataType.SERIALIZABLE,
 				new GzipCompression()
 			);
-		for ( int i = 0; i < fieldOfViewSize[ fieldOfViewSize.length - 1 ]; i += blockSize[ blockSize.length - 1 ] )
+		for ( int i = 0; i < dimensions[ dimensions.length - 1 ]; i += blockSize[ blockSize.length - 1 ] )
 		{
 			final long[] blockPosition = new long[ blockSize.length ];
 			blockPosition[ blockPosition.length - 1 ] = i / blockSize[ blockSize.length - 1 ];
@@ -153,7 +153,7 @@ public class ReferenceHistogramTest
 				sparkContext,
 				dataProvider, dataAccessType,
 				histogramsN5BasePath, histogramsDataset,
-				fieldOfViewSize, blockSize,
+				dimensions, blockSize,
 				REFERENCE_HISTOGRAM_POINTS_PERCENT,
 				histMinValue, histMaxValue, histograms.get( 0 ).getNumBins()
 			);
