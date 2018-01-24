@@ -13,7 +13,6 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
@@ -149,6 +148,15 @@ public class HistogramsProvider implements Serializable
 		}
 	}
 
+	public DataProvider getDataProvider() { return dataProvider; }
+
+	public String getHistogramsN5BasePath() { return histogramsN5BasePath; }
+	public String getHistogramsDataset() { return histogramsDataset; }
+
+	public double getHistogramMinValue() { return histMinValue; }
+	public double getHistogramMaxValue() { return histMaxValue; }
+	public int getHistogramBins() { return bins; }
+
 	private < T extends NativeType< T > & RealType< T > > void populateHistogramsN5() throws IOException, URISyntaxException
 	{
 		System.out.println( "Binning the input stack and saving as N5 blocks..." );
@@ -181,7 +189,11 @@ public class HistogramsProvider implements Serializable
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-				final WrappedSerializableDataBlockWriter< Histogram > histogramsBlock = new WrappedSerializableDataBlockWriter<>( n5Local, histogramsDataset, blockPosition );
+				final WrappedSerializableDataBlockWriter< Histogram > histogramsBlock = new WrappedSerializableDataBlockWriter<>(
+						n5Local,
+						histogramsDataset,
+						blockPosition
+					);
 
 				if ( histogramsBlock.wasLoadedSuccessfully() )
 				{
@@ -190,14 +202,14 @@ public class HistogramsProvider implements Serializable
 				}
 
 				final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
+
+				// initialize all histograms
 				final ListCursor< Histogram > histogramsBlockImgCursor = histogramsBlockImg.cursor();
 				while ( histogramsBlockImgCursor.hasNext() )
 				{
 					histogramsBlockImgCursor.fwd();
 					histogramsBlockImgCursor.set( new Histogram( histMinValue, histMaxValue, bins ) );
 				}
-				final ListRandomAccess< Histogram > histogramsBlockImgRandomAccess = histogramsBlockImg.randomAccess();
-				final long[] histogramsBlockPosition = new long[ histogramsBlockImgRandomAccess.numDimensions() ];
 
 				// create an interval to be processed in each tile image
 				final long[] blockIntervalMin = new long[ blockSize.length ], blockIntervalMax = new long[ blockSize.length ];
@@ -207,6 +219,9 @@ public class HistogramsProvider implements Serializable
 					blockIntervalMax[ d ] = Math.min( ( blockPosition[ d ] + 1 ) * blockSize[ d ], fieldOfViewSize[ d ] ) - 1;
 				}
 				final Interval blockInterval = new FinalInterval( blockIntervalMin, blockIntervalMax );
+
+				final ListRandomAccess< Histogram > histogramsBlockImgRandomAccess = histogramsBlockImg.randomAccess();
+				final long[] histogramsBlockPosition = new long[ histogramsBlockImgRandomAccess.numDimensions() ];
 
 				// loop over tile images and populate the histograms using the corresponding part of each tile image
 				int done = 0;
@@ -284,16 +299,6 @@ public class HistogramsProvider implements Serializable
 				return kryo.readObject( input, HashMap[].class );
 			}
 		}
-	}
-
-
-	public JavaPairRDD< Long, Histogram > getHistograms() throws IOException
-	{
-//		if ( rddHistograms == null )
-//			loadHistogramsN5();
-//
-//		return rddHistograms;
-		return null;
 	}
 
 	/*private void loadHistogramsN5() throws IOException
@@ -385,7 +390,11 @@ public class HistogramsProvider implements Serializable
 			{
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-				final WrappedSerializableDataBlockWriter< HashMap< Integer, Integer > > histogramsBlock = new WrappedSerializableDataBlockWriter<>( n5Local, histogramsDataset, blockGridPosition );
+				final WrappedSerializableDataBlockWriter< HashMap< Integer, Integer > > histogramsBlock = new WrappedSerializableDataBlockWriter<>(
+						n5Local,
+						histogramsDataset,
+						blockGridPosition
+					);
 
 				if ( histogramsBlock.wasLoadedSuccessfully() )
 				{
@@ -476,7 +485,11 @@ public class HistogramsProvider implements Serializable
 				{
 					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 					final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( histogramsN5BasePath ) );
-					final WrappedSerializableDataBlockReader< Histogram > histogramsBlock = new WrappedSerializableDataBlockReader<>( n5Local, histogramsDataset, blockPosition );
+					final WrappedSerializableDataBlockReader< Histogram > histogramsBlock = new WrappedSerializableDataBlockReader<>(
+							n5Local,
+							histogramsDataset,
+							blockPosition
+						);
 					final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
 					final ListLocalizingCursor< Histogram > histogramsBlockImgCursor = histogramsBlockImg.localizingCursor();
 
@@ -548,7 +561,11 @@ public class HistogramsProvider implements Serializable
 
 					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 					final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( histogramsN5BasePath ) );
-					final WrappedSerializableDataBlockReader< Histogram > histogramsBlock = new WrappedSerializableDataBlockReader<>( n5Local, histogramsDataset, blockPosition );
+					final WrappedSerializableDataBlockReader< Histogram > histogramsBlock = new WrappedSerializableDataBlockReader<>(
+							n5Local,
+							histogramsDataset,
+							blockPosition
+						);
 					final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
 					final IntervalView< Histogram > translatedHistogramsBlockImg = Views.translate( histogramsBlockImg, blockPixelOffset );
 					final RandomAccess< Histogram > translatedHistogramsBlockImgRandomAccess = translatedHistogramsBlockImg.randomAccess();
@@ -577,7 +594,7 @@ public class HistogramsProvider implements Serializable
 		return accumulatedHistogram;
 	}
 
-	private static List< long[] > getBlockPositions( final long[] dimensions, final int[] blockSize )
+	public static List< long[] > getBlockPositions( final long[] dimensions, final int[] blockSize )
 	{
 		final List< long[] > blockPositions = new ArrayList<>();
 		final CellGrid cellGrid = new CellGrid( dimensions, blockSize );
