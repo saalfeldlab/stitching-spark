@@ -44,9 +44,13 @@ public class ReferenceHistogramTest
 	}
 
 	@After
-	public void tearDown()
+	public void tearDown() throws IOException
 	{
 		sparkContext.close();
+
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		n5.remove();
 	}
 
 
@@ -138,6 +142,8 @@ public class ReferenceHistogramTest
 			final long[] blockPosition = new long[ blockSize.length ];
 			blockPosition[ blockPosition.length - 1 ] = i / blockSize[ blockSize.length - 1 ];
 			final WrappedSerializableDataBlockWriter< Histogram > histogramsBlock = new WrappedSerializableDataBlockWriter<>( n5, histogramsDataset, blockPosition );
+			Assert.assertFalse( histogramsBlock.wasLoadedSuccessfully() );
+
 			final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
 			final ListLocalizingCursor< Histogram > histogramsBlockImgCursor = histogramsBlockImg.localizingCursor();
 			while ( histogramsBlockImgCursor.hasNext() )
