@@ -9,13 +9,16 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.histogram.Histogram;
 import org.janelia.histogram.HistogramMatching;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.N5RemoveSpark;
 
 import mpicbg.models.Affine1D;
 import mpicbg.models.AffineModel1D;
@@ -71,15 +74,41 @@ public class FlatfieldCorrectionSolver implements Serializable
 		}
 	}
 
+	public static class FlatfieldSolutionMetadata implements Serializable
+	{
+		private static final long serialVersionUID = -4110180561225910592L;
+
+		public final String scalingTermDataset;
+		public final String translationTermDataset;
+		public final String pivotValuesDataset;
+
+		public FlatfieldSolutionMetadata( final int scaleLevel )
+		{
+			scalingTermDataset = PathResolver.get( INTERMEDIATE_EXPORTS_N5_GROUP, SCALING_TERM_GROUP, "s" + scaleLevel );
+			translationTermDataset = PathResolver.get( INTERMEDIATE_EXPORTS_N5_GROUP, TRANSLATION_TERM_GROUP, "s" + scaleLevel );
+			pivotValuesDataset = PathResolver.get( INTERMEDIATE_EXPORTS_N5_GROUP, PIVOT_VALUES_GROUP, "s" + scaleLevel );
+		}
+
+		public FlatfieldSolution open( final DataProvider dataProvider, final String histogramsN5BasePath ) throws IOException
+		{
+			final N5Reader n5 = dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) );
+			return new FlatfieldSolution(
+					new ValuePair<>( N5Utils.open( n5, scalingTermDataset ), N5Utils.open( n5, translationTermDataset ) ),
+					N5Utils.open( n5, pivotValuesDataset )
+				);
+		}
+	}
+
 	private static final double INTERPOLATION_LAMBDA_IDENTITY = 0.0;
 	private static final double INTERPOLATION_LAMBDA_PIVOT = 0.5;
 
 	private static final double INTERPOLATION_LAMBDA_SCALING = 0.5;
 	private static final double INTERPOLATION_LAMBDA_TRANSLATION = 0.5;
 
-	private static final String SCALING_TERM_DATASET = "flatfield-solution-S";
-	private static final String TRANSLATION_TERM_DATASET = "flatfield-solution-T";
-	private static final String PIVOT_VALUES_DATASET = "flatfield-solution-pivot";
+	private static final String INTERMEDIATE_EXPORTS_N5_GROUP = "flatfield-intermediate-exports";
+	private static final String SCALING_TERM_GROUP = "flatfield-solution-S";
+	private static final String TRANSLATION_TERM_GROUP = "flatfield-solution-T";
+	private static final String PIVOT_VALUES_GROUP = "flatfield-solution-pivot";
 
 	private transient final JavaSparkContext sparkContext;
 
@@ -89,7 +118,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 	}
 
 	@SuppressWarnings("unchecked")
-	public < M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable > FlatfieldSolution leastSquaresInterpolationFit(
+	public < M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable > FlatfieldSolutionMetadata leastSquaresInterpolationFit(
 			final DataProvider dataProvider,
 			final int currentScaleLevel,
 			final String histogramsN5BasePath, final String currentScaleHistogramsDataset,
@@ -109,12 +138,10 @@ public class FlatfieldCorrectionSolver implements Serializable
 		final long[] currentScaleHistogramsDimensions = currentScaleHistogramsDatasetAttributes.getDimensions();
 		final int[] currentScaleHistogramsBlockSize = currentScaleHistogramsDatasetAttributes.getBlockSize();
 
-		final String scalingTermDataset = SCALING_TERM_DATASET + "-scale" + currentScaleLevel;
-		final String translationTermDataset = TRANSLATION_TERM_DATASET + "-scale" + currentScaleLevel;
-		final String pivotValuesDataset = PIVOT_VALUES_DATASET + "-scale" + currentScaleLevel;
-		n5.createDataset( scalingTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
-		n5.createDataset( translationTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
-		n5.createDataset( pivotValuesDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+		final FlatfieldSolutionMetadata flatfieldSolutionMetadata = new FlatfieldSolutionMetadata( currentScaleLevel );
+		n5.createDataset( flatfieldSolutionMetadata.scalingTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+		n5.createDataset( flatfieldSolutionMetadata.translationTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+		n5.createDataset( flatfieldSolutionMetadata.pivotValuesDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
 
 		final List< long[] > currentScaleBlockPositions = HistogramsProvider.getBlockPositions( currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize );
 		sparkContext.parallelize( currentScaleBlockPositions, currentScaleBlockPositions.size() ).foreach( currentScaleBlockPosition ->
@@ -271,21 +298,24 @@ public class FlatfieldCorrectionSolver implements Serializable
 					translatedPivotValuesBlockImgCursor.get().set( offset[ 0 ] );
 				}
 
-				N5Utils.saveBlock( scalingTermBlockImg, n5Local, scalingTermDataset, currentScaleBlockPosition );
-				N5Utils.saveBlock( translationTermBlockImg, n5Local, translationTermDataset, currentScaleBlockPosition );
-				N5Utils.saveBlock( pivotValuesBlockImg, n5Local, pivotValuesDataset, currentScaleBlockPosition );
+				N5Utils.saveBlock( scalingTermBlockImg, n5Local, flatfieldSolutionMetadata.scalingTermDataset, currentScaleBlockPosition );
+				N5Utils.saveBlock( translationTermBlockImg, n5Local, flatfieldSolutionMetadata.translationTermDataset, currentScaleBlockPosition );
+				N5Utils.saveBlock( pivotValuesBlockImg, n5Local, flatfieldSolutionMetadata.pivotValuesDataset, currentScaleBlockPosition );
 			} );
 
 		broadcastedRegularizer.destroy();
 
-		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution = new ValuePair<>(
-				N5Utils.open( n5, scalingTermDataset ),
-				N5Utils.open( n5, translationTermDataset )
+		return flatfieldSolutionMetadata;
+	}
+
+	public void cleanupFlatfieldSolutionExports( final DataProvider dataProvider, final String histogramsN5BasePath ) throws IOException
+	{
+		final DataAccessType dataAccessType = dataProvider.getType();
+		N5RemoveSpark.remove(
+				sparkContext,
+				() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				INTERMEDIATE_EXPORTS_N5_GROUP
 			);
-
-		final RandomAccessibleInterval< DoubleType > offsetsImg = N5Utils.open( n5, pivotValuesDataset );
-
-		return new FlatfieldSolution( solution, offsetsImg );
 	}
 
 

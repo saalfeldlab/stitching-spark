@@ -16,6 +16,7 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldSolution;
+import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldSolutionMetadata;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.ModelType;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
 import org.janelia.histogram.Histogram;
@@ -332,7 +333,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 					System.out.println( "Solving for scale " + pixelsMapping.scale + ":  size=" + Arrays.toString( pixelsMapping.getDimensions() ) + ",  model=" + modelType.toString() + ", regularizer=" + regularizerModelType.toString() );
 
-					final FlatfieldSolution solutionAndOffsets = solver.leastSquaresInterpolationFit(
+					final FlatfieldSolutionMetadata flatfieldSolutionMetadata = solver.leastSquaresInterpolationFit(
 							dataProvider,
 							pixelsMapping.scale,
 							histogramsProvider.getHistogramsN5BasePath(), downsampledHistogramsDataset,
@@ -342,6 +343,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 							args.pivotValue()
 						);
 
+					final FlatfieldSolution solutionAndOffsets = flatfieldSolutionMetadata.open( dataProvider, histogramsProvider.getHistogramsN5BasePath() );
 					solution = solutionAndOffsets.correctionFields;
 					offsets = solutionAndOffsets.pivotValues;
 				}
@@ -404,19 +406,15 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		}
 
 
-		// cleanup the 'fullsize' directory
+		// cleanup intermediate flatfield correction steps image data
 		// TODO: add cmd switch to disable this behavior if needed to inspect individual steps
-		try
-		{
-			System.out.println( "Cleaning up temporary files..." );
-			final String folderToDelete = PathResolver.getParent( solutionPath );
-			dataProvider.deleteFolder( URI.create( folderToDelete ) );
-		}
-		catch ( final IOException e )
-		{
-			System.out.println( "Failed to clean up temporary files:" );
-			e.printStackTrace();
-		}
+		System.out.println( "Cleaning up temporary files..." );
+		final String folderToDelete = PathResolver.getParent( solutionPath );
+		dataProvider.deleteFolder( URI.create( folderToDelete ) );
+
+		// cleanup intermediate N5 exports
+		solver.cleanupFlatfieldSolutionExports( dataProvider, histogramsProvider.getHistogramsN5BasePath() );
+		shiftedDownsampling.cleanupDownsampledHistograms( dataProvider, histogramsProvider.getHistogramsN5BasePath() );
 
 		elapsed = System.nanoTime() - elapsed;
 		System.out.println( "----------" );
