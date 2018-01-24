@@ -14,6 +14,7 @@ import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -63,8 +64,9 @@ public class HistogramsProvider implements Serializable
 
 	private transient final JavaSparkContext sparkContext;
 	private transient final DataProvider dataProvider;
+	private transient final TileInfo[] tiles;
+
 	private final DataAccessType dataAccessType;
-	private final TileInfo[] tiles;
 	private final Interval workingInterval;
 	private final long[] fullTileSize;
 	private final boolean use2D;
@@ -184,6 +186,8 @@ public class HistogramsProvider implements Serializable
 				return;
 		}
 
+		final Broadcast< TileInfo[] > broadcastedTiles = sparkContext.broadcast( tiles );
+
 		final List< long[] > blockPositions = getBlockPositions( fieldOfViewSize, blockSize );
 		sparkContext.parallelize( blockPositions, blockPositions.size() ).foreach( blockPosition ->
 			{
@@ -225,7 +229,7 @@ public class HistogramsProvider implements Serializable
 
 				// loop over tile images and populate the histograms using the corresponding part of each tile image
 				int done = 0;
-				for ( final TileInfo tile : tiles )
+				for ( final TileInfo tile : broadcastedTiles.value() )
 				{
 					final RandomAccessibleInterval< T > tileImg = TileLoader.loadTile( tile, dataProviderLocal );
 					final Interval tileImgOffsetInterval;
@@ -265,6 +269,8 @@ public class HistogramsProvider implements Serializable
 
 				histogramsBlock.save();
 			} );
+
+		broadcastedTiles.destroy();
 
 		// mark all histograms as ready to skip block existence check and save time for subsequent runs
 		n5.setAttribute( histogramsDataset, ALL_HISTOGRAMS_EXIST_KEY, true );
