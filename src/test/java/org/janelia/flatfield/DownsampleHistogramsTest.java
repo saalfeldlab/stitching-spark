@@ -33,7 +33,7 @@ import net.imglib2.view.Views;
 
 public class DownsampleHistogramsTest
 {
-	private static final String histogramsN5BasePath = System.getProperty("user.home") + "/tmp/n5-reference-histogram-test";
+	private static final String histogramsN5BasePath = System.getProperty("user.home") + "/tmp/n5-downsample-histogram-test";
 	private static final String histogramsDataset = "/test/group/dataset";
 	private static final double EPSILON = 1e-10;
 
@@ -54,9 +54,13 @@ public class DownsampleHistogramsTest
 	}
 
 	@After
-	public void tearDown()
+	public void tearDown() throws IOException
 	{
 		sparkContext.close();
+
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		n5.remove();
 	}
 
 	@Test
@@ -118,6 +122,9 @@ public class DownsampleHistogramsTest
 					histogramsDataset,
 					cellGridPosition
 				);
+
+			Assert.assertFalse( histogramsBlock.wasLoadedSuccessfully() );
+
 			final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
 
 			// initialize all histograms
@@ -193,6 +200,9 @@ public class DownsampleHistogramsTest
 						downsampledHistogramsDataset,
 						downsampledCellGridPosition
 					);
+
+				Assert.assertTrue( downsampledHistogramsBlock.wasLoadedSuccessfully() );
+
 				final WrappedListImg< Histogram > downsampledHistogramsBlockImg = downsampledHistogramsBlock.wrap();
 
 				final IntervalView< Histogram > translatedDownsampledHistogramsBlockImg = Views.translate( downsampledHistogramsBlockImg, downsampledCellMin );
