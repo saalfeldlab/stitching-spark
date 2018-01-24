@@ -1,5 +1,7 @@
 package org.janelia.flatfield;
 
+import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -7,19 +9,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.histogram.Histogram;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 
 import net.imglib2.Cursor;
 import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.cell.CellGrid;
+import net.imglib2.img.list.ListCursor;
+import net.imglib2.img.list.WrappedListImg;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.iterator.IntervalIterator;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineSet;
 import net.imglib2.realtransform.RealViews;
@@ -27,10 +38,10 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.IntervalsNullable;
 import net.imglib2.util.Util;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
-import scala.Tuple2;
 
 public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 {
@@ -110,32 +121,168 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 	}
 
 
-	public JavaPairRDD< Long, Histogram > downsampleHistograms(
-			final JavaPairRDD< Long, Histogram > rddHistograms,
-			final PixelsMapping pixelsMapping )
+	/**
+	 * Downsamples histograms as an N5 dataset with respect to the given pixel mapping (the mapping between input and output accumulated pixels).
+	 * Returns the path to the dataset where the resulting downsampled histograms are stored (within the same N5 container).
+	 *
+	 * @param histogramsProvider
+	 * @param pixelsMapping
+	 * @return path to downsampled histograms dataset
+	 * @throws IOException
+	 */
+	public String downsampleHistogramsN5(
+			final PixelsMapping pixelsMapping,
+			final DataProvider dataProvider,
+			final String histogramsN5BasePath, final String histogramsDataset,
+			final double histMinValue, final double histMaxValue, final int bins ) throws IOException
 	{
 		if ( pixelsMapping.scale == 0 )
-			return rddHistograms;
+			return histogramsDataset;
 
 		final Broadcast< int[] > broadcastedFullPixelToDownsampledPixel = pixelsMapping.broadcastedFullPixelToDownsampledPixel;
 		final Broadcast< int[] > broadcastedDownsampledPixelToFullPixelsCount = pixelsMapping.broadcastedDownsampledPixelToFullPixelsCount;
 
-		return rddHistograms
-				.mapToPair( tuple -> new Tuple2<>( ( long ) broadcastedFullPixelToDownsampledPixel.value()[ tuple._1().intValue() ], tuple._2() ) )
-				.reduceByKey(
-						( ret, other ) ->
+		// additionally broadcast the downsampled pixel to full pixels mapping
+		final Broadcast< Map< Long, Interval > > broadcastedDownsampledPixelToFullPixels = sparkContext.broadcast( pixelsMapping.downsampledPixelToFullPixels );
+
+		final String downsampledHistogramsDataset = histogramsDataset + "-downsampled";
+
+		final DataAccessType dataAccessType = dataProvider.getType();
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		final DatasetAttributes histogramsDatasetAttributes = n5.getDatasetAttributes( histogramsDataset );
+
+		final long[] histogramsDimensions = histogramsDatasetAttributes.getDimensions();
+		final int [] blockSize = histogramsDatasetAttributes.getBlockSize();
+		final long[] downsampledHistogramsDimensions = pixelsMapping.getDimensions();
+		final int[] downsampledBlockSize = histogramsDatasetAttributes.getBlockSize();
+
+		n5.createDataset(
+				downsampledHistogramsDataset,
+				downsampledHistogramsDimensions,
+				downsampledBlockSize,
+				histogramsDatasetAttributes.getDataType(),
+				histogramsDatasetAttributes.getCompression()
+			);
+
+		final List< long[] > downsampledBlockPositions = HistogramsProvider.getBlockPositions( downsampledHistogramsDimensions, downsampledBlockSize );
+		sparkContext.parallelize( downsampledBlockPositions, downsampledBlockPositions.size() ).foreach( downsampledBlockPosition ->
+			{
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
+				final WrappedSerializableDataBlockWriter< Histogram > downsampledHistogramsBlock = new WrappedSerializableDataBlockWriter<>(
+						n5Local,
+						downsampledHistogramsDataset,
+						downsampledBlockPosition
+					);
+
+				if ( downsampledHistogramsBlock.wasLoadedSuccessfully() )
+					throw new RuntimeException( "previous downsampled histograms dataset was not properly cleaned up" );
+
+				// find the interval in full resolution pixels that this downsampled block maps into
+				final CellGrid downsampledCellGrid = new CellGrid( downsampledHistogramsDimensions, downsampledBlockSize );
+				final long[] downsampledCellMin = new long[ downsampledCellGrid.numDimensions() ], downsampledCellMax = new long[ downsampledCellGrid.numDimensions() ];
+				final int[] downsampledCellDimensions = new int[ downsampledCellGrid.numDimensions() ];
+				downsampledCellGrid.getCellDimensions( downsampledBlockPosition, downsampledCellMin, downsampledCellDimensions );
+				for ( int d = 0; d < downsampledCellGrid.numDimensions(); ++d )
+					downsampledCellMax[ d ] = downsampledCellMin[ d ] + downsampledCellDimensions[ d ] - 1;
+
+				final long[] downsampledBlockToFullPixelsMin = new long[ downsampledCellGrid.numDimensions() ], downsampledBlockToFullPixelsMax = new long[ downsampledCellGrid.numDimensions() ];
+				Arrays.fill( downsampledBlockToFullPixelsMin, Long.MAX_VALUE );
+				Arrays.fill( downsampledBlockToFullPixelsMax, Long.MIN_VALUE );
+
+				final Interval downsampledCellInterval = new FinalInterval( downsampledCellMin, downsampledCellMax );
+				final IntervalIterator downsampledCellIntervalIterator = new IntervalIterator( downsampledCellInterval );
+				final long[] downsampledPosition = new long[ downsampledCellGrid.numDimensions() ];
+
+				// TODO: this can be optimized by only checking the corners of downsampledCellInterval
+				while ( downsampledCellIntervalIterator.hasNext() )
+				{
+					downsampledCellIntervalIterator.fwd();
+					downsampledCellIntervalIterator.localize( downsampledPosition );
+					final long downsampledPixelIndex = IntervalIndexer.positionToIndex( downsampledPosition, downsampledHistogramsDimensions );
+					final Interval fullPixelsInterval = broadcastedDownsampledPixelToFullPixels.value().get( downsampledPixelIndex );
+					for ( int d = 0; d < downsampledCellGrid.numDimensions(); ++d )
+					{
+						downsampledBlockToFullPixelsMin[ d ] = Math.min( fullPixelsInterval.min( d ), downsampledBlockToFullPixelsMin[ d ] );
+						downsampledBlockToFullPixelsMax[ d ] = Math.max( fullPixelsInterval.max( d ), downsampledBlockToFullPixelsMax[ d ] );
+					}
+				}
+				final Interval downsampledBlockToFullPixelsInterval = new FinalInterval( downsampledBlockToFullPixelsMin, downsampledBlockToFullPixelsMax );
+
+				// wrap the downsampled histograms block
+				final WrappedListImg< Histogram > downsampledHistogramsBlockImg = downsampledHistogramsBlock.wrap();
+				// initialize all histograms
+				final ListCursor< Histogram > downsampledHistogramsBlockImgCursor = downsampledHistogramsBlockImg.cursor();
+				while ( downsampledHistogramsBlockImgCursor.hasNext() )
+				{
+					downsampledHistogramsBlockImgCursor.fwd();
+					downsampledHistogramsBlockImgCursor.set( new Histogram( histMinValue, histMaxValue, bins ) );
+				}
+				// translate the block view to its correct position in the downsampled histograms space
+				final IntervalView< Histogram > translatedDownsampledHistogramsBlockImg = Views.translate( downsampledHistogramsBlockImg, downsampledCellMin );
+				final RandomAccess< Histogram > downsampledHistogramsRandomAccess = translatedDownsampledHistogramsBlockImg.randomAccess();
+
+				// find a set of data blocks in original resolution with all pixels required to be accumulated in this downsampled block
+				final CellGrid cellGrid = new CellGrid( histogramsDimensions, blockSize );
+				final long[] cellGridDimensions = cellGrid.getGridDimensions();
+				final long numCells = Intervals.numElements( cellGridDimensions );
+				final long[] cellMin = new long[ cellGrid.numDimensions() ], cellMax = new long[ cellGrid.numDimensions() ];
+				final int[] cellDimensions = new int[ cellGrid.numDimensions() ];
+				final long[] cellGridPosition = new long[ cellGrid.numDimensions() ], pixelPosition = new long[ cellGrid.numDimensions() ];
+				for ( long cellIndex = 0; cellIndex < numCells; ++cellIndex )
+				{
+					cellGrid.getCellDimensions( cellIndex, cellMin, cellDimensions );
+					for ( int d = 0; d < cellGrid.numDimensions(); ++d )
+						cellMax[ d ] = cellMin[ d ] + cellDimensions[ d ] - 1;
+					final Interval cellPixelsInterval = new FinalInterval( cellMin, cellMax );
+
+					final Interval fullPixelsInDownsampledBlockInterval = IntervalsNullable.intersect( cellPixelsInterval, downsampledBlockToFullPixelsInterval );
+					if ( fullPixelsInDownsampledBlockInterval != null )
+					{
+						cellGrid.getCellGridPositionFlat( cellIndex, cellGridPosition );
+						final WrappedSerializableDataBlockReader< Histogram > histogramsBlock = new WrappedSerializableDataBlockReader<>(
+								n5Local,
+								histogramsDataset,
+								cellGridPosition
+							);
+
+						final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
+						final IntervalView< Histogram > translatedHistogramsBlockImg = Views.translate( histogramsBlockImg, cellMin );
+						final IntervalView< Histogram > histogramsBlockIntersection = Views.interval( translatedHistogramsBlockImg, fullPixelsInDownsampledBlockInterval );
+						final Cursor< Histogram > histogramsBlockIntersectionCursor = Views.iterable( histogramsBlockIntersection ).localizingCursor();
+						while ( histogramsBlockIntersectionCursor.hasNext() )
 						{
-							ret.add( other );
-							return ret;
-						} )
-				.mapToPair(
-						tuple ->
-						{
-							final int cnt = broadcastedDownsampledPixelToFullPixelsCount.value()[ tuple._1().intValue() ];
-							final Histogram accumulatedHistogram = tuple._2();
-							accumulatedHistogram.average( cnt );
-							return new Tuple2<>( tuple._1(), accumulatedHistogram );
-						} );
+							final Histogram histogram = histogramsBlockIntersectionCursor.next();
+							histogramsBlockIntersectionCursor.localize( pixelPosition );
+							final long pixelIndex = IntervalIndexer.positionToIndex( pixelPosition, histogramsDimensions );
+							final long downsampledPixelIndex = broadcastedFullPixelToDownsampledPixel.value()[ ( int ) pixelIndex ];
+							IntervalIndexer.indexToPosition( downsampledPixelIndex, downsampledHistogramsDimensions, downsampledPosition );
+							downsampledHistogramsRandomAccess.setPosition( downsampledPosition );
+							final Histogram accumulatedHistogram = downsampledHistogramsRandomAccess.get();
+							accumulatedHistogram.add( histogram );
+						}
+					}
+				}
+
+				// average all accumulated histograms
+				downsampledCellIntervalIterator.reset();
+				while ( downsampledCellIntervalIterator.hasNext() )
+				{
+					downsampledCellIntervalIterator.fwd();
+					downsampledCellIntervalIterator.localize( downsampledPosition );
+					downsampledHistogramsRandomAccess.setPosition( downsampledPosition );
+					final Histogram accumulatedHistogram = downsampledHistogramsRandomAccess.get();
+					final long downsampledPixelIndex = IntervalIndexer.positionToIndex( downsampledPosition, downsampledHistogramsDimensions );
+					final int accumulatedHistogramsCount = broadcastedDownsampledPixelToFullPixelsCount.value()[ ( int ) downsampledPixelIndex ];
+					accumulatedHistogram.average( accumulatedHistogramsCount );
+				}
+
+				downsampledHistogramsBlock.save();
+			} );
+
+		broadcastedDownsampledPixelToFullPixels.destroy();
+
+		return downsampledHistogramsDataset;
 	}
 
 	public < T extends NativeType< T > & RealType< T > > RandomAccessibleInterval< T > downsampleSolutionComponent(
