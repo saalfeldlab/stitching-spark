@@ -1,14 +1,21 @@
 package org.janelia.flatfield;
 
+import java.io.IOException;
 import java.io.Serializable;
-import java.util.Arrays;
+import java.net.URI;
 import java.util.List;
 
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.histogram.Histogram;
 import org.janelia.histogram.HistogramMatching;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
+import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import mpicbg.models.Affine1D;
 import mpicbg.models.AffineModel1D;
@@ -24,15 +31,15 @@ import mpicbg.models.PointMatch;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.cell.CellGrid;
+import net.imglib2.img.list.WrappedListImg;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
-import net.imglib2.view.RandomAccessiblePair;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
-import scala.Tuple2;
 
 public class FlatfieldCorrectionSolver implements Serializable
 {
@@ -50,21 +57,6 @@ public class FlatfieldCorrectionSolver implements Serializable
 		IdentityModel
 	}
 
-	private static final double INTERPOLATION_LAMBDA_IDENTITY = 0.0;
-	private static final double INTERPOLATION_LAMBDA_PIVOT = 0.5;
-
-	private static final double INTERPOLATION_LAMBDA_SCALING = 0.5;
-	private static final double INTERPOLATION_LAMBDA_TRANSLATION = 0.5;
-
-	private transient final JavaSparkContext sparkContext;
-
-	public FlatfieldCorrectionSolver( final JavaSparkContext sparkContext )
-	{
-		this.sparkContext = sparkContext;
-	}
-
-
-
 	public static class FlatfieldSolution
 	{
 		public final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > correctionFields;
@@ -78,150 +70,220 @@ public class FlatfieldCorrectionSolver implements Serializable
 			this.pivotValues = pivotValues;
 		}
 	}
+
+	private static final double INTERPOLATION_LAMBDA_IDENTITY = 0.0;
+	private static final double INTERPOLATION_LAMBDA_PIVOT = 0.5;
+
+	private static final double INTERPOLATION_LAMBDA_SCALING = 0.5;
+	private static final double INTERPOLATION_LAMBDA_TRANSLATION = 0.5;
+
+	private static final String SCALING_TERM_DATASET = "flatfield-solution-S";
+	private static final String TRANSLATION_TERM_DATASET = "flatfield-solution-T";
+	private static final String PIVOT_VALUES_DATASET = "flatfield-solution-pivot";
+
+	private transient final JavaSparkContext sparkContext;
+
+	public FlatfieldCorrectionSolver( final JavaSparkContext sparkContext )
+	{
+		this.sparkContext = sparkContext;
+	}
+
 	@SuppressWarnings("unchecked")
 	public < M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable > FlatfieldSolution leastSquaresInterpolationFit(
-			final JavaPairRDD< Long, Histogram > rddHistograms,
+			final DataProvider dataProvider,
+			final int currentScaleLevel,
+			final String histogramsN5BasePath, final String currentScaleHistogramsDataset,
 			final Histogram referenceHistogram,
-			final ShiftedDownsampling< ? >.PixelsMapping pixelsMapping,
 			final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer,
-			final ModelType modelType,
-			final RegularizerModelType regularizerModelType,
-			final double pivotValue )
+			final ModelType modelType, final RegularizerModelType regularizerModelType,
+			final double pivotValue ) throws IOException
 	{
-		System.out.println( "Solving for scale " + pixelsMapping.scale + ":  size=" + Arrays.toString( pixelsMapping.getDimensions() ) + ",  model=" + modelType.toString() + ", regularizer=" + regularizerModelType.toString() );
-
 		final Broadcast< RandomAccessiblePairNullable< DoubleType, DoubleType > > broadcastedRegularizer = sparkContext.broadcast( regularizer );
-
-		final long[] size = pixelsMapping.getDimensions();
 
 //		final double referenceHistogramOffset = getMedianValue( referenceHistogram );
 		final double referenceHistogramOffset = pivotValue;
 
-		final JavaPairRDD< Long, Pair< Pair< Double, Double >, Double > > rddSolutionPixels = rddHistograms.mapToPair( tuple ->
+		final DataAccessType dataAccessType = dataProvider.getType();
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		final DatasetAttributes currentScaleHistogramsDatasetAttributes = n5.getDatasetAttributes( currentScaleHistogramsDataset );
+		final long[] currentScaleHistogramsDimensions = currentScaleHistogramsDatasetAttributes.getDimensions();
+		final int[] currentScaleHistogramsBlockSize = currentScaleHistogramsDatasetAttributes.getBlockSize();
+
+		final String scalingTermDataset = SCALING_TERM_DATASET + "-scale" + currentScaleLevel;
+		final String translationTermDataset = TRANSLATION_TERM_DATASET + "-scale" + currentScaleLevel;
+		final String pivotValuesDataset = PIVOT_VALUES_DATASET + "-scale" + currentScaleLevel;
+		n5.createDataset( scalingTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+		n5.createDataset( translationTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+		n5.createDataset( pivotValuesDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+
+		final List< long[] > currentScaleBlockPositions = HistogramsProvider.getBlockPositions( currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize );
+		sparkContext.parallelize( currentScaleBlockPositions, currentScaleBlockPositions.size() ).foreach( currentScaleBlockPosition ->
 			{
-				final long[] position = new long[ size.length ];
-				IntervalIndexer.indexToPosition( tuple._1(), size, position );
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
 
-				final List< PointMatch > matches = HistogramMatching.generateHistogramMatches( tuple._2(), referenceHistogram );
+				// histogram block reader
+				final WrappedSerializableDataBlockReader< Histogram > histogramsBlock = new WrappedSerializableDataBlockReader<>(
+						n5Local,
+						currentScaleHistogramsDataset,
+						currentScaleBlockPosition
+					);
+				final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
 
-				// apply the offsets to the pointmatch values
-//				final double[] offset = new double[] { getMedianValue( tuple._2() ), referenceHistogramOffset };
-				final double[] offset = new double[] { pivotValue, referenceHistogramOffset };
-				for ( final PointMatch match : matches )
+				// solution data blocks
+				final RandomAccessibleInterval< DoubleType > scalingTermBlockImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( histogramsBlockImg ) );
+				final RandomAccessibleInterval< DoubleType > translationTermBlockImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( histogramsBlockImg ) );
+				final RandomAccessibleInterval< DoubleType > pivotValuesBlockImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( histogramsBlockImg ) );
+
+				final CellGrid cellGrid = new CellGrid( currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize );
+				final long[] cellMin = new long[ cellGrid.numDimensions() ];
+				final int[] cellDimensions = new int[ cellGrid.numDimensions() ];
+				cellGrid.getCellDimensions( currentScaleBlockPosition, cellMin, cellDimensions );
+
+				final IntervalView< Histogram > translatedHistogramsBlockImg = Views.translate( histogramsBlockImg, cellMin );
+				final IntervalView< DoubleType > translatedScalingTermBlockImg = Views.translate( scalingTermBlockImg, cellMin );
+				final IntervalView< DoubleType > translatedTranslationTermBlockImg = Views.translate( translationTermBlockImg, cellMin );
+				final IntervalView< DoubleType > translatedPivotValuesBlockImg = Views.translate( pivotValuesBlockImg, cellMin );
+
+				final Cursor< Histogram > translatedHistogramsBlockImgCursor = Views.flatIterable( translatedHistogramsBlockImg ).localizingCursor();
+				final Cursor< DoubleType > translatedScalingTermBlockImgCursor = Views.flatIterable( translatedScalingTermBlockImg ).cursor();
+				final Cursor< DoubleType > translatedTranslationTermBlockImgCursor = Views.flatIterable( translatedTranslationTermBlockImg ).cursor();
+				final Cursor< DoubleType > translatedPivotValuesBlockImgCursor = Views.flatIterable( translatedPivotValuesBlockImg ).cursor();
+
+				final long[] position = new long[ cellGrid.numDimensions() ];
+				while ( translatedHistogramsBlockImgCursor.hasNext() )
 				{
-					final Point[] points = new Point[] { match.getP1(), match.getP2() };
-					for ( int i = 0; i < 2; ++i )
-						for ( final double[] value : new double[][] { points[ i ].getL(), points[ i ].getW() } )
-							value[ 0 ] -= offset[ i ];
+					final Histogram histogram = translatedHistogramsBlockImgCursor.next();
+					translatedHistogramsBlockImgCursor.localize( position );
+
+					translatedScalingTermBlockImgCursor.fwd();
+					translatedTranslationTermBlockImgCursor.fwd();
+					translatedPivotValuesBlockImgCursor.fwd();
+
+					final List< PointMatch > matches = HistogramMatching.generateHistogramMatches( histogram, referenceHistogram );
+
+					// apply the offsets to the pointmatch values
+//					final double[] offset = new double[] { getMedianValue( tuple._2() ), referenceHistogramOffset };
+					final double[] offset = new double[] { pivotValue, referenceHistogramOffset };
+					for ( final PointMatch match : matches )
+					{
+						final Point[] points = new Point[] { match.getP1(), match.getP2() };
+						for ( int i = 0; i < 2; ++i )
+							for ( final double[] value : new double[][] { points[ i ].getL(), points[ i ].getW() } )
+								value[ 0 ] -= offset[ i ];
+					}
+
+					final double[] regularizerValues;
+					if ( broadcastedRegularizer.value() != null )
+					{
+						final RandomAccessiblePairNullable< DoubleType, DoubleType >.RandomAccess regularizerRandomAccess = broadcastedRegularizer.value().randomAccess();
+						regularizerRandomAccess.setPosition( position );
+
+						regularizerValues = new double[]
+							{
+								( regularizerRandomAccess.getA() != null ? regularizerRandomAccess.getA().get() : 1 ),
+								( regularizerRandomAccess.getB() != null ? regularizerRandomAccess.getB().get() : 0 )
+							};
+					}
+					else
+					{
+						regularizerValues = null;
+					}
+
+					final M model;
+					switch ( modelType )
+					{
+					case AffineModel:
+						model = ( M ) new AffineModel1D();
+						break;
+					case FixedTranslationAffineModel:
+						model = ( M ) new FixedTranslationAffineModel1D( regularizerValues == null ? 0 : regularizerValues[ 1 ] );
+						break;
+					case FixedScalingAffineModel:
+						model = ( M ) new FixedScalingAffineModel1D( regularizerValues == null ? 1 : regularizerValues[ 0 ] );
+						break;
+					default:
+						model = null;
+						break;
+					}
+
+					final M pivotedModel = ( M ) new InterpolatedAffineModel1D<>( model, new FixedTranslationAffineModel1D( 0 ), INTERPOLATION_LAMBDA_PIVOT );
+
+					boolean modelFound = false;
+					try
+					{
+//						modelFound = model.filter( matches, new ArrayList<>(), 4.0 );
+						pivotedModel.fit( matches );
+						modelFound = true;
+					}
+					catch ( final Exception e )
+					{
+//						modelFound = false;
+//						e.printStackTrace();
+						throw e;
+					}
+
+
+					final R regularizerModel;
+					switch ( regularizerModelType )
+					{
+					case IdentityModel:
+						regularizerModel = ( R ) new IdentityModel();
+						break;
+					case AffineModel:
+						final AffineModel1D downsampledModel = new AffineModel1D();
+						downsampledModel.set(
+								regularizerValues != null ? regularizerValues[ 0 ] : 1,
+								regularizerValues != null ? regularizerValues[ 1 ] : 0 );
+						regularizerModel = ( R ) downsampledModel;
+						break;
+					default:
+						regularizerModel = null;
+						break;
+					}
+
+//					final R interpolatedRegularizer = ( R ) new InterpolatedAffineModel1D<>(
+//							regularizerModel,
+//							new IdentityModel(),
+//							INTERPOLATION_LAMBDA_IDENTITY );
+	//
+//					final M interpolatedModel = ( M ) ( modelFound ?
+//							new IndependentlyInterpolatedAffineModel1D<>(
+//									pivotedModel,
+//									interpolatedRegularizer,
+//									INTERPOLATION_LAMBDA_SCALING,
+//									INTERPOLATION_LAMBDA_TRANSLATION ) :
+//							interpolatedRegularizer );
+
+					final M interpolatedModel = ( M ) ( modelFound ?
+							new IndependentlyInterpolatedAffineModel1D<>(
+									pivotedModel,
+									regularizerModel,
+									INTERPOLATION_LAMBDA_SCALING,
+									INTERPOLATION_LAMBDA_TRANSLATION ) :
+								regularizerModel );
+
+					final double[] estimatedModelValues = new double[ 2 ];
+					interpolatedModel.toArray( estimatedModelValues );
+
+					translatedScalingTermBlockImgCursor.get().set( estimatedModelValues[ 0 ] );
+					translatedTranslationTermBlockImgCursor.get().set( estimatedModelValues[ 1 ] );
+					translatedPivotValuesBlockImgCursor.get().set( offset[ 0 ] );
 				}
 
-				final double[] regularizerValues;
-				if ( broadcastedRegularizer.value() != null )
-				{
-					final RandomAccessiblePairNullable< DoubleType, DoubleType >.RandomAccess regularizerRandomAccess = broadcastedRegularizer.value().randomAccess();
-					regularizerRandomAccess.setPosition( position );
-
-					regularizerValues = new double[]
-						{
-							( regularizerRandomAccess.getA() != null ? regularizerRandomAccess.getA().get() : 1 ),
-							( regularizerRandomAccess.getB() != null ? regularizerRandomAccess.getB().get() : 0 )
-						};
-				}
-				else
-				{
-					regularizerValues = null;
-				}
-
-				final M model;
-				switch ( modelType )
-				{
-				case AffineModel:
-					model = ( M ) new AffineModel1D();
-					break;
-				case FixedTranslationAffineModel:
-					model = ( M ) new FixedTranslationAffineModel1D( regularizerValues == null ? 0 : regularizerValues[ 1 ] );
-					break;
-				case FixedScalingAffineModel:
-					model = ( M ) new FixedScalingAffineModel1D( regularizerValues == null ? 1 : regularizerValues[ 0 ] );
-					break;
-				default:
-					model = null;
-					break;
-				}
-
-				final M pivotedModel = ( M ) new InterpolatedAffineModel1D<>( model, new FixedTranslationAffineModel1D( 0 ), INTERPOLATION_LAMBDA_PIVOT );
-
-				boolean modelFound = false;
-				try
-				{
-//					modelFound = model.filter( matches, new ArrayList<>(), 4.0 );
-					pivotedModel.fit( matches );
-					modelFound = true;
-				}
-				catch ( final Exception e )
-				{
-					modelFound = false;
-					e.printStackTrace();
-				}
-
-
-				final R regularizerModel;
-				switch ( regularizerModelType )
-				{
-				case IdentityModel:
-					regularizerModel = ( R ) new IdentityModel();
-					break;
-				case AffineModel:
-					final AffineModel1D downsampledModel = new AffineModel1D();
-					downsampledModel.set(
-							regularizerValues != null ? regularizerValues[ 0 ] : 1,
-							regularizerValues != null ? regularizerValues[ 1 ] : 0 );
-					regularizerModel = ( R ) downsampledModel;
-					break;
-				default:
-					regularizerModel = null;
-					break;
-				}
-
-				final R interpolatedRegularizer = ( R ) new InterpolatedAffineModel1D<>(
-						regularizerModel,
-						new IdentityModel(),
-						INTERPOLATION_LAMBDA_IDENTITY );
-
-				final M interpolatedModel = ( M ) ( modelFound ?
-						new IndependentlyInterpolatedAffineModel1D<>(
-								pivotedModel,
-								interpolatedRegularizer,
-								INTERPOLATION_LAMBDA_SCALING,
-								INTERPOLATION_LAMBDA_TRANSLATION ) :
-						interpolatedRegularizer );
-
-				final double[] estimatedModelValues = new double[ 2 ];
-				interpolatedModel.toArray( estimatedModelValues );
-
-				return new Tuple2<>( tuple._1(), new ValuePair<>( new ValuePair<>( estimatedModelValues[ 0 ], estimatedModelValues[ 1 ] ), offset[ 0 ] ) );
+				N5Utils.saveBlock( scalingTermBlockImg, n5Local, scalingTermDataset, currentScaleBlockPosition );
+				N5Utils.saveBlock( translationTermBlockImg, n5Local, translationTermDataset, currentScaleBlockPosition );
+				N5Utils.saveBlock( pivotValuesBlockImg, n5Local, pivotValuesDataset, currentScaleBlockPosition );
 			} );
-
-		final List< Tuple2< Long, Pair< Pair< Double, Double >, Double > > > solutionPixels  = rddSolutionPixels.collect();
 
 		broadcastedRegularizer.destroy();
 
-		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution = new ValuePair<>( ArrayImgs.doubles( size ), ArrayImgs.doubles( size ) );
-		final RandomAccessiblePair< DoubleType, DoubleType >.RandomAccess solutionRandomAccess = new RandomAccessiblePair<>( solution.getA(), solution.getB() ).randomAccess();
-		final long[] position = new long[ size.length ];
-		for ( final Tuple2< Long, Pair< Pair< Double, Double >, Double > > tuple : solutionPixels )
-		{
-			IntervalIndexer.indexToPosition( tuple._1(), size, position );
-			solutionRandomAccess.setPosition( position );
+		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution = new ValuePair<>(
+				N5Utils.open( n5, scalingTermDataset ),
+				N5Utils.open( n5, translationTermDataset )
+			);
 
-			solutionRandomAccess.getA().set( tuple._2().getA().getA() );
-			solutionRandomAccess.getB().set( tuple._2().getA().getB() );
-		}
-
-		final double[] offsets = new double[ solutionPixels.size() ];
-		for ( final Tuple2< Long, Pair< Pair< Double, Double >, Double > > tuple : solutionPixels )
-			offsets[ tuple._1().intValue() ] = tuple._2().getB();
-		final RandomAccessibleInterval< DoubleType > offsetsImg = ArrayImgs.doubles( offsets, size );
+		final RandomAccessibleInterval< DoubleType > offsetsImg = N5Utils.open( n5, pivotValuesDataset );
 
 		return new FlatfieldSolution( solution, offsetsImg );
 	}

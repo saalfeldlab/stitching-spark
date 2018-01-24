@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.TreeMap;
 
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -254,7 +253,6 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 		System.out.println( "Loading histograms.." );
 		System.out.println( "Specified intensity range: min=" + args.histMinValue() + ", max=" + args.histMaxValue() );
-		final JavaPairRDD< Long, Histogram > rddFullHistograms = histogramsProvider.getHistograms();
 
 		final Histogram referenceHistogram = histogramsProvider.getReferenceHistogram();
 		System.out.println( "Obtained reference histogram of size " + referenceHistogram.getNumBins() );
@@ -325,18 +323,24 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 						regularizer = null;
 					}
 
-					final JavaPairRDD< Long, Histogram > rddDownsampledHistograms = shiftedDownsampling.downsampleHistograms(
-							rddFullHistograms,
-							pixelsMapping );
+					final String downsampledHistogramsDataset = shiftedDownsampling.downsampleHistogramsN5(
+							pixelsMapping,
+							dataProvider,
+							histogramsProvider.getHistogramsN5BasePath(), histogramsProvider.getHistogramsDataset(),
+							histogramsProvider.getHistogramMinValue(), histogramsProvider.getHistogramMaxValue(), histogramsProvider.getHistogramBins()
+						);
+
+					System.out.println( "Solving for scale " + pixelsMapping.scale + ":  size=" + Arrays.toString( pixelsMapping.getDimensions() ) + ",  model=" + modelType.toString() + ", regularizer=" + regularizerModelType.toString() );
 
 					final FlatfieldSolution solutionAndOffsets = solver.leastSquaresInterpolationFit(
-							rddDownsampledHistograms,
+							dataProvider,
+							pixelsMapping.scale,
+							histogramsProvider.getHistogramsN5BasePath(), downsampledHistogramsDataset,
 							referenceHistogram,
-							pixelsMapping,
 							regularizer,
-							modelType,
-							regularizerModelType,
-							args.pivotValue() );
+							modelType, regularizerModelType,
+							args.pivotValue()
+						);
 
 					solution = solutionAndOffsets.correctionFields;
 					offsets = solutionAndOffsets.pivotValues;
