@@ -15,13 +15,23 @@ import net.imglib2.util.Intervals;
 
 abstract public class AbstractWrappedSerializableDataBlockReader< N5 extends N5Reader, T extends Serializable >
 {
+	protected static enum OpenMode
+	{
+		READ,
+		READ_WRITE
+	}
+
 	protected final N5 n5;
 	protected final String pathName;
 	protected DataBlock< T[] > dataBlock;
 	protected boolean wasLoadedSuccessfully;
 
 	@SuppressWarnings( "unchecked" )
-	public AbstractWrappedSerializableDataBlockReader( final N5 n5, final String pathName, final long[] gridPosition ) throws IOException
+	protected AbstractWrappedSerializableDataBlockReader(
+			final N5 n5,
+			final String pathName,
+			final long[] gridPosition,
+			final OpenMode openMode ) throws IOException
 	{
 		this.n5 = n5;
 		this.pathName = pathName;
@@ -36,15 +46,8 @@ abstract public class AbstractWrappedSerializableDataBlockReader< N5 extends N5R
 		catch ( final IOException e )
 		{
 			wasLoadedSuccessfully = false;
-		}
-
-		if ( !wasLoadedSuccessfully )
-		{
-			// compute the block size accounting for the border blocks that can be smaller than regular blocks
-			final int[] blockSize = new int[ datasetAttributes.getNumDimensions() ];
-			for ( int d = 0; d < blockSize.length; ++d )
-				blockSize[ d ] = ( int ) Math.min( datasetAttributes.getDimensions()[ d ] - gridPosition[ d ] * datasetAttributes.getBlockSize()[ d ], datasetAttributes.getBlockSize()[ d ] );
-			this.dataBlock = ( DataBlock< T[] > ) datasetAttributes.getDataType().createDataBlock( blockSize, gridPosition );
+			if ( openMode == OpenMode.READ )
+				throw e;
 		}
 	}
 
