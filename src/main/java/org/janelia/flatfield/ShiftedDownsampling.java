@@ -13,10 +13,12 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.histogram.Histogram;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
+import org.janelia.saalfeldlab.n5.spark.N5RemoveSpark;
 
 import net.imglib2.Cursor;
 import net.imglib2.FinalDimensions;
@@ -45,6 +47,8 @@ import net.imglib2.view.Views;
 
 public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 {
+	private static final String DOWNSAMPLED_HISTOGRAMS_GROUP = "downsampled-histograms";
+
 	private final JavaSparkContext sparkContext;
 	private final Interval workingInterval;
 	private final A downsamplingTransform;
@@ -145,7 +149,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 		// additionally broadcast the downsampled pixel to full pixels mapping
 		final Broadcast< Map< Long, Interval > > broadcastedDownsampledPixelToFullPixels = sparkContext.broadcast( pixelsMapping.downsampledPixelToFullPixels );
 
-		final String downsampledHistogramsDataset = histogramsDataset + "-downsampled";
+		final String downsampledHistogramsDataset = PathResolver.get( DOWNSAMPLED_HISTOGRAMS_GROUP, "s" + pixelsMapping.scale );
 
 		final DataAccessType dataAccessType = dataProvider.getType();
 		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
@@ -355,6 +359,16 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 			img = RealViews.affine( alignedDownsampledImg, downsamplingTransform.inverse() );
 		}
 		return img;
+	}
+
+	public void cleanupDownsampledHistograms( final DataProvider dataProvider, final String histogramsN5BasePath ) throws IOException
+	{
+		final DataAccessType dataAccessType = dataProvider.getType();
+		N5RemoveSpark.remove(
+				sparkContext,
+				() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				DOWNSAMPLED_HISTOGRAMS_GROUP
+			);
 	}
 
 
