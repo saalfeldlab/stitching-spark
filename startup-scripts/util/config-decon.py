@@ -2,7 +2,7 @@
 
 import sys
 import json
-import os.path
+import os
 
 if __name__ == '__main__':
 	for config_filepath in sys.argv[1:]:
