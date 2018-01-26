@@ -242,8 +242,8 @@
 							</excludes>
 						</relocation>
 						<relocation>
-							<pattern>org.apache.commons.compress.utils.IOUtils</pattern>
-							<shadedPattern>org.janelia.saalfeldlab.org.apache.commons.compress.utils.IOUtils</shadedPattern>
+							<pattern>org.apache.commons.compress</pattern>
+							<shadedPattern>org.janelia.saalfeldlab.org.apache.commons.compress</shadedPattern>
 						</relocation>
 					</relocations>
 				</configuration>
