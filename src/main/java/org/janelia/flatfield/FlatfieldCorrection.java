@@ -41,8 +41,6 @@ import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineSet;
-import net.imglib2.realtransform.AffineTransform2D;
-import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
@@ -248,7 +246,6 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				basePath,
 				tiles,
 				fullTileSize,
-				args.use2D(),
 				args.histMinValue(), args.histMaxValue(), args.bins()
 			);
 
@@ -277,8 +274,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		}
 
 		// Define the transform and calculate the image size on each scale level
-		final A downsamplingTransform = createDownsamplingTransform( workingInterval.numDimensions() );
-		final ShiftedDownsampling< A > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, workingInterval, downsamplingTransform );
+		final ShiftedDownsampling< A > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, workingInterval );
 		final FlatfieldCorrectionSolver solver = new FlatfieldCorrectionSolver( sparkContext );
 
 		final int iterations = 1;
@@ -419,19 +415,6 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		elapsed = System.nanoTime() - elapsed;
 		System.out.println( "----------" );
 		System.out.println( String.format( "Took %f mins", elapsed / 1e9 / 60 ) );
-	}
-
-
-	@SuppressWarnings("unchecked")
-	private < A extends AffineGet & AffineSet > A createDownsamplingTransform( final int numDimensions )
-	{
-		final A downsamplingTransform = ( A ) ( numDimensions == 2 ? new AffineTransform2D() : new AffineTransform3D() );
-		for ( int d = 0; d < numDimensions; ++d )
-		{
-			downsamplingTransform.set( 0.5, d, d );
-			downsamplingTransform.set( -0.5, d, numDimensions );
-		}
-		return downsamplingTransform;
 	}
 
 	private int findStartingScale( final ShiftedDownsampling< ? > shiftedDownsampling )

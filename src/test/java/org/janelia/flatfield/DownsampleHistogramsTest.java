@@ -152,13 +152,7 @@ public class DownsampleHistogramsTest
 		}
 
 		final Interval interval = new SerializableFinalInterval( dimensions );
-		final AffineTransform3D downsamplingTransform = new AffineTransform3D();
-		downsamplingTransform.set(
-				0.5, 0, 0, -0.5,
-				0, 0.5, 0, -0.5,
-				0, 0, 0.5, -0.5
-			);
-		final ShiftedDownsampling< AffineTransform3D > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, interval, downsamplingTransform );
+		final ShiftedDownsampling< AffineTransform3D > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, interval );
 
 		final int scale = 1;
 		try ( ShiftedDownsampling< AffineTransform3D >.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
