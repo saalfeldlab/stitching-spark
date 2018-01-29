@@ -533,21 +533,16 @@ public class HistogramsProvider implements Serializable
 			// choose subset of these histograms (e.g. >25% and <75%)
 			.filter( tuple -> tuple._2() >= mStart && tuple._2() < mEnd )
 			// map chosen histograms to their respective N5 blocks where they belong
-			.mapPartitionsToPair( tuples ->
+			.mapToPair( tuple ->
 				{
-					final List< Tuple2< Integer, Long > > blockIndexAndPixelIndex = new ArrayList<>();
 					final CellGrid cellGrid = new CellGrid( fieldOfViewSize, blockSize );
 					final long[] cellGridDimensions = cellGrid.getGridDimensions();
 					final long[] pixelPosition = new long[ fieldOfViewSize.length ], blockPosition = new long[ fieldOfViewSize.length ];
-					while ( tuples.hasNext() )
-					{
-						final long pixelIndex = tuples.next()._1()._2();
-						IntervalIndexer.indexToPosition( pixelIndex, fieldOfViewSize, pixelPosition );
-						cellGrid.getCellPosition( pixelPosition, blockPosition );
-						final int blockIndex = ( int ) IntervalIndexer.positionToIndex( blockPosition, cellGridDimensions );
-						blockIndexAndPixelIndex.add( new Tuple2<>( blockIndex, pixelIndex ) );
-					}
-					return blockIndexAndPixelIndex.iterator();
+					final long pixelIndex = tuple._1()._2();
+					IntervalIndexer.indexToPosition( pixelIndex, fieldOfViewSize, pixelPosition );
+					cellGrid.getCellPosition( pixelPosition, blockPosition );
+					final int blockIndex = ( int ) IntervalIndexer.positionToIndex( blockPosition, cellGridDimensions );
+					return new Tuple2<>( blockIndex, pixelIndex );
 				}
 			)
 			// group histogram indexes by their respective N5 blocks
