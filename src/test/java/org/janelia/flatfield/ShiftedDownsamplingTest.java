@@ -23,8 +23,6 @@ import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineSet;
 import net.imglib2.realtransform.AffineTransform;
-import net.imglib2.realtransform.AffineTransform2D;
-import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
@@ -53,10 +51,7 @@ public class ShiftedDownsamplingTest
 	public void testPixelsMapping()
 	{
 		final Interval interval = Intervals.createMinSize( 0, 16 );
-		final AffineTransform downsamplingTransform = new AffineTransform( 1 );
-		downsamplingTransform.set( 0.5, -0.5 );
-
-		final ShiftedDownsampling< AffineTransform > downsampler = new ShiftedDownsampling<>( sparkContext, interval, downsamplingTransform );
+		final ShiftedDownsampling< AffineTransform > downsampler = new ShiftedDownsampling<>( sparkContext, interval );
 
 		final long[] expectedDimensionsAtScales = new long[] { 16, 9, 5, 3, 2, 1 };
 		final long[] expectedPixelSizeAtScales = new long[] { 1, 2, 4, 8, 16, 32 };
@@ -111,30 +106,7 @@ public class ShiftedDownsamplingTest
 
 		final ImagePlus imp = ImageImporter.openImage( filepath );
 		final RandomAccessibleInterval< T > img = ( RandomAccessibleInterval< T > ) ImagePlusImgs.from( imp );
-
-		final A downsamplingTransform;
-		switch ( img.numDimensions() )
-		{
-		case 2:
-			downsamplingTransform = ( A ) new AffineTransform2D();
-			downsamplingTransform.set(
-					0.5, 0, -0.5,
-					0, 0.5, -0.5
-				);
-			break;
-		case 3:
-			downsamplingTransform = ( A ) new AffineTransform3D();
-			downsamplingTransform.set(
-					0.5, 0, 0, -0.5,
-					0, 0.5, 0, -0.5,
-					0, 0, 0.5, -0.5
-				);
-			break;
-		default:
-			throw new IllegalArgumentException( "Input image has " + img.numDimensions() + " dimensions (only 2d and 3d images are supported)" );
-		}
-
-		final ShiftedDownsampling< A > downsampler = new ShiftedDownsampling<>( img, downsamplingTransform );
+		final ShiftedDownsampling< A > downsampler = new ShiftedDownsampling<>( img );
 
 		final int restoredScale = 0;
 		final List< RandomAccessibleInterval< T > > restoredImgs = new ArrayList<>();

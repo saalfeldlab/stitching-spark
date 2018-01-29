@@ -35,6 +35,9 @@ import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.iterator.IntervalIterator;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineSet;
+import net.imglib2.realtransform.AffineTransform;
+import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
@@ -57,21 +60,28 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 	private final List< long[] > scaleLevelOffset;
 	private final List< long[] > scaleLevelDimensions;
 
-	public ShiftedDownsampling(
-			final Interval workingInterval,
-			final A downsamplingTransform )
+	public ShiftedDownsampling( final Interval workingInterval )
 	{
 		// The version that doesn't use Spark
-		this( null, workingInterval, downsamplingTransform );
+		this( null, workingInterval );
 	}
-	public ShiftedDownsampling(
-			final JavaSparkContext sparkContext,
-			final Interval workingInterval,
-			final A downsamplingTransform )
+	@SuppressWarnings( "unchecked" )
+	public ShiftedDownsampling( final JavaSparkContext sparkContext, final Interval workingInterval )
 	{
 		this.sparkContext = sparkContext;
 		this.workingInterval = workingInterval;
-		this.downsamplingTransform = downsamplingTransform;
+
+		if ( workingInterval.numDimensions() == 2 )
+			downsamplingTransform = ( A ) new AffineTransform2D();
+		else if ( workingInterval.numDimensions() == 3 )
+			downsamplingTransform = ( A ) new AffineTransform3D();
+		else
+			downsamplingTransform = ( A ) new AffineTransform( workingInterval.numDimensions() );
+		for ( int d = 0; d < downsamplingTransform.numDimensions(); ++d )
+		{
+			downsamplingTransform.set( 0.5, d, d );
+			downsamplingTransform.set( -0.5, d, downsamplingTransform.numDimensions() );
+		}
 
 		scaleLevelPixelSize = new ArrayList<>();
 		scaleLevelOffset = new ArrayList<>();

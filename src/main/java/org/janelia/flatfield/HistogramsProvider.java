@@ -69,7 +69,6 @@ public class HistogramsProvider implements Serializable
 	private final DataAccessType dataAccessType;
 	private final Interval workingInterval;
 	private final long[] fullTileSize;
-	private final boolean use2D;
 
 	private final String histogramsN5BasePath;
 	private final String histogramsDataset;
@@ -89,7 +88,6 @@ public class HistogramsProvider implements Serializable
 			final String basePath,
 			final TileInfo[] tiles,
 			final long[] fullTileSize,
-			final boolean use2D,
 			final double histMinValue, final double histMaxValue, final int bins ) throws IOException, URISyntaxException
 	{
 		this.sparkContext = sparkContext;
@@ -97,7 +95,6 @@ public class HistogramsProvider implements Serializable
 		this.workingInterval = workingInterval;
 		this.tiles = tiles;
 		this.fullTileSize = fullTileSize;
-		this.use2D = use2D;
 
 		this.histMinValue = histMinValue;
 		this.histMaxValue = histMaxValue;
@@ -122,8 +119,9 @@ public class HistogramsProvider implements Serializable
 		final TileType tileType = TileLoader.getTileType( tiles[ 0 ], dataProvider );
 		// TODO: check that all tiles are of the same type
 
-		fieldOfViewSize = use2D ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize.clone();
+		final boolean use2D = workingInterval.numDimensions() < fullTileSize.length;
 
+		fieldOfViewSize = use2D ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize.clone();
 		blockSize = new int[ fieldOfViewSize.length ];
 		if ( tileType == TileType.N5_DATASET )
 		{
