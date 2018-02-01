@@ -495,9 +495,9 @@ public class HistogramsProvider implements Serializable
 					{
 						final RealComposite< R > histogram = histogramsBlockImgCursor.next();
 
-						// compute mean value of the histogram
+						// compute mean value of the histogram (excluding tail bins)
 						double histogramValueSum = 0, histogramQuantitySum = 0;
-						for ( long bin = 0; bin < binMapper.getBinCount(); ++bin )
+						for ( long bin = 1; bin < bins - 1; ++bin )
 						{
 							final double binQuantity = histogram.get( bin ).getRealDouble();
 							binMapper.getCenterValue( bin, binCenterValue );
