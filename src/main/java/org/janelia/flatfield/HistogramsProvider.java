@@ -53,6 +53,7 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Util;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import net.imglib2.view.composite.CompositeIntervalView;
@@ -193,9 +194,17 @@ public class HistogramsProvider implements Serializable
 		}
 		else
 		{
-			// check the dimensionality of the existing histograms
+			// validate existing histograms
 			if ( n5.getDatasetAttributes( histogramsDataset ).getNumDimensions() != extendedDimensions.length )
 				throw new RuntimeException( "histograms-n5 has different dimensionality than the field of view" );
+
+			if (
+					!Util.isApproxEqual( n5.getAttribute( histogramsDataset, HISTOGRAM_MIN_VALUE_KEY, Double.class ), histMinValue, 1e-10 ) ||
+					!Util.isApproxEqual( n5.getAttribute( histogramsDataset, HISTOGRAM_MAX_VALUE_KEY, Double.class ), histMaxValue, 1e-10 ) )
+				throw new RuntimeException( "histograms-n5 has different value range" );
+
+			if ( n5.getAttribute( histogramsDataset, HISTOGRAM_NUM_BINS_KEY, Integer.class ) != bins )
+				throw new RuntimeException( "histograms-n5 has different number of bins" );
 
 			// skip this step if the flag 'allHistogramsExist' is set
 			final Boolean allHistogramsExist = n5.getAttribute( histogramsDataset, ALL_HISTOGRAMS_EXIST_KEY, Boolean.class );
