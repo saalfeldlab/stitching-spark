@@ -136,6 +136,23 @@ public class ReferenceHistogramTest
 		Assert.assertArrayEquals( addTailBins( 2, 2.3333333333, 1.3333333333, 1, 1.3333333333 ), accumulatedHistogram, EPSILON );
 	}
 
+	/**
+	 * Test reference histogram with tail bins having non-zero values.
+	 * @throws IOException
+	 */
+	@Test
+	public void testNonZeroTailBins() throws IOException
+	{
+		final List< double[] > histograms = new ArrayList<>();
+		histograms.add( new double[] { 6, 1, 4, 2, 0, 1, 4 } );
+		histograms.add( new double[] { 3, 2, 2, 2, 2, 0, 7 } );
+		histograms.add( new double[] { 1, 3, 1, 0, 1, 3, 9 } );
+		histograms.add( new double[] { 8, 2, 5, 1, 0, 0, 2 } );
+
+		final double[] accumulatedHistogram = getReferenceHistogram( histograms );
+		Assert.assertArrayEquals( new double[] { 4.5, 1.5, 3, 2, 1, 0.5, 5.5 }, accumulatedHistogram, EPSILON );
+	}
+
 	private double[] getReferenceHistogram( final List< double[] > histograms ) throws IOException
 	{
 		final int bins = histograms.get( 0 ).length;
