@@ -172,21 +172,21 @@ public class HistogramsProvider implements Serializable
 	{
 		System.out.println( "Binning the input stack and saving as N5 blocks..." );
 
-		final long[] histogramsStorageDimensions = new long[ fieldOfViewSize.length + 1 ];
-		System.arraycopy( fieldOfViewSize, 0, histogramsStorageDimensions, 0, fieldOfViewSize.length );
-		histogramsStorageDimensions[ fieldOfViewSize.length ] = bins;
+		final long[] extendedDimensions = new long[ fieldOfViewSize.length + 1 ];
+		System.arraycopy( fieldOfViewSize, 0, extendedDimensions, 0, fieldOfViewSize.length );
+		extendedDimensions[ fieldOfViewSize.length ] = bins;
 
-		final int[] histogramsStorageBlockSize = new int[ blockSize.length + 1 ];
-		System.arraycopy( blockSize, 0, histogramsStorageBlockSize, 0, blockSize.length );
-		histogramsStorageBlockSize[ blockSize.length ] = bins;
+		final int[] extendedBlockSize = new int[ blockSize.length + 1 ];
+		System.arraycopy( blockSize, 0, extendedBlockSize, 0, blockSize.length );
+		extendedBlockSize[ blockSize.length ] = bins;
 
 		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
 		if ( !n5.datasetExists( histogramsDataset ) )
 		{
 			n5.createDataset(
 					histogramsDataset,
-					histogramsStorageDimensions,
-					histogramsStorageBlockSize,
+					extendedDimensions,
+					extendedBlockSize,
 					DataType.FLOAT64,
 					new GzipCompression()
 				);
@@ -194,7 +194,7 @@ public class HistogramsProvider implements Serializable
 		else
 		{
 			// check the dimensionality of the existing histograms
-			if ( n5.getDatasetAttributes( histogramsDataset ).getNumDimensions() != histogramsStorageDimensions.length )
+			if ( n5.getDatasetAttributes( histogramsDataset ).getNumDimensions() != extendedDimensions.length )
 				throw new RuntimeException( "histograms-n5 has different dimensionality than the field of view" );
 
 			// skip this step if the flag 'allHistogramsExist' is set
@@ -217,7 +217,7 @@ public class HistogramsProvider implements Serializable
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 
 				// create histogram block
-				final RandomAccessibleInterval< DoubleType > histogramsStorageImg = ArrayImgs.doubles( Conversions.toLongArray( histogramsStorageBlockSize ) );
+				final RandomAccessibleInterval< DoubleType > histogramsStorageImg = ArrayImgs.doubles( Conversions.toLongArray( extendedBlockSize ) );
 				final RandomAccessibleInterval< R > histogramsGenericStorageImg = ( RandomAccessibleInterval< R > ) histogramsStorageImg;
 				final CompositeIntervalView< R, RealComposite< R > > histogramsImg = Views.collapseReal( histogramsGenericStorageImg );
 
@@ -288,7 +288,9 @@ public class HistogramsProvider implements Serializable
 				System.out.println( "Block min=" + Arrays.toString( Intervals.minAsLongArray( blockInterval ) ) + ", max=" + Arrays.toString( Intervals.maxAsLongArray( blockInterval ) ) + ": populated histograms" );
 
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-				N5Utils.saveBlock( histogramsStorageImg, n5Local, histogramsDataset, blockPosition );
+				final long[] extendedBlockPosition = new long[ extendedBlockSize.length ];
+				System.arraycopy( blockPosition, 0, extendedBlockPosition, 0, blockPosition.length );
+				N5Utils.saveBlock( histogramsStorageImg, n5Local, histogramsDataset, extendedBlockPosition );
 			} );
 
 		broadcastedTiles.destroy();
