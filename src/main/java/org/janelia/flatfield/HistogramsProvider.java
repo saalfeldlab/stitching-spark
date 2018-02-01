@@ -1,8 +1,6 @@
 package org.janelia.flatfield;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.Serializable;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -20,7 +18,6 @@ import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.histogram.Histogram;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -32,22 +29,14 @@ import org.janelia.stitching.TileLoader;
 import org.janelia.stitching.TileLoader.TileType;
 import org.janelia.util.Conversions;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.serializers.MapSerializer;
-
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.histogram.Histogram1d;
 import net.imglib2.histogram.Real1dBinMapper;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.cell.CellGrid;
-import net.imglib2.img.list.ListImg;
-import net.imglib2.img.list.ListLocalizingCursor;
-import net.imglib2.img.list.WrappedListImg;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
@@ -79,7 +68,6 @@ public class HistogramsProvider implements Serializable
 
 	private final DataAccessType dataAccessType;
 	private final Interval workingInterval;
-	private final long[] fullTileSize;
 
 	private final String histogramsN5BasePath;
 	private final String histogramsDataset;
@@ -90,7 +78,7 @@ public class HistogramsProvider implements Serializable
 	private final long[] fieldOfViewSize;
 	private final int[] blockSize;
 
-	private transient Histogram referenceHistogram;
+	private transient double[] referenceHistogram;
 
 	public HistogramsProvider(
 			final JavaSparkContext sparkContext,
@@ -105,7 +93,6 @@ public class HistogramsProvider implements Serializable
 		this.dataProvider = dataProvider;
 		this.workingInterval = workingInterval;
 		this.tiles = tiles;
-		this.fullTileSize = fullTileSize;
 
 		this.histMinValue = histMinValue;
 		this.histMaxValue = histMaxValue;
@@ -317,128 +304,7 @@ public class HistogramsProvider implements Serializable
 		n5.setAttribute( histogramsDataset, ALL_HISTOGRAMS_EXIST_KEY, true );
 	}
 
-	@SuppressWarnings( "unchecked" )
-	private ListImg< HashMap< Integer, Integer > > readSliceHistograms( final DataProvider dataProvider, final int slice ) throws IOException
-	{
-		return new ListImg<>( Arrays.asList( readSliceHistogramsArray( dataProvider, 0, slice ) ), new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } );
-	}
-	@SuppressWarnings( "rawtypes" )
-	private HashMap[] readSliceHistogramsArray( final DataProvider dataProvider, final int scale, final int slice ) throws IOException
-	{
-		System.out.println( "Loading slice " + slice );
-		final String path = generateSliceHistogramsPath( scale, slice );
-
-		if ( !dataProvider.fileExists( URI.create( path ) ) )
-			return null;
-
-//		final Kryo kryo = kryoSerializer.newKryo();
-		final Kryo kryo = new Kryo();
-		final MapSerializer serializer = new MapSerializer();
-		serializer.setKeysCanBeNull( false );
-		serializer.setKeyClass( Integer.class, kryo.getSerializer( Integer.class ) );
-		serializer.setValueClass( Integer.class, kryo.getSerializer( Integer.class) );
-		kryo.register( HashMap.class, serializer );
-
-		try ( final InputStream is = new FileInputStream( path ) )
-		{
-			try ( final Input input = new Input( is ) )
-			{
-				return kryo.readObject( input, HashMap[].class );
-			}
-		}
-	}
-
-	/*private void convertHistogramsToN5() throws IOException
-	{
-		final int[] blockSize = new int[ fullTileSize.length ];
-		Arrays.fill( blockSize, HISTOGRAMS_DEFAULT_BLOCK_SIZE );
-
-		final List< long[] > blockGridPositions = new ArrayList<>();
-		final CellGrid cellGrid = new CellGrid( fullTileSize, blockSize );
-		for ( int index = 0; index < Intervals.numElements( cellGrid.getGridDimensions() ); ++index )
-		{
-			final long[] blockGridPosition = new long[ cellGrid.numDimensions() ];
-			cellGrid.getCellGridPositionFlat( index, blockGridPosition );
-			blockGridPositions.add( blockGridPosition );
-		}
-
-		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
-		if ( !n5.datasetExists( histogramsDataset ) )
-		{
-			n5.createDataset(
-					histogramsDataset,
-					fullTileSize,
-					blockSize,
-					DataType.SERIALIZABLE,
-					new GzipCompression()
-				);
-		}
-
-		sparkContext.parallelize( blockGridPositions, blockGridPositions.size() ).foreach( blockGridPosition ->
-			{
-				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
-				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-				final WrappedSerializableDataBlockWriter< HashMap< Integer, Integer > > histogramsBlock = new WrappedSerializableDataBlockWriter<>(
-						n5Local,
-						histogramsDataset,
-						blockGridPosition
-					);
-
-				if ( histogramsBlock.wasLoadedSuccessfully() )
-				{
-					System.out.println( "Skipping block at " + Arrays.toString( blockGridPosition ) + " (already exists)" );
-					return;
-				}
-
-				final long[] blockPixelOffset = new long[ blockSize.length ];
-				for ( int d = 0; d < blockPixelOffset.length; ++d )
-					blockPixelOffset[ d ] = blockGridPosition[ d ] * blockSize[ d ];
-
-				// create an interval to be processed in each tile image
-				final long[] blockIntervalMin = new long[ blockSize.length ], blockIntervalMax = new long[ blockSize.length ];
-				for ( int d = 0; d < blockSize.length; ++d )
-				{
-					blockIntervalMin[ d ] = blockGridPosition[ d ] * blockSize[ d ];
-					blockIntervalMax[ d ] = Math.min( ( blockGridPosition[ d ] + 1 ) * blockSize[ d ], fullTileSize[ d ] ) - 1;
-				}
-				final Interval blockInterval = new FinalInterval( blockIntervalMin, blockIntervalMax );
-				// create a 2D interval to be processed in each slice
-				final Interval sliceInterval = new FinalInterval( new long[] { blockIntervalMin[ 0 ], blockIntervalMin[ 1 ] }, new long[] { blockIntervalMax[ 0 ], blockIntervalMax[ 1 ] } );
-
-
-				final WrappedListImg< HashMap< Integer, Integer > > histogramsBlockImg = histogramsBlock.wrap();
-				final ListCursor< HashMap< Integer, Integer > > histogramsBlockImgCursor = histogramsBlockImg.cursor();
-				final long[] pixelPosition = new long[ blockGridPosition.length ];
-				while ( histogramsBlockImgCursor.hasNext() )
-				{
-					histogramsBlockImgCursor.fwd();
-					histogramsBlockImgCursor.localize( pixelPosition );
-
-					// apply block pixel offset
-					for ( int d = 0; d < pixelPosition.length; ++d )
-						pixelPosition[ d ] += blockPixelOffset[ d ];
-
-					// load histograms for corresponding slice
-					final int slice = ( int ) pixelPosition[ 2 ] + 1;
-					final RandomAccessibleInterval< HashMap< Integer, Integer > > sliceHistograms = readSliceHistograms( dataProviderLocal, slice );
-					final RandomAccessibleInterval< HashMap< Integer, Integer > > sliceHistogramsInterval = Views.offsetInterval( sliceHistograms, sliceInterval );
-					final Cursor< HashMap< Integer, Integer > > sliceHistogramsIntervalCursor = Views.flatIterable( sliceHistogramsInterval ).cursor();
-					// block cursor is one step forward, make sure they are aligned throughout subsequent steps
-					histogramsBlockImgCursor.set( sliceHistogramsIntervalCursor.next() );
-					while ( sliceHistogramsIntervalCursor.hasNext() )
-					{
-						histogramsBlockImgCursor.fwd();
-						histogramsBlockImgCursor.set( sliceHistogramsIntervalCursor.next() );
-					}
-				}
-
-				System.out.println( "Block min=" + Arrays.toString( Intervals.minAsLongArray( blockInterval ) ) + ", max=" + Arrays.toString( Intervals.maxAsLongArray( blockInterval ) ) + ": converted slice histograms to N5" );
-
-				histogramsBlock.save();
-			} );
-	}*/
-
-	public Histogram getReferenceHistogram()
+	public double[] getReferenceHistogram()
 	{
 		if ( referenceHistogram == null )
 		{

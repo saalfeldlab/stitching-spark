@@ -15,8 +15,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
+import org.janelia.flatfield.HistogramMatching;
 import org.janelia.histogram.Histogram;
-import org.janelia.histogram.HistogramMatching;
 import org.janelia.intensity.LinearIntensityMap;
 import org.janelia.util.Conversions;
 

@@ -11,7 +11,6 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.histogram.Histogram;
-import org.janelia.histogram.HistogramMatching;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
