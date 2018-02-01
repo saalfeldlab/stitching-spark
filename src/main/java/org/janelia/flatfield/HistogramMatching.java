@@ -1,4 +1,4 @@
-package org.janelia.histogram;
+package org.janelia.flatfield;
 
 import java.util.ArrayList;
 import java.util.List;

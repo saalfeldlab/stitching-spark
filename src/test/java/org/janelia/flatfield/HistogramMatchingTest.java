@@ -1,13 +1,14 @@
-package org.janelia.histogram;
+package org.janelia.flatfield;
 
 import java.util.List;
 
+import org.janelia.flatfield.HistogramMatching;
 import org.junit.Assert;
 import org.junit.Test;
 
 import mpicbg.models.PointMatch;
 
-public class HistogramsTest
+public class HistogramMatchingTest
 {
 	private static final double EPSILON = 1e-10;
 
