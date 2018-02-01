@@ -274,10 +274,10 @@ public class HistogramsProvider implements Serializable
 						final Cursor< T > tileCursor = Views.flatIterable( tileImgInterval ).cursor();
 						while ( histogramsBlockImgCursor.hasNext() || tileCursor.hasNext() )
 						{
-							final RealComposite< R > histogramStorage = histogramsBlockImgCursor.next();
+							final RealComposite< R > histogram = histogramsBlockImgCursor.next();
 							final T value = tileCursor.next();
 							final long bin = binMapper.map( ( R ) value );
-							histogramStorage.get( bin ).inc();
+							histogram.get( bin ).inc();
 						}
 					}
 					else
@@ -289,12 +289,12 @@ public class HistogramsProvider implements Serializable
 						// 3) FoV is 2D, tile is 3D (last dimension in tile space is collapsed and used as additional data points)
 						while ( histogramsBlockImgCursor.hasNext() || tileCompositeCursor.hasNext() )
 						{
-							final RealComposite< R > histogramStorage = histogramsBlockImgCursor.next();
+							final RealComposite< R > histogram = histogramsBlockImgCursor.next();
 							final RealComposite< T > compositeValue = tileCompositeCursor.next();
 							for ( final T value : compositeValue )
 							{
 								final long bin = binMapper.map( ( R ) value );
-								histogramStorage.get( bin ).inc();
+								histogram.get( bin ).inc();
 							}
 						}
 					}
@@ -453,7 +453,7 @@ public class HistogramsProvider implements Serializable
 		}
 		return referenceHistogram;
 	}
-	public static Histogram estimateReferenceHistogram(
+	public static < R extends RealType< R > > double[] estimateReferenceHistogram(
 			final JavaSparkContext sparkContext,
 			final DataProvider dataProvider, final DataAccessType dataAccessType,
 			final String histogramsN5BasePath, final String histogramsDataset,
@@ -467,121 +467,116 @@ public class HistogramsProvider implements Serializable
 		final long mEnd = mStart + numMedianPoints;
 
 		final List< long[] > blockPositions = getBlockPositions( fieldOfViewSize, blockSize );
-		final Histogram accumulatedHistogram = sparkContext.parallelize( blockPositions, blockPositions.size() )
+		final double[] accumulatedFilteredHistogram = sparkContext.parallelize( blockPositions, blockPositions.size() )
 			// compute mean value for each histogram
 			.flatMapToPair( blockPosition ->
 				{
 					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 					final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( histogramsN5BasePath ) );
-					final WrappedSerializableDataBlockReader< Histogram > histogramsBlock = new WrappedSerializableDataBlockReader<>(
-							n5Local,
-							histogramsDataset,
-							blockPosition
-						);
-					final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
-					final ListLocalizingCursor< Histogram > histogramsBlockImgCursor = histogramsBlockImg.localizingCursor();
+					final RandomAccessibleInterval< R > histogramsStorageImg = ( RandomAccessibleInterval< R > ) N5Utils.open( n5Local, histogramsDataset );
+					final CompositeIntervalView< R, RealComposite< R > > histogramsImg = Views.collapseReal( histogramsStorageImg );
 
-					final long[] pixelPosition = new long[ blockSize.length ];
-					final long[] blockPixelOffset = new long[ blockSize.length ];
-					for ( int d = 0; d < blockPixelOffset.length; ++d )
-						blockPixelOffset[ d ] = blockPosition[ d ] * blockSize[ d ];
+					final Real1dBinMapper< R > binMapper = new Real1dBinMapper<>( histMinValue, histMaxValue, bins, true );
+					final R binCenterValue = ( R ) new DoubleType();
 
-					final List< Tuple2< Long, Float > > pixelIndexAndHistogramMean = new ArrayList<>();
+					final CellGrid cellGrid = new CellGrid( fieldOfViewSize, blockSize );
+					final long[] cellMin = new long[ cellGrid.numDimensions() ], cellMax = new long[ cellGrid.numDimensions() ];
+					final int[] cellDimensions = new int[ cellGrid.numDimensions() ];
+					cellGrid.getCellDimensions( blockPosition, cellMin, cellDimensions );
+					for ( int d = 0; d < cellGrid.numDimensions(); ++d )
+						cellMax[ d ] = cellMin[ d ] + cellDimensions[ d ] - 1;
+					final Interval blockInterval = new FinalInterval( cellMin, cellMax );
+
+					final IntervalView< RealComposite< R > > histogramsBlockImg = Views.interval( histogramsImg, blockInterval );
+					final Cursor< RealComposite< R > > histogramsBlockImgCursor = Views.iterable( histogramsBlockImg ).localizingCursor();
+
+					final List< Tuple2< Float, Long > > histogramMeanAndPixelIndex = new ArrayList<>();
 					while ( histogramsBlockImgCursor.hasNext() )
 					{
-						final Histogram histogram = histogramsBlockImgCursor.next();
+						final RealComposite< R > histogram = histogramsBlockImgCursor.next();
 
 						// compute mean value of the histogram
-						double histogramSum = 0;
-						for ( int i = 0; i < histogram.getNumBins(); i++ )
-							histogramSum += histogram.get( i ) * histogram.getBinValue( i );
-						final double histogramMean = histogramSum / histogram.getQuantityTotal();
+						double histogramValueSum = 0, histogramQuantitySum = 0;
+						for ( long bin = 0; bin < binMapper.getBinCount(); ++bin )
+						{
+							final double binQuantity = histogram.get( bin ).getRealDouble();
+							binMapper.getCenterValue( bin, binCenterValue );
+							histogramValueSum += binQuantity * binCenterValue.getRealDouble();
+							histogramQuantitySum += binQuantity;
+						}
+						final double histogramMean = histogramValueSum / histogramQuantitySum;
 
-						// compute pixel index
-						histogramsBlockImgCursor.localize( pixelPosition );
-						for ( int d = 0; d < pixelPosition.length; ++d )
-							pixelPosition[ d ] += blockPixelOffset[ d ];
-						final long pixelIndex = IntervalIndexer.positionToIndex( pixelPosition, fieldOfViewSize );
-
-						pixelIndexAndHistogramMean.add( new Tuple2<>( pixelIndex, ( float ) histogramMean ) );
+						final long pixelIndex = IntervalIndexer.positionToIndex( histogramsBlockImgCursor, histogramsImg );
+						histogramMeanAndPixelIndex.add( new Tuple2<>( ( float ) histogramMean, pixelIndex ) );
 					}
-					return pixelIndexAndHistogramMean.iterator();
+					return histogramMeanAndPixelIndex.iterator();
 				}
 			)
-			.mapToPair( pair -> pair.swap() )
 			// sort histograms by their mean values
 			.sortByKey()
 			.zipWithIndex()
 			// choose subset of these histograms (e.g. >25% and <75%)
 			.filter( tuple -> tuple._2() >= mStart && tuple._2() < mEnd )
-			// map chosen histograms to their respective N5 blocks where they belong
+			// map filtered histograms to their respective N5 blocks where they belong
 			.mapToPair( tuple ->
 				{
+					final long pixelIndex = tuple._1()._2();
+					final long[] pixelPosition = new long[ fieldOfViewSize.length ], blockPosition = new long[ fieldOfViewSize.length ];
+					IntervalIndexer.indexToPosition( pixelIndex, fieldOfViewSize, pixelPosition );
+
 					final CellGrid cellGrid = new CellGrid( fieldOfViewSize, blockSize );
 					final long[] cellGridDimensions = cellGrid.getGridDimensions();
-					final long[] pixelPosition = new long[ fieldOfViewSize.length ], blockPosition = new long[ fieldOfViewSize.length ];
-					final long pixelIndex = tuple._1()._2();
-					IntervalIndexer.indexToPosition( pixelIndex, fieldOfViewSize, pixelPosition );
 					cellGrid.getCellPosition( pixelPosition, blockPosition );
-					final int blockIndex = ( int ) IntervalIndexer.positionToIndex( blockPosition, cellGridDimensions );
-					return new Tuple2<>( blockIndex, pixelIndex );
+
+					final long blockIndex = IntervalIndexer.positionToIndex( blockPosition, cellGridDimensions );
+					return new Tuple2<>( blockIndex, pixelPosition );
 				}
 			)
-			// group histogram indexes by their respective N5 blocks
+			// group filtered histograms by their respective N5 blocks
 			.groupByKey()
-			// for each N5 block, accumulate all histograms
+			// for each N5 block, accumulate all filtered histograms within this block
 			.map( tuple ->
 				{
-					final int blockIndex = tuple._1();
-					final CellGrid cellGrid = new CellGrid( fieldOfViewSize, blockSize );
-					final long[] blockPosition = new long[ fieldOfViewSize.length ];
-					cellGrid.getCellGridPositionFlat( blockIndex, blockPosition );
-
-					final long[] pixelPosition = new long[ blockSize.length ];
-					final long[] blockPixelOffset = new long[ blockSize.length ];
-					for ( int d = 0; d < blockPixelOffset.length; ++d )
-						blockPixelOffset[ d ] = blockPosition[ d ] * blockSize[ d ];
-
+					final Iterable< long[] > pixelPositions = tuple._2();
 					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 					final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( histogramsN5BasePath ) );
-					final WrappedSerializableDataBlockReader< Histogram > histogramsBlock = new WrappedSerializableDataBlockReader<>(
-							n5Local,
-							histogramsDataset,
-							blockPosition
-						);
-					final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
-					final IntervalView< Histogram > translatedHistogramsBlockImg = Views.translate( histogramsBlockImg, blockPixelOffset );
-					final RandomAccess< Histogram > translatedHistogramsBlockImgRandomAccess = translatedHistogramsBlockImg.randomAccess();
+					final RandomAccessibleInterval< R > histogramsStorageImg = ( RandomAccessibleInterval< R > ) N5Utils.open( n5Local, histogramsDataset );
+					final CompositeIntervalView< R, RealComposite< R > > histogramsImg = Views.collapseReal( histogramsStorageImg );
+					final RandomAccess< RealComposite< R > > histogramsImgRandomAccess = histogramsImg.randomAccess();
 
-					final Histogram accumulatedBlockHistogram = new Histogram( histMinValue, histMaxValue, bins );
-					for ( final Iterator< Long > it = tuple._2().iterator(); it.hasNext(); )
+					final double[] accumulatedFilteredBlockHistogram = new double[ bins ];
+					for ( final Iterator< long[] > it = pixelPositions.iterator(); it.hasNext(); )
 					{
-						final long pixelIndex = it.next();
-						IntervalIndexer.indexToPosition( pixelIndex, fieldOfViewSize, pixelPosition );
-						translatedHistogramsBlockImgRandomAccess.setPosition( pixelPosition );
-						final Histogram histogram = translatedHistogramsBlockImgRandomAccess.get();
-						accumulatedBlockHistogram.add( histogram );
+						final long[] pixelPosition = it.next();
+						histogramsImgRandomAccess.setPosition( pixelPosition );
+						final RealComposite< R > histogram = histogramsImgRandomAccess.get();
+						for ( int bin = 0; bin < bins; ++bin )
+							accumulatedFilteredBlockHistogram[ bin ] += histogram.get( bin ).getRealDouble();
 					}
-					return accumulatedBlockHistogram;
+					return accumulatedFilteredBlockHistogram;
 				}
 			)
 			.treeReduce( ( histogram, other ) ->
 				{
-					histogram.add( other );
+					for ( int bin = 0; bin < bins; ++bin )
+						histogram[ bin ] += other[ bin ];
 					return histogram;
 				},
 				Integer.MAX_VALUE // max possible aggregation depth
 			);
 
-		accumulatedHistogram.average( numMedianPoints );
-		return accumulatedHistogram;
+		// average the accumulated histogram
+		for ( int bin = 0; bin < bins; ++bin )
+			accumulatedFilteredHistogram[ bin ] /= numMedianPoints;
+
+		return accumulatedFilteredHistogram;
 	}
 
 	public static List< long[] > getBlockPositions( final long[] dimensions, final int[] blockSize )
 	{
 		final List< long[] > blockPositions = new ArrayList<>();
 		final CellGrid cellGrid = new CellGrid( dimensions, blockSize );
-		for ( int blockIndex = 0; blockIndex < Intervals.numElements( cellGrid.getGridDimensions() ); ++blockIndex )
+		for ( long blockIndex = 0; blockIndex < Intervals.numElements( cellGrid.getGridDimensions() ); ++blockIndex )
 		{
 			final long[] blockPosition = new long[ cellGrid.numDimensions() ];
 			cellGrid.getCellGridPositionFlat( blockIndex, blockPosition );
