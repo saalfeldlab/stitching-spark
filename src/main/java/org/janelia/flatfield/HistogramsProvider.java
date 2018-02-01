@@ -226,9 +226,11 @@ public class HistogramsProvider implements Serializable
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 
 				// create histogram block
-				final RandomAccessibleInterval< DoubleType > histogramsStorageImg = ArrayImgs.doubles( Conversions.toLongArray( extendedBlockSize ) );
-				final RandomAccessibleInterval< R > histogramsGenericStorageImg = ( RandomAccessibleInterval< R > ) histogramsStorageImg;
-				final CompositeIntervalView< R, RealComposite< R > > histogramsImg = Views.collapseReal( histogramsGenericStorageImg );
+				final RandomAccessibleInterval< DoubleType > histogramsStorageBlockImg = ArrayImgs.doubles( Conversions.toLongArray( extendedBlockSize ) );
+				final RandomAccessibleInterval< R > histogramsGenericStorageBlockImg = ( RandomAccessibleInterval< R > ) histogramsStorageBlockImg;
+				final RandomAccessibleInterval< RealComposite< R > > histogramsBlockImg = Views.collapseReal( histogramsGenericStorageBlockImg );
+
+				final Real1dBinMapper< R > binMapper = new Real1dBinMapper<>( histMinValue, histMaxValue, bins, true );
 
 				// create an interval to be processed in each tile image
 				final long[] blockIntervalMin = new long[ blockSize.length ], blockIntervalMax = new long[ blockSize.length ];
@@ -261,33 +263,40 @@ public class HistogramsProvider implements Serializable
 					}
 
 					final RandomAccessibleInterval< T > tileStorageImgInterval = Views.offsetInterval( tileStorageImg, tileImgOffsetInterval );
+					final Cursor< RealComposite< R > > histogramsBlockImgCursor = Views.flatIterable( histogramsBlockImg ).cursor();
 
-					final RandomAccessibleInterval< ? > tileImgInterval;
-					if ( tileStorageImg.numDimensions() < blockInterval.numDimensions() )
-						tileImgInterval = Views.collapseReal( tileStorageImgInterval );
-					else
-						tileImgInterval = tileStorageImgInterval;
-
-					final Cursor< RealComposite< R > > histogramsImgCursor = Views.flatIterable( histogramsImg ).cursor();
-					final Cursor< ? > tileCursor = Views.flatIterable( tileImgInterval ).cursor();
-
-					// handles all possible cases:
-					// 1) FoV is 2D, tile is 2D
-					// 2) FoV is 3D, tile is 3D
-					// 3) FoV is 2D, tile is 3D (last dimension in tile space is collapsed and used as additional data points)
-					while ( histogramsImgCursor.hasNext() || tileCursor.hasNext() )
+					if ( tileStorageImg.numDimensions() == blockInterval.numDimensions() )
 					{
-						final RealComposite< R > histogramStorage = histogramsImgCursor.next();
-						final Real1dBinMapper< R > binMapper = new Real1dBinMapper<>( histMinValue, histMaxValue, bins, true );
-						final Histogram1d< R > histogram = new Histogram1d<>( histogramStorage, binMapper );
+						// handles the following cases:
+						// 1) FoV is 2D, tile is 2D
+						// 2) FoV is 3D, tile is 3D
+						final RandomAccessibleInterval< T > tileImgInterval = tileStorageImgInterval;
+						final Cursor< T > tileCursor = Views.flatIterable( tileImgInterval ).cursor();
+						while ( histogramsBlockImgCursor.hasNext() || tileCursor.hasNext() )
+						{
+							final RealComposite< R > histogramStorage = histogramsBlockImgCursor.next();
+							final T value = tileCursor.next();
+							final long bin = binMapper.map( ( R ) value );
+							histogramStorage.get( bin ).inc();
+						}
+					}
+					else
+					{
+						final RandomAccessibleInterval< RealComposite< T > > tileImgCompositeInterval = Views.collapseReal( tileStorageImgInterval );
+						final Cursor< RealComposite< T > > tileCompositeCursor = Views.flatIterable( tileImgCompositeInterval ).cursor();
 
-						final Object value = tileCursor.next();
-						if ( value instanceof RealComposite< ? > )
-							histogram.addData( ( RealComposite< R > ) value );
-						else if ( value instanceof RealType< ? > )
-							histogram.increment( ( R ) value );
-						else
-							throw new RuntimeException( "unknown type" );
+						// handles the following cases:
+						// 3) FoV is 2D, tile is 3D (last dimension in tile space is collapsed and used as additional data points)
+						while ( histogramsBlockImgCursor.hasNext() || tileCompositeCursor.hasNext() )
+						{
+							final RealComposite< R > histogramStorage = histogramsBlockImgCursor.next();
+							final RealComposite< T > compositeValue = tileCompositeCursor.next();
+							for ( final T value : compositeValue )
+							{
+								final long bin = binMapper.map( ( R ) value );
+								histogramStorage.get( bin ).inc();
+							}
+						}
 					}
 
 					if ( ++done % 20 == 0 )
@@ -299,7 +308,7 @@ public class HistogramsProvider implements Serializable
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
 				final long[] extendedBlockPosition = new long[ extendedBlockSize.length ];
 				System.arraycopy( blockPosition, 0, extendedBlockPosition, 0, blockPosition.length );
-				N5Utils.saveBlock( histogramsStorageImg, n5Local, histogramsDataset, extendedBlockPosition );
+				N5Utils.saveBlock( histogramsStorageBlockImg, n5Local, histogramsDataset, extendedBlockPosition );
 			} );
 
 		broadcastedTiles.destroy();
