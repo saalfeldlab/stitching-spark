@@ -258,9 +258,8 @@ public class FlatfieldCorrectionSolver implements Serializable
 					}
 					catch ( final Exception e )
 					{
-//						modelFound = false;
-//						e.printStackTrace();
-						throw e;
+						modelFound = false;
+						e.printStackTrace();
 					}
 
 
