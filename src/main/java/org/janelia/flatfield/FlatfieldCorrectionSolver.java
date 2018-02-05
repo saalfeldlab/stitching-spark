@@ -10,7 +10,6 @@ import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.histogram.Histogram;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -31,10 +30,12 @@ import mpicbg.models.Model;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.cell.CellGrid;
-import net.imglib2.img.list.WrappedListImg;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
@@ -42,6 +43,8 @@ import net.imglib2.util.ValuePair;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
+import net.imglib2.view.composite.CompositeIntervalView;
+import net.imglib2.view.composite.RealComposite;
 
 public class FlatfieldCorrectionSolver implements Serializable
 {
@@ -110,18 +113,18 @@ public class FlatfieldCorrectionSolver implements Serializable
 	private static final String PIVOT_VALUES_GROUP = "flatfield-solution-pivot";
 
 	private transient final JavaSparkContext sparkContext;
+	private final HistogramsProvider histogramsProvider;
 
-	public FlatfieldCorrectionSolver( final JavaSparkContext sparkContext )
+	public FlatfieldCorrectionSolver( final JavaSparkContext sparkContext, final HistogramsProvider histogramsProvider )
 	{
 		this.sparkContext = sparkContext;
+		this.histogramsProvider = histogramsProvider;
 	}
 
-	@SuppressWarnings("unchecked")
-	public < M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable > FlatfieldSolutionMetadata leastSquaresInterpolationFit(
-			final DataProvider dataProvider,
+	@SuppressWarnings( "unchecked" )
+	public < T extends RealType< T >, M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable > FlatfieldSolutionMetadata leastSquaresInterpolationFit(
 			final int currentScaleLevel,
-			final String histogramsN5BasePath, final String currentScaleHistogramsDataset,
-			final Histogram referenceHistogram,
+			final String currentScaleHistogramsDataset,
 			final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer,
 			final ModelType modelType, final RegularizerModelType regularizerModelType,
 			final double pivotValue ) throws IOException
@@ -131,8 +134,13 @@ public class FlatfieldCorrectionSolver implements Serializable
 //		final double referenceHistogramOffset = getMedianValue( referenceHistogram );
 		final double referenceHistogramOffset = pivotValue;
 
-		final DataAccessType dataAccessType = dataProvider.getType();
-		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		final double[] binValues = HistogramMatching.getBinValues(
+				histogramsProvider.getHistogramMinValue(),
+				histogramsProvider.getHistogramMaxValue(),
+				histogramsProvider.getHistogramBins()
+			);
+
+		final N5Writer n5 = histogramsProvider.getDataProvider().createN5Writer( URI.create( histogramsProvider.getHistogramsN5BasePath() ) );
 		final DatasetAttributes currentScaleHistogramsDatasetAttributes = n5.getDatasetAttributes( currentScaleHistogramsDataset );
 		final long[] currentScaleHistogramsDimensions = currentScaleHistogramsDatasetAttributes.getDimensions();
 		final int[] currentScaleHistogramsBlockSize = currentScaleHistogramsDatasetAttributes.getBlockSize();
@@ -145,48 +153,54 @@ public class FlatfieldCorrectionSolver implements Serializable
 		final List< long[] > currentScaleBlockPositions = HistogramsProvider.getBlockPositions( currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize );
 		sparkContext.parallelize( currentScaleBlockPositions, currentScaleBlockPositions.size() ).foreach( currentScaleBlockPosition ->
 			{
-				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
-				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-
-				// histogram block reader
-				final WrappedSerializableDataBlockReader< Histogram > histogramsBlock = new WrappedSerializableDataBlockReader<>(
-						n5Local,
-						currentScaleHistogramsDataset,
-						currentScaleBlockPosition
-					);
-				final WrappedListImg< Histogram > histogramsBlockImg = histogramsBlock.wrap();
-
-				// solution data blocks
-				final RandomAccessibleInterval< DoubleType > scalingTermBlockImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( histogramsBlockImg ) );
-				final RandomAccessibleInterval< DoubleType > translationTermBlockImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( histogramsBlockImg ) );
-				final RandomAccessibleInterval< DoubleType > pivotValuesBlockImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( histogramsBlockImg ) );
-
 				final CellGrid cellGrid = new CellGrid( currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize );
-				final long[] cellMin = new long[ cellGrid.numDimensions() ];
+				final long[] cellMin = new long[ cellGrid.numDimensions() ], cellMax = new long[ cellGrid.numDimensions() ];
 				final int[] cellDimensions = new int[ cellGrid.numDimensions() ];
 				cellGrid.getCellDimensions( currentScaleBlockPosition, cellMin, cellDimensions );
+				for ( int d = 0; d < cellGrid.numDimensions(); ++d )
+					cellMax[ d ] = cellMin[ d ] + cellDimensions[ d ] - 1;
+				final Interval cellInterval = new FinalInterval( cellMin, cellMax );
 
-				final IntervalView< Histogram > translatedHistogramsBlockImg = Views.translate( histogramsBlockImg, cellMin );
-				final IntervalView< DoubleType > translatedScalingTermBlockImg = Views.translate( scalingTermBlockImg, cellMin );
-				final IntervalView< DoubleType > translatedTranslationTermBlockImg = Views.translate( translationTermBlockImg, cellMin );
-				final IntervalView< DoubleType > translatedPivotValuesBlockImg = Views.translate( pivotValuesBlockImg, cellMin );
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( histogramsProvider.getDataAccessType() );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsProvider.getHistogramsN5BasePath() ) );
+				final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, currentScaleHistogramsDataset );
+				final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
+				final IntervalView< RealComposite< T > > histogramsBlockImg = Views.interval( histogramsImg, cellInterval );
 
-				final Cursor< Histogram > translatedHistogramsBlockImgCursor = Views.flatIterable( translatedHistogramsBlockImg ).localizingCursor();
-				final Cursor< DoubleType > translatedScalingTermBlockImgCursor = Views.flatIterable( translatedScalingTermBlockImg ).cursor();
-				final Cursor< DoubleType > translatedTranslationTermBlockImgCursor = Views.flatIterable( translatedTranslationTermBlockImg ).cursor();
-				final Cursor< DoubleType > translatedPivotValuesBlockImgCursor = Views.flatIterable( translatedPivotValuesBlockImg ).cursor();
+				// solution data blocks
+				final RandomAccessibleInterval< DoubleType > scalingTermBlockStorageImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( histogramsBlockImg ) );
+				final RandomAccessibleInterval< DoubleType > translationTermBlockStorageImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( histogramsBlockImg ) );
+				final RandomAccessibleInterval< DoubleType > pivotValuesBlockStorageImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( histogramsBlockImg ) );
+
+				final IntervalView< DoubleType > scalingTermBlockImg = Views.translate( scalingTermBlockStorageImg, cellMin );
+				final IntervalView< DoubleType > translationTermBlockImg = Views.translate( translationTermBlockStorageImg, cellMin );
+				final IntervalView< DoubleType > pivotValuesBlockImg = Views.translate( pivotValuesBlockStorageImg, cellMin );
+
+				final Cursor< RealComposite< T > > histogramsBlockImgCursor = Views.flatIterable( histogramsBlockImg ).localizingCursor();
+				final Cursor< DoubleType > scalingTermBlockImgCursor = Views.flatIterable( scalingTermBlockImg ).cursor();
+				final Cursor< DoubleType > translationTermBlockImgCursor = Views.flatIterable( translationTermBlockImg ).cursor();
+				final Cursor< DoubleType > pivotValuesBlockImgCursor = Views.flatIterable( pivotValuesBlockImg ).cursor();
+
+				final RealComposite< T > referenceHistogram = ( RealComposite< T > ) new RealComposite<>(
+						ArrayImgs.doubles( histogramsProvider.getReferenceHistogram(), histogramsProvider.getHistogramBins() ).randomAccess(),
+						histogramsProvider.getHistogramBins()
+					);
 
 				final long[] position = new long[ cellGrid.numDimensions() ];
-				while ( translatedHistogramsBlockImgCursor.hasNext() )
+				while ( histogramsBlockImgCursor.hasNext() )
 				{
-					final Histogram histogram = translatedHistogramsBlockImgCursor.next();
-					translatedHistogramsBlockImgCursor.localize( position );
+					final RealComposite< T > histogram = histogramsBlockImgCursor.next();
+					histogramsBlockImgCursor.localize( position );
 
-					translatedScalingTermBlockImgCursor.fwd();
-					translatedTranslationTermBlockImgCursor.fwd();
-					translatedPivotValuesBlockImgCursor.fwd();
+					scalingTermBlockImgCursor.fwd();
+					translationTermBlockImgCursor.fwd();
+					pivotValuesBlockImgCursor.fwd();
 
-					final List< PointMatch > matches = HistogramMatching.generateHistogramMatches( histogram, referenceHistogram );
+					final List< PointMatch > matches = HistogramMatching.generateHistogramMatches(
+							histogram,
+							referenceHistogram,
+							binValues
+						);
 
 					// apply the offsets to the pointmatch values
 //					final double[] offset = new double[] { getMedianValue( tuple._2() ), referenceHistogramOffset };
@@ -292,9 +306,9 @@ public class FlatfieldCorrectionSolver implements Serializable
 					final double[] estimatedModelValues = new double[ 2 ];
 					interpolatedModel.toArray( estimatedModelValues );
 
-					translatedScalingTermBlockImgCursor.get().set( estimatedModelValues[ 0 ] );
-					translatedTranslationTermBlockImgCursor.get().set( estimatedModelValues[ 1 ] );
-					translatedPivotValuesBlockImgCursor.get().set( offset[ 0 ] );
+					scalingTermBlockImgCursor.get().set( estimatedModelValues[ 0 ] );
+					translationTermBlockImgCursor.get().set( estimatedModelValues[ 1 ] );
+					pivotValuesBlockImgCursor.get().set( offset[ 0 ] );
 				}
 
 				N5Utils.saveBlock( scalingTermBlockImg, n5Local, flatfieldSolutionMetadata.scalingTermDataset, currentScaleBlockPosition );
@@ -345,18 +359,5 @@ public class FlatfieldCorrectionSolver implements Serializable
 			dstTranslationCursor.next().set( m[ 1 ] );
 		}
 		return new ValuePair<>( dstScaling, dstTranslation );
-	}
-
-
-	private double getMedianValue( final Histogram histogram )
-	{
-		double quantityProcessed = 0;
-		for ( int i = 0; i < histogram.getNumBins(); ++i )
-		{
-			quantityProcessed += histogram.get( i );
-			if ( quantityProcessed >= histogram.getQuantityTotal() / 2 )
-				return histogram.getBinValue( i );
-		}
-		return 0;
 	}
 }
