@@ -39,19 +39,37 @@ import net.imglib2.view.Views;
 public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 {
 	private final JavaSparkContext sparkContext;
-	private final HistogramsProvider histogramsProvider;
 	private final String downsampledHistogramsGroupPath;
 	private final A downsamplingTransform;
 	private final List< String > scalePyramidDatasetPaths;
 	private final List< long[] > scalePyramidDatasetDimensions;
 
-	@SuppressWarnings( "unchecked" )
+	private final DataAccessType dataAccessType;
+	private final String histogramsN5BasePath;
+
 	public ShiftedDownsampling( final JavaSparkContext sparkContext, final HistogramsProvider histogramsProvider ) throws IOException
 	{
-		this.sparkContext = sparkContext;
-		this.histogramsProvider = histogramsProvider;
+		this(
+				sparkContext,
+				histogramsProvider.getDataAccessType(),
+				histogramsProvider.getHistogramsN5BasePath(),
+				histogramsProvider.getHistogramsDataset(),
+				histogramsProvider.getWorkingInterval()
+			);
+	}
 
-		final Interval workingInterval = histogramsProvider.getWorkingInterval();
+	@SuppressWarnings( "unchecked" )
+	public ShiftedDownsampling(
+			final JavaSparkContext sparkContext,
+			final DataAccessType dataAccessType,
+			final String histogramsN5BasePath,
+			final String fullScaleHistogramsDataset,
+			final Interval workingInterval ) throws IOException
+	{
+		this.sparkContext = sparkContext;
+		this.dataAccessType = dataAccessType;
+		this.histogramsN5BasePath = histogramsN5BasePath;
+
 		if ( workingInterval.numDimensions() == 2 )
 			downsamplingTransform = ( A ) new AffineTransform2D();
 		else if ( workingInterval.numDimensions() == 3 )
@@ -64,10 +82,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 			downsamplingTransform.set( -0.5, d, downsamplingTransform.numDimensions() );
 		}
 
-		final DataProvider dataProvider = histogramsProvider.getDataProvider();
-		final DataAccessType dataAccessType = dataProvider.getType();
-		final String histogramsN5BasePath = histogramsProvider.getHistogramsN5BasePath();
-		final String fullScaleHistogramsDataset = histogramsProvider.getHistogramsDataset();
+		final DataProvider dataProvider = DataProviderFactory.createByType( dataAccessType );
 
 		final String histogramsDatasetParentGroupPath = ( Paths.get( fullScaleHistogramsDataset ).getParent() != null ? Paths.get( fullScaleHistogramsDataset ).getParent().toString() : "" );
 		downsampledHistogramsGroupPath = Paths.get( histogramsDatasetParentGroupPath, "histograms-downsampled" ).toString();
@@ -77,6 +92,11 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 		Arrays.fill( downsamplingFactors, 2 );
 		downsamplingFactors[ downsamplingFactors.length - 1 ] = 1;
 
+		// do not offset the extra 'bins' dimension
+		final boolean[] dimensionsWithOffset = new boolean[ workingInterval.numDimensions() + 1 ];
+		Arrays.fill( dimensionsWithOffset, true );
+		dimensionsWithOffset[ dimensionsWithOffset.length - 1 ] = false;
+
 		scalePyramidDatasetPaths = new ArrayList<>();
 		scalePyramidDatasetPaths.add( fullScaleHistogramsDataset );
 		scalePyramidDatasetPaths.addAll( N5ScalePyramidHalfPixelOffsetDownsamplerSpark.downsampleScalePyramidWithHalfPixelOffset(
@@ -84,13 +104,19 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 				() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
 				fullScaleHistogramsDataset,
 				downsampledHistogramsGroupPath,
-				downsamplingFactors
+				downsamplingFactors,
+				dimensionsWithOffset
 			) );
 
 		scalePyramidDatasetDimensions = new ArrayList<>();
 		final N5Reader n5 = dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) );
 		for ( final String scalePyramidDatasetPath : scalePyramidDatasetPaths )
-			scalePyramidDatasetDimensions.add( n5.getDatasetAttributes( scalePyramidDatasetPath ).getDimensions() );
+		{
+			final long[] extendedDimensions = n5.getDatasetAttributes( scalePyramidDatasetPath ).getDimensions();
+			final long[] dimensions = new long[ extendedDimensions.length - 1 ];
+			System.arraycopy( extendedDimensions, 0, dimensions, 0, dimensions.length );
+			scalePyramidDatasetDimensions.add( dimensions );
+		}
 	}
 
 	public < T extends NativeType< T > & RealType< T > > RandomAccessibleInterval< T > downsampleSolutionComponent(
@@ -159,9 +185,9 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 
 	public void cleanupDownsampledHistograms() throws IOException
 	{
-		final DataProvider dataProvider = histogramsProvider.getDataProvider();
-		final DataAccessType dataAccessType = dataProvider.getType();
-		final String histogramsN5BasePath = histogramsProvider.getHistogramsN5BasePath();
+		final DataAccessType dataAccessType = this.dataAccessType;
+		final String histogramsN5BasePath = this.histogramsN5BasePath;
+		final String downsampledHistogramsGroupPath = this.downsampledHistogramsGroupPath;
 
 		N5RemoveSpark.remove(
 				sparkContext,

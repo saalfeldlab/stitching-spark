@@ -38,7 +38,7 @@ public class ReferenceHistogramTest
 	public void setUp()
 	{
 		sparkContext = new JavaSparkContext( new SparkConf()
-				.setMaster( "local" )
+				.setMaster( "local[*]" )
 				.setAppName( "ReferenceHistogramTest" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" ) );
 	}
