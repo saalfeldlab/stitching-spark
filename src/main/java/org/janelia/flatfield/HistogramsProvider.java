@@ -86,7 +86,7 @@ public class HistogramsProvider implements Serializable
 			final String basePath,
 			final TileInfo[] tiles,
 			final long[] fullTileSize,
-			final double histMinValue, final double histMaxValue, final int bins ) throws IOException, URISyntaxException
+			final double histMinValue, final double histMaxValue, final int innerBins ) throws IOException, URISyntaxException
 	{
 		this.sparkContext = sparkContext;
 		this.dataProvider = dataProvider;
@@ -95,7 +95,7 @@ public class HistogramsProvider implements Serializable
 
 		this.histMinValue = histMinValue;
 		this.histMaxValue = histMaxValue;
-		this.bins = bins;
+		this.bins = innerBins + 2; // add two extra bins to store tails of the distribution
 
 		dataAccessType = dataProvider.getType();
 
