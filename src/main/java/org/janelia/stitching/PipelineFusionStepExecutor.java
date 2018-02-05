@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,17 +24,19 @@ import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.saalfeldlab.n5.spark.N5DownsamplingSpark;
-import org.janelia.stitching.FusionPerformer.FusionMode;
+import org.janelia.saalfeldlab.n5.spark.N5PowerOfTwoScalePyramidIsotropicDownsamplerSpark3D;
 import org.janelia.util.Conversions;
 
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalDimensions;
+import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
 import net.imglib2.img.cell.CellGrid;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.IntervalsHelper;
 import net.imglib2.view.RandomAccessiblePairNullable;
 
 /**
@@ -46,6 +49,8 @@ import net.imglib2.view.RandomAccessiblePairNullable;
 public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > extends PipelineStepExecutor
 {
 	private static final long serialVersionUID = -8151178964876747760L;
+
+	private static final int MAX_PARTITIONS = 15000;
 
 	final TreeMap< Integer, long[] > levelToImageDimensions = new TreeMap<>(), levelToCellSize = new TreeMap<>();
 
@@ -127,7 +132,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final String n5ExportPath = baseExportPath;
 		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ), N5ExportMetadata.getGsonBuilder() );
 
-		int[][] downsamplingFactors = null;
+		List< String > downsampledDatasets = null;
 
 		final double[] voxelDimensions = job.getPixelResolution();
 		normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
@@ -172,11 +177,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// Generate lower scale levels
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
-				downsamplingFactors = N5DownsamplingSpark.downsampleIsotropic(
+				downsampledDatasets = N5PowerOfTwoScalePyramidIsotropicDownsamplerSpark3D.downsamplePowerOfTwoScalePyramidIsotropic3D(
 						sparkContext,
 						() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( n5ExportPath ) ),
 						fullScaleOutputPath,
-						new FinalVoxelDimensions( "um", voxelDimensions )
+						voxelDimensions
 					);
 
 			broadcastedPairwiseConnectionsMap.destroy();
@@ -185,9 +190,12 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		System.out.println( "All channels have been exported" );
 
-		final double[][] scalesDouble = new double[ downsamplingFactors.length ][];
-		for ( int s = 0; s < downsamplingFactors.length; ++s )
-			scalesDouble[ s ] = Conversions.toDoubleArray( downsamplingFactors[ s ] );
+		// TODO: remove and make n5-viewer to look for downsampling factors attributes by itself
+		final double[][] scalesDouble = new double[ downsampledDatasets.size() + 1 ][];
+		scalesDouble[ 0 ] = new double[ job.getDimensionality() ];
+		Arrays.fill( scalesDouble[ 0 ], 1 );
+		for ( int s = 0; s < downsampledDatasets.size(); ++s )
+			scalesDouble[ s + 1 ] = Conversions.toDoubleArray( n5.getAttribute( downsampledDatasets.get( s ), "downsamplingFactors", int[].class ) );
 
 		final N5ExportMetadataWriter exportMetadata = N5ExportMetadata.openForWriting( n5 );
 		exportMetadata.setDefaultScales( scalesDouble );
