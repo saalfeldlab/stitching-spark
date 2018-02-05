@@ -15,7 +15,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldSolution;
+import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldRegularizerMetadata;
+import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldRegularizerMetadata.RegularizerMode;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldSolutionMetadata;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.ModelType;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
@@ -46,7 +47,6 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
-import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 import scala.Tuple2;
@@ -263,58 +263,69 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 		final int iterations = 1;
 		final int startScale = findStartingScale( shiftedDownsampling ), endScale = 0;
-		Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > lastSolution = null;
-		RandomAccessibleInterval< DoubleType > offsets = null;
+
+		FlatfieldSolutionMetadata lastSolutionMetadata = null;
 		for ( int iter = 0; iter < iterations; iter++ )
 		{
-			Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > downsampledSolution = null;
+			FlatfieldSolutionMetadata downsampledSolutionMetadata = null;
 
 			// solve in a bottom-up fashion (starting from the smallest scale level)
 			for ( int scale = startScale; scale >= endScale; scale-- )
 			{
-				final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution;
-
 				final ModelType modelType;
 				final RegularizerModelType regularizerModelType;
 
 				modelType = scale >= Math.round( ( double ) ( startScale + endScale ) / 2 ) ? ModelType.AffineModel : ModelType.FixedScalingAffineModel;
 				regularizerModelType = iter == 0 && scale == startScale ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel;
 
-				final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer;
+				final FlatfieldRegularizerMetadata regularizerMetadata;
 				if ( regularizerModelType == RegularizerModelType.AffineModel )
 				{
-					final RandomAccessible< DoubleType > scalingRegularizer, translationRegularizer;
+					final String scalingRegularizerDataset, translationRegularizerDataset;
+					final RegularizerMode scalingRegularizerMode, translationRegularizerMode;
 
-					if ( modelType != ModelType.FixedScalingAffineModel || lastSolution == null )
-						scalingRegularizer = downsampledSolution != null ? Views.raster( shiftedDownsampling.upsample( downsampledSolution.getA(), scale ) ) : null;
+					if ( modelType != ModelType.FixedScalingAffineModel || lastSolutionMetadata == null )
+					{
+						scalingRegularizerDataset = downsampledSolutionMetadata != null ? downsampledSolutionMetadata.scalingTermDataset : null;
+						scalingRegularizerMode = RegularizerMode.UPSAMPLE_CURRENT_SOLUTION;
+					}
 					else
-						scalingRegularizer = shiftedDownsampling.downsampleSolutionComponent( lastSolution.getA(), scale );
+					{
+						scalingRegularizerDataset = lastSolutionMetadata.scalingTermDataset;
+						scalingRegularizerMode = RegularizerMode.DOWNSAMPLE_PREVIOUS_SOLUTION;
+					}
 
-					if ( modelType != ModelType.FixedTranslationAffineModel || lastSolution == null )
-						translationRegularizer = downsampledSolution != null ? Views.raster( shiftedDownsampling.upsample( downsampledSolution.getB(), scale ) ) : null;
+					if ( modelType != ModelType.FixedTranslationAffineModel || lastSolutionMetadata == null )
+					{
+						translationRegularizerDataset = downsampledSolutionMetadata != null ? downsampledSolutionMetadata.translationTermDataset : null;
+						translationRegularizerMode = RegularizerMode.UPSAMPLE_CURRENT_SOLUTION;
+					}
 					else
-						translationRegularizer = shiftedDownsampling.downsampleSolutionComponent( lastSolution.getB(), scale );
+					{
+						translationRegularizerDataset = lastSolutionMetadata.translationTermDataset;
+						translationRegularizerMode = RegularizerMode.DOWNSAMPLE_PREVIOUS_SOLUTION;
+					}
 
-					regularizer = new RandomAccessiblePairNullable<>( scalingRegularizer, translationRegularizer );
+					regularizerMetadata = new FlatfieldRegularizerMetadata(
+							scalingRegularizerDataset, translationRegularizerDataset,
+							scalingRegularizerMode, translationRegularizerMode
+						);
 				}
 				else
 				{
-					regularizer = null;
+					regularizerMetadata = null;
 				}
 
 				System.out.println( "Solving for scale " + scale + ":  size=" + Arrays.toString( shiftedDownsampling.getDimensionsAtScale( scale ) ) + ",  model=" + modelType.toString() + ", regularizer=" + regularizerModelType.toString() );
 
-				final FlatfieldSolutionMetadata flatfieldSolutionMetadata = solver.leastSquaresInterpolationFit(
+				final FlatfieldSolutionMetadata currentSolutionMetadata = solver.leastSquaresInterpolationFit(
 						scale,
 						shiftedDownsampling.getDatasetAtScale( scale ),
-						regularizer,
+						regularizerMetadata,
+						shiftedDownsampling,
 						modelType, regularizerModelType,
 						args.pivotValue()
 					);
-
-				final FlatfieldSolution solutionAndOffsets = flatfieldSolutionMetadata.open( dataProvider, histogramsProvider.getHistogramsN5BasePath() );
-				solution = solutionAndOffsets.correctionFields;
-				offsets = solutionAndOffsets.pivotValues;
 
 				// keep older scale of the fixed-component solution to avoid unnecessary chain of upscaling operations which reduces contrast
 				if ( scale != endScale )
@@ -322,27 +333,33 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 					switch ( modelType )
 					{
 					case FixedScalingAffineModel:
-						downsampledSolution = new ValuePair<>( downsampledSolution.getA(), solution.getB() );
+						downsampledSolutionMetadata = new FlatfieldSolutionMetadata(
+								downsampledSolutionMetadata.scalingTermDataset,
+								currentSolutionMetadata.translationTermDataset,
+								args.pivotValue()
+							);
 						break;
 					case FixedTranslationAffineModel:
-						downsampledSolution = new ValuePair<>( solution.getA(), downsampledSolution.getB() );
+						downsampledSolutionMetadata = new FlatfieldSolutionMetadata(
+								currentSolutionMetadata.scalingTermDataset,
+								downsampledSolutionMetadata.translationTermDataset,
+								args.pivotValue()
+							);
 						break;
 					default:
-						downsampledSolution = solution;
+						downsampledSolutionMetadata = currentSolutionMetadata;
 						break;
 					}
 				}
 				else
 				{
-					downsampledSolution = solution;
+					downsampledSolutionMetadata = currentSolutionMetadata;
 				}
-
-				saveSolution( dataProvider, iter, scale, solution );
 			}
 
-			lastSolution = downsampledSolution;
+			lastSolutionMetadata = downsampledSolutionMetadata;
 
-			if ( iter % 2 == 0 && lastSolution.getB().numDimensions() > 2 )
+			/*if ( iter % 2 == 0 && lastSolution.getB().numDimensions() > 2 )
 			{
 				final RandomAccessibleInterval< DoubleType > averageTranslationalComponent = averageSolutionComponent( lastSolution.getB() );
 				saveSolutionComponent( dataProvider, iter, 0, averageTranslationalComponent, Utils.addFilenameSuffix( translationTermFilename, "_avg" ) );
@@ -350,12 +367,12 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				lastSolution = new ValuePair<>(
 						lastSolution.getA(),
 						Views.interval( Views.extendBorder( Views.stack( averageTranslationalComponent ) ), lastSolution.getA() ) );
-			}
+			}*/
 		}
 
 		// account for the pivot point in the final solution
 		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > unpivotedSolution = FlatfieldCorrectionSolver.unpivotSolution(
-				new FlatfieldSolution( lastSolution, offsets ) );
+				lastSolutionMetadata.open( dataProvider, histogramsProvider.getHistogramsN5BasePath() ) );
 
 		saveSolutionComponent( dataProvider, iterations - 1, 0, unpivotedSolution.getA(), Utils.addFilenameSuffix( scalingTermFilename, "_offset" ) );
 		saveSolutionComponent( dataProvider, iterations - 1, 0, unpivotedSolution.getB(), Utils.addFilenameSuffix( translationTermFilename, "_offset" ) );
