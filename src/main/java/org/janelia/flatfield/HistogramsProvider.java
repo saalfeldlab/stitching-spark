@@ -65,9 +65,9 @@ public class HistogramsProvider implements Serializable
 	private transient final JavaSparkContext sparkContext;
 	private transient final DataProvider dataProvider;
 	private transient final TileInfo[] tiles;
+	private transient final Interval workingInterval;
 
 	private final DataAccessType dataAccessType;
-	private final Interval workingInterval;
 
 	private final String histogramsN5BasePath;
 	private final String histogramsDataset;
@@ -78,7 +78,7 @@ public class HistogramsProvider implements Serializable
 	private final long[] fieldOfViewSize;
 	private final int[] blockSize;
 
-	private transient double[] referenceHistogram;
+	private double[] referenceHistogram;
 
 	public HistogramsProvider(
 			final JavaSparkContext sparkContext,
@@ -148,6 +148,8 @@ public class HistogramsProvider implements Serializable
 	}
 
 	public DataProvider getDataProvider() { return dataProvider; }
+	public DataAccessType getDataAccessType() { return dataAccessType; }
+	public Interval getWorkingInterval() { return workingInterval; };
 
 	public String getHistogramsN5BasePath() { return histogramsN5BasePath; }
 	public String getHistogramsDataset() { return histogramsDataset; }
@@ -319,7 +321,7 @@ public class HistogramsProvider implements Serializable
 		}
 		return referenceHistogram;
 	}
-	public static < R extends RealType< R > > double[] estimateReferenceHistogram(
+	public static < T extends RealType< T > > double[] estimateReferenceHistogram(
 			final JavaSparkContext sparkContext,
 			final DataProvider dataProvider, final DataAccessType dataAccessType,
 			final String histogramsN5BasePath, final String histogramsDataset,
@@ -339,11 +341,11 @@ public class HistogramsProvider implements Serializable
 				{
 					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 					final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( histogramsN5BasePath ) );
-					final RandomAccessibleInterval< R > histogramsStorageImg = ( RandomAccessibleInterval< R > ) N5Utils.open( n5Local, histogramsDataset );
-					final CompositeIntervalView< R, RealComposite< R > > histogramsImg = Views.collapseReal( histogramsStorageImg );
+					final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, histogramsDataset );
+					final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
 
-					final Real1dBinMapper< R > binMapper = new Real1dBinMapper<>( histMinValue, histMaxValue, bins, true );
-					final R binCenterValue = ( R ) new DoubleType();
+					final Real1dBinMapper< T > binMapper = new Real1dBinMapper<>( histMinValue, histMaxValue, bins, true );
+					final T binCenterValue = ( T ) new DoubleType();
 
 					final CellGrid cellGrid = new CellGrid( fieldOfViewSize, blockSize );
 					final long[] cellMin = new long[ cellGrid.numDimensions() ], cellMax = new long[ cellGrid.numDimensions() ];
@@ -353,13 +355,13 @@ public class HistogramsProvider implements Serializable
 						cellMax[ d ] = cellMin[ d ] + cellDimensions[ d ] - 1;
 					final Interval blockInterval = new FinalInterval( cellMin, cellMax );
 
-					final IntervalView< RealComposite< R > > histogramsBlockImg = Views.interval( histogramsImg, blockInterval );
-					final Cursor< RealComposite< R > > histogramsBlockImgCursor = Views.iterable( histogramsBlockImg ).localizingCursor();
+					final IntervalView< RealComposite< T > > histogramsBlockImg = Views.interval( histogramsImg, blockInterval );
+					final Cursor< RealComposite< T > > histogramsBlockImgCursor = Views.iterable( histogramsBlockImg ).localizingCursor();
 
 					final List< Tuple2< Float, Long > > histogramMeanAndPixelIndex = new ArrayList<>();
 					while ( histogramsBlockImgCursor.hasNext() )
 					{
-						final RealComposite< R > histogram = histogramsBlockImgCursor.next();
+						final RealComposite< T > histogram = histogramsBlockImgCursor.next();
 
 						// compute mean value of the histogram (excluding tail bins)
 						double histogramValueSum = 0, histogramQuantitySum = 0;
@@ -406,16 +408,16 @@ public class HistogramsProvider implements Serializable
 					final Iterable< long[] > pixelPositions = tuple._2();
 					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 					final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( histogramsN5BasePath ) );
-					final RandomAccessibleInterval< R > histogramsStorageImg = ( RandomAccessibleInterval< R > ) N5Utils.open( n5Local, histogramsDataset );
-					final CompositeIntervalView< R, RealComposite< R > > histogramsImg = Views.collapseReal( histogramsStorageImg );
-					final RandomAccess< RealComposite< R > > histogramsImgRandomAccess = histogramsImg.randomAccess();
+					final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, histogramsDataset );
+					final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
+					final RandomAccess< RealComposite< T > > histogramsImgRandomAccess = histogramsImg.randomAccess();
 
 					final double[] accumulatedFilteredBlockHistogram = new double[ bins ];
 					for ( final Iterator< long[] > it = pixelPositions.iterator(); it.hasNext(); )
 					{
 						final long[] pixelPosition = it.next();
 						histogramsImgRandomAccess.setPosition( pixelPosition );
-						final RealComposite< R > histogram = histogramsImgRandomAccess.get();
+						final RealComposite< T > histogram = histogramsImgRandomAccess.get();
 						for ( int bin = 0; bin < bins; ++bin )
 							accumulatedFilteredBlockHistogram[ bin ] += histogram.get( bin ).getRealDouble();
 					}

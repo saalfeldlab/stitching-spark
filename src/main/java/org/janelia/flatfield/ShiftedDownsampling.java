@@ -179,4 +179,9 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 	{
 		return scalePyramidDatasetDimensions.get( scale );
 	}
+
+	public String getDatasetAtScale( final int scale )
+	{
+		return scalePyramidDatasetPaths.get( scale );
+	}
 }
