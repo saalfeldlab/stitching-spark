@@ -27,7 +27,6 @@ import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileLoader;
 import org.janelia.stitching.TileLoader.TileType;
-import org.janelia.util.Conversions;
 
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
@@ -212,23 +211,33 @@ public class HistogramsProvider implements Serializable
 		final List< long[] > blockPositions = getBlockPositions( fieldOfViewSize, blockSize );
 		sparkContext.parallelize( blockPositions, blockPositions.size() ).foreach( blockPosition ->
 			{
-				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
+				// create correct block interval including the 'bins' dimension
+				final long[] extendedBlockPosition = new long[ extendedBlockSize.length ];
+				System.arraycopy( blockPosition, 0, extendedBlockPosition, 0, blockPosition.length );
+				final CellGrid extendedCellGrid = new CellGrid( extendedDimensions, extendedBlockSize );
+				final long[] extendedCellMin = new long[ extendedCellGrid.numDimensions() ], extendedCellMax = new long[ extendedCellGrid.numDimensions() ];
+				final int[] extendedCellDimensions = new int[ extendedCellGrid.numDimensions() ];
+				extendedCellGrid.getCellDimensions( extendedBlockPosition, extendedCellMin, extendedCellDimensions );
+				for ( int d = 0; d < extendedCellGrid.numDimensions(); ++d )
+					extendedCellMax[ d ] = extendedCellMin[ d ] + extendedCellDimensions[ d ] - 1;
+				final Interval extendedBlockInterval = new FinalInterval( extendedCellMin, extendedCellMax );
 
 				// create histogram block
-				final RandomAccessibleInterval< DoubleType > histogramsStorageBlockImg = ArrayImgs.doubles( Conversions.toLongArray( extendedBlockSize ) );
+				final RandomAccessibleInterval< DoubleType > histogramsStorageBlockImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( extendedBlockInterval ) );
 				final RandomAccessibleInterval< R > histogramsGenericStorageBlockImg = ( RandomAccessibleInterval< R > ) histogramsStorageBlockImg;
 				final RandomAccessibleInterval< RealComposite< R > > histogramsBlockImg = Views.collapseReal( histogramsGenericStorageBlockImg );
-
 				final Real1dBinMapper< R > binMapper = new Real1dBinMapper<>( histMinValue, histMaxValue, bins, true );
 
 				// create an interval to be processed in each tile image
-				final long[] blockIntervalMin = new long[ blockSize.length ], blockIntervalMax = new long[ blockSize.length ];
-				for ( int d = 0; d < blockSize.length; ++d )
-				{
-					blockIntervalMin[ d ] = blockPosition[ d ] * blockSize[ d ];
-					blockIntervalMax[ d ] = Math.min( ( blockPosition[ d ] + 1 ) * blockSize[ d ], fieldOfViewSize[ d ] ) - 1;
-				}
-				final Interval blockInterval = new FinalInterval( blockIntervalMin, blockIntervalMax );
+				final CellGrid cellGrid = new CellGrid( fieldOfViewSize, blockSize );
+				final long[] cellMin = new long[ cellGrid.numDimensions() ], cellMax = new long[ cellGrid.numDimensions() ];
+				final int[] cellDimensions = new int[ cellGrid.numDimensions() ];
+				cellGrid.getCellDimensions( blockPosition, cellMin, cellDimensions );
+				for ( int d = 0; d < cellGrid.numDimensions(); ++d )
+					cellMax[ d ] = cellMin[ d ] + cellDimensions[ d ] - 1;
+				final Interval blockInterval = new FinalInterval( cellMin, cellMax );
+
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
 
 				// loop over tile images and populate the histograms using the corresponding part of each tile image
 				int done = 0;
@@ -295,8 +304,6 @@ public class HistogramsProvider implements Serializable
 				System.out.println( "Block min=" + Arrays.toString( Intervals.minAsLongArray( blockInterval ) ) + ", max=" + Arrays.toString( Intervals.maxAsLongArray( blockInterval ) ) + ": populated histograms" );
 
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
-				final long[] extendedBlockPosition = new long[ extendedBlockSize.length ];
-				System.arraycopy( blockPosition, 0, extendedBlockPosition, 0, blockPosition.length );
 				N5Utils.saveBlock( histogramsStorageBlockImg, n5Local, histogramsDataset, extendedBlockPosition );
 			} );
 
