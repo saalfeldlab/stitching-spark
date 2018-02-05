@@ -38,7 +38,7 @@ import net.imglib2.view.Views;
 
 public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 {
-	private final JavaSparkContext sparkContext;
+	private transient final JavaSparkContext sparkContext;
 	private final String downsampledHistogramsGroupPath;
 	private final A downsamplingTransform;
 	private final List< String > scalePyramidDatasetPaths;

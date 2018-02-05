@@ -10,6 +10,7 @@ import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
+import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldRegularizerMetadata.RegularizerMode;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -32,6 +33,7 @@ import mpicbg.models.PointMatch;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.cell.CellGrid;
@@ -81,8 +83,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 	{
 		private static final long serialVersionUID = -4110180561225910592L;
 
-		public final String scalingTermDataset;
-		public final String translationTermDataset;
+		public final String scalingTermDataset, translationTermDataset;
 //		public final String pivotValuesDataset;
 
 		private double pivotValue;
@@ -92,6 +93,13 @@ public class FlatfieldCorrectionSolver implements Serializable
 			scalingTermDataset = PathResolver.get( INTERMEDIATE_EXPORTS_N5_GROUP, SCALING_TERM_GROUP, "s" + scaleLevel );
 			translationTermDataset = PathResolver.get( INTERMEDIATE_EXPORTS_N5_GROUP, TRANSLATION_TERM_GROUP, "s" + scaleLevel );
 //			pivotValuesDataset = PathResolver.get( INTERMEDIATE_EXPORTS_N5_GROUP, PIVOT_VALUES_GROUP, "s" + scaleLevel );
+			this.pivotValue = pivotValue;
+		}
+
+		public FlatfieldSolutionMetadata( final String scalingTermDataset, final String translationTermDataset, final double pivotValue )
+		{
+			this.scalingTermDataset = scalingTermDataset;
+			this.translationTermDataset = translationTermDataset;
 			this.pivotValue = pivotValue;
 		}
 
@@ -109,6 +117,30 @@ public class FlatfieldCorrectionSolver implements Serializable
 				);
 //			N5Utils.open( n5, pivotValuesDataset )
 			return new FlatfieldSolution( correctionFields, pivotValuesImg );
+		}
+	}
+
+	public static class FlatfieldRegularizerMetadata implements Serializable
+	{
+		private static final long serialVersionUID = 3764292044450927660L;
+
+		public static enum RegularizerMode
+		{
+			UPSAMPLE_CURRENT_SOLUTION,
+			DOWNSAMPLE_PREVIOUS_SOLUTION
+		}
+
+		public final String scalingRegularizerDataset, translationRegularizerDataset;
+		public final RegularizerMode scalingRegularizerMode, translationRegularizerMode;
+
+		public FlatfieldRegularizerMetadata(
+				final String scalingRegularizerDataset, final String translationRegularizerDataset,
+				final RegularizerMode scalingRegularizerMode, final RegularizerMode translationRegularizerMode )
+		{
+			this.scalingRegularizerDataset = scalingRegularizerDataset;
+			this.translationRegularizerDataset = translationRegularizerDataset;
+			this.scalingRegularizerMode = scalingRegularizerMode;
+			this.translationRegularizerMode = translationRegularizerMode;
 		}
 	}
 
@@ -136,12 +168,11 @@ public class FlatfieldCorrectionSolver implements Serializable
 	public < T extends RealType< T >, M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable > FlatfieldSolutionMetadata leastSquaresInterpolationFit(
 			final int currentScaleLevel,
 			final String currentScaleHistogramsDataset,
-			final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer,
+			final FlatfieldRegularizerMetadata regularizerMetadata,
+			final ShiftedDownsampling< ? > shiftedDownsampling,
 			final ModelType modelType, final RegularizerModelType regularizerModelType,
 			final double pivotValue ) throws IOException
 	{
-		final Broadcast< RandomAccessiblePairNullable< DoubleType, DoubleType > > broadcastedRegularizer = sparkContext.broadcast( regularizer );
-
 //		final double referenceHistogramOffset = getMedianValue( referenceHistogram );
 		final double referenceHistogramOffset = pivotValue;
 
@@ -150,6 +181,9 @@ public class FlatfieldCorrectionSolver implements Serializable
 				histogramsProvider.getHistogramMaxValue(),
 				histogramsProvider.getHistogramBins()
 			);
+
+		// TODO: make shifted downsampling Serializable (currently there is a required non-serializable field for affine transformation)
+		final Broadcast< ShiftedDownsampling< ? > > broadcastedShiftedDownsampling = sparkContext.broadcast( shiftedDownsampling );
 
 		final N5Writer n5 = histogramsProvider.getDataProvider().createN5Writer( URI.create( histogramsProvider.getHistogramsN5BasePath() ) );
 		final DatasetAttributes currentScaleHistogramsDatasetAttributes = n5.getDatasetAttributes( currentScaleHistogramsDataset );
@@ -161,24 +195,14 @@ public class FlatfieldCorrectionSolver implements Serializable
 		final int[] currentScaleHistogramsBlockSize = new int[ currentScaleHistogramsExtendedBlockSize.length - 1 ];
 		System.arraycopy( currentScaleHistogramsExtendedBlockSize, 0, currentScaleHistogramsBlockSize, 0, currentScaleHistogramsBlockSize.length );
 
-		final FlatfieldSolutionMetadata flatfieldSolutionMetadata = new FlatfieldSolutionMetadata( currentScaleLevel, pivotValue );
-		n5.createDataset( flatfieldSolutionMetadata.scalingTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
-		n5.createDataset( flatfieldSolutionMetadata.translationTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+		final FlatfieldSolutionMetadata solutionMetadata = new FlatfieldSolutionMetadata( currentScaleLevel, pivotValue );
+		n5.createDataset( solutionMetadata.scalingTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+		n5.createDataset( solutionMetadata.translationTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
 //		n5.createDataset( flatfieldSolutionMetadata.pivotValuesDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
 
-		final List< long[] > currentScaleBlockPositions = HistogramsProvider.getBlockPositions( currentScaleHistogramsExtendedDimensions, currentScaleHistogramsExtendedBlockSize );
-		sparkContext.parallelize( currentScaleBlockPositions, currentScaleBlockPositions.size() ).foreach( extendedBlockPosition ->
+		final List< long[] > currentScaleBlockPositions = HistogramsProvider.getBlockPositions( currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize );
+		sparkContext.parallelize( currentScaleBlockPositions, currentScaleBlockPositions.size() ).foreach( blockPosition ->
 			{
-				final CellGrid extendedCellGrid = new CellGrid( currentScaleHistogramsExtendedDimensions, currentScaleHistogramsExtendedBlockSize );
-				final long[] extendedCellMin = new long[ extendedCellGrid.numDimensions() ], extendedCellMax = new long[ extendedCellGrid.numDimensions() ];
-				final int[] extendedCellDimensions = new int[ extendedCellGrid.numDimensions() ];
-				extendedCellGrid.getCellDimensions( extendedBlockPosition, extendedCellMin, extendedCellDimensions );
-				for ( int d = 0; d < extendedCellGrid.numDimensions(); ++d )
-					extendedCellMax[ d ] = extendedCellMin[ d ] + extendedCellDimensions[ d ] - 1;
-				final Interval extendedCellInterval = new FinalInterval( extendedCellMin, extendedCellMax );
-
-				final long[] blockPosition = new long[ extendedBlockPosition.length - 1 ];
-				System.arraycopy( extendedBlockPosition, 0, blockPosition, 0, blockPosition.length );
 				final CellGrid cellGrid = new CellGrid( currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize );
 				final long[] cellMin = new long[ cellGrid.numDimensions() ], cellMax = new long[ cellGrid.numDimensions() ];
 				final int[] cellDimensions = new int[ cellGrid.numDimensions() ];
@@ -187,11 +211,44 @@ public class FlatfieldCorrectionSolver implements Serializable
 					cellMax[ d ] = cellMin[ d ] + cellDimensions[ d ] - 1;
 				final Interval cellInterval = new FinalInterval( cellMin, cellMax );
 
+				// open histograms dataset
 				final DataProvider dataProviderLocal = DataProviderFactory.createByType( histogramsProvider.getDataAccessType() );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsProvider.getHistogramsN5BasePath() ) );
 				final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, currentScaleHistogramsDataset );
 				final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
 				final IntervalView< RealComposite< T > > histogramsBlockImg = Views.interval( histogramsImg, cellInterval );
+
+				// open regularizer datasets
+				final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer;
+				if ( regularizerMetadata != null )
+				{
+					final ShiftedDownsampling< ? > shiftedDownsamplingLocal = broadcastedShiftedDownsampling.value();
+
+					final RandomAccessibleInterval< DoubleType > scalingRegularizerSource = N5Utils.open( n5Local, regularizerMetadata.scalingRegularizerDataset );
+					final RandomAccessibleInterval< DoubleType > translationRegularizerSource = N5Utils.open( n5Local, regularizerMetadata.scalingRegularizerDataset );
+
+					final RandomAccessible< DoubleType > scalingRegularizer;
+					if ( regularizerMetadata.scalingRegularizerMode == RegularizerMode.UPSAMPLE_CURRENT_SOLUTION )
+						scalingRegularizer = Views.raster( shiftedDownsamplingLocal.upsample( scalingRegularizerSource, currentScaleLevel ) );
+					else if ( regularizerMetadata.scalingRegularizerMode == RegularizerMode.DOWNSAMPLE_PREVIOUS_SOLUTION )
+						scalingRegularizer = shiftedDownsamplingLocal.downsampleSolutionComponent( scalingRegularizerSource, currentScaleLevel );
+					else
+						throw new IllegalArgumentException( "unknown regularizer mode" );
+
+					final RandomAccessible< DoubleType > translationRegularizer;
+					if ( regularizerMetadata.translationRegularizerMode == RegularizerMode.UPSAMPLE_CURRENT_SOLUTION )
+						translationRegularizer = Views.raster( shiftedDownsamplingLocal.upsample( translationRegularizerSource, currentScaleLevel ) );
+					else if ( regularizerMetadata.scalingRegularizerMode == RegularizerMode.DOWNSAMPLE_PREVIOUS_SOLUTION )
+						translationRegularizer = shiftedDownsamplingLocal.downsampleSolutionComponent( translationRegularizerSource, currentScaleLevel );
+					else
+						throw new IllegalArgumentException( "unknown regularizer mode" );
+
+					regularizer = new RandomAccessiblePairNullable<>( scalingRegularizer, translationRegularizer );
+				}
+				else
+				{
+					regularizer = null;
+				}
 
 				// solution data blocks
 				final RandomAccessibleInterval< DoubleType > scalingTermBlockStorageImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( cellInterval ) );
@@ -211,7 +268,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 						histogramsProvider.getHistogramBins()
 					);
 
-				final long[] position = new long[ extendedCellGrid.numDimensions() ];
+				final long[] position = new long[ cellGrid.numDimensions() ];
 				while ( histogramsBlockImgCursor.hasNext() )
 				{
 					final RealComposite< T > histogram = histogramsBlockImgCursor.next();
@@ -239,9 +296,9 @@ public class FlatfieldCorrectionSolver implements Serializable
 					}
 
 					final double[] regularizerValues;
-					if ( broadcastedRegularizer.value() != null )
+					if ( regularizer != null )
 					{
-						final RandomAccessiblePairNullable< DoubleType, DoubleType >.RandomAccess regularizerRandomAccess = broadcastedRegularizer.value().randomAccess();
+						final RandomAccessiblePairNullable< DoubleType, DoubleType >.RandomAccess regularizerRandomAccess = regularizer.randomAccess();
 						regularizerRandomAccess.setPosition( position );
 
 						regularizerValues = new double[]
@@ -335,14 +392,14 @@ public class FlatfieldCorrectionSolver implements Serializable
 					pivotValuesBlockImgCursor.get().set( offset[ 0 ] );
 				}
 
-				N5Utils.saveBlock( scalingTermBlockImg, n5Local, flatfieldSolutionMetadata.scalingTermDataset, blockPosition );
-				N5Utils.saveBlock( translationTermBlockImg, n5Local, flatfieldSolutionMetadata.translationTermDataset, blockPosition );
+				N5Utils.saveBlock( scalingTermBlockImg, n5Local, solutionMetadata.scalingTermDataset, blockPosition );
+				N5Utils.saveBlock( translationTermBlockImg, n5Local, solutionMetadata.translationTermDataset, blockPosition );
 //				N5Utils.saveBlock( pivotValuesBlockImg, n5Local, flatfieldSolutionMetadata.pivotValuesDataset, blockPosition );
 			} );
 
-		broadcastedRegularizer.destroy();
+		broadcastedShiftedDownsampling.destroy();
 
-		return flatfieldSolutionMetadata;
+		return solutionMetadata;
 	}
 
 	public void cleanupFlatfieldSolutionExports( final DataProvider dataProvider, final String histogramsN5BasePath ) throws IOException
