@@ -60,6 +60,7 @@ public class HistogramsProvider implements Serializable
 	private static final String HISTOGRAM_MIN_VALUE_KEY = "histogramMinValue";
 	private static final String HISTOGRAM_MAX_VALUE_KEY = "histogramMaxValue";
 	private static final String HISTOGRAM_NUM_BINS_KEY = "histogramNumBins";
+	private static final String REFERENCE_HISTOGRAM_KEY = "referenceHistogram";
 
 	private static final int MAX_PARTITIONS = 15000;
 
@@ -324,18 +325,34 @@ public class HistogramsProvider implements Serializable
 		n5.setAttribute( histogramsDataset, ALL_HISTOGRAMS_EXIST_KEY, true );
 	}
 
-	public double[] getReferenceHistogram()
+	public double[] getReferenceHistogram() throws IOException
 	{
 		if ( referenceHistogram == null )
 		{
-			referenceHistogram = estimateReferenceHistogram(
-					sparkContext,
-					dataProvider, dataAccessType,
-					histogramsN5BasePath, histogramsDataset,
-					fieldOfViewSize, blockSize,
-					REFERENCE_HISTOGRAM_POINTS_PERCENT,
-					histMinValue, histMaxValue, bins
-				);
+			// try to load cached reference histogram from the attributes
+			final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+			final double[] referenceHistogramAttribute = n5.getAttribute( histogramsDataset, REFERENCE_HISTOGRAM_KEY, double[].class );
+			if ( referenceHistogramAttribute != null )
+			{
+				if ( referenceHistogramAttribute.length != bins )
+					throw new RuntimeException( "reference histogram has different number of bins" );
+
+				referenceHistogram = referenceHistogramAttribute;
+			}
+			else
+			{
+				referenceHistogram = estimateReferenceHistogram(
+						sparkContext,
+						dataProvider, dataAccessType,
+						histogramsN5BasePath, histogramsDataset,
+						fieldOfViewSize, blockSize,
+						REFERENCE_HISTOGRAM_POINTS_PERCENT,
+						histMinValue, histMaxValue, bins
+					);
+
+				// cache reference histogram in the attributes
+				n5.setAttribute( histogramsDataset, REFERENCE_HISTOGRAM_KEY, referenceHistogram );
+			}
 		}
 		return referenceHistogram;
 	}
