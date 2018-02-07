@@ -136,6 +136,15 @@ public class HistogramsProvider implements Serializable
 			throw new NotImplementedException( "Backend storage not supported for tiles: " + tileType );
 		}
 
+		// reduce memory requirement by shrinking block size for the histogram dataset
+		while (
+				( workingInterval.numDimensions() == 2 && Arrays.stream( blockSize ).min().getAsInt() > 128 ) ||
+				( workingInterval.numDimensions() == 3 && Arrays.stream( blockSize ).min().getAsInt() > 32 ) )
+		{
+			for ( int d = 0; d < blockSize.length; ++d )
+				blockSize[ d ] >>= 1;
+		}
+
 		if ( !use2D && sliceHistogramsExist() )
 		{
 			// if the histograms are stored in the old format, convert them to the new N5 format first
