@@ -61,6 +61,8 @@ public class HistogramsProvider implements Serializable
 	private static final String HISTOGRAM_MAX_VALUE_KEY = "histogramMaxValue";
 	private static final String HISTOGRAM_NUM_BINS_KEY = "histogramNumBins";
 
+	private static final int MAX_PARTITIONS = 15000;
+
 	private transient final JavaSparkContext sparkContext;
 	private transient final DataProvider dataProvider;
 	private transient final TileInfo[] tiles;
@@ -209,7 +211,7 @@ public class HistogramsProvider implements Serializable
 		final Broadcast< TileInfo[] > broadcastedTiles = sparkContext.broadcast( tiles );
 
 		final List< long[] > blockPositions = getBlockPositions( fieldOfViewSize, blockSize );
-		sparkContext.parallelize( blockPositions, blockPositions.size() ).foreach( blockPosition ->
+		sparkContext.parallelize( blockPositions, Math.min( blockPositions.size(), MAX_PARTITIONS ) ).foreach( blockPosition ->
 			{
 				// create correct block interval including the 'bins' dimension
 				final long[] extendedBlockPosition = new long[ extendedBlockSize.length ];
@@ -342,7 +344,7 @@ public class HistogramsProvider implements Serializable
 		final long mEnd = mStart + numMedianPoints;
 
 		final List< long[] > blockPositions = getBlockPositions( fieldOfViewSize, blockSize );
-		final double[] accumulatedFilteredHistogram = sparkContext.parallelize( blockPositions, blockPositions.size() )
+		final double[] accumulatedFilteredHistogram = sparkContext.parallelize( blockPositions, Math.min( blockPositions.size(), MAX_PARTITIONS ) )
 			// compute mean value for each histogram
 			.flatMapToPair( blockPosition ->
 				{
