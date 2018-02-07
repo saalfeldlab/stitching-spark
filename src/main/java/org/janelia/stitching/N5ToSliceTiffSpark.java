@@ -86,7 +86,8 @@ public class N5ToSliceTiffSpark
 						},
 						n5DatasetPath,
 						outputChannelPath,
-						TiffUtils.TiffCompression.NONE
+						TiffUtils.TiffCompression.NONE,
+						2 // xy slices
 					);
 			}
 		}
