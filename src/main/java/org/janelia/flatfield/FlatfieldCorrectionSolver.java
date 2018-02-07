@@ -229,17 +229,17 @@ public class FlatfieldCorrectionSolver implements Serializable
 
 					final RandomAccessible< DoubleType > scalingRegularizer;
 					if ( regularizerMetadata.scalingRegularizerMode == RegularizerMode.UPSAMPLE_CURRENT_SOLUTION )
-						scalingRegularizer = Views.raster( shiftedDownsamplingLocal.upsample( scalingRegularizerSource, currentScaleLevel ) );
+						scalingRegularizer = shiftedDownsamplingLocal.upsampleImage( scalingRegularizerSource, currentScaleLevel );
 					else if ( regularizerMetadata.scalingRegularizerMode == RegularizerMode.DOWNSAMPLE_PREVIOUS_SOLUTION )
-						scalingRegularizer = shiftedDownsamplingLocal.downsampleSolutionComponent( scalingRegularizerSource, currentScaleLevel );
+						scalingRegularizer = shiftedDownsamplingLocal.downsampleImage( scalingRegularizerSource, currentScaleLevel );
 					else
 						throw new IllegalArgumentException( "unknown regularizer mode" );
 
 					final RandomAccessible< DoubleType > translationRegularizer;
 					if ( regularizerMetadata.translationRegularizerMode == RegularizerMode.UPSAMPLE_CURRENT_SOLUTION )
-						translationRegularizer = Views.raster( shiftedDownsamplingLocal.upsample( translationRegularizerSource, currentScaleLevel ) );
+						translationRegularizer = shiftedDownsamplingLocal.upsampleImage( translationRegularizerSource, currentScaleLevel );
 					else if ( regularizerMetadata.scalingRegularizerMode == RegularizerMode.DOWNSAMPLE_PREVIOUS_SOLUTION )
-						translationRegularizer = shiftedDownsamplingLocal.downsampleSolutionComponent( translationRegularizerSource, currentScaleLevel );
+						translationRegularizer = shiftedDownsamplingLocal.downsampleImage( translationRegularizerSource, currentScaleLevel );
 					else
 						throw new IllegalArgumentException( "unknown regularizer mode" );
 

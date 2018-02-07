@@ -18,6 +18,7 @@ import org.janelia.saalfeldlab.n5.spark.N5ScalePyramidHalfPixelOffsetDownsampler
 import bdv.export.Downsample;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImgFactory;
@@ -119,7 +120,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 		}
 	}
 
-	public < T extends NativeType< T > & RealType< T > > RandomAccessibleInterval< T > downsampleSolutionComponent(
+	public < T extends NativeType< T > & RealType< T > > RandomAccessibleInterval< T > downsampleImage(
 			final RandomAccessibleInterval< T > fullComponent,
 			final int scale )
 	{
@@ -144,7 +145,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 	}
 
 	@SuppressWarnings( "unchecked" )
-	public < T extends RealType< T > & NativeType< T > > RealRandomAccessible< T > upsample(
+	public < T extends RealType< T > & NativeType< T > > RandomAccessible< T > upsampleImage(
 			final RandomAccessibleInterval< T > downsampledImg,
 			final int newScale )
 	{
@@ -180,7 +181,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 			// Then, apply the inverse of the downsampling transform in order to map the downsampled image to the upsampled image
 			img = RealViews.affine( alignedDownsampledImg, downsamplingTransform.inverse() );
 		}
-		return img;
+		return Views.raster( img );
 	}
 
 	public void cleanupDownsampledHistograms() throws IOException
