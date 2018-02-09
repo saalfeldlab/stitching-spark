@@ -12,7 +12,7 @@ flintstone_file = os.path.join('flintstone', 'flintstone.sh')
 flintstone_path = os.path.join(curr_script_dir, flintstone_file)
 
 os.environ['SPARK_VERSION'] = 'test'
-os.environ['N_DRIVER_THREADS'] = '2'
+os.environ['N_DRIVER_THREADS'] = '16'
 os.environ['MEMORY_PER_NODE'] = '105'
 os.environ['TERMINATE'] = '1'
 
