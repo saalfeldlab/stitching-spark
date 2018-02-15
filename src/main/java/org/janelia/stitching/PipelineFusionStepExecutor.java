@@ -25,7 +25,7 @@ import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.saalfeldlab.n5.spark.N5PowerOfTwoScalePyramidIsotropicDownsamplerSpark3D;
+import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5NonIsotropicScalePyramidSpark3D;
 import org.janelia.util.Conversions;
 
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
@@ -177,7 +177,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// Generate lower scale levels
 			// FIXME: remove. But it saves time for now
 			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
-				downsampledDatasets = N5PowerOfTwoScalePyramidIsotropicDownsamplerSpark3D.downsamplePowerOfTwoScalePyramidIsotropic3D(
+				downsampledDatasets = N5NonIsotropicScalePyramidSpark3D.downsampleNonIsotropicScalePyramid(
 						sparkContext,
 						() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( n5ExportPath ) ),
 						fullScaleOutputPath,
