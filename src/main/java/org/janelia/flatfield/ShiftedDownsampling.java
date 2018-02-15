@@ -13,7 +13,7 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.spark.N5RemoveSpark;
-import org.janelia.saalfeldlab.n5.spark.N5ScalePyramidHalfPixelOffsetDownsamplerSpark;
+import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5OffsetScalePyramidSpark;
 
 import bdv.export.Downsample;
 import net.imglib2.FinalInterval;
@@ -100,7 +100,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 
 		scalePyramidDatasetPaths = new ArrayList<>();
 		scalePyramidDatasetPaths.add( fullScaleHistogramsDataset );
-		scalePyramidDatasetPaths.addAll( N5ScalePyramidHalfPixelOffsetDownsamplerSpark.downsampleScalePyramidWithHalfPixelOffset(
+		scalePyramidDatasetPaths.addAll( N5OffsetScalePyramidSpark.downsampleOffsetScalePyramid(
 				sparkContext,
 				() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
 				fullScaleHistogramsDataset,
