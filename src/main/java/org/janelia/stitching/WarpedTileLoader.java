@@ -36,36 +36,36 @@ public class WarpedTileLoader
 			final DataProvider dataProvider,
 			final double[] slabMin,
 			final TileInfo slabTile,
-			final TpsTransformWrapper transform )
+			final TpsTransformWrapper slabTransform )
 	{
-		return load( dataProvider, slabMin, slabTile, transform, DEFAULT_PADDING, null );
+		return load( dataProvider, slabMin, slabTile, slabTransform, DEFAULT_PADDING, null );
 	}
 
 	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > load(
 			final DataProvider dataProvider,
 			final double[] slabMin,
 			final TileInfo slabTile,
-			final TpsTransformWrapper transform,
+			final TpsTransformWrapper slabTransform,
 			final long[] padding )
 	{
-		return load( dataProvider, slabMin, slabTile, transform, padding, null );
+		return load( dataProvider, slabMin, slabTile, slabTransform, padding, null );
 	}
 
 	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > load(
 			final DataProvider dataProvider,
 			final double[] slabMin,
 			final TileInfo slabTile,
-			final TpsTransformWrapper transform,
+			final TpsTransformWrapper slabTransform,
 			final RandomAccessiblePairNullable< U, U > flatfield )
 	{
-		return load( dataProvider, slabMin, slabTile, transform, DEFAULT_PADDING, flatfield );
+		return load( dataProvider, slabMin, slabTile, slabTransform, DEFAULT_PADDING, flatfield );
 	}
 
 	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > load(
 			final DataProvider dataProvider,
 			final double[] slabMin,
 			final TileInfo slabTile,
-			final TpsTransformWrapper transform,
+			final TpsTransformWrapper slabTransform,
 			final long[] padding,
 			final RandomAccessiblePairNullable< U, U > flatfield )
 	{
@@ -82,33 +82,33 @@ public class WarpedTileLoader
 			source = rawTile;
 		}
 
-		return warp( slabMin, slabTile, source, transform, padding );
+		return warp( slabMin, slabTile, source, slabTransform, padding );
 	}
 
 	public static Interval getBoundingBox(
 			final double[] slabMin,
 			final TileInfo slabTile,
-			final TpsTransformWrapper transform )
+			final TpsTransformWrapper slabTransform )
 	{
-		return getBoundingBox( slabMin, slabTile, transform, DEFAULT_PADDING );
+		return getBoundingBox( slabMin, slabTile, slabTransform, DEFAULT_PADDING );
 	}
 
 	public static Interval getBoundingBox(
 			final double[] slabMin,
 			final TileInfo slabTile,
-			final TpsTransformWrapper transform,
+			final TpsTransformWrapper slabTransform,
 			final long[] padding )
 	{
 		final Interval tileInterval = new FinalInterval( new FinalDimensions( slabTile.getSize() ) );
 		final RandomAccessibleInterval< ByteType > fakeTileImg = ConstantUtils.constantRandomAccessibleInterval( new ByteType(), slabMin.length, tileInterval );
-		return warp( slabMin, slabTile, fakeTileImg, transform, padding );
+		return warp( slabMin, slabTile, fakeTileImg, slabTransform, padding );
 	}
 
 	private static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > warp(
 			final double[] slabMin,
 			final TileInfo slabTile,
 			final RandomAccessibleInterval< T > img,
-			final TpsTransformWrapper transform,
+			final TpsTransformWrapper slabTransform,
 			final long[] padding )
 	{
 		final double[] tileSlabMinPhysicalUnits = new double[ slabMin.length ], tileSlabMaxPhysicalUnits = new double[ slabMin.length ];
@@ -126,11 +126,11 @@ public class WarpedTileLoader
 		final RealRandomAccessible< T > interpolatedImg = Views.interpolate( extendedImg, new NLinearInterpolatorFactory<>() );
 		final RealRandomAccessible< T > interpolatedImgMicrons = RealViews.affineReal( interpolatedImg, pixelsToMicrons );
 		final RealRandomAccessible< T > translatedInterpolatedImgMicrons = RealViews.affineReal( interpolatedImgMicrons, slabTranslationMicrons );
-		final RealRandomAccessible< T > transformedImgMicrons = RealViews.transformReal( translatedInterpolatedImgMicrons, transform );
+		final RealRandomAccessible< T > transformedImgMicrons = RealViews.transformReal( translatedInterpolatedImgMicrons, slabTransform );
 		final RealRandomAccessible< T > transformedImgPixels = RealViews.affineReal( transformedImgMicrons, pixelsToMicrons.inverse() );
 		final RandomAccessible< T > rasteredTransformedImgPixels = Views.raster( transformedImgPixels );
 
-		final RealInterval estimatedBoundingBoxPhysicalUnits = TransformBoundingBox.boundingBoxForwardCorners( tileSlabPhysicalUnitsInterval, transform );
+		final RealInterval estimatedBoundingBoxPhysicalUnits = TransformBoundingBox.boundingBoxForwardCorners( tileSlabPhysicalUnitsInterval, slabTransform );
 		final long[] paddedBoundingBoxMin = new long[ slabMin.length ], paddedBoundingBoxMax = new long[ slabMin.length ];
 		for ( int d = 0; d < slabMin.length; ++d )
 		{
