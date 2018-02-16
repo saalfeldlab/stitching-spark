@@ -17,25 +17,35 @@ public class TileSearchRadiusEstimator implements Serializable
 {
 	private static final long serialVersionUID = 3966655006478467424L;
 
-	private static final double ESTIMATION_WINDOW_SIZE_TIMES = 3;
-
 	private final Map< Integer, TileInfo > stageTilesMap, stitchedTilesMap;
 	private final Map< Integer, double[] > tileOffsets;
 	private final SearchRadiusEstimator estimator;
 	private final double[] stitchedTilesOffset;
 
-	public TileSearchRadiusEstimator( final TileInfo[] stageTiles, final TileInfo[] stitchedTiles, final double searchRadiusMultiplier )
+	public TileSearchRadiusEstimator(
+			final TileInfo[] stageTiles,
+			final TileInfo[] stitchedTiles,
+			final double searchRadiusMultiplier,
+			final int[] statsWindowTileSize )
 	{
-		this( stageTiles, stitchedTiles, null, searchRadiusMultiplier );
+		this(
+				stageTiles,
+				stitchedTiles,
+				getEstimationWindowSize( stageTiles[ 0 ].getSize(), statsWindowTileSize ),
+				searchRadiusMultiplier
+			);
 	}
 
-	public TileSearchRadiusEstimator( final TileInfo[] stageTiles, final TileInfo[] stitchedTiles, final double[] estimationWindowSizeNullable, final double searchRadiusMultiplier )
+	public TileSearchRadiusEstimator(
+			final TileInfo[] stageTiles,
+			final TileInfo[] stitchedTiles,
+			final double[] estimationWindowSize,
+			final double searchRadiusMultiplier )
 	{
 		stageTilesMap = Utils.createTilesMap( stageTiles );
 		stitchedTilesMap = Utils.createTilesMap( stitchedTiles );
 
 		stitchedTilesOffset = getStitchedTilesOffset( stageTilesMap, stitchedTilesMap );
-		final double[] estimationWindowSize = ( estimationWindowSizeNullable == null ? getEstimationWindowSize( stageTiles[ 0 ].getSize() ) : estimationWindowSizeNullable );
 
 		final Map< Integer, double[] > stageValues = new HashMap<>(), stitchedValues = new HashMap<>();
 		for ( final Entry< Integer, TileInfo > stageEntry : stageTilesMap.entrySet() )
@@ -131,11 +141,11 @@ public class TileSearchRadiusEstimator implements Serializable
 						estimator.getEstimationWindowSize() ) );
 	}
 
-	private static double[] getEstimationWindowSize( final long[] tileSize )
+	private static double[] getEstimationWindowSize( final long[] tileSize, final int[] statsWindowTileSize )
 	{
 		final double[] estimationWindowSize = new double[ tileSize.length ];
 		for ( int d = 0; d < tileSize.length; ++d )
-			estimationWindowSize[ d ] = tileSize[ d ] * ESTIMATION_WINDOW_SIZE_TIMES;
+			estimationWindowSize[ d ] = tileSize[ d ] * statsWindowTileSize[ d ];
 		return estimationWindowSize;
 	}
 

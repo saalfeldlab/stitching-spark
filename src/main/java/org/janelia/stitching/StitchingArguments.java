@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.List;
 
 import org.janelia.fusion.FusionMode;
+import org.janelia.util.Conversions;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -147,6 +148,11 @@ public class StitchingArguments implements Serializable {
 	public long[] maxCoord()
 	{
 		return parseArray( maxCoord );
+	}
+
+	public int[] searchWindowSizeTiles()
+	{
+		return Conversions.toIntArray( parseArray( statsWindowSizeTiles ) );
 	}
 
 	public List< String > inputTileConfigurations() { return inputTileConfigurations; }
