@@ -13,6 +13,7 @@ public class ComparableTuple< T extends Comparable< ? super T > > implements Com
 {
 	private final T[] values;
 
+	@SafeVarargs
 	public ComparableTuple( final T... values )
 	{
 		this.values = values;
