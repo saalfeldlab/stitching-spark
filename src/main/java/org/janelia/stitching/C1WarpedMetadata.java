@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,8 +49,10 @@ public class C1WarpedMetadata
 	}
 	private static final String SLABS_DIR = "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/updated-config-paths";
 	private static final String LANDMARKS_DIR = "/groups/saalfeld/home/bogovicj/projects/igor_illumiation-correction/serialized_transforms";
-
+	private static final String FLATFIELD_DIR = "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/flatfield-new";
 	private static final String NEW_TILES_LOCATION = "/nrs/saalfeld/igor/Rui/Sample1_C1_rawdata/Position1_LargeTile2";
+	private static final String BASE_PATH = "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/restitching-affine";
+	private static final double[] PIXEL_RESOLUTION = new double[] { 0.097, 0.097, 0.18 };
 
 	public static Set< String > getSlabs()
 	{
@@ -70,7 +73,15 @@ public class C1WarpedMetadata
 	public static TileInfo[] getSlabTiles( final String slab, final int channel ) throws IOException
 	{
 		final Path slabPath = Paths.get( SLABS_DIR, slab, "ch" + channel + "-" + slab + "-final.json" );
-		final TileInfo[] slabTiles = TileInfoJSONProvider.loadTilesConfiguration( DataProviderFactory.createFSDataProvider().getJsonReader( URI.create( slabPath.toString() ) ) );
+		final List< TileInfo > slabTiles = new ArrayList<>(
+				Arrays.asList(
+						TileInfoJSONProvider.loadTilesConfiguration( DataProviderFactory.createFSDataProvider().getJsonReader( URI.create( slabPath.toString() ) ) )
+					)
+			);
+
+		for ( final TileInfo tile : slabTiles )
+			if ( tile.getPixelResolution() == null )
+				tile.setPixelResolution( PIXEL_RESOLUTION );
 
 		// hack to update tile paths
 		for ( final TileInfo tile : slabTiles )
@@ -79,18 +90,18 @@ public class C1WarpedMetadata
 		// hack to remove a non-existing tile 18808 in ch1
 		if ( channel == 1 )
 		{
-			for ( final TileInfo tile : slabTiles )
+			for ( final Iterator< TileInfo > it = slabTiles.iterator(); it.hasNext(); )
 			{
+				final TileInfo tile = it.next();
 				if ( tile.getIndex().intValue() == 18808 )
 				{
-					final List< TileInfo > newSlabTiles = new ArrayList<>( Arrays.asList( slabTiles ) );
-					newSlabTiles.remove( tile );
-					return newSlabTiles.toArray( new TileInfo[ 0 ] );
+					it.remove();
+					break;
 				}
 			}
 		}
 
-		return slabTiles;
+		return slabTiles.toArray( new TileInfo[ 0 ] );
 	}
 
 	public static TileInfo[] getTiles( final int channel ) throws IOException
@@ -99,5 +110,15 @@ public class C1WarpedMetadata
 		for ( final String slab : getSlabs() )
 			tiles.addAll( Arrays.asList( getSlabTiles( slab, channel ) ) );
 		return tiles.toArray( new TileInfo[ 0 ] );
+	}
+
+	public static String getFlatfieldPath( final int channel )
+	{
+		return Paths.get( FLATFIELD_DIR, "ch" + channel ).toString();
+	}
+
+	public static String getBasePath()
+	{
+		return BASE_PATH;
 	}
 }

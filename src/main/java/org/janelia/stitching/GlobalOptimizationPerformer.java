@@ -175,8 +175,8 @@ public class GlobalOptimizationPerformer
 
 		// --- FIXME: test translation-only solution
 		// instead of pre-aligning, apply the models of the approximate tile transforms to the point matches
-		for ( final Tile< ? > tile : tilesSet )
-			tile.apply();
+//		for ( final Tile< ? > tile : tilesSet )
+//			tile.apply();
 
 
 		// --- FIXME: test translation-only solution
@@ -311,7 +311,7 @@ public class GlobalOptimizationPerformer
 
 		// --- FIXME: test translation-only solution
 		// instead of pre-aligning, we use the known transform for each tile and apply to point matches
-//		tc.preAlign();
+		tc.preAlign();
 
 		final int iterations = 5000;
 

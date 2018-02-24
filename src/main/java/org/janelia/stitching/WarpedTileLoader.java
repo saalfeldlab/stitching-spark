@@ -32,36 +32,36 @@ public class WarpedTileLoader
 {
 	private static final long[] DEFAULT_PADDING = new long[] { 200, 200, 200 };
 
-	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > load(
+	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > loadTile(
 			final DataProvider dataProvider,
 			final double[] slabMin,
 			final TileInfo slabTile,
 			final TpsTransformWrapper slabTransform )
 	{
-		return load( dataProvider, slabMin, slabTile, slabTransform, DEFAULT_PADDING, null );
+		return loadTile( dataProvider, slabMin, slabTile, slabTransform, DEFAULT_PADDING, null );
 	}
 
-	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > load(
+	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > loadTile(
 			final DataProvider dataProvider,
 			final double[] slabMin,
 			final TileInfo slabTile,
 			final TpsTransformWrapper slabTransform,
 			final long[] padding )
 	{
-		return load( dataProvider, slabMin, slabTile, slabTransform, padding, null );
+		return loadTile( dataProvider, slabMin, slabTile, slabTransform, padding, null );
 	}
 
-	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > load(
+	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > loadTile(
 			final DataProvider dataProvider,
 			final double[] slabMin,
 			final TileInfo slabTile,
 			final TpsTransformWrapper slabTransform,
 			final RandomAccessiblePairNullable< U, U > flatfield )
 	{
-		return load( dataProvider, slabMin, slabTile, slabTransform, DEFAULT_PADDING, flatfield );
+		return loadTile( dataProvider, slabMin, slabTile, slabTransform, DEFAULT_PADDING, flatfield );
 	}
 
-	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > load(
+	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > loadTile(
 			final DataProvider dataProvider,
 			final double[] slabMin,
 			final TileInfo slabTile,

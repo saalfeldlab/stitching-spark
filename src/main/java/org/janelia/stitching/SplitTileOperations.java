@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import org.janelia.stitching.analysis.FilterAdjacentShifts;
-
 import mpicbg.imglib.custom.OffsetConverter;
 import mpicbg.models.Point;
 import net.imglib2.Dimensions;
@@ -15,7 +13,6 @@ import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
 import net.imglib2.iterator.IntervalIterator;
-import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.IntervalsNullable;
@@ -43,122 +40,6 @@ public class SplitTileOperations
 			}
 		}
 		return tileSplitBoxes;
-	}
-
-	/**
-	 * Returns list of overlapping tile box pairs.
-	 * If {@code adjacent} is set, retains only pairs that are adjacent in the transformed space (overlap by more than 50%)
-	 *
-	 * @param tileBoxes
-	 * @param adjacent
-	 * @return
-	 */
-	public static List< TilePair > findOverlappingTileBoxes( final List< TileInfo > tileBoxes, final boolean adjacent )
-	{
-		final List< TilePair > overlappingBoxes = new ArrayList<>();
-		for ( int i = 0; i < tileBoxes.size(); i++ )
-		{
-			for ( int j = i + 1; j < tileBoxes.size(); j++ )
-			{
-				if ( tileBoxes.get( i ).getOriginalTile().getIndex().intValue() != tileBoxes.get( j ).getOriginalTile().getIndex().intValue() )
-				{
-					final TilePair tileBoxPair = new TilePair( tileBoxes.get( i ), tileBoxes.get( j ) );
-					final Interval fixedTileBoxInterval = tileBoxPair.getA().getBoundaries();
-					final Interval movingInFixedTileBoxInterval = transformMovingTileBox( tileBoxPair );
-					final Interval tileBoxesOverlap = IntervalsNullable.intersect( fixedTileBoxInterval, movingInFixedTileBoxInterval );
-					if ( tileBoxesOverlap != null )
-					{
-						if ( !adjacent || FilterAdjacentShifts.isAdjacent( getMinTileDimensions( tileBoxPair ), tileBoxesOverlap ) )
-							overlappingBoxes.add( tileBoxPair );
-					}
-				}
-			}
-		}
-		return overlappingBoxes;
-	}
-
-	/**
-	 * Returns an interval of the moving tile box being transformed into coordinate space of the fixed original tile.
-	 * @param tileBoxPair
-	 * @return
-	 */
-	public static Interval transformMovingTileBox( final TilePair tileBoxPair )
-	{
-		final TileInfo fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
-		final AffineTransform3D fixedTileTransform = TileOperations.getTileTransform( fixedTileBox.getOriginalTile() );
-		return transformMovingTileBox( fixedTileTransform, movingTileBox );
-	}
-
-	/**
-	 * Returns an interval of the moving tile box being transformed into coordinate space of the fixed original tile.
-	 *
-	 * @param fixedTileTransform
-	 * @param movingTileBox
-	 * @return
-	 */
-	public static Interval transformMovingTileBox( final AffineTransform3D fixedTileTransform, final TileInfo movingTileBox )
-	{
-		final double[] movingMiddlePoint = getTileBoxMiddlePoint( movingTileBox );
-		final double[] movingInFixedMiddlePoint = new double[ movingMiddlePoint.length ];
-		final AffineTransform3D movingTileTransform = TileOperations.getTileTransform( movingTileBox.getOriginalTile() );
-		final AffineTransform3D movingToFixed = new AffineTransform3D();
-		movingToFixed.preConcatenate( movingTileTransform ).preConcatenate( fixedTileTransform.inverse() );
-		movingToFixed.apply( movingMiddlePoint, movingInFixedMiddlePoint );
-		final RealInterval movingInFixedTileBoxRealInterval = getTileBoxInterval( movingInFixedMiddlePoint, movingTileBox.getSize() );
-		return TileOperations.roundRealInterval( movingInFixedTileBoxRealInterval );
-	}
-
-	/**
-	 * Returns overlap intervals of a given tile box pair in the coordinate space of each tile (useful for cropping).
-	 *
-	 * @param tileBoxPair
-	 * @param padding
-	 * @return
-	 */
-	public static Interval[] getOverlapIntervals( final TilePair tileBoxPair )
-	{
-		final Interval[] tileBoxesInFixedSpace = new Interval[] { tileBoxPair.getA().getBoundaries(), transformMovingTileBox( tileBoxPair ) };
-		final Interval overlapInFixedSpace = IntervalsNullable.intersect( tileBoxesInFixedSpace[ 0 ], tileBoxesInFixedSpace[ 1 ] );
-		if ( overlapInFixedSpace == null )
-			return null;
-
-		final long[] originalMovingTileTopLeftCornerInFixedSpace = Intervals.minAsLongArray( IntervalsHelper.offset( tileBoxesInFixedSpace[ 1 ], Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) ) );
-		final Interval[] originalTilesInFixedSpace = new Interval[] {
-				new FinalInterval( tileBoxPair.getA().getOriginalTile().getSize() ),
-				IntervalsHelper.translate( new FinalInterval( tileBoxPair.getB().getOriginalTile().getSize() ), originalMovingTileTopLeftCornerInFixedSpace ) };
-
-		final Interval[] overlapsInOriginalTileSpace = new Interval[ 2 ];
-		for ( int j = 0; j < 2; j++ )
-			overlapsInOriginalTileSpace[ j ] = IntervalsHelper.offset( overlapInFixedSpace, Intervals.minAsLongArray( originalTilesInFixedSpace[ j ] ) );
-
-		return overlapsInOriginalTileSpace;
-	}
-
-	/**
-	 * Returns overlap intervals of a given tile box pair in the coordinate space of each tile (useful for cropping).
-	 * The overlaps are extended by a given padding value.
-	 *
-	 * @param tileBoxPair
-	 * @param padding
-	 * @return
-	 */
-	public static Interval[] getPaddedOverlapIntervals( final TilePair tileBoxPair, final long[] padding )
-	{
-		final Interval[] overlapsInOriginalTileSpace = getOverlapIntervals( tileBoxPair );
-		if ( overlapsInOriginalTileSpace == null )
-			return null;
-
-		final Interval[] tileBoxesInFixedSpace = new Interval[] { tileBoxPair.getA().getBoundaries(), transformMovingTileBox( tileBoxPair ) };
-		final long[] originalMovingTileTopLeftCornerInFixedSpace = Intervals.minAsLongArray( IntervalsHelper.offset( tileBoxesInFixedSpace[ 1 ], Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) ) );
-		final Interval[] originalTilesInFixedSpace = new Interval[] {
-				new FinalInterval( tileBoxPair.getA().getOriginalTile().getSize() ),
-				IntervalsHelper.translate( new FinalInterval( tileBoxPair.getB().getOriginalTile().getSize() ), originalMovingTileTopLeftCornerInFixedSpace ) };
-
-		final Interval[] paddedOverlapsInOriginalTileSpace = new Interval[ 2 ];
-		for ( int j = 0; j < 2; ++j )
-			paddedOverlapsInOriginalTileSpace[ j ] = TileOperations.padInterval( overlapsInOriginalTileSpace[ j ], originalTilesInFixedSpace[ j ], padding );
-
-		return paddedOverlapsInOriginalTileSpace;
 	}
 
 	/**

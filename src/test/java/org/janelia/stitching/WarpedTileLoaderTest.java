@@ -47,7 +47,7 @@ public class WarpedTileLoaderTest
 		final ImagePlus imp = ImageImporter.openImage( slabTile.getFilePath() );
 		imp.show();
 
-		final RandomAccessibleInterval< T > warpedTile = WarpedTileLoader.load( DataProviderFactory.createFSDataProvider(), slabMin, slabTile, transform );
+		final RandomAccessibleInterval< T > warpedTile = WarpedTileLoader.loadTile( DataProviderFactory.createFSDataProvider(), slabMin, slabTile, transform );
 
 		final Interval estimatedBoundingBox = WarpedTileLoader.getBoundingBox( slabMin, slabTile, transform );
 		for ( int d = 0; d < Math.max( warpedTile.numDimensions(), estimatedBoundingBox.numDimensions() ); ++d )

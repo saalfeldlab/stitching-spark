@@ -26,7 +26,7 @@ import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileLoader;
-import org.janelia.stitching.TileLoader.TileType;
+import org.janelia.stitching.TileLoader.TileStorageType;
 
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
@@ -116,19 +116,19 @@ public class HistogramsProvider implements Serializable
 
 		// set field of view size and block size
 		// check if tiles are single image files, or N5 datasets
-		final TileType tileType = TileLoader.getTileType( tiles[ 0 ], dataProvider );
+		final TileStorageType tileType = TileLoader.getTileType( tiles[ 0 ], dataProvider );
 		// TODO: check that all tiles are of the same type
 
 		final boolean use2D = workingInterval.numDimensions() < fullTileSize.length;
 
 		fieldOfViewSize = use2D ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize.clone();
 		blockSize = new int[ fieldOfViewSize.length ];
-		if ( tileType == TileType.N5_DATASET )
+		if ( tileType == TileStorageType.N5_DATASET )
 		{
 			final int[] tileBlockSize = TileLoader.getTileN5DatasetAttributes( tiles[ 0 ], dataProvider ).getBlockSize();
 			System.arraycopy( tileBlockSize, 0, blockSize, 0, blockSize.length );
 		}
-		else if ( tileType == TileType.IMAGE_FILE )
+		else if ( tileType == TileStorageType.IMAGE_FILE )
 		{
 			Arrays.fill( blockSize, HISTOGRAMS_DEFAULT_BLOCK_SIZE );
 		}

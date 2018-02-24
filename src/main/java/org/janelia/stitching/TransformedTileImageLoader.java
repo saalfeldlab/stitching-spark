@@ -1,26 +1,8 @@
 package org.janelia.stitching;
 
-import org.janelia.dataaccess.DataProvider;
-import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
-
-import net.imglib2.Interval;
-import net.imglib2.RandomAccessible;
-import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.RealRandomAccessible;
-import net.imglib2.converter.Converters;
-import net.imglib2.converter.RealConverter;
-import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.realtransform.AffineGet;
-import net.imglib2.realtransform.RealViews;
-import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.RealType;
-import net.imglib2.util.Util;
-import net.imglib2.view.RandomAccessiblePairNullable;
-import net.imglib2.view.Views;
-
 public class TransformedTileImageLoader
 {
-	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > loadTile(
+	/*public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > loadTile(
 			final TileInfo tile,
 			final DataProvider dataProvider )
 	{
@@ -53,5 +35,5 @@ public class TransformedTileImageLoader
 		final Interval boundingBox = TileOperations.estimateBoundingBox( tile );
 		final RandomAccessibleInterval< T > transformedImg = Views.interval( rasteredInterpolatedImg, boundingBox );
 		return transformedImg;
-	}
+	}*/
 }

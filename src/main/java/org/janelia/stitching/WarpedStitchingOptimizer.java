@@ -24,18 +24,13 @@ import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
 import net.imglib2.realtransform.AffineTransform3D;
 
-public class StitchingOptimizer implements Serializable
+public class WarpedStitchingOptimizer implements Serializable
 {
 	private static final long serialVersionUID = -3873876669757549452L;
 
-	private static final double MAX_ALLOWED_ERROR_LIMIT = 30;
-	private static final double INITIAL_MAX_ALLOWED_ERROR = 15;
-	private static final double MAX_ALLOWED_ERROR_STEP = 5;
+	private static final int MAX_PARTITIONS = 15000;
 
-	private static double getMaxAllowedError( final int iteration )
-	{
-		return Math.min( INITIAL_MAX_ALLOWED_ERROR + iteration * MAX_ALLOWED_ERROR_STEP, MAX_ALLOWED_ERROR_LIMIT );
-	}
+	private static final double INITIAL_MAX_ALLOWED_ERROR = 15;
 
 	private static final class OptimizationParameters
 	{
@@ -103,22 +98,21 @@ public class StitchingOptimizer implements Serializable
 		}
 	}
 
-	private final StitchingJob job;
+	private final C1WarpedStitchingJob job;
 	private transient final JavaSparkContext sparkContext;
 
-	public StitchingOptimizer( final StitchingJob job, final JavaSparkContext sparkContext )
+	public WarpedStitchingOptimizer( final C1WarpedStitchingJob job, final JavaSparkContext sparkContext )
 	{
 		this.job = job;
 		this.sparkContext = sparkContext;
 	}
 
-	public void optimize( final int iteration ) throws IOException
+	public void optimize() throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 
-		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
-		final String iterationDirname = "iter" + iteration;
-		final String pairwiseShiftsPath = PathResolver.get( basePath, iterationDirname, "pairwise.json" );
+		final String basePath = job.getBasePath();
+		final String pairwiseShiftsPath = PathResolver.get( basePath, "pairwise.json" );
 
 		// FIXME: skip if solution already exists?
 //		if ( Files.exists( Paths.get( Utils.addFilenameSuffix( pairwiseShiftsPath, "-used" ) ) ) )
@@ -126,14 +120,14 @@ public class StitchingOptimizer implements Serializable
 
 		final List< SerializablePairWiseStitchingResult > tileBoxShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 
-		try ( final OutputStream logOut = dataProvider.getOutputStream( URI.create( PathResolver.get( basePath, iterationDirname, "optimizer.txt" ) ) ) )
+		try ( final OutputStream logOut = dataProvider.getOutputStream( URI.create( PathResolver.get( basePath, "optimizer.txt" ) ) ) )
 		{
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
 				logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
-				System.out.println( "Stitching iteration " + iteration + ": Tiles total per channel: " + job.getTiles( 0 ).length );
+				System.out.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
 
-				final double maxAllowedError = getMaxAllowedError( iteration );
+				final double maxAllowedError = INITIAL_MAX_ALLOWED_ERROR;
 				logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 
 				final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter );
@@ -177,10 +171,7 @@ public class StitchingOptimizer implements Serializable
 							tilesToSave,
 							dataProvider.getJsonWriter( URI.create( PathResolver.get(
 									basePath,
-									iterationDirname,
-									Utils.addFilenameSuffix(
-											PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( channel ) ),
-											"-stitched" )
+									"ch" + channel + "-affine-stitched.json"
 								) ) )
 						);
 				}
@@ -188,7 +179,7 @@ public class StitchingOptimizer implements Serializable
 		}
 	}
 
-	private OptimizationResult findBestOptimization( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final double maxAllowedError, final PrintWriter logWriter )
+	private OptimizationResult findBestOptimization( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final double maxAllowedError, final PrintWriter logWriter ) throws IOException
 	{
 		final List< OptimizationParameters > optimizationParametersList = new ArrayList<>();
 		for ( double testMinCrossCorrelation = 0.1; testMinCrossCorrelation <= 1; testMinCrossCorrelation += 0.05 )
@@ -200,7 +191,7 @@ public class StitchingOptimizer implements Serializable
 
 		final Broadcast< List< SerializablePairWiseStitchingResult > > broadcastedTileBoxShifts = sparkContext.broadcast( tileBoxShifts );
 
-		final List< OptimizationResult > optimizationResultList = new ArrayList<>( sparkContext.parallelize( optimizationParametersList, optimizationParametersList.size() ).map( optimizationParameters ->
+		final List< OptimizationResult > optimizationResultList = new ArrayList<>( sparkContext.parallelize( optimizationParametersList, Math.min( optimizationParametersList.size(), MAX_PARTITIONS ) ).map( optimizationParameters ->
 			{
 				final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters );
 

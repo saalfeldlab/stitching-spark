@@ -5,7 +5,6 @@ import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.Model;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
-import net.imglib2.realtransform.AffineTransform3D;
 
 /**
  * Convenience class for creating default {@link Model} which is required by stitching procedure.
@@ -48,14 +47,16 @@ public class TileModelFactory {
 		if ( tile.numDimensions() != 3 )
 			throw new Exception( "3d only" );
 
+		final AffineModel3D affineModel = new AffineModel3D();
+
+		/*
 		// initialize the model with the known tile transform
 		final AffineTransform3D tileTransform = TileOperations.getTileTransform( tile );
-		final AffineModel3D affineModel = new AffineModel3D();
 		affineModel.set(
 				tileTransform.get(0, 0), tileTransform.get(0, 1), tileTransform.get(0, 2), tileTransform.get(0, 3),
 				tileTransform.get(1, 0), tileTransform.get(1, 1), tileTransform.get(1, 2), tileTransform.get(1, 3),
 				tileTransform.get(2, 0), tileTransform.get(2, 1), tileTransform.get(2, 2), tileTransform.get(2, 3)
-			);
+			);*/
 
 		/*return ( M ) new InterpolatedAffineModel3D<>(
 				affineModel,

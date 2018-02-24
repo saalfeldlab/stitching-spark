@@ -1,30 +1,8 @@
 package org.janelia.stitching;
 
-import java.io.Reader;
-import java.lang.reflect.Modifier;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-
-import org.janelia.dataaccess.DataProvider;
-import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.dataaccess.PathResolver;
-import org.janelia.saalfeldlab.n5.bdv.AffineTransform3DJsonAdapter;
-
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-
-import net.imglib2.RealInterval;
-import net.imglib2.realtransform.AffineTransform3D;
-import net.imglib2.realtransform.Translation;
-import net.imglib2.util.Intervals;
-
 public class SlabTransformsToTileTransforms
 {
-	private static class SlabTransform
+	/*private static class SlabTransform
 	{
 		public List< Integer > slabs;
 		public AffineTransform3D transform;
@@ -114,5 +92,5 @@ public class SlabTransformsToTileTransforms
 							)
 					) )
 			);
-	}
+	}*/
 }

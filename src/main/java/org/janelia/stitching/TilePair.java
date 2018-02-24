@@ -10,14 +10,12 @@ import net.imglib2.util.Pair;
 
 public class TilePair implements Pair< TileInfo, TileInfo >
 {
-	private TileInfo[] tilePair;
+	private final TileInfo[] tilePair;
 
 	public TilePair( final TileInfo t1, final TileInfo t2 )
 	{
 		tilePair = new TileInfo[] { t1, t2 };
 	}
-
-	protected TilePair() { }
 
 	@Override
 	public TileInfo getA()

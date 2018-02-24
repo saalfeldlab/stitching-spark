@@ -16,7 +16,6 @@ import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
-import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 
@@ -325,43 +324,6 @@ public class TileOperations
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
 				tile.setPosition( d, tile.getPosition( d ) + offset[ d ] );
-	}
-
-	/**
-	 * Returns tile transform, that is its affine transform if not null, or translation transform to the position of the tile otherwise.
-	 */
-	public static AffineTransform3D getTileTransform( final TileInfo tile )
-	{
-		final AffineTransform3D ret;
-		if ( tile.getTransform() != null )
-		{
-			ret = tile.getTransform();
-		}
-		else
-		{
-			ret = new AffineTransform3D();
-			ret.setTranslation( tile.getPosition() );
-		}
-		return ret;
-	}
-
-	/**
-	 * Estimates the bounding box of a transformed (or shifted) tile.
-	 *
-	 * FIXME: to be consistent with an affine transformation or a real shift vector, {@link TileInfo#getBoundaries()} should be changed from rounding to extending
-	 * to the smallest containing interval
-	 */
-	public static Interval estimateBoundingBox( final TileInfo tile )
-	{
-		if ( tile.getTransform() == null )
-			return tile.getBoundaries();
-
-		final double[] tileMax = new double[ tile.numDimensions() ];
-		for ( int d = 0; d < tileMax.length; ++d )
-			tileMax[ d ] = tile.getSize( d ) - 1;
-		final RealInterval tileRealBoundsAtZero = new FinalRealInterval( new double[ tile.numDimensions() ], tileMax );
-		final RealInterval estimatedRealBounds = tile.getTransform().estimateBounds( tileRealBoundsAtZero );
-		return Intervals.smallestContainingInterval( estimatedRealBounds );
 	}
 
 	/**
