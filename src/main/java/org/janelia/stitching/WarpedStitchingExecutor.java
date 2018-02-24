@@ -8,7 +8,6 @@ import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -49,9 +48,12 @@ import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
+import scala.Tuple2;
 
 public class WarpedStitchingExecutor implements Serializable
 {
+	private static final int MAX_PARTITIONS = 15000;
+
 	private static class StitchingResult implements Serializable
 	{
 		private static final long serialVersionUID = -533794988639089455L;
@@ -81,47 +83,102 @@ public class WarpedStitchingExecutor implements Serializable
 
 	public void run() throws PipelineExecutionException, IOException
 	{
-		// split tiles into 8 boxes
-		final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
-		Arrays.fill( tileBoxesGridSize, job.getArgs().splitOverlapParts() );
-
-		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
-
-//		final List< TilePair > overlappingBoxes = WarpedSplitTileOperations.findOverlappingTileBoxes(
-//				tileBoxes,
-//				!job.getArgs().useAllPairs(),
-//				job.getTileSlabMapping()
-//			);
-
-		final JavaRDD< TileInfo > tileBoxesRDD = sparkContext.parallelize( tileBoxes );
-
-		final List< TilePair > overlappingBoxes = tileBoxesRDD
-				.cartesian( tileBoxesRDD )
-				.flatMap(
-						tileBoxTuple ->
-						{
-							final List< TilePair > ret;
-							final TilePair tileBoxPair = new TilePair( tileBoxTuple._1(), tileBoxTuple._2() );
-							if (
-									tileBoxPair.getA().getIndex().intValue() < tileBoxPair.getB().getIndex().intValue() // no duplicates
-									&&
-									WarpedSplitTileOperations.isOverlappingTileBoxPair( tileBoxPair, !job.getArgs().useAllPairs(), job.getTileSlabMapping() ) // overlapping tile box pair
-								)
-									ret = Collections.singletonList( tileBoxPair );
-							else
-								ret = Collections.emptyList();
-
-							return ret.iterator();
-						}
-					)
-				.collect();
-
-
+		final List< TilePair > overlappingBoxes = findOverlappingBoxes();
 		preparePairwiseShifts( overlappingBoxes );
 
 		final WarpedStitchingOptimizer optimizer = new WarpedStitchingOptimizer( job, sparkContext );
 		optimizer.optimize();
 	}
+
+	private List< TilePair > findOverlappingBoxes() throws IOException
+	{
+		// split tiles into 8 boxes
+		final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
+		Arrays.fill( tileBoxesGridSize, job.getArgs().splitOverlapParts() );
+		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
+		System.out.println( "  " + tileBoxes.size() + " tiles boxes were generated" );
+
+		// find bounding boxes of warped tiles
+		final List< Tuple2< Integer, Interval > > tileWarpedBoundingBoxes = sparkContext
+				.parallelize( Arrays.asList( job.getTiles( 0 ) ), Math.min( job.getTiles( 0 ).length, MAX_PARTITIONS ) )
+				.mapToPair(
+						tile ->
+						{
+							final String slab = job.getTileSlabMapping().getSlab( tile );
+							return new Tuple2<>(
+									tile.getIndex(),
+									WarpedTileLoader.getBoundingBox(
+											job.getTileSlabMapping().getSlabMin( slab ),
+											tile,
+											job.getTileSlabMapping().getSlabTransform( slab )
+										)
+								);
+						}
+					)
+				.collect();
+		System.out.println( "  got bounding boxes for warped tiles" );
+
+		// find pairs of possibly overlapping tiles
+		final Broadcast< List< Tuple2< Integer, Interval > > > tileWarpedBoundingBoxesBroadcast = sparkContext.broadcast( tileWarpedBoundingBoxes );
+		final List< Tuple2< Integer, Integer > > possiblyOverlappingTiles = sparkContext
+				.parallelize( tileWarpedBoundingBoxes, Math.min( tileWarpedBoundingBoxes.size(), MAX_PARTITIONS ) )
+				.flatMap(
+						tileWarpedBoundingBoxTuple ->
+						{
+							final int tileIndex = tileWarpedBoundingBoxTuple._1();
+							final Interval tileWarpedBoundingBox = tileWarpedBoundingBoxTuple._2();
+							final List< Tuple2< Integer, Integer > > possiblyOverlappingTilesWithCurrent = new ArrayList<>();
+							for ( final Tuple2< Integer, Interval > otherTileWarpedBoundingBox : tileWarpedBoundingBoxesBroadcast.value() )
+								if ( tileIndex < otherTileWarpedBoundingBox._1().intValue() && TileOperations.overlap( tileWarpedBoundingBox, otherTileWarpedBoundingBox._2() ) )
+									possiblyOverlappingTilesWithCurrent.add( new Tuple2<>( tileIndex, otherTileWarpedBoundingBox._1() ) );
+							return possiblyOverlappingTilesWithCurrent.iterator();
+						}
+					)
+				.collect();
+		tileWarpedBoundingBoxesBroadcast.destroy();
+		System.out.println( "  got possibly overlapping tile pairs" );
+
+		// helper mapping: tile -> tile boxes
+		final Map< Integer, List< TileInfo > > tileToBoxes = new HashMap<>();
+		for ( final TileInfo tileBox : tileBoxes )
+		{
+			final int tileIndex = tileBox.getOriginalTile().getIndex();
+			if ( !tileToBoxes.containsKey( tileIndex ) )
+				tileToBoxes.put( tileIndex, new ArrayList<>() );
+			tileToBoxes.get( tileIndex ).add( tileBox );
+		}
+		System.out.println( "  created helper mapping: tile -> tile boxes" );
+
+		// find overlapping tile box pairs
+		final Broadcast< Map< Integer, List< TileInfo > > > tileToBoxesBroadcast = sparkContext.broadcast( tileToBoxes );
+		final List< TilePair > overlappingBoxes = sparkContext
+				.parallelize( possiblyOverlappingTiles, Math.min( possiblyOverlappingTiles.size(), MAX_PARTITIONS ) )
+				.flatMap(
+						possiblyOverlappingTilePair ->
+						{
+							final List< TilePair > overlappingBoxesForTilePair = new ArrayList<>();
+							for ( final TileInfo tileBox1 : tileToBoxesBroadcast.value().get( possiblyOverlappingTilePair._1() ) )
+							{
+								for ( final TileInfo tileBox2 : tileToBoxesBroadcast.value().get( possiblyOverlappingTilePair._2() ) )
+								{
+									final TilePair tileBoxPair = new TilePair( tileBox1, tileBox2 );
+									if ( tileBoxPair.getA().getIndex().intValue() > tileBoxPair.getB().getIndex().intValue() )
+										tileBoxPair.swap();
+
+									if ( WarpedSplitTileOperations.isOverlappingTileBoxPair( tileBoxPair, !job.getArgs().useAllPairs(), job.getTileSlabMapping() ) )
+										overlappingBoxesForTilePair.add( tileBoxPair );
+								}
+							}
+							return overlappingBoxesForTilePair.iterator();
+						}
+					)
+				.collect();
+		tileToBoxesBroadcast.destroy();
+		System.out.println( "  collected overlapping pairs" );
+
+		return overlappingBoxes;
+	}
+
 
 	/**
 	 * Initiates the computation for pairs that have not been precomputed. Stores the pairwise file for this iteration of stitching.
@@ -357,7 +414,7 @@ public class WarpedStitchingExecutor implements Serializable
 		final LongAccumulator noOverlapWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 
-		final JavaRDD< StitchingResult > pairwiseStitching = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() ).map( tileBoxPair ->
+		final JavaRDD< StitchingResult > pairwiseStitching = sparkContext.parallelize( overlappingBoxes, Math.min( overlappingBoxes.size(), MAX_PARTITIONS ) ).map( tileBoxPair ->
 			{
 				System.out.println( "Processing tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
 
