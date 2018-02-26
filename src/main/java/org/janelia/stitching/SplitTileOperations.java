@@ -52,9 +52,8 @@ public class SplitTileOperations
 	 */
 	public static Interval[] getAdjustedOverlapIntervals( final TilePair tileBoxPair, final SearchRadius searchRadius )
 	{
-		final Interval originalFixedTileInFixedSpace = new FinalInterval( tileBoxPair.getA().getOriginalTile().getSize() );
-		final long[] movingTileBoxPositionInsideTile = Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() );
-		final Dimensions originalMovingTileDimensions = new FinalDimensions( tileBoxPair.getB().getOriginalTile().getSize() );
+		final Interval fixedTileBox = new FinalInterval( tileBoxPair.getA().getBoundaries() );
+		final Interval movingTileBox = new FinalInterval( tileBoxPair.getB().getBoundaries() );
 
 		final Interval searchRadiusBoundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
 
@@ -82,29 +81,28 @@ public class SplitTileOperations
 			for ( int d = 0; d < testMovingTileBoxPositionInFixedSpace.length; ++d )
 				testMovingTileBoxPositionInFixedSpace[ d ] = ( cornersPos[ d ] == 0 ? searchRadiusBoundingBox.min( d ) : searchRadiusBoundingBox.max( d ) );
 
-			// calculate new test position of the original moving tile
-			final long[] testOriginalMovingTilePositionInFixedSpace = new long[ testMovingTileBoxPositionInFixedSpace.length ];
-			for ( int d = 0; d < testOriginalMovingTilePositionInFixedSpace.length; ++d )
-				testOriginalMovingTilePositionInFixedSpace[ d ] = testMovingTileBoxPositionInFixedSpace[ d ] - movingTileBoxPositionInsideTile[ d ];
+			// get moving tile box interval in the fixed space
+			final Interval testMovingTileBoxInFixedSpace = IntervalsHelper.setPosition( movingTileBox, testMovingTileBoxPositionInFixedSpace );
 
-			final Interval testOriginalMovingTileInFixedSpace = IntervalsHelper.translate( new FinalInterval( originalMovingTileDimensions ), testOriginalMovingTilePositionInFixedSpace );
-			final Interval testOriginalTilesOverlapInFixedSpace = IntervalsNullable.intersect( originalFixedTileInFixedSpace, testOriginalMovingTileInFixedSpace );
+			// get overlap between tile boxes in the fixed space
+			final Interval testTileBoxesOverlapInFixedSpace = IntervalsNullable.intersect( fixedTileBox, testMovingTileBoxInFixedSpace );
 
-			if ( testOriginalTilesOverlapInFixedSpace != null )
+			if ( testTileBoxesOverlapInFixedSpace != null )
 			{
-				// update overlap corners in the fixed space
+				// update fixed tile ROI boundaries
 				for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
 				{
-					overlapInFixedSpaceMin[ d ] = Math.min( testOriginalTilesOverlapInFixedSpace.min( d ), overlapInFixedSpaceMin[ d ] );
-					overlapInFixedSpaceMax[ d ] = Math.max( testOriginalTilesOverlapInFixedSpace.max( d ), overlapInFixedSpaceMax[ d ] );
+					overlapInFixedSpaceMin[ d ] = Math.min( testTileBoxesOverlapInFixedSpace.min( d ), overlapInFixedSpaceMin[ d ] );
+					overlapInFixedSpaceMax[ d ] = Math.max( testTileBoxesOverlapInFixedSpace.max( d ), overlapInFixedSpaceMax[ d ] );
 				}
 
-				// calculate and update overlap corners in the moving space
-				final Interval testOriginalTilesOverlapInMovingSpace = IntervalsHelper.offset( testOriginalTilesOverlapInFixedSpace, testOriginalMovingTilePositionInFixedSpace );
+				// update moving tile ROI boundaries
+				final Interval testTileBoxesOverlapInMovingTileBoxSpace = IntervalsHelper.offset( testTileBoxesOverlapInFixedSpace, testMovingTileBoxPositionInFixedSpace );
+				final Interval testTileBoxesOverlapInMovingSpace = IntervalsHelper.translate( testTileBoxesOverlapInMovingTileBoxSpace, Intervals.minAsLongArray( movingTileBox ) );
 				for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
 				{
-					overlapInMovingSpaceMin[ d ] = Math.min( testOriginalTilesOverlapInMovingSpace.min( d ), overlapInMovingSpaceMin[ d ] );
-					overlapInMovingSpaceMax[ d ] = Math.max( testOriginalTilesOverlapInMovingSpace.max( d ), overlapInMovingSpaceMax[ d ] );
+					overlapInMovingSpaceMin[ d ] = Math.min( testTileBoxesOverlapInMovingSpace.min( d ), overlapInMovingSpaceMin[ d ] );
+					overlapInMovingSpaceMax[ d ] = Math.max( testTileBoxesOverlapInMovingSpace.max( d ), overlapInMovingSpaceMax[ d ] );
 				}
 			}
 		}
@@ -113,10 +111,10 @@ public class SplitTileOperations
 			if ( ( overlapInFixedSpaceMin[ d ] == Long.MAX_VALUE || overlapInFixedSpaceMax[ d ] == Long.MIN_VALUE ) || ( overlapInMovingSpaceMin[ d ] == Long.MAX_VALUE || overlapInMovingSpaceMax[ d ] == Long.MIN_VALUE ) )
 				return null;
 
-		final Interval[] adjustedOverlapsInOriginalTileSpace = new Interval[ 2 ];
-		adjustedOverlapsInOriginalTileSpace[ 0 ] = new FinalInterval( overlapInFixedSpaceMin, overlapInFixedSpaceMax );
-		adjustedOverlapsInOriginalTileSpace[ 1 ] = new FinalInterval( overlapInMovingSpaceMin, overlapInMovingSpaceMax );
-		return adjustedOverlapsInOriginalTileSpace;
+		return new Interval[] {
+				new FinalInterval( overlapInFixedSpaceMin, overlapInFixedSpaceMax ),
+				new FinalInterval( overlapInMovingSpaceMin, overlapInMovingSpaceMax )
+			};
 	}
 
 	/**

@@ -27,4 +27,9 @@ public class IntervalsHelper
 			translation[ d ] = -offset[ d ];
 		return translate( interval, translation );
 	}
+
+	public static FinalInterval setPosition( final Interval interval, final long... position )
+	{
+		return translate( new FinalInterval( Intervals.dimensionsAsLongArray( interval ) ), position );
+	}
 }
