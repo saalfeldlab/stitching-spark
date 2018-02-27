@@ -1,6 +1,7 @@
 package org.janelia.util;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import net.imglib2.Cursor;
@@ -129,6 +130,13 @@ public class Conversions {
 		return ret;
 	}
 
+	public static String toCommaSeparatedString( final Collection< ? extends Number > collection )
+	{
+		final List< String > strs = new ArrayList<>();
+		for ( final Number x : collection )
+			strs.add( x.toString() );
+		return String.join( ",", strs.toArray( new String[ 0 ] ) );
+	}
 
 	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< FloatType, ? > convertImageToFloat( final RandomAccessibleInterval< T > src )
 	{

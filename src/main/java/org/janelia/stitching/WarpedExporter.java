@@ -52,6 +52,7 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T >, U extend
 	private final int outputCellSize;
 	private final String outputPath;
 	private final String flatfieldPath;
+	private final Set< Integer > filteredTiles;
 
 	double[] normalizedVoxelDimensions;
 
@@ -67,7 +68,8 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T >, U extend
 			final double[] voxelDimensions,
 			final int outputCellSize,
 			final String outputPath,
-			final String flatfieldPath )
+			final String flatfieldPath,
+			final Set< Integer > filteredTiles )
 	{
 		this.sparkContext = sparkContext;
 		this.slabsTilesChannels = slabsTilesChannels;
@@ -77,6 +79,7 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T >, U extend
 		this.outputCellSize = outputCellSize;
 		this.outputPath = outputPath;
 		this.flatfieldPath = flatfieldPath;
+		this.filteredTiles = filteredTiles;
 	}
 
 	public void setSubInterval( final Interval subinterval )
@@ -213,8 +216,24 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T >, U extend
 		}
 
 		final Interval fullBoundingBox = TileOperations.getCollectionBoundaries( tileWarpedBoundingBoxes.values().toArray( new Interval[ 0 ] ) );
-		final long[] offset = Intervals.minAsLongArray( fullBoundingBox );
-		final Interval boundingBox = subinterval != null ? IntervalsHelper.translate( subinterval, offset ) : fullBoundingBox;
+
+		final Map< Integer, Interval > filteredTilesWarpedBoundingBoxes;
+		final Interval filteredBoundingBox;
+		if ( filteredTiles != null )
+		{
+			filteredTilesWarpedBoundingBoxes = new HashMap<>();
+			for ( final Integer filteredTileIndex : filteredTiles )
+				filteredTilesWarpedBoundingBoxes.put( filteredTileIndex, tileWarpedBoundingBoxes.get( filteredTileIndex ) );
+			filteredBoundingBox = TileOperations.getCollectionBoundaries( filteredTilesWarpedBoundingBoxes.values().toArray( new Interval[ 0 ] ) );
+		}
+		else
+		{
+			filteredTilesWarpedBoundingBoxes = tileWarpedBoundingBoxes;
+			filteredBoundingBox = fullBoundingBox;
+		}
+
+		final long[] offset = Intervals.minAsLongArray( filteredBoundingBox );
+		final Interval boundingBox = subinterval != null ? IntervalsHelper.translate( subinterval, offset ) : filteredBoundingBox;
 		final long[] dimensions = Intervals.dimensionsAsLongArray( boundingBox );
 
 		// use the size of the tile as a bigger cell to minimize the number of loads for each image
@@ -255,7 +274,7 @@ public class WarpedExporter< T extends NativeType< T > & RealType< T >, U extend
 		sparkContext.parallelize( biggerCells, Math.min( biggerCells.size(), MAX_PARTITIONS ) ).foreach( biggerCell ->
 			{
 				final Boundaries biggerCellBox = biggerCell.getBoundaries();
-				final Set< Integer > tileIndexesWithinCell = TileOperations.findTilesWithinSubregion( tileWarpedBoundingBoxes, biggerCellBox );
+				final Set< Integer > tileIndexesWithinCell = TileOperations.findTilesWithinSubregion( filteredTilesWarpedBoundingBoxes, biggerCellBox );
 				if ( tileIndexesWithinCell.isEmpty() )
 					return;
 

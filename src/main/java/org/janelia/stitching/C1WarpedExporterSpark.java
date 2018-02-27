@@ -4,13 +4,17 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.util.Conversions;
 
 import bdv.img.TpsTransformWrapper;
 import net.imglib2.type.NativeType;
@@ -22,19 +26,30 @@ public class C1WarpedExporterSpark
 	public static void main( final String[] args ) throws IOException, PipelineExecutionException
 	{
 		final String flatfieldPath = args.length > 0 ? args[ 0 ] : null;
+		final String filteredTilesStr = args.length > ( flatfieldPath == null ? 0 : 1 ) ? args[  (flatfieldPath == null ? 0 : 1 ) ] : null;
+		final Set< Integer > filteredTiles;
+		if ( filteredTilesStr != null )
+			filteredTiles = new TreeSet<>( Arrays.asList( Conversions.toBoxedArray( Conversions.parseIntArray( filteredTilesStr.split( "," ) ) ) ) );
+		else
+			filteredTiles = null;
 
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "C1WarpedExport" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 			) )
 		{
-			run( sparkContext, flatfieldPath );
+			run(
+					sparkContext,
+					flatfieldPath == null || flatfieldPath.isEmpty() ? null : flatfieldPath,
+					filteredTiles
+				);
 		}
 	}
 
 	private static < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > void run(
 			final JavaSparkContext sparkContext,
-			final String flatfieldPath ) throws IOException, PipelineExecutionException
+			final String flatfieldPath,
+			final Set< Integer > filteredTiles ) throws IOException, PipelineExecutionException
 	{
 		final int outputCellSize = 128;
 		final double[] voxelDimensions = new double[] { 0.097, 0.097, 0.18 };
@@ -87,7 +102,9 @@ public class C1WarpedExporterSpark
 		else
 			System.out.println( "Exporting without flatfield correction" );
 
-		final String outputPath = "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/warped-export" + ( flatfieldPath != null ? "-flatfield" : "" );
+		final String outputPathFlatfieldSuffix = flatfieldPath != null ? "-flatfield" : "";
+		final String outputPathFilteredTilesSuffix = filteredTiles != null ? "-" + Conversions.toCommaSeparatedString( filteredTiles ) : "";
+		final String outputPath = "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/warped-export" + outputPathFlatfieldSuffix + outputPathFilteredTilesSuffix;
 
 		final WarpedExporter< T, U > exporter = new WarpedExporter<>(
 				sparkContext,
@@ -97,7 +114,8 @@ public class C1WarpedExporterSpark
 				voxelDimensions,
 				outputCellSize,
 				outputPath,
-				flatfieldPath
+				flatfieldPath,
+				filteredTiles
 			);
 
 //		final Interval subinterval = new FinalInterval( new long[] { 3000, 3000, 3000 }, new long[] { 3999, 3999, 3999 } );
