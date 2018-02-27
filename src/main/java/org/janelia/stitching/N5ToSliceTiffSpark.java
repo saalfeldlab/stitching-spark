@@ -13,7 +13,7 @@ import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
 import org.janelia.saalfeldlab.n5.spark.N5SliceTiffConverter;
-import org.janelia.saalfeldlab.n5.spark.TiffUtils;
+import org.janelia.saalfeldlab.n5.spark.util.TiffUtils;
 
 public class N5ToSliceTiffSpark
 {
