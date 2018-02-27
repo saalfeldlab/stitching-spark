@@ -42,7 +42,7 @@ public class StitchingJob implements Serializable {
 	private String saveFolder;
 	private String datasetName;
 
-	private List< TileInfo[] > tilesMultichannel;
+	private transient List< TileInfo[] > tilesMultichannel;
 
 	public StitchingJob( final StitchingArguments args )
 	{
