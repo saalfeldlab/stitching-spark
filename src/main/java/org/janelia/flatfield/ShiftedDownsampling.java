@@ -1,185 +1,159 @@
 package org.janelia.flatfield;
 
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.broadcast.Broadcast;
-import org.janelia.histogram.Histogram;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
+import org.janelia.saalfeldlab.n5.spark.N5RemoveSpark;
+import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5OffsetScalePyramidSpark;
 
-import net.imglib2.Cursor;
-import net.imglib2.FinalDimensions;
+import bdv.export.Downsample;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineSet;
+import net.imglib2.realtransform.AffineTransform;
+import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
-import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
+import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
-import scala.Tuple2;
 
 public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 {
-	private final JavaSparkContext sparkContext;
-	private final Interval workingInterval;
+	private transient final JavaSparkContext sparkContext;
+	private final String downsampledHistogramsGroupPath;
 	private final A downsamplingTransform;
+	private final List< String > scalePyramidDatasetPaths;
+	private final List< long[] > scalePyramidDatasetDimensions;
 
-	private final List< long[] > scaleLevelPixelSize;
-	private final List< long[] > scaleLevelOffset;
-	private final List< long[] > scaleLevelDimensions;
+	private final DataAccessType dataAccessType;
+	private final String histogramsN5BasePath;
 
-	public ShiftedDownsampling(
-			final Interval workingInterval,
-			final A downsamplingTransform )
+	public ShiftedDownsampling( final JavaSparkContext sparkContext, final HistogramsProvider histogramsProvider ) throws IOException
 	{
-		// The version that doesn't use Spark
-		this( null, workingInterval, downsamplingTransform );
+		this(
+				sparkContext,
+				histogramsProvider.getDataAccessType(),
+				histogramsProvider.getHistogramsN5BasePath(),
+				histogramsProvider.getHistogramsDataset(),
+				histogramsProvider.getWorkingInterval()
+			);
 	}
+
+	@SuppressWarnings( "unchecked" )
 	public ShiftedDownsampling(
 			final JavaSparkContext sparkContext,
-			final Interval workingInterval,
-			final A downsamplingTransform )
+			final DataAccessType dataAccessType,
+			final String histogramsN5BasePath,
+			final String fullScaleHistogramsDataset,
+			final Interval workingInterval ) throws IOException
 	{
 		this.sparkContext = sparkContext;
-		this.workingInterval = workingInterval;
-		this.downsamplingTransform = downsamplingTransform;
+		this.dataAccessType = dataAccessType;
+		this.histogramsN5BasePath = histogramsN5BasePath;
 
-		scaleLevelPixelSize = new ArrayList<>();
-		scaleLevelOffset = new ArrayList<>();
-		scaleLevelDimensions = new ArrayList<>();
-		long smallestDimension;
-		do
+		if ( workingInterval.numDimensions() == 2 )
+			downsamplingTransform = ( A ) new AffineTransform2D();
+		else if ( workingInterval.numDimensions() == 3 )
+			downsamplingTransform = ( A ) new AffineTransform3D();
+		else
+			downsamplingTransform = ( A ) new AffineTransform( workingInterval.numDimensions() );
+		for ( int d = 0; d < downsamplingTransform.numDimensions(); ++d )
 		{
-			final int scale = scaleLevelDimensions.size();
-			final long[]
-					pixelSize 		= new long[ workingInterval.numDimensions() ],
-					offset 			= new long[ workingInterval.numDimensions() ],
-					downsampledSize = new long[ workingInterval.numDimensions() ];
-			for ( int d = 0; d < downsampledSize.length; d++ )
-			{
-				// how many original pixels form a single pixel on this scale level
-				pixelSize[ d ] = ( long ) ( scale == 0 ? 1 : scaleLevelPixelSize.get( scale - 1 )[ d ] / downsamplingTransform.get( d, d ) );
-
-				// how many original pixels form the leftmost pixel on this scale level (which could be different from pixelSize[d] because of the translation component)
-				offset[ d ] = ( long ) ( scale == 0 ? 0 : Math.min( pixelSize[ d ] * downsamplingTransform.get( d, downsamplingTransform.numDimensions() ) + pixelSize[ d ], workingInterval.dimension( d ) ) );
-
-				// how many original pixels form the rightmost pixel on this scale level
-				final long remaining = workingInterval.dimension( d ) - offset[ d ];
-
-				// how many downsampled pixels are on this scale level
-				downsampledSize[ d ] = ( offset[ d ] == 0 ? 0 : 1 ) + remaining / pixelSize[ d ] + ( remaining % pixelSize[ d ] == 0 ? 0 : 1 );
-			}
-
-			scaleLevelPixelSize.add( pixelSize );
-			scaleLevelOffset.add( offset );
-			scaleLevelDimensions.add( downsampledSize );
-
-			smallestDimension = Long.MAX_VALUE;
-			for ( int d = 0; d < workingInterval.numDimensions(); d++ )
-				smallestDimension = Math.min( downsampledSize[ d ], smallestDimension );
+			downsamplingTransform.set( 0.5, d, d );
+			downsamplingTransform.set( -0.5, d, downsamplingTransform.numDimensions() );
 		}
-		while ( smallestDimension > 1 );
 
-		System.out.println( "Scale level to dimensions:" );
-		for ( int i = 0; i < scaleLevelDimensions.size(); i++ )
-			System.out.println( String.format( " %d: %s", i, Arrays.toString( scaleLevelDimensions.get( i ) ) ) );
+		final DataProvider dataProvider = DataProviderFactory.createByType( dataAccessType );
+
+		final String histogramsDatasetParentGroupPath = ( Paths.get( fullScaleHistogramsDataset ).getParent() != null ? Paths.get( fullScaleHistogramsDataset ).getParent().toString() : "" );
+		downsampledHistogramsGroupPath = Paths.get( histogramsDatasetParentGroupPath, "histograms-downsampled" ).toString();
+
+		// last extra dimension is for bins and should not be downsampled
+		final int[] downsamplingFactors = new int[ workingInterval.numDimensions() + 1 ];
+		Arrays.fill( downsamplingFactors, 2 );
+		downsamplingFactors[ downsamplingFactors.length - 1 ] = 1;
+
+		// do not offset the extra 'bins' dimension
+		final boolean[] dimensionsWithOffset = new boolean[ workingInterval.numDimensions() + 1 ];
+		Arrays.fill( dimensionsWithOffset, true );
+		dimensionsWithOffset[ dimensionsWithOffset.length - 1 ] = false;
+
+		scalePyramidDatasetPaths = new ArrayList<>();
+		scalePyramidDatasetPaths.add( fullScaleHistogramsDataset );
+		scalePyramidDatasetPaths.addAll( N5OffsetScalePyramidSpark.downsampleOffsetScalePyramid(
+				sparkContext,
+				() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				fullScaleHistogramsDataset,
+				downsampledHistogramsGroupPath,
+				downsamplingFactors,
+				dimensionsWithOffset
+			) );
+
+		scalePyramidDatasetDimensions = new ArrayList<>();
+		final N5Reader n5 = dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) );
+		for ( final String scalePyramidDatasetPath : scalePyramidDatasetPaths )
+		{
+			final long[] extendedDimensions = n5.getDatasetAttributes( scalePyramidDatasetPath ).getDimensions();
+			final long[] dimensions = new long[ extendedDimensions.length - 1 ];
+			System.arraycopy( extendedDimensions, 0, dimensions, 0, dimensions.length );
+			scalePyramidDatasetDimensions.add( dimensions );
+		}
 	}
 
-	public int getNumScales()
-	{
-		return scaleLevelDimensions.size();
-	}
-
-	public long[] getDimensionsAtScale( final int scale )
-	{
-		return scaleLevelDimensions.get( scale );
-	}
-
-
-	public JavaPairRDD< Long, Histogram > downsampleHistograms(
-			final JavaPairRDD< Long, Histogram > rddHistograms,
-			final PixelsMapping pixelsMapping )
-	{
-		if ( pixelsMapping.scale == 0 )
-			return rddHistograms;
-
-		final Broadcast< int[] > broadcastedFullPixelToDownsampledPixel = pixelsMapping.broadcastedFullPixelToDownsampledPixel;
-		final Broadcast< int[] > broadcastedDownsampledPixelToFullPixelsCount = pixelsMapping.broadcastedDownsampledPixelToFullPixelsCount;
-
-		return rddHistograms
-				.mapToPair( tuple -> new Tuple2<>( ( long ) broadcastedFullPixelToDownsampledPixel.value()[ tuple._1().intValue() ], tuple._2() ) )
-				.reduceByKey(
-						( ret, other ) ->
-						{
-							ret.add( other );
-							return ret;
-						} )
-				.mapToPair(
-						tuple ->
-						{
-							final int cnt = broadcastedDownsampledPixelToFullPixelsCount.value()[ tuple._1().intValue() ];
-							final Histogram accumulatedHistogram = tuple._2();
-							accumulatedHistogram.average( cnt );
-							return new Tuple2<>( tuple._1(), accumulatedHistogram );
-						} );
-	}
-
-	public < T extends NativeType< T > & RealType< T > > RandomAccessibleInterval< T > downsampleSolutionComponent(
+	public < T extends NativeType< T > & RealType< T > > RandomAccessibleInterval< T > downsampleImage(
 			final RandomAccessibleInterval< T > fullComponent,
-			final PixelsMapping pixelsMapping )
+			final int scale )
 	{
-		if ( pixelsMapping.scale == 0 )
+		if ( scale == 0 )
 			return fullComponent;
 
-		final long[] downsampledSize = pixelsMapping.getDimensions();
-		final RandomAccessibleInterval< T > downsampledComponent = new ArrayImgFactory< T >().create( downsampledSize, Util.getTypeFromInterval( fullComponent ).createVariable() );
-		final Cursor< T > downsampledComponentCursor = Views.iterable( downsampledComponent ).localizingCursor();
-		final long[] downsampledPosition = new long[ downsampledComponent.numDimensions() ];
-		while ( downsampledComponentCursor.hasNext() )
-		{
-			double fullPixelsSum = 0;
-			final T downsampledVal = downsampledComponentCursor.next();
+		final long[] downsampledDimensions = scalePyramidDatasetDimensions.get( scale );
+		final int[] factor = new int[ downsampledDimensions.length ];
+		Arrays.fill( factor, 1 << scale );
+		final long[] shift = new long[ downsampledDimensions.length ];
+		Arrays.fill( shift, 1 << ( scale - 1 ) );
 
-			downsampledComponentCursor.localize( downsampledPosition );
-			final long downsampledPixel = IntervalIndexer.positionToIndex( downsampledPosition, downsampledSize );
+		final IntervalView< T > shiftedFullComponent = Views.translate( fullComponent, shift );
+		final ExtendedRandomAccessibleInterval< T, RandomAccessibleInterval< T > > extendedShiftedFullComponent = Views.extendMirrorDouble( shiftedFullComponent );
 
-			final IntervalView< T > fullComponentInterval = Views.interval( fullComponent, pixelsMapping.downsampledPixelToFullPixels.get( downsampledPixel ) );
-			final Cursor< T > fullComponentIntervalCursor = Views.iterable( fullComponentInterval ).cursor();
-			while ( fullComponentIntervalCursor.hasNext() )
-				fullPixelsSum += fullComponentIntervalCursor.next().getRealDouble();
+		final T type = Util.getTypeFromInterval( fullComponent );
+		final RandomAccessibleInterval< T > downsampledComponent = new ArrayImgFactory< T >().create( downsampledDimensions, type );
 
-			downsampledVal.setReal( fullPixelsSum / fullComponentInterval.size() );
-		}
+		Downsample.downsample( extendedShiftedFullComponent, downsampledComponent, factor );
 
 		return downsampledComponent;
 	}
 
-	@SuppressWarnings("unchecked")
-	public < T extends RealType< T > & NativeType< T > > RealRandomAccessible< T > upsample( final RandomAccessibleInterval< T > downsampledImg, final int newScale )
+	@SuppressWarnings( "unchecked" )
+	public < T extends RealType< T > & NativeType< T > > RandomAccessible< T > upsampleImage(
+			final RandomAccessibleInterval< T > downsampledImg,
+			final int newScale )
 	{
 		// find the scale level of downsampledImg by comparing the dimensions
 		int oldScale = -1;
-		for ( int scale = getNumScales() - 1; scale >= 0; scale-- )
+		for ( int scale = scalePyramidDatasetPaths.size() - 1; scale >= 0; scale-- )
 		{
-			boolean found = true;
-			for ( int d = 0; d < downsampledImg.numDimensions(); d++ )
-				found &= downsampledImg.dimension( d ) == scaleLevelDimensions.get( scale )[ d ];
-
-			if ( found )
+			if ( Intervals.equalDimensions( downsampledImg, new FinalInterval( scalePyramidDatasetDimensions.get( scale ) ) ) )
 			{
 				oldScale = scale;
 				break;
@@ -207,117 +181,34 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 			// Then, apply the inverse of the downsampling transform in order to map the downsampled image to the upsampled image
 			img = RealViews.affine( alignedDownsampledImg, downsamplingTransform.inverse() );
 		}
-		return img;
+		return Views.raster( img );
 	}
 
-
-	public class PixelsMapping implements AutoCloseable
+	public void cleanupDownsampledHistograms() throws IOException
 	{
-		public final int scale;
-		public final Map< Long, Interval > downsampledPixelToFullPixels;
+		final DataAccessType dataAccessType = this.dataAccessType;
+		final String histogramsN5BasePath = this.histogramsN5BasePath;
+		final String downsampledHistogramsGroupPath = this.downsampledHistogramsGroupPath;
 
-		public final Broadcast< int[] > broadcastedFullPixelToDownsampledPixel;
-		public final Broadcast< int[] > broadcastedDownsampledPixelToFullPixelsCount;
+		N5RemoveSpark.remove(
+				sparkContext,
+				() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				downsampledHistogramsGroupPath
+			);
+	}
 
-		@Override
-		public void close()
-		{
-			if ( broadcastedFullPixelToDownsampledPixel != null && broadcastedFullPixelToDownsampledPixel.isValid() )
-				broadcastedFullPixelToDownsampledPixel.destroy();
+	public int getNumScales()
+	{
+		return scalePyramidDatasetDimensions.size();
+	}
 
-			if ( broadcastedDownsampledPixelToFullPixelsCount != null && broadcastedDownsampledPixelToFullPixelsCount.isValid() )
-				broadcastedDownsampledPixelToFullPixelsCount.destroy();
-		}
+	public long[] getDimensionsAtScale( final int scale )
+	{
+		return scalePyramidDatasetDimensions.get( scale );
+	}
 
-		public long[] getPixelSize()
-		{
-			return scaleLevelPixelSize.get( scale );
-		}
-		public long[] getOffset()
-		{
-			return scaleLevelOffset.get( scale );
-		}
-		public long[] getDimensions()
-		{
-			return scaleLevelDimensions.get( scale );
-		}
-
-
-		public PixelsMapping( final int scale )
-		{
-			this.scale = scale;
-
-			final long[] pixelSize = getPixelSize();
-			final long[] offset = getOffset();
-			final long[] downsampledSize = getDimensions();
-
-			final long[] fullDimensions = Intervals.dimensionsAsLongArray( workingInterval );
-
-			if ( scale == 0 )
-			{
-				downsampledPixelToFullPixels = null;
-				broadcastedFullPixelToDownsampledPixel = null;
-				broadcastedDownsampledPixelToFullPixelsCount = null;
-				return;
-			}
-
-			// First, generate the following mapping: downsampled pixel -> corresponding interval of full-scale pixels
-			downsampledPixelToFullPixels = new HashMap<>();
-			final long numDownsampledPixels = Intervals.numElements( new FinalDimensions( downsampledSize ) );
-			final int[] downsampledPosition = new int[ downsampledSize.length ];
-			for ( long downsampledPixel = 0; downsampledPixel < numDownsampledPixels; downsampledPixel++ )
-			{
-				IntervalIndexer.indexToPosition( downsampledPixel, downsampledSize, downsampledPosition );
-				final long[] mins = new long[ fullDimensions.length ], maxs = new long[ fullDimensions.length ];
-				for ( int d = 0; d < mins.length; d++ )
-				{
-					if ( downsampledPosition[ d ] == 0 )
-					{
-						mins[ d ] = 0;
-						maxs[ d ] = offset[ d ] - 1;
-					}
-					else
-					{
-						mins[ d ] = offset[ d ] + pixelSize[ d ] * ( downsampledPosition[ d ] - 1 );
-						maxs[ d ] = Math.min( mins[ d ] + pixelSize[ d ], fullDimensions[ d ] ) - 1;
-					}
-				}
-				final Interval srcInterval = new FinalInterval( mins, maxs );
-				downsampledPixelToFullPixels.put( downsampledPixel, srcInterval );
-			}
-
-			// Next, generate some additional mappings:
-			// 1) full pixel -> corresponding downsampled pixel
-			// 2) downsampled pixel -> size of the corresponding interval of full-scale pixels
-			final int[] fullPixelToDownsampledPixel = new int[ ( int ) Intervals.numElements( workingInterval ) ];
-			final int[] downsampledPixelToFullPixelsCount = new int[ downsampledPixelToFullPixels.size() ];
-			for ( final Entry< Long, Interval > entry : downsampledPixelToFullPixels.entrySet() )
-			{
-				final long downsampledPixel = entry.getKey();
-				final long[] mins = Intervals.minAsLongArray( entry.getValue() );
-				final long[] maxs = Intervals.maxAsLongArray( entry.getValue() );
-
-				final long[] position = mins.clone();
-				final int n = entry.getValue().numDimensions();
-				for ( int d = 0; d < n; )
-				{
-					fullPixelToDownsampledPixel[ ( int ) IntervalIndexer.positionToIndex( position, fullDimensions ) ] = ( int ) downsampledPixel;
-
-					for ( d = 0; d < n; ++d )
-					{
-						position[ d ]++;
-						if ( position[ d ] <= maxs[ d ] )
-							break;
-						else
-							position[ d ] = mins[ d ];
-					}
-				}
-
-				downsampledPixelToFullPixelsCount[ ( int ) downsampledPixel ] = ( int ) Intervals.numElements( entry.getValue() );
-			}
-
-			broadcastedFullPixelToDownsampledPixel = sparkContext != null ? sparkContext.broadcast( fullPixelToDownsampledPixel ) : null;
-			broadcastedDownsampledPixelToFullPixelsCount = sparkContext != null ? sparkContext.broadcast( downsampledPixelToFullPixelsCount ) : null;
-		}
+	public String getDatasetAtScale( final int scale )
+	{
+		return scalePyramidDatasetPaths.get( scale );
 	}
 }

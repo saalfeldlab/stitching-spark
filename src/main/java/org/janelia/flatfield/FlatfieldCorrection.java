@@ -11,15 +11,15 @@ import java.util.List;
 import java.util.TreeMap;
 
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldSolution;
+import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldRegularizerMetadata;
+import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldRegularizerMetadata.RegularizerMode;
+import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldSolutionMetadata;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.ModelType;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
-import org.janelia.histogram.Histogram;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -28,11 +28,11 @@ import org.kohsuke.args4j.CmdLineException;
 
 import ij.ImagePlus;
 import net.imglib2.Cursor;
-import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.histogram.Real1dBinMapper;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
@@ -41,15 +41,12 @@ import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineSet;
-import net.imglib2.realtransform.AffineTransform2D;
-import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
-import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 import scala.Tuple2;
@@ -208,28 +205,6 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		.reduce( ( a, b ) -> new Tuple2<>( Math.min( a._1(), b._1() ), Math.max( a._2(), b._2() ) ) );
 	}
 
-	private < T extends NativeType< T > & RealType< T > > Histogram binStack( final TileInfo[] tiles, final double histMinValue, final double histMaxValue, final int bins )
-	{
-		return sparkContext.parallelize( Arrays.asList( tiles ) ).map( tile ->
-			{
-				final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
-				final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
-				final Cursor< T > cursor = Views.iterable( img ).cursor();
-				final Histogram histogram = new Histogram( histMinValue, histMaxValue, bins );
-				while ( cursor.hasNext() )
-					histogram.put( cursor.next().getRealDouble() );
-				return histogram;
-			} )
-		.treeReduce( ( a, b ) ->
-			{
-				a.add( b );
-				return a;
-			},
-			Integer.MAX_VALUE );
-	}
-
-
-
 
 	public < A extends AffineGet & AffineSet, T extends NativeType< T > & RealType< T >, V extends TreeMap< Short, Integer > >
 	void run() throws IOException, URISyntaxException
@@ -248,99 +223,109 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				basePath,
 				tiles,
 				fullTileSize,
-				args.use2D(),
 				args.histMinValue(), args.histMaxValue(), args.bins()
 			);
 
 		System.out.println( "Loading histograms.." );
 		System.out.println( "Specified intensity range: min=" + args.histMinValue() + ", max=" + args.histMaxValue() );
-		final JavaPairRDD< Long, Histogram > rddFullHistograms = histogramsProvider.getHistograms();
 
-		final Histogram referenceHistogram = histogramsProvider.getReferenceHistogram();
-		System.out.println( "Obtained reference histogram of size " + referenceHistogram.getNumBins() );
-		final double[] referenceHistogramArray = new double[ referenceHistogram.getNumBins() ];
-		for ( int i = 0; i < referenceHistogram.getNumBins(); ++i )
-			referenceHistogramArray[ i ] = referenceHistogram.get( i );
+		final double[] referenceHistogram = histogramsProvider.getReferenceHistogram();
+		System.out.println( "Obtained reference histogram of size " + referenceHistogram.length + " (first and last bins are tail bins)" );
 		System.out.println( "Reference histogram:");
-		System.out.println( Arrays.toString( referenceHistogramArray ) );
+		System.out.println( Arrays.toString( referenceHistogram ) );
 		System.out.println();
 
 		// save the reference histogram to file so one can plot it
 		final String referenceHistogramFilepath = PathResolver.get( basePath, "referenceHistogram-min_" + ( int ) Math.round( args.histMinValue().doubleValue() ) + ",max_" + ( int ) Math.round( args.histMaxValue().doubleValue() ) + ".txt" );
 		try ( final OutputStream out = dataProvider.getOutputStream( URI.create( referenceHistogramFilepath ) ) )
 		{
+			final Real1dBinMapper< DoubleType > binMapper = new Real1dBinMapper<>(
+					histogramsProvider.getHistogramMinValue(),
+					histogramsProvider.getHistogramMaxValue(),
+					histogramsProvider.getHistogramBins(),
+					true
+				);
+			final DoubleType binCenterValue = new DoubleType();
 			try ( final PrintWriter writer = new PrintWriter( out ) )
 			{
 				writer.println( "BinValue Frequency");
-				for ( int i = 0; i < referenceHistogram.getNumBins(); ++i )
-					writer.println( referenceHistogram.getBinValue( i ) + " " + referenceHistogram.get( i ) );
+				for ( int bin = 1; bin < referenceHistogram.length - 1; ++bin )
+				{
+					binMapper.getCenterValue( bin, binCenterValue );
+					writer.println( binCenterValue.get() + " " + referenceHistogram[ bin ] );
+				}
 			}
 		}
 
-		// Define the transform and calculate the image size on each scale level
-		final A downsamplingTransform = createDownsamplingTransform( workingInterval.numDimensions() );
-		final ShiftedDownsampling< A > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, workingInterval, downsamplingTransform );
-		final FlatfieldCorrectionSolver solver = new FlatfieldCorrectionSolver( sparkContext );
+		// Generate downsampled histograms with half-pixel offset
+		final ShiftedDownsampling< A > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, histogramsProvider );
+		final FlatfieldCorrectionSolver solver = new FlatfieldCorrectionSolver( sparkContext, histogramsProvider );
 
 		final int iterations = 1;
 		final int startScale = findStartingScale( shiftedDownsampling ), endScale = 0;
-		Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > lastSolution = null;
-		RandomAccessibleInterval< DoubleType > offsets = null;
+
+		FlatfieldSolutionMetadata lastSolutionMetadata = null;
 		for ( int iter = 0; iter < iterations; iter++ )
 		{
-			Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > downsampledSolution = null;
+			FlatfieldSolutionMetadata downsampledSolutionMetadata = null;
 
 			// solve in a bottom-up fashion (starting from the smallest scale level)
 			for ( int scale = startScale; scale >= endScale; scale-- )
 			{
-				final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution;
-
 				final ModelType modelType;
 				final RegularizerModelType regularizerModelType;
 
 				modelType = scale >= Math.round( ( double ) ( startScale + endScale ) / 2 ) ? ModelType.AffineModel : ModelType.FixedScalingAffineModel;
 				regularizerModelType = iter == 0 && scale == startScale ? RegularizerModelType.IdentityModel : RegularizerModelType.AffineModel;
 
-				try ( ShiftedDownsampling< A >.PixelsMapping pixelsMapping = shiftedDownsampling.new PixelsMapping( scale ) )
+				final FlatfieldRegularizerMetadata regularizerMetadata;
+				if ( regularizerModelType == RegularizerModelType.AffineModel )
 				{
-					final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer;
-					if ( regularizerModelType == RegularizerModelType.AffineModel )
+					final String scalingRegularizerDataset, translationRegularizerDataset;
+					final RegularizerMode scalingRegularizerMode, translationRegularizerMode;
+
+					if ( modelType != ModelType.FixedScalingAffineModel || lastSolutionMetadata == null )
 					{
-						final RandomAccessible< DoubleType > scalingRegularizer, translationRegularizer;
-
-						if ( modelType != ModelType.FixedScalingAffineModel || lastSolution == null )
-							scalingRegularizer = downsampledSolution != null ? Views.raster( shiftedDownsampling.upsample( downsampledSolution.getA(), scale ) ) : null;
-						else
-							scalingRegularizer = shiftedDownsampling.downsampleSolutionComponent( lastSolution.getA(), pixelsMapping );
-
-						if ( modelType != ModelType.FixedTranslationAffineModel || lastSolution == null )
-							translationRegularizer = downsampledSolution != null ? Views.raster( shiftedDownsampling.upsample( downsampledSolution.getB(), scale ) ) : null;
-						else
-							translationRegularizer = shiftedDownsampling.downsampleSolutionComponent( lastSolution.getB(), pixelsMapping );
-
-						regularizer = new RandomAccessiblePairNullable<>( scalingRegularizer, translationRegularizer );
+						scalingRegularizerDataset = downsampledSolutionMetadata != null ? downsampledSolutionMetadata.scalingTermDataset : null;
+						scalingRegularizerMode = RegularizerMode.UPSAMPLE_CURRENT_SOLUTION;
 					}
 					else
 					{
-						regularizer = null;
+						scalingRegularizerDataset = lastSolutionMetadata.scalingTermDataset;
+						scalingRegularizerMode = RegularizerMode.DOWNSAMPLE_PREVIOUS_SOLUTION;
 					}
 
-					final JavaPairRDD< Long, Histogram > rddDownsampledHistograms = shiftedDownsampling.downsampleHistograms(
-							rddFullHistograms,
-							pixelsMapping );
+					if ( modelType != ModelType.FixedTranslationAffineModel || lastSolutionMetadata == null )
+					{
+						translationRegularizerDataset = downsampledSolutionMetadata != null ? downsampledSolutionMetadata.translationTermDataset : null;
+						translationRegularizerMode = RegularizerMode.UPSAMPLE_CURRENT_SOLUTION;
+					}
+					else
+					{
+						translationRegularizerDataset = lastSolutionMetadata.translationTermDataset;
+						translationRegularizerMode = RegularizerMode.DOWNSAMPLE_PREVIOUS_SOLUTION;
+					}
 
-					final FlatfieldSolution solutionAndOffsets = solver.leastSquaresInterpolationFit(
-							rddDownsampledHistograms,
-							referenceHistogram,
-							pixelsMapping,
-							regularizer,
-							modelType,
-							regularizerModelType,
-							args.pivotValue() );
-
-					solution = solutionAndOffsets.correctionFields;
-					offsets = solutionAndOffsets.pivotValues;
+					regularizerMetadata = new FlatfieldRegularizerMetadata(
+							scalingRegularizerDataset, translationRegularizerDataset,
+							scalingRegularizerMode, translationRegularizerMode
+						);
 				}
+				else
+				{
+					regularizerMetadata = null;
+				}
+
+				System.out.println( "Solving for scale " + scale + ":  size=" + Arrays.toString( shiftedDownsampling.getDimensionsAtScale( scale ) ) + ",  model=" + modelType.toString() + ", regularizer=" + regularizerModelType.toString() );
+
+				final FlatfieldSolutionMetadata currentSolutionMetadata = solver.leastSquaresInterpolationFit(
+						scale,
+						shiftedDownsampling.getDatasetAtScale( scale ),
+						regularizerMetadata,
+						shiftedDownsampling,
+						modelType, regularizerModelType,
+						args.pivotValue()
+					);
 
 				// keep older scale of the fixed-component solution to avoid unnecessary chain of upscaling operations which reduces contrast
 				if ( scale != endScale )
@@ -348,27 +333,33 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 					switch ( modelType )
 					{
 					case FixedScalingAffineModel:
-						downsampledSolution = new ValuePair<>( downsampledSolution.getA(), solution.getB() );
+						downsampledSolutionMetadata = new FlatfieldSolutionMetadata(
+								downsampledSolutionMetadata.scalingTermDataset,
+								currentSolutionMetadata.translationTermDataset,
+								args.pivotValue()
+							);
 						break;
 					case FixedTranslationAffineModel:
-						downsampledSolution = new ValuePair<>( solution.getA(), downsampledSolution.getB() );
+						downsampledSolutionMetadata = new FlatfieldSolutionMetadata(
+								currentSolutionMetadata.scalingTermDataset,
+								downsampledSolutionMetadata.translationTermDataset,
+								args.pivotValue()
+							);
 						break;
 					default:
-						downsampledSolution = solution;
+						downsampledSolutionMetadata = currentSolutionMetadata;
 						break;
 					}
 				}
 				else
 				{
-					downsampledSolution = solution;
+					downsampledSolutionMetadata = currentSolutionMetadata;
 				}
-
-				saveSolution( dataProvider, iter, scale, solution );
 			}
 
-			lastSolution = downsampledSolution;
+			lastSolutionMetadata = downsampledSolutionMetadata;
 
-			if ( iter % 2 == 0 && lastSolution.getB().numDimensions() > 2 )
+			/*if ( iter % 2 == 0 && lastSolution.getB().numDimensions() > 2 )
 			{
 				final RandomAccessibleInterval< DoubleType > averageTranslationalComponent = averageSolutionComponent( lastSolution.getB() );
 				saveSolutionComponent( dataProvider, iter, 0, averageTranslationalComponent, Utils.addFilenameSuffix( translationTermFilename, "_avg" ) );
@@ -376,12 +367,12 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				lastSolution = new ValuePair<>(
 						lastSolution.getA(),
 						Views.interval( Views.extendBorder( Views.stack( averageTranslationalComponent ) ), lastSolution.getA() ) );
-			}
+			}*/
 		}
 
 		// account for the pivot point in the final solution
 		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > unpivotedSolution = FlatfieldCorrectionSolver.unpivotSolution(
-				new FlatfieldSolution( lastSolution, offsets ) );
+				lastSolutionMetadata.open( dataProvider, histogramsProvider.getHistogramsN5BasePath() ) );
 
 		saveSolutionComponent( dataProvider, iterations - 1, 0, unpivotedSolution.getA(), Utils.addFilenameSuffix( scalingTermFilename, "_offset" ) );
 		saveSolutionComponent( dataProvider, iterations - 1, 0, unpivotedSolution.getB(), Utils.addFilenameSuffix( translationTermFilename, "_offset" ) );
@@ -400,42 +391,25 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		}
 
 
-		// cleanup the 'fullsize' directory
+		// cleanup intermediate flatfield correction steps image data
 		// TODO: add cmd switch to disable this behavior if needed to inspect individual steps
-		try
-		{
-			System.out.println( "Cleaning up temporary files..." );
-			final String folderToDelete = PathResolver.getParent( solutionPath );
-			dataProvider.deleteFolder( URI.create( folderToDelete ) );
-		}
-		catch ( final IOException e )
-		{
-			System.out.println( "Failed to clean up temporary files:" );
-			e.printStackTrace();
-		}
+		System.out.println( "Cleaning up temporary files..." );
+		final String folderToDelete = PathResolver.getParent( solutionPath );
+		dataProvider.deleteFolder( URI.create( folderToDelete ) );
+
+		// cleanup intermediate N5 exports
+		solver.cleanupFlatfieldSolutionExports( dataProvider, histogramsProvider.getHistogramsN5BasePath() );
+		shiftedDownsampling.cleanupDownsampledHistograms();
 
 		elapsed = System.nanoTime() - elapsed;
 		System.out.println( "----------" );
 		System.out.println( String.format( "Took %f mins", elapsed / 1e9 / 60 ) );
 	}
 
-
-	@SuppressWarnings("unchecked")
-	private < A extends AffineGet & AffineSet > A createDownsamplingTransform( final int numDimensions )
-	{
-		final A downsamplingTransform = ( A ) ( numDimensions == 2 ? new AffineTransform2D() : new AffineTransform3D() );
-		for ( int d = 0; d < numDimensions; ++d )
-		{
-			downsamplingTransform.set( 0.5, d, d );
-			downsamplingTransform.set( -0.5, d, numDimensions );
-		}
-		return downsamplingTransform;
-	}
-
 	private int findStartingScale( final ShiftedDownsampling< ? > shiftedDownsampling )
 	{
 		for ( int scale = shiftedDownsampling.getNumScales() - 1; scale >= 0; --scale )
-			if ( Intervals.numElements( new FinalDimensions( shiftedDownsampling.getDimensionsAtScale( scale ) ) ) >= SCALE_LEVEL_MIN_PIXELS )
+			if ( Intervals.numElements( shiftedDownsampling.getDimensionsAtScale( scale ) ) >= SCALE_LEVEL_MIN_PIXELS )
 				return scale;
 		return -1;
 	}

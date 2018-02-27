@@ -15,8 +15,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.histogram.Histogram;
-import org.janelia.histogram.HistogramMatching;
 import org.janelia.intensity.LinearIntensityMap;
 import org.janelia.util.Conversions;
 
@@ -455,7 +453,9 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 //			IJ.saveAsTiff( downsampledOverlapImp, destFolder + "/downsampled-overlap_" + Paths.get( tilePairArr[ i ].getFilePath() ).getFileName().toString() );
 		}
 
-		final double[] value = new double[ 2 ];
+
+		// FIXME: adapt to work with new histogram matching implementation
+		/*final double[] value = new double[ 2 ];
 		final int[] coeffIndex = new int[ 2 ];
 		final Map< Integer, Map< Integer, Histogram[] > > histograms = new HashMap<>();
 		while ( imgCursors[ 0 ].hasNext() || imgCursors[ 1 ].hasNext() || coeffCursors[ 0 ].hasNext() || coeffCursors[ 1 ].hasNext() )
@@ -493,7 +493,8 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 			}
 		}
 
-		return matches;
+		return matches;*/
+		return null;
 	}
 
 

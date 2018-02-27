@@ -1,14 +1,23 @@
 package org.janelia.flatfield;
 
+import java.io.IOException;
 import java.io.Serializable;
-import java.util.Arrays;
+import java.net.URI;
 import java.util.List;
 
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
-import org.janelia.histogram.Histogram;
-import org.janelia.histogram.HistogramMatching;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.PathResolver;
+import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldRegularizerMetadata.RegularizerMode;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
+import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.N5RemoveSpark;
 
 import mpicbg.models.Affine1D;
 import mpicbg.models.AffineModel1D;
@@ -22,17 +31,23 @@ import mpicbg.models.Model;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.cell.CellGrid;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.util.IntervalIndexer;
+import net.imglib2.util.ConstantUtils;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
-import net.imglib2.view.RandomAccessiblePair;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
-import scala.Tuple2;
+import net.imglib2.view.composite.CompositeIntervalView;
+import net.imglib2.view.composite.RealComposite;
 
 public class FlatfieldCorrectionSolver implements Serializable
 {
@@ -50,21 +65,6 @@ public class FlatfieldCorrectionSolver implements Serializable
 		IdentityModel
 	}
 
-	private static final double INTERPOLATION_LAMBDA_IDENTITY = 0.0;
-	private static final double INTERPOLATION_LAMBDA_PIVOT = 0.5;
-
-	private static final double INTERPOLATION_LAMBDA_SCALING = 0.5;
-	private static final double INTERPOLATION_LAMBDA_TRANSLATION = 0.5;
-
-	private transient final JavaSparkContext sparkContext;
-
-	public FlatfieldCorrectionSolver( final JavaSparkContext sparkContext )
-	{
-		this.sparkContext = sparkContext;
-	}
-
-
-
 	public static class FlatfieldSolution
 	{
 		public final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > correctionFields;
@@ -78,161 +78,338 @@ public class FlatfieldCorrectionSolver implements Serializable
 			this.pivotValues = pivotValues;
 		}
 	}
-	@SuppressWarnings("unchecked")
-	public < M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable > FlatfieldSolution leastSquaresInterpolationFit(
-			final JavaPairRDD< Long, Histogram > rddHistograms,
-			final Histogram referenceHistogram,
-			final ShiftedDownsampling< ? >.PixelsMapping pixelsMapping,
-			final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer,
-			final ModelType modelType,
-			final RegularizerModelType regularizerModelType,
-			final double pivotValue )
+
+	public static class FlatfieldSolutionMetadata implements Serializable
 	{
-		System.out.println( "Solving for scale " + pixelsMapping.scale + ":  size=" + Arrays.toString( pixelsMapping.getDimensions() ) + ",  model=" + modelType.toString() + ", regularizer=" + regularizerModelType.toString() );
+		private static final long serialVersionUID = -4110180561225910592L;
 
-		final Broadcast< RandomAccessiblePairNullable< DoubleType, DoubleType > > broadcastedRegularizer = sparkContext.broadcast( regularizer );
+		public final String scalingTermDataset, translationTermDataset;
+//		public final String pivotValuesDataset;
 
-		final long[] size = pixelsMapping.getDimensions();
+		private double pivotValue;
 
+		public FlatfieldSolutionMetadata( final int scaleLevel, final double pivotValue )
+		{
+			scalingTermDataset = PathResolver.get( INTERMEDIATE_EXPORTS_N5_GROUP, SCALING_TERM_GROUP, "s" + scaleLevel );
+			translationTermDataset = PathResolver.get( INTERMEDIATE_EXPORTS_N5_GROUP, TRANSLATION_TERM_GROUP, "s" + scaleLevel );
+//			pivotValuesDataset = PathResolver.get( INTERMEDIATE_EXPORTS_N5_GROUP, PIVOT_VALUES_GROUP, "s" + scaleLevel );
+			this.pivotValue = pivotValue;
+		}
+
+		public FlatfieldSolutionMetadata( final String scalingTermDataset, final String translationTermDataset, final double pivotValue )
+		{
+			this.scalingTermDataset = scalingTermDataset;
+			this.translationTermDataset = translationTermDataset;
+			this.pivotValue = pivotValue;
+		}
+
+		public FlatfieldSolution open( final DataProvider dataProvider, final String histogramsN5BasePath ) throws IOException
+		{
+			final N5Reader n5 = dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) );
+			final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > correctionFields = new ValuePair<>(
+					N5Utils.open( n5, scalingTermDataset ),
+					N5Utils.open( n5, translationTermDataset )
+				);
+			final RandomAccessibleInterval< DoubleType > pivotValuesImg = ConstantUtils.constantRandomAccessibleInterval(
+					new DoubleType( pivotValue ),
+					correctionFields.getA().numDimensions(),
+					correctionFields.getA()
+				);
+//			N5Utils.open( n5, pivotValuesDataset )
+			return new FlatfieldSolution( correctionFields, pivotValuesImg );
+		}
+	}
+
+	public static class FlatfieldRegularizerMetadata implements Serializable
+	{
+		private static final long serialVersionUID = 3764292044450927660L;
+
+		public static enum RegularizerMode
+		{
+			UPSAMPLE_CURRENT_SOLUTION,
+			DOWNSAMPLE_PREVIOUS_SOLUTION
+		}
+
+		public final String scalingRegularizerDataset, translationRegularizerDataset;
+		public final RegularizerMode scalingRegularizerMode, translationRegularizerMode;
+
+		public FlatfieldRegularizerMetadata(
+				final String scalingRegularizerDataset, final String translationRegularizerDataset,
+				final RegularizerMode scalingRegularizerMode, final RegularizerMode translationRegularizerMode )
+		{
+			this.scalingRegularizerDataset = scalingRegularizerDataset;
+			this.translationRegularizerDataset = translationRegularizerDataset;
+			this.scalingRegularizerMode = scalingRegularizerMode;
+			this.translationRegularizerMode = translationRegularizerMode;
+		}
+	}
+
+	private static final double INTERPOLATION_LAMBDA_IDENTITY = 0.0;
+	private static final double INTERPOLATION_LAMBDA_PIVOT = 0.5;
+
+	private static final double INTERPOLATION_LAMBDA_SCALING = 0.5;
+	private static final double INTERPOLATION_LAMBDA_TRANSLATION = 0.5;
+
+	private static final String INTERMEDIATE_EXPORTS_N5_GROUP = "flatfield-intermediate-exports";
+	private static final String SCALING_TERM_GROUP = "flatfield-solution-S";
+	private static final String TRANSLATION_TERM_GROUP = "flatfield-solution-T";
+//	private static final String PIVOT_VALUES_GROUP = "flatfield-solution-pivot";
+
+	private transient final JavaSparkContext sparkContext;
+	private final HistogramsProvider histogramsProvider;
+
+	public FlatfieldCorrectionSolver( final JavaSparkContext sparkContext, final HistogramsProvider histogramsProvider )
+	{
+		this.sparkContext = sparkContext;
+		this.histogramsProvider = histogramsProvider;
+	}
+
+	@SuppressWarnings( "unchecked" )
+	public < T extends RealType< T >, M extends Model< M > & Affine1D< M >, R extends Model< R > & Affine1D< R > & InvertibleBoundable > FlatfieldSolutionMetadata leastSquaresInterpolationFit(
+			final int currentScaleLevel,
+			final String currentScaleHistogramsDataset,
+			final FlatfieldRegularizerMetadata regularizerMetadata,
+			final ShiftedDownsampling< ? > shiftedDownsampling,
+			final ModelType modelType, final RegularizerModelType regularizerModelType,
+			final double pivotValue ) throws IOException
+	{
 //		final double referenceHistogramOffset = getMedianValue( referenceHistogram );
 		final double referenceHistogramOffset = pivotValue;
 
-		final JavaPairRDD< Long, Pair< Pair< Double, Double >, Double > > rddSolutionPixels = rddHistograms.mapToPair( tuple ->
+		final double[] binValues = HistogramMatching.getBinValues(
+				histogramsProvider.getHistogramMinValue(),
+				histogramsProvider.getHistogramMaxValue(),
+				histogramsProvider.getHistogramBins()
+			);
+
+		// TODO: make shifted downsampling Serializable (currently there is a required non-serializable field for affine transformation)
+		final Broadcast< ShiftedDownsampling< ? > > broadcastedShiftedDownsampling = sparkContext.broadcast( shiftedDownsampling );
+
+		final N5Writer n5 = histogramsProvider.getDataProvider().createN5Writer( URI.create( histogramsProvider.getHistogramsN5BasePath() ) );
+		final DatasetAttributes currentScaleHistogramsDatasetAttributes = n5.getDatasetAttributes( currentScaleHistogramsDataset );
+		final long[] currentScaleHistogramsExtendedDimensions = currentScaleHistogramsDatasetAttributes.getDimensions();
+		final int[] currentScaleHistogramsExtendedBlockSize = currentScaleHistogramsDatasetAttributes.getBlockSize();
+
+		final long[] currentScaleHistogramsDimensions = new long[ currentScaleHistogramsExtendedDimensions.length - 1 ];
+		System.arraycopy( currentScaleHistogramsExtendedDimensions, 0, currentScaleHistogramsDimensions, 0, currentScaleHistogramsDimensions.length );
+		final int[] currentScaleHistogramsBlockSize = new int[ currentScaleHistogramsExtendedBlockSize.length - 1 ];
+		System.arraycopy( currentScaleHistogramsExtendedBlockSize, 0, currentScaleHistogramsBlockSize, 0, currentScaleHistogramsBlockSize.length );
+
+		final FlatfieldSolutionMetadata solutionMetadata = new FlatfieldSolutionMetadata( currentScaleLevel, pivotValue );
+		n5.createDataset( solutionMetadata.scalingTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+		n5.createDataset( solutionMetadata.translationTermDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+//		n5.createDataset( flatfieldSolutionMetadata.pivotValuesDataset, currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize, DataType.FLOAT64, currentScaleHistogramsDatasetAttributes.getCompression() );
+
+		final List< long[] > currentScaleBlockPositions = HistogramsProvider.getBlockPositions( currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize );
+		sparkContext.parallelize( currentScaleBlockPositions, currentScaleBlockPositions.size() ).foreach( blockPosition ->
 			{
-				final long[] position = new long[ size.length ];
-				IntervalIndexer.indexToPosition( tuple._1(), size, position );
+				final CellGrid cellGrid = new CellGrid( currentScaleHistogramsDimensions, currentScaleHistogramsBlockSize );
+				final long[] cellMin = new long[ cellGrid.numDimensions() ], cellMax = new long[ cellGrid.numDimensions() ];
+				final int[] cellDimensions = new int[ cellGrid.numDimensions() ];
+				cellGrid.getCellDimensions( blockPosition, cellMin, cellDimensions );
+				for ( int d = 0; d < cellGrid.numDimensions(); ++d )
+					cellMax[ d ] = cellMin[ d ] + cellDimensions[ d ] - 1;
+				final Interval cellInterval = new FinalInterval( cellMin, cellMax );
 
-				final List< PointMatch > matches = HistogramMatching.generateHistogramMatches( tuple._2(), referenceHistogram );
+				// open histograms dataset
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( histogramsProvider.getDataAccessType() );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsProvider.getHistogramsN5BasePath() ) );
+				final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, currentScaleHistogramsDataset );
+				final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
+				final IntervalView< RealComposite< T > > histogramsBlockImg = Views.interval( histogramsImg, cellInterval );
 
-				// apply the offsets to the pointmatch values
-//				final double[] offset = new double[] { getMedianValue( tuple._2() ), referenceHistogramOffset };
-				final double[] offset = new double[] { pivotValue, referenceHistogramOffset };
-				for ( final PointMatch match : matches )
+				// open regularizer datasets
+				final RandomAccessiblePairNullable< DoubleType, DoubleType > regularizer;
+				if ( regularizerMetadata != null )
 				{
-					final Point[] points = new Point[] { match.getP1(), match.getP2() };
-					for ( int i = 0; i < 2; ++i )
-						for ( final double[] value : new double[][] { points[ i ].getL(), points[ i ].getW() } )
-							value[ 0 ] -= offset[ i ];
-				}
+					final ShiftedDownsampling< ? > shiftedDownsamplingLocal = broadcastedShiftedDownsampling.value();
 
-				final double[] regularizerValues;
-				if ( broadcastedRegularizer.value() != null )
-				{
-					final RandomAccessiblePairNullable< DoubleType, DoubleType >.RandomAccess regularizerRandomAccess = broadcastedRegularizer.value().randomAccess();
-					regularizerRandomAccess.setPosition( position );
+					final RandomAccessibleInterval< DoubleType > scalingRegularizerSource = N5Utils.open( n5Local, regularizerMetadata.scalingRegularizerDataset );
+					final RandomAccessibleInterval< DoubleType > translationRegularizerSource = N5Utils.open( n5Local, regularizerMetadata.scalingRegularizerDataset );
 
-					regularizerValues = new double[]
-						{
-							( regularizerRandomAccess.getA() != null ? regularizerRandomAccess.getA().get() : 1 ),
-							( regularizerRandomAccess.getB() != null ? regularizerRandomAccess.getB().get() : 0 )
-						};
+					final RandomAccessible< DoubleType > scalingRegularizer;
+					if ( regularizerMetadata.scalingRegularizerMode == RegularizerMode.UPSAMPLE_CURRENT_SOLUTION )
+						scalingRegularizer = shiftedDownsamplingLocal.upsampleImage( scalingRegularizerSource, currentScaleLevel );
+					else if ( regularizerMetadata.scalingRegularizerMode == RegularizerMode.DOWNSAMPLE_PREVIOUS_SOLUTION )
+						scalingRegularizer = shiftedDownsamplingLocal.downsampleImage( scalingRegularizerSource, currentScaleLevel );
+					else
+						throw new IllegalArgumentException( "unknown regularizer mode" );
+
+					final RandomAccessible< DoubleType > translationRegularizer;
+					if ( regularizerMetadata.translationRegularizerMode == RegularizerMode.UPSAMPLE_CURRENT_SOLUTION )
+						translationRegularizer = shiftedDownsamplingLocal.upsampleImage( translationRegularizerSource, currentScaleLevel );
+					else if ( regularizerMetadata.scalingRegularizerMode == RegularizerMode.DOWNSAMPLE_PREVIOUS_SOLUTION )
+						translationRegularizer = shiftedDownsamplingLocal.downsampleImage( translationRegularizerSource, currentScaleLevel );
+					else
+						throw new IllegalArgumentException( "unknown regularizer mode" );
+
+					regularizer = new RandomAccessiblePairNullable<>( scalingRegularizer, translationRegularizer );
 				}
 				else
 				{
-					regularizerValues = null;
+					regularizer = null;
 				}
 
-				final M model;
-				switch ( modelType )
+				// solution data blocks
+				final RandomAccessibleInterval< DoubleType > scalingTermBlockStorageImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( cellInterval ) );
+				final RandomAccessibleInterval< DoubleType > translationTermBlockStorageImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( cellInterval ) );
+				final RandomAccessibleInterval< DoubleType > pivotValuesBlockStorageImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( cellInterval ) );
+				final IntervalView< DoubleType > scalingTermBlockImg = Views.translate( scalingTermBlockStorageImg, Intervals.minAsLongArray( cellInterval ) );
+				final IntervalView< DoubleType > translationTermBlockImg = Views.translate( translationTermBlockStorageImg, Intervals.minAsLongArray( cellInterval ) );
+				final IntervalView< DoubleType > pivotValuesBlockImg = Views.translate( pivotValuesBlockStorageImg, Intervals.minAsLongArray( cellInterval ) );
+
+				final Cursor< RealComposite< T > > histogramsBlockImgCursor = Views.flatIterable( histogramsBlockImg ).localizingCursor();
+				final Cursor< DoubleType > scalingTermBlockImgCursor = Views.flatIterable( scalingTermBlockImg ).cursor();
+				final Cursor< DoubleType > translationTermBlockImgCursor = Views.flatIterable( translationTermBlockImg ).cursor();
+				final Cursor< DoubleType > pivotValuesBlockImgCursor = Views.flatIterable( pivotValuesBlockImg ).cursor();
+
+				final RealComposite< T > referenceHistogram = ( RealComposite< T > ) new RealComposite<>(
+						ArrayImgs.doubles( histogramsProvider.getReferenceHistogram(), histogramsProvider.getHistogramBins() ).randomAccess(),
+						histogramsProvider.getHistogramBins()
+					);
+
+				final long[] position = new long[ cellGrid.numDimensions() ];
+				while ( histogramsBlockImgCursor.hasNext() )
 				{
-				case AffineModel:
-					model = ( M ) new AffineModel1D();
-					break;
-				case FixedTranslationAffineModel:
-					model = ( M ) new FixedTranslationAffineModel1D( regularizerValues == null ? 0 : regularizerValues[ 1 ] );
-					break;
-				case FixedScalingAffineModel:
-					model = ( M ) new FixedScalingAffineModel1D( regularizerValues == null ? 1 : regularizerValues[ 0 ] );
-					break;
-				default:
-					model = null;
-					break;
+					final RealComposite< T > histogram = histogramsBlockImgCursor.next();
+					histogramsBlockImgCursor.localize( position );
+
+					scalingTermBlockImgCursor.fwd();
+					translationTermBlockImgCursor.fwd();
+					pivotValuesBlockImgCursor.fwd();
+
+					final List< PointMatch > matches = HistogramMatching.generateHistogramMatches(
+							histogram,
+							referenceHistogram,
+							binValues
+						);
+
+					// apply the offsets to the pointmatch values
+//					final double[] offset = new double[] { getMedianValue( tuple._2() ), referenceHistogramOffset };
+					final double[] offset = new double[] { pivotValue, referenceHistogramOffset };
+					for ( final PointMatch match : matches )
+					{
+						final Point[] points = new Point[] { match.getP1(), match.getP2() };
+						for ( int i = 0; i < 2; ++i )
+							for ( final double[] value : new double[][] { points[ i ].getL(), points[ i ].getW() } )
+								value[ 0 ] -= offset[ i ];
+					}
+
+					final double[] regularizerValues;
+					if ( regularizer != null )
+					{
+						final RandomAccessiblePairNullable< DoubleType, DoubleType >.RandomAccess regularizerRandomAccess = regularizer.randomAccess();
+						regularizerRandomAccess.setPosition( position );
+
+						regularizerValues = new double[]
+							{
+								( regularizerRandomAccess.getA() != null ? regularizerRandomAccess.getA().get() : 1 ),
+								( regularizerRandomAccess.getB() != null ? regularizerRandomAccess.getB().get() : 0 )
+							};
+					}
+					else
+					{
+						regularizerValues = null;
+					}
+
+					final M model;
+					switch ( modelType )
+					{
+					case AffineModel:
+						model = ( M ) new AffineModel1D();
+						break;
+					case FixedTranslationAffineModel:
+						model = ( M ) new FixedTranslationAffineModel1D( regularizerValues == null ? 0 : regularizerValues[ 1 ] );
+						break;
+					case FixedScalingAffineModel:
+						model = ( M ) new FixedScalingAffineModel1D( regularizerValues == null ? 1 : regularizerValues[ 0 ] );
+						break;
+					default:
+						model = null;
+						break;
+					}
+
+					final M pivotedModel = ( M ) new InterpolatedAffineModel1D<>( model, new FixedTranslationAffineModel1D( 0 ), INTERPOLATION_LAMBDA_PIVOT );
+
+					boolean modelFound = false;
+					try
+					{
+//						modelFound = model.filter( matches, new ArrayList<>(), 4.0 );
+						pivotedModel.fit( matches );
+						modelFound = true;
+					}
+					catch ( final Exception e )
+					{
+						modelFound = false;
+						e.printStackTrace();
+					}
+
+
+					final R regularizerModel;
+					switch ( regularizerModelType )
+					{
+					case IdentityModel:
+						regularizerModel = ( R ) new IdentityModel();
+						break;
+					case AffineModel:
+						final AffineModel1D downsampledModel = new AffineModel1D();
+						downsampledModel.set(
+								regularizerValues != null ? regularizerValues[ 0 ] : 1,
+								regularizerValues != null ? regularizerValues[ 1 ] : 0 );
+						regularizerModel = ( R ) downsampledModel;
+						break;
+					default:
+						regularizerModel = null;
+						break;
+					}
+
+//					final R interpolatedRegularizer = ( R ) new InterpolatedAffineModel1D<>(
+//							regularizerModel,
+//							new IdentityModel(),
+//							INTERPOLATION_LAMBDA_IDENTITY );
+	//
+//					final M interpolatedModel = ( M ) ( modelFound ?
+//							new IndependentlyInterpolatedAffineModel1D<>(
+//									pivotedModel,
+//									interpolatedRegularizer,
+//									INTERPOLATION_LAMBDA_SCALING,
+//									INTERPOLATION_LAMBDA_TRANSLATION ) :
+//							interpolatedRegularizer );
+
+					final M interpolatedModel = ( M ) ( modelFound ?
+							new IndependentlyInterpolatedAffineModel1D<>(
+									pivotedModel,
+									regularizerModel,
+									INTERPOLATION_LAMBDA_SCALING,
+									INTERPOLATION_LAMBDA_TRANSLATION ) :
+								regularizerModel );
+
+					final double[] estimatedModelValues = new double[ 2 ];
+					interpolatedModel.toArray( estimatedModelValues );
+
+					scalingTermBlockImgCursor.get().set( estimatedModelValues[ 0 ] );
+					translationTermBlockImgCursor.get().set( estimatedModelValues[ 1 ] );
+					pivotValuesBlockImgCursor.get().set( offset[ 0 ] );
 				}
 
-				final M pivotedModel = ( M ) new InterpolatedAffineModel1D<>( model, new FixedTranslationAffineModel1D( 0 ), INTERPOLATION_LAMBDA_PIVOT );
-
-				boolean modelFound = false;
-				try
-				{
-//					modelFound = model.filter( matches, new ArrayList<>(), 4.0 );
-					pivotedModel.fit( matches );
-					modelFound = true;
-				}
-				catch ( final Exception e )
-				{
-//					modelFound = false;
-//					e.printStackTrace();
-					throw e;
-				}
-
-
-				final R regularizerModel;
-				switch ( regularizerModelType )
-				{
-				case IdentityModel:
-					regularizerModel = ( R ) new IdentityModel();
-					break;
-				case AffineModel:
-					final AffineModel1D downsampledModel = new AffineModel1D();
-					downsampledModel.set(
-							regularizerValues != null ? regularizerValues[ 0 ] : 1,
-							regularizerValues != null ? regularizerValues[ 1 ] : 0 );
-					regularizerModel = ( R ) downsampledModel;
-					break;
-				default:
-					regularizerModel = null;
-					break;
-				}
-
-//				final R interpolatedRegularizer = ( R ) new InterpolatedAffineModel1D<>(
-//						regularizerModel,
-//						new IdentityModel(),
-//						INTERPOLATION_LAMBDA_IDENTITY );
-//
-//				final M interpolatedModel = ( M ) ( modelFound ?
-//						new IndependentlyInterpolatedAffineModel1D<>(
-//								pivotedModel,
-//								interpolatedRegularizer,
-//								INTERPOLATION_LAMBDA_SCALING,
-//								INTERPOLATION_LAMBDA_TRANSLATION ) :
-//						interpolatedRegularizer );
-
-				final M interpolatedModel = ( M ) ( modelFound ?
-						new IndependentlyInterpolatedAffineModel1D<>(
-								pivotedModel,
-								regularizerModel,
-								INTERPOLATION_LAMBDA_SCALING,
-								INTERPOLATION_LAMBDA_TRANSLATION ) :
-							regularizerModel );
-
-				final double[] estimatedModelValues = new double[ 2 ];
-				interpolatedModel.toArray( estimatedModelValues );
-
-				return new Tuple2<>( tuple._1(), new ValuePair<>( new ValuePair<>( estimatedModelValues[ 0 ], estimatedModelValues[ 1 ] ), offset[ 0 ] ) );
+				N5Utils.saveBlock( scalingTermBlockImg, n5Local, solutionMetadata.scalingTermDataset, blockPosition );
+				N5Utils.saveBlock( translationTermBlockImg, n5Local, solutionMetadata.translationTermDataset, blockPosition );
+//				N5Utils.saveBlock( pivotValuesBlockImg, n5Local, flatfieldSolutionMetadata.pivotValuesDataset, blockPosition );
 			} );
 
-		final List< Tuple2< Long, Pair< Pair< Double, Double >, Double > > > solutionPixels  = rddSolutionPixels.collect();
+		broadcastedShiftedDownsampling.destroy();
 
-		broadcastedRegularizer.destroy();
+		return solutionMetadata;
+	}
 
-		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution = new ValuePair<>( ArrayImgs.doubles( size ), ArrayImgs.doubles( size ) );
-		final RandomAccessiblePair< DoubleType, DoubleType >.RandomAccess solutionRandomAccess = new RandomAccessiblePair<>( solution.getA(), solution.getB() ).randomAccess();
-		final long[] position = new long[ size.length ];
-		for ( final Tuple2< Long, Pair< Pair< Double, Double >, Double > > tuple : solutionPixels )
-		{
-			IntervalIndexer.indexToPosition( tuple._1(), size, position );
-			solutionRandomAccess.setPosition( position );
-
-			solutionRandomAccess.getA().set( tuple._2().getA().getA() );
-			solutionRandomAccess.getB().set( tuple._2().getA().getB() );
-		}
-
-		final double[] offsets = new double[ solutionPixels.size() ];
-		for ( final Tuple2< Long, Pair< Pair< Double, Double >, Double > > tuple : solutionPixels )
-			offsets[ tuple._1().intValue() ] = tuple._2().getB();
-		final RandomAccessibleInterval< DoubleType > offsetsImg = ArrayImgs.doubles( offsets, size );
-
-		return new FlatfieldSolution( solution, offsetsImg );
+	public void cleanupFlatfieldSolutionExports( final DataProvider dataProvider, final String histogramsN5BasePath ) throws IOException
+	{
+		final DataAccessType dataAccessType = dataProvider.getType();
+		N5RemoveSpark.remove(
+				sparkContext,
+				() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				INTERMEDIATE_EXPORTS_N5_GROUP
+			);
 	}
 
 
@@ -263,18 +440,5 @@ public class FlatfieldCorrectionSolver implements Serializable
 			dstTranslationCursor.next().set( m[ 1 ] );
 		}
 		return new ValuePair<>( dstScaling, dstTranslation );
-	}
-
-
-	private double getMedianValue( final Histogram histogram )
-	{
-		double quantityProcessed = 0;
-		for ( int i = 0; i < histogram.getNumBins(); ++i )
-		{
-			quantityProcessed += histogram.get( i );
-			if ( quantityProcessed >= histogram.getQuantityTotal() / 2 )
-				return histogram.getBinValue( i );
-		}
-		return 0;
 	}
 }
