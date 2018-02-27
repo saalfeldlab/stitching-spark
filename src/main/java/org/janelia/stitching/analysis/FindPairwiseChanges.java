@@ -21,6 +21,8 @@ import org.janelia.stitching.Utils;
 public class FindPairwiseChanges
 {
 	private static final double SEARCH_RADIUS_MULTIPLIER = 3;
+	private static final int[] STATS_WINDOW_TILE_SIZE = new int[] { 3, 3, 3 };
+	private static final int MIN_NUM_NEIGHBORS = 5;
 
 	public static void main( final String[] args ) throws IOException, PipelineExecutionException
 	{
@@ -30,7 +32,14 @@ public class FindPairwiseChanges
 		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) );
 
 		final List< TilePair > adjacentPairs = FilterAdjacentShifts.filterAdjacentPairs( TileOperations.findOverlappingTiles( stageTiles ) );
-		final List< TilePair > newAdjacentPairs = getPairsWithPrediction( stageTiles, stitchedTiles, 5, true );
+		final List< TilePair > newAdjacentPairs = getPairsWithPrediction(
+				stageTiles,
+				stitchedTiles,
+				SEARCH_RADIUS_MULTIPLIER,
+				STATS_WINDOW_TILE_SIZE,
+				MIN_NUM_NEIGHBORS,
+				true
+			);
 
 		// find adjacent pairs that are formed between a tile from the stitched set and a tile from the missing set
 		final Map< Integer, TileInfo > stitchedTilesMap = Utils.createTilesMap( stitchedTiles );
@@ -68,10 +77,17 @@ public class FindPairwiseChanges
 	public static List< TilePair > getPairsWithPrediction(
 			final TileInfo[] stageTiles,
 			final TileInfo[] stitchedTiles,
+			final double searchRadiusMultiplier,
+			final int[] statsWindowTileSize,
 			final int minNumNeighbors,
 			final boolean adjacentOnly ) throws PipelineExecutionException
 	{
-		final TileSearchRadiusEstimator predictor = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
+		final TileSearchRadiusEstimator predictor = new TileSearchRadiusEstimator(
+				stageTiles,
+				stitchedTiles,
+				searchRadiusMultiplier,
+				statsWindowTileSize
+			);
 		final List< TileInfo > predictedTiles = new ArrayList<>();
 		for ( final TileInfo stageTile : stageTiles )
 		{

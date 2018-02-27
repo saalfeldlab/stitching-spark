@@ -47,6 +47,7 @@ import net.imglib2.util.ValuePair;
 public class SearchRadiusEstimatorTest
 {
 	private final static double SEARCH_RADIUS_MULTIPLIER = 3;
+	private final static int STATS_WINDOW_TILE_SIZE_DIMENSION = 3;
 	private final static double EPSILON = 1e-3;
 
 	final Random rnd = new Random();
@@ -476,7 +477,7 @@ public class SearchRadiusEstimatorTest
 		final double[] estimationWindowSize = new double[ 2 ];
 		Arrays.fill( estimationWindowSize, 1e10 );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles/*, estimationWindowSize*/, SEARCH_RADIUS_MULTIPLIER );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, estimationWindowSize, SEARCH_RADIUS_MULTIPLIER );
 		final SearchRadius radius = estimator.getSearchRadiusWithinEstimationWindow( testStageTile );
 
 		// test exhaustive search against KD-tree search
@@ -654,7 +655,7 @@ public class SearchRadiusEstimatorTest
 
 		final TileInfo testStageTile = stageTiles[ rnd.nextInt( stageTiles.length ) ];
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles/*, estimationWindowSize*/, SEARCH_RADIUS_MULTIPLIER );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, estimationWindowSize, SEARCH_RADIUS_MULTIPLIER );
 		final SearchRadius radius = estimator.getSearchRadiusWithinEstimationWindow( testStageTile );
 
 		// test exhaustive search against KD-tree search
@@ -780,7 +781,12 @@ public class SearchRadiusEstimatorTest
 		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator(
+				stageTiles,
+				stitchedTiles,
+				SEARCH_RADIUS_MULTIPLIER,
+				new int[] { STATS_WINDOW_TILE_SIZE_DIMENSION, STATS_WINDOW_TILE_SIZE_DIMENSION, STATS_WINDOW_TILE_SIZE_DIMENSION }
+			);
 
 		final List< TilePair > overlappingTilePairs = TileOperations.findOverlappingTiles( stageTiles );
 		TilePair tilePair = null;
@@ -945,7 +951,12 @@ public class SearchRadiusEstimatorTest
 		System.out.println( "Chosen Z index = " + zCoordChosen );
 		System.out.println( "2d Stage tiles = " + stageTiles.length + ", 2d stitched tiles = " + stitchedTiles.length );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator(
+				stageTiles,
+				stitchedTiles,
+				SEARCH_RADIUS_MULTIPLIER,
+				new int[] { STATS_WINDOW_TILE_SIZE_DIMENSION, STATS_WINDOW_TILE_SIZE_DIMENSION }
+			);
 		System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( estimator.getEstimationWindowSize() ) ) + " --" );
 
 		final List< TilePair > overlappingTilePairs = FilterAdjacentShifts.filterAdjacentPairs( TileOperations.findOverlappingTiles( stageTiles ) );
@@ -1603,7 +1614,12 @@ public class SearchRadiusEstimatorTest
 		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/groups/betzig/betziglab/4Stephan/160727_Sample2_C3/Stitch_Igor/restitching/restitching-covariance/ch0.json" ) ) );
 		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/groups/betzig/betziglab/4Stephan/160727_Sample2_C3/Stitch_Igor/restitching/ch0-final.json" ) ) );
 
-		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, SEARCH_RADIUS_MULTIPLIER );
+		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator(
+				stageTiles,
+				stitchedTiles,
+				SEARCH_RADIUS_MULTIPLIER,
+				new int[] { STATS_WINDOW_TILE_SIZE_DIMENSION, STATS_WINDOW_TILE_SIZE_DIMENSION, STATS_WINDOW_TILE_SIZE_DIMENSION }
+			);
 		System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( estimator.getEstimationWindowSize() ) ) + " --" );
 
 		final List< TilePair > overlappingTilePairs = FilterAdjacentShifts.filterAdjacentPairs( TileOperations.findOverlappingTiles( stageTiles ) );
