@@ -46,7 +46,7 @@ public class TransformedTileImageLoader
 			source = img;
 		}
 
-		final RandomAccessible< T > extendedImg = Views.extendBorder( source );
+		final RandomAccessible< T > extendedImg = Views.extendZero( source );
 		final RealRandomAccessible< T > interpolatedImg = Views.interpolate( extendedImg, new NLinearInterpolatorFactory<>() );
 		final AffineGet transform = TileOperations.getTileTransform( tile );
 		final RandomAccessible< T > rasteredInterpolatedImg = Views.raster( RealViews.affine( interpolatedImg, transform ) );
