@@ -94,7 +94,7 @@ public class WarpedStitchingOptimizer implements Serializable
 		@Override
 		public int compareTo( final OptimizationResult other )
 		{
-			if ( translationOnlyStitching != other.translationOnlyStitching )
+			if ( translationOnlyStitching != other.translationOnlyStitching && Math.min( remainingGraphSize, other.remainingGraphSize ) > 0 )
 				throw new RuntimeException( "some tiles have translation model while some others have affine model" );
 
 			// if both are above the error threshold, the order is determined solely by smaller or higher error
