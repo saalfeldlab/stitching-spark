@@ -191,7 +191,7 @@ public class WarpedStitchingOptimizer implements Serializable
 							tilesToSave,
 							dataProvider.getJsonWriter( URI.create( PathResolver.get(
 									basePath,
-									"ch" + channel + "-affine-stitched.json"
+									"ch" + channel + "-" + ( bestOptimization.translationOnlyStitching ? "translation" : "affine" ) + "-stitched.json"
 								) ) )
 						);
 				}
