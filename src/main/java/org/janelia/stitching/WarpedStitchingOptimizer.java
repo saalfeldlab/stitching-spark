@@ -57,6 +57,7 @@ public class WarpedStitchingOptimizer implements Serializable
 		public final double maxDisplacement;
 		public final double avgDisplacement;
 
+		public final boolean translationOnlyStitching;
 		public final int replacedTilesSimilarity;
 		public final int replacedTilesTranslation;
 
@@ -69,6 +70,7 @@ public class WarpedStitchingOptimizer implements Serializable
 				final int remainingPairs,
 				final double avgDisplacement,
 				final double maxDisplacement,
+				final boolean translationOnlyStitching,
 				final int replacedTilesSimilarity,
 				final int replacedTilesTranslation )
 		{
@@ -79,6 +81,7 @@ public class WarpedStitchingOptimizer implements Serializable
 			this.remainingPairs = remainingPairs;
 			this.avgDisplacement = avgDisplacement;
 			this.maxDisplacement = maxDisplacement;
+			this.translationOnlyStitching = translationOnlyStitching;
 			this.replacedTilesSimilarity = replacedTilesSimilarity;
 			this.replacedTilesTranslation = replacedTilesTranslation;
 
@@ -91,6 +94,9 @@ public class WarpedStitchingOptimizer implements Serializable
 		@Override
 		public int compareTo( final OptimizationResult other )
 		{
+			if ( translationOnlyStitching != other.translationOnlyStitching )
+				throw new RuntimeException( "some tiles have translation model while some others have affine model" );
+
 			// if both are above the error threshold, the order is determined solely by smaller or higher error
 			if ( maxDisplacement > maxAllowedError || other.maxDisplacement > other.maxAllowedError )
 				return Double.compare( maxDisplacement, other.maxDisplacement );
@@ -205,6 +211,8 @@ public class WarpedStitchingOptimizer implements Serializable
 
 		final Broadcast< List< SerializablePairWiseStitchingResult > > broadcastedTileBoxShifts = sparkContext.broadcast( tileBoxShifts );
 
+		GlobalOptimizationPerformer.suppressOutput();
+
 		final List< OptimizationResult > optimizationResultList = new ArrayList<>( sparkContext.parallelize( optimizationParametersList, Math.min( optimizationParametersList.size(), MAX_PARTITIONS ) ).map( optimizationParameters ->
 			{
 				final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters );
@@ -219,6 +227,9 @@ public class WarpedStitchingOptimizer implements Serializable
 //				if ( optimizationPerformer.replacedTilesTranslation != 0 )
 //					return null;
 
+				if ( optimizationPerformer.translationOnlyStitching && ( optimizationPerformer.replacedTilesSimilarity != 0 || optimizationPerformer.replacedTilesTranslation != 0 ) )
+					throw new RuntimeException( "some tiles have their models replaced while translation-only stitching mode was reported" );
+
 				final OptimizationResult optimizationResult = new OptimizationResult(
 						optimized,
 						maxAllowedError,
@@ -228,6 +239,7 @@ public class WarpedStitchingOptimizer implements Serializable
 						optimizationPerformer.remainingPairs,
 						optimizationPerformer.avgDisplacement,
 						optimizationPerformer.maxDisplacement,
+						optimizationPerformer.translationOnlyStitching,
 						optimizationPerformer.replacedTilesSimilarity,
 						optimizationPerformer.replacedTilesTranslation
 					);
@@ -258,8 +270,14 @@ public class WarpedStitchingOptimizer implements Serializable
 						", max.error=" + optimizationResult.maxDisplacement +
 						";  cross.corr=" + String.format( "%.2f", optimizationResult.optimizationParameters.minCrossCorrelation ) +
 						", variance=" + String.format( "%.2f", optimizationResult.optimizationParameters.minVariance ) +
+						( optimizationResult.translationOnlyStitching
+								?
+									"; translation-only stitching"
+								:
+									"; higher-order model stitching" +
 									";  tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity +
 									";  tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation
+							)
 					);
 		}
 
