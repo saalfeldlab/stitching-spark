@@ -262,23 +262,38 @@ public class WarpedStitchingOptimizer implements Serializable
 			logWriter.println( "Scanning parameter space for the optimizer: min.cross.correlation and min.variance:" );
 			logWriter.println();
 			for ( final OptimizationResult optimizationResult : optimizationResultList )
+			{
+				final String modelSpecificationLog;
+				if ( optimizationResult.remainingGraphSize != 0 )
+				{
+					if ( optimizationResult.translationOnlyStitching )
+					{
+						modelSpecificationLog = ";  translation-only stitching";
+					}
+					else
+					{
+						modelSpecificationLog =
+								";  higher-order model stitching" +
+								"; tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity +
+								"; tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation;
+					}
+				}
+				else
+				{
+					modelSpecificationLog = "";
+				}
+
 				logWriter.println(
-						"retainedGraphRatio=" + optimizationResult.retainedGraphRatio +
+						"retainedGraphRatio=" + String.format( "%.2f", optimizationResult.retainedGraphRatio ) +
 						", graph=" + optimizationResult.remainingGraphSize +
 						", pairs=" + optimizationResult.remainingPairs +
-						", avg.error=" + String.format( "%.2f", optimizationResult.avgDisplacement ) +
+						",  avg.error=" + String.format( "%.2f", optimizationResult.avgDisplacement ) +
 						", max.error=" + String.format( "%.2f", optimizationResult.maxDisplacement ) +
 						";  cross.corr=" + String.format( "%.2f", optimizationResult.optimizationParameters.minCrossCorrelation ) +
 						", variance=" + String.format( "%.2f", optimizationResult.optimizationParameters.minVariance ) +
-						( optimizationResult.translationOnlyStitching
-								?
-									"; translation-only stitching"
-								:
-									"; higher-order model stitching" +
-									";  tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity +
-									";  tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation
-							)
+						modelSpecificationLog
 					);
+			}
 		}
 
 		return optimizationResultList.get( 0 );
