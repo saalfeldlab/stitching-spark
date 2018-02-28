@@ -12,6 +12,7 @@ import java.util.TreeMap;
 import java.util.Vector;
 import java.util.concurrent.ExecutionException;
 
+import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.InterpolatedAffineModel2D;
 import mpicbg.models.InterpolatedAffineModel3D;
@@ -201,12 +202,12 @@ public class GlobalOptimizationPerformer
 
 		long elapsed = System.nanoTime();
 
-		tc.optimize(
-				10, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
+		tc.optimizeSilently(
+				new ErrorStatistic( iterations + 1 ),
+				0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
 				iterations,
 				iterations,
-				translationOnlyStitching ? 1 : DAMPNESS_FACTOR,
-				1 // run on a single thread because multiple configurations are tested at once on Spark
+				translationOnlyStitching ? 1 : DAMPNESS_FACTOR
 			);
 
 		elapsed = System.nanoTime() - elapsed;
