@@ -78,7 +78,7 @@ public class C1WarpedStitchingSpark implements Serializable, AutoCloseable
 		final SerializableStitchingParameters params = new SerializableStitchingParameters();
 		params.channel1 = 1;
 		params.channel2 = 1;
-		params.checkPeaks = 50;
+		params.checkPeaks = 100;
 		params.computeOverlap = true;
 		params.subpixelAccuracy = true;
 		params.virtual = false;
