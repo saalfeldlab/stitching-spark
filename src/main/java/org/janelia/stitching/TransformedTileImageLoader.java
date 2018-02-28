@@ -9,7 +9,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealConverter;
-import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.NativeType;
@@ -47,7 +47,7 @@ public class TransformedTileImageLoader
 		}
 
 		final RandomAccessible< T > extendedImg = Views.extendZero( source );
-		final RealRandomAccessible< T > interpolatedImg = Views.interpolate( extendedImg, new NLinearInterpolatorFactory<>() );
+		final RealRandomAccessible< T > interpolatedImg = Views.interpolate( extendedImg, new ClampingNLinearInterpolatorFactory<>() );
 		final AffineGet transform = TileOperations.getTileTransform( tile );
 		final RandomAccessible< T > rasteredInterpolatedImg = Views.raster( RealViews.affine( interpolatedImg, transform ) );
 		final Interval boundingBox = TileOperations.estimateBoundingBox( tile );
