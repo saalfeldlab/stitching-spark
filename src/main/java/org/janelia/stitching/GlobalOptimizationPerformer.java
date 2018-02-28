@@ -250,41 +250,21 @@ public class GlobalOptimizationPerformer
 		if ( tilesSet.isEmpty() )
 			return null;
 
-		// trash everything but the largest graph
-		final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
-		writeLog( logWriter, "Number of tile graphs = " + graphs.size() );
-
-		int largestGraphSize = 0;
-		int largestGraphId = -1;
-		int graphSizesSum = 0;
-
-		final TreeMap< Integer, Integer > graphSizeToCount = new TreeMap<>();
-
-		for ( int i = 0; i < graphs.size(); ++i )
-		{
-			final int graphSize = graphs.get( i ).size();
-
-			graphSizesSum += graphSize;
-
-			if ( graphSize > largestGraphSize )
-			{
-				largestGraphSize = graphSize;
-				largestGraphId = i;
-			}
-
-			graphSizeToCount.put( graphSize, graphSizeToCount.getOrDefault( graphSize, 0 ) + 1 );
-		}
-
+		// print graph sizes
+		final TreeMap< Integer, Integer > graphSizeToCount = getGraphsSize( tilesSet );
+		writeLog( logWriter, "Number of tile graphs = " + graphSizeToCount.values().stream().mapToInt( Number::intValue ).sum() );
 		for ( final Entry< Integer, Integer > entry : graphSizeToCount.descendingMap().entrySet() )
 			writeLog( logWriter, "   " + entry.getKey() + " tiles: " + entry.getValue() + " graphs" );
 
-		final ArrayList< Tile< ? > > largestGraph = new ArrayList< >();
-		largestGraph.addAll( graphs.get( largestGraphId ) );
-		tilesSet.clear();
-		tilesSet.addAll( largestGraph );
+		// trash everything but the largest graph
+		final int numTilesBeforeRetainingLargestGraph = tilesSet.size();
+		preserveOnlyLargestGraph( tilesSet );
+		final int numTilesAfterRetainingLargestGraph = tilesSet.size();
 
-		writeLog( logWriter, "Using the largest graph of size " + largestGraphSize + " (throwing away " + ( graphSizesSum - largestGraphSize ) + " tiles from smaller graphs)" );
-		remainingGraphSize = largestGraphSize;
+		writeLog( logWriter, "Using the largest graph of size " + numTilesAfterRetainingLargestGraph + " (throwing away " + ( numTilesBeforeRetainingLargestGraph - numTilesAfterRetainingLargestGraph ) + " tiles from smaller graphs)" );
+		remainingGraphSize = numTilesAfterRetainingLargestGraph;
+
+		remainingPairs = countRemainingPairs( tilesSet, comparePointPairs );
 
 		final TileConfiguration tc = new TileConfiguration();
 		tc.addTiles( tilesSet );
@@ -365,7 +345,51 @@ public class GlobalOptimizationPerformer
 		return imageInformationList;
 	}
 
-	private void writeLog( final PrintWriter logWriter, final String log )
+
+	private static TreeMap< Integer, Integer > getGraphsSize( final Set< Tile< ? > > tilesSet )
+	{
+		final TreeMap< Integer, Integer > graphSizeToCount = new TreeMap<>();
+
+		final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
+		for ( final Set< Tile< ? > > graph : graphs )
+		{
+			final int graphSize = graph.size();
+			graphSizeToCount.put( graphSize, graphSizeToCount.getOrDefault( graphSize, 0 ) + 1 );
+		}
+
+		return graphSizeToCount;
+	}
+
+	private static void preserveOnlyLargestGraph( final Set< Tile< ? > > tilesSet )
+	{
+		final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
+		int largestGraphSize = 0, largestGraphId = -1;
+		for ( int i = 0; i < graphs.size(); ++i )
+		{
+			final int graphSize = graphs.get( i ).size();
+			if ( graphSize > largestGraphSize )
+			{
+				largestGraphSize = graphSize;
+				largestGraphId = i;
+			}
+		}
+
+		final ArrayList< Tile< ? > > largestGraph = new ArrayList<>();
+		largestGraph.addAll( graphs.get( largestGraphId ) );
+		tilesSet.clear();
+		tilesSet.addAll( largestGraph );
+	}
+
+	private static int countRemainingPairs( final Set< Tile< ? > > remainingTilesSet, final Vector< ComparePointPair > comparePointPairs )
+	{
+		int remainingPairs = 0;
+		for ( final ComparePointPair comparePointPair : comparePointPairs )
+			if ( comparePointPair.getIsValidOverlap() && remainingTilesSet.contains( comparePointPair.getTile1() ) && remainingTilesSet.contains( comparePointPair.getTile2() ) )
+				++remainingPairs;
+		return remainingPairs;
+	}
+
+	private static void writeLog( final PrintWriter logWriter, final String log )
 	{
 		if ( logWriter != null )
 			logWriter.println( log );
