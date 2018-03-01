@@ -138,31 +138,6 @@ public class GlobalOptimizationPerformer
 			}
 		}
 
-		// if all tiles have underlying translation models, consider this stitching configuration to be translation-only
-		translationOnlyStitching = true;
-		for ( final Tile< ? > tile : tilesSet )
-		{
-			if ( !( tile.getModel() instanceof TranslationModel2D || tile.getModel() instanceof TranslationModel3D ) )
-			{
-				translationOnlyStitching = false;
-				break;
-			}
-		}
-
-		// if some of the tiles do not have enough point matches for a high-order model, fall back to simpler model
-		replacedTilesTranslation = ensureEnoughPointMatches( tilesSet );
-
-		// FIXME: don't consider configurations where some affine models have been replaced by translation models
-//		if ( replacedTilesTranslation != 0 )
-//			return null;
-
-		// instead of pre-aligning, apply the models of the approximate tile transforms to the point matches
-//		for ( final Tile< ? > tile : tilesSet )
-//			tile.apply();
-
-		// if the point matches are on the same plane, fall back to SimilarityModel3D (otherwise AffineModel3D will throw IllDefinedPointsException)
-		replacedTilesSimilarity = ensureNotIllDefined( tilesSet );
-
 		writeLog( logWriter, "Pairs above the threshold: " + pairsAdded + ", pairs total = " + comparePointPairs.size() );
 
 		if ( tilesSet.isEmpty() )
@@ -183,6 +158,23 @@ public class GlobalOptimizationPerformer
 		remainingGraphSize = numTilesAfterRetainingLargestGraph;
 
 		remainingPairs = countRemainingPairs( tilesSet, comparePointPairs );
+
+		// if all tiles have underlying translation models, consider this stitching configuration to be translation-only
+		translationOnlyStitching = true;
+		for ( final Tile< ? > tile : tilesSet )
+		{
+			if ( !( tile.getModel() instanceof TranslationModel2D || tile.getModel() instanceof TranslationModel3D ) )
+			{
+				translationOnlyStitching = false;
+				break;
+			}
+		}
+
+		// if some of the tiles do not have enough point matches for a high-order model, fall back to simpler model
+		replacedTilesTranslation = ensureEnoughPointMatches( tilesSet );
+
+		// if the point matches are on the same plane, fall back to SimilarityModel3D (otherwise AffineModel3D will throw IllDefinedPointsException)
+		replacedTilesSimilarity = ensureNotIllDefined( tilesSet );
 
 		final TileConfiguration tc = new TileConfiguration();
 		tc.addTiles( tilesSet );
