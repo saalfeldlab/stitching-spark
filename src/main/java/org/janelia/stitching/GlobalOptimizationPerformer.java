@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -291,26 +290,39 @@ public class GlobalOptimizationPerformer
 			}
 			else
 			{
-				final int dim = tile.getMatches().iterator().next().getP1().getL().length;
-				final double[] mins = new double[ dim ], maxs = new double[ dim ];
-				Arrays.fill( mins, Double.POSITIVE_INFINITY );
-				Arrays.fill( maxs, Double.NEGATIVE_INFINITY );
+				final Tile< ? > tileCopy = new ImagePlusTimePoint(
+						( ( ImagePlusTimePoint ) tile ).getImagePlus(),
+						( ( ImagePlusTimePoint ) tile ).getImpId(),
+						( ( ImagePlusTimePoint ) tile ).getTimePoint(),
+						tile.getModel().copy(),
+						( ( ImagePlusTimePoint ) tile ).getElement()
+					);
+
 				for ( final PointMatch pointMatch : tile.getMatches() )
 				{
-					final double[] coords = pointMatch.getP1().getL();
-					for ( int d = 0; d < dim; ++d )
-					{
-						mins[ d ] = Math.min( coords[ d ], mins[ d ] );
-						maxs[ d ] = Math.max( coords[ d ], maxs[ d ] );
-					}
+					final PointMatch pointMatchCopy = new PointMatch(
+							pointMatch.getP1().clone(),
+							pointMatch.getP2().clone(),
+							pointMatch.getWeight()
+						);
+					tileCopy.addMatch( pointMatchCopy );
 				}
 
-				boolean samePlane = false;
-				for ( int d = 0; d < dim; ++d )
-					if ( Math.abs( maxs[ d ] - mins[ d ] ) < 1e-8 )
-						samePlane = true;
+				boolean illDefined = false;
+				try
+				{
+					tileCopy.fitModel();
+				}
+				catch ( final NotEnoughDataPointsException e )
+				{
+					throw new RuntimeException( "should not happen! already checked for having enough point matches" );
+				}
+				catch ( final IllDefinedDataPointsException e )
+				{
+					illDefined = true;
+				}
 
-				if ( samePlane )
+				if ( illDefined )
 				{
 					newTilesSet.add( getReplacementTile( tile, getSimilarityReplacementModel( tile ) ) );
 					++numTilesReplacedWithSimilarity;
@@ -568,6 +580,7 @@ public class GlobalOptimizationPerformer
 
 	private static void preserveOnlyLargestGraph( final Set< Tile< ? > > tilesSet )
 	{
+		// get components
 		final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
 		int largestGraphSize = 0, largestGraphId = -1;
 		for ( int i = 0; i < graphs.size(); ++i )
@@ -580,6 +593,7 @@ public class GlobalOptimizationPerformer
 			}
 		}
 
+		// retain the largest component
 		final ArrayList< Tile< ? > > largestGraph = new ArrayList<>();
 		largestGraph.addAll( graphs.get( largestGraphId ) );
 		tilesSet.clear();
