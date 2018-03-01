@@ -4,6 +4,7 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -12,6 +13,12 @@ import java.util.TreeMap;
 import java.util.Vector;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.commons.lang.NotImplementedException;
+
+import mpicbg.models.AffineModel2D;
+import mpicbg.models.AffineModel3D;
+import mpicbg.models.ConstantAffineModel2D;
+import mpicbg.models.ConstantAffineModel3D;
 import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.InterpolatedAffineModel2D;
@@ -19,6 +26,8 @@ import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
+import mpicbg.models.RigidModel2D;
+import mpicbg.models.RigidModel3D;
 import mpicbg.models.SimilarityModel2D;
 import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.Tile;
@@ -104,10 +113,9 @@ public class GlobalOptimizationPerformer
 			final SerializableStitchingParameters params,
 			final PrintWriter logWriter ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
 	{
+		// create a set of tiles
 		final Set< Tile< ? > > tilesSet = new HashSet<>();
-
 		int pairsAdded = 0;
-
 		for ( final ComparePointPair comparePointPair : comparePointPairs )
 		{
 			if ( comparePointPair.getIsValidOverlap() )
@@ -130,7 +138,7 @@ public class GlobalOptimizationPerformer
 			}
 		}
 
-		// if at least one tile has a higher-order model, do not consider this stitching translation-only
+		// if all tiles have underlying translation models, consider this stitching configuration to be translation-only
 		translationOnlyStitching = true;
 		for ( final Tile< ? > tile : tilesSet )
 		{
@@ -195,7 +203,11 @@ public class GlobalOptimizationPerformer
 		}
 		else
 		{
-			// TODO: instead of pre-aligning, we use the known transform for each tile and apply to point matches
+			// prealign using translation model, otherwise might get IllDefined exception due to selecting a subset of point matches between a pair of tiles
+			if ( tc.getFixedTiles().size() != 1 )
+				throw new RuntimeException( "number of fixed tiles: " + tc.getFixedTiles().size() + ", expected 1" );
+			final Tile< ? > fixedTile = tc.getFixedTiles().iterator().next();
+			prealignWithTranslationModel( tilesSet, fixedTile );
 		}
 
 		final int iterations = 5000;
@@ -257,26 +269,9 @@ public class GlobalOptimizationPerformer
 		final Set< Tile< ? > > newTilesSet = new HashSet<>();
 		for ( final Tile< ? > tile : tilesSet )
 		{
-			final int dim = tile.getMatches().iterator().next().getP1().getL().length;
 			if ( tile.getMatches().size() < tile.getModel().getMinNumMatches() )
 			{
-				final Model< ? > replacementModel = dim == 2 ? new TranslationModel2D() : new TranslationModel3D();
-				final Tile< ? > replacementTile = new ImagePlusTimePoint(
-						( ( ImagePlusTimePoint ) tile ).getImagePlus(),
-						( ( ImagePlusTimePoint ) tile ).getImpId(),
-						( ( ImagePlusTimePoint ) tile ).getTimePoint(),
-						replacementModel,
-						( ( ImagePlusTimePoint ) tile ).getElement()
-					);
-				replacementTile.addMatches( tile.getMatches() );
-				for ( final Tile< ? > connectedTile : tile.getConnectedTiles() )
-				{
-					// don't use removeConnectedTile() because it "overdoes" it by removing point matches from both sides which we would like to preserve
-					connectedTile.getConnectedTiles().remove( tile );
-					connectedTile.addConnectedTile( replacementTile );
-					replacementTile.addConnectedTile( connectedTile );
-				}
-				newTilesSet.add( replacementTile );
+				newTilesSet.add( getReplacementTile( tile, getTranslationReplacementModel( tile ) ) );
 				++numTilesReplacedWithTranslation;
 			}
 			else
@@ -325,40 +320,7 @@ public class GlobalOptimizationPerformer
 
 				if ( samePlane )
 				{
-					final Model< ? > replacementModel;
-					if ( dim == 2 )
-					{
-						replacementModel = new InterpolatedAffineModel2D<>(
-								new SimilarityModel2D(),
-								new TranslationModel2D(),
-								REGULARIZER_TRANSLATION
-							);
-					}
-					else
-					{
-						replacementModel = new InterpolatedAffineModel3D<>(
-								new SimilarityModel3D(),
-								new TranslationModel3D(),
-								REGULARIZER_TRANSLATION
-							);
-					}
-
-					final Tile< ? > replacementTile = new ImagePlusTimePoint(
-							( ( ImagePlusTimePoint ) tile ).getImagePlus(),
-							( ( ImagePlusTimePoint ) tile ).getImpId(),
-							( ( ImagePlusTimePoint ) tile ).getTimePoint(),
-							replacementModel,
-							( ( ImagePlusTimePoint ) tile ).getElement()
-						);
-					replacementTile.addMatches( tile.getMatches() );
-					for ( final Tile< ? > connectedTile : tile.getConnectedTiles() )
-					{
-						// do not use removeConnectedTile() because it also removes the point matches from both sides which we would like to preserve
-						connectedTile.getConnectedTiles().remove( tile );
-						connectedTile.addConnectedTile( replacementTile );
-						replacementTile.addConnectedTile( connectedTile );
-					}
-					newTilesSet.add( replacementTile );
+					newTilesSet.add( getReplacementTile( tile, getSimilarityReplacementModel( tile ) ) );
 					++numTilesReplacedWithSimilarity;
 				}
 				else
@@ -371,6 +333,231 @@ public class GlobalOptimizationPerformer
 		tilesSet.addAll( newTilesSet );
 
 		return numTilesReplacedWithSimilarity;
+	}
+
+	private static void prealignWithTranslationModel( final Set< Tile< ? > > tilesSet, final Tile< ? > fixedTile ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		// create translation tiles to be able to change the graph topology while keeping the original graph intact
+		final Set< Tile< ? > > translationTilesSet = new HashSet<>();
+		for ( final Tile< ? > tile : tilesSet )
+		{
+			final Tile< ? > translationTile = new ImagePlusTimePoint(
+					( ( ImagePlusTimePoint ) tile ).getImagePlus(),
+					( ( ImagePlusTimePoint ) tile ).getImpId(),
+					( ( ImagePlusTimePoint ) tile ).getTimePoint(),
+					getTranslationReplacementModel( tile ),
+					( ( ImagePlusTimePoint ) tile ).getElement()
+				);
+			translationTile.addMatches( tile.getMatches() );
+			translationTilesSet.add( translationTile );
+		}
+
+		// translation tiles still have old references to original tiles in connectedTiles, need to update the references
+		final Map< Integer, Tile< ? > > translationTileIndexMapping = getTileIndexMapping( translationTilesSet );
+		for ( final Tile< ? > tile : tilesSet )
+		{
+			final Tile< ? > translationTile = translationTileIndexMapping.get( ( ( ImagePlusTimePoint ) tile ).getImpId() );
+			for ( final Tile< ? > connectedTile : tile.getConnectedTiles() )
+			{
+				final Tile< ? > connectedTranslationTile = translationTileIndexMapping.get( ( ( ImagePlusTimePoint ) connectedTile ).getImpId() );
+				translationTile.addConnectedTile( connectedTranslationTile );
+			}
+		}
+
+		// create a translation-based tile configuration
+		final TileConfiguration translationTileConfiguration = new TileConfiguration();
+		translationTileConfiguration.addTiles( translationTilesSet );
+		// fix the same tile as in the original tile configuration
+		for ( final Tile< ? > translationTile : translationTilesSet )
+		{
+			if ( ( ( ImagePlusTimePoint ) translationTile ).getImpId() == ( ( ImagePlusTimePoint ) fixedTile ).getImpId() )
+			{
+				translationTileConfiguration.fixTile( translationTile );
+				break;
+			}
+		}
+		// prealign translation-based configuration
+		translationTileConfiguration.preAlign();
+
+		// original point matches have been prealigned, only need to apply the prealigned translation component to original tile models
+		final Map< Integer, Tile< ? > > tileIndexToOriginalTile = getTileIndexMapping( tilesSet );
+		for ( final Tile< ? > prealignedTranslationTile : translationTilesSet )
+		{
+			final Tile< ? > originalTile = tileIndexToOriginalTile.get( ( ( ImagePlusTimePoint ) prealignedTranslationTile ).getImpId() );
+			final int dim = originalTile.getMatches().iterator().next().getP1().getL().length;
+			if ( dim == 2 )
+			{
+				final double[] prealignedTranslation = ( ( TranslationModel2D ) prealignedTranslationTile.getModel() ).getTranslation();
+				updateModel2DWithTranslation(
+						originalTile.getModel(),
+						prealignedTranslation[ 0 ],
+						prealignedTranslation[ 1 ]
+					);
+			}
+			else
+			{
+				final double[] prealignedTranslation = ( ( TranslationModel3D ) prealignedTranslationTile.getModel() ).getTranslation();
+				updateModel3DWithTranslation(
+						originalTile.getModel(),
+						prealignedTranslation[ 0 ],
+						prealignedTranslation[ 1 ],
+						prealignedTranslation[ 2 ]
+					);
+			}
+			originalTile.updateCost();
+		}
+	}
+
+	private static Map< Integer, Tile< ? > > getTileIndexMapping( final Set< Tile< ? > > tilesSet )
+	{
+		final Map< Integer, Tile< ? > > tileIndexMapping = new HashMap<>();
+		for ( final Tile< ? > tile : tilesSet )
+			tileIndexMapping.put( ( ( ImagePlusTimePoint ) tile ).getImpId(), tile );
+		return tileIndexMapping;
+	}
+
+	private static void updateModel2DWithTranslation(
+			final Model< ? > model,
+			final double tx,
+			final double ty )
+	{
+		if ( model instanceof TranslationModel2D )
+		{
+			final TranslationModel2D actualModel = ( TranslationModel2D ) model;
+			actualModel.set( tx, ty );
+		}
+		else if ( model instanceof RigidModel2D )
+		{
+			final RigidModel2D actualModel = ( RigidModel2D ) model;
+			actualModel.set( 0, tx, ty );
+		}
+		else if ( model instanceof SimilarityModel2D )
+		{
+			final SimilarityModel2D actualModel = ( SimilarityModel2D ) model;
+			actualModel.setScaleRotationTranslation( 1, 0, tx, ty );
+		}
+		else if ( model instanceof AffineModel2D )
+		{
+			final AffineModel2D actualModel = ( AffineModel2D ) model;
+			actualModel.set( 1, 0, 0, 1, tx, ty );
+		}
+		else if ( model instanceof InterpolatedAffineModel2D< ?, ? > )
+		{
+			final InterpolatedAffineModel2D< ?, ? > actualModel = ( InterpolatedAffineModel2D< ?, ? > ) model;
+			updateModel2DWithTranslation( actualModel.getA(), tx, ty );
+			updateModel2DWithTranslation( actualModel.getB(), tx, ty );
+			actualModel.set( 1, 0, 0, 1, tx, ty );
+		}
+		else if ( !( model instanceof ConstantAffineModel2D< ? > ) )
+		{
+			throw new NotImplementedException( "model updating is not implemented for " + model );
+		}
+	}
+
+	private static void updateModel3DWithTranslation(
+			final Model< ? > model,
+			final double tx,
+			final double ty,
+			final double tz )
+	{
+		if ( model instanceof TranslationModel3D )
+		{
+			final TranslationModel3D actualModel = ( TranslationModel3D ) model;
+			actualModel.set( tx, ty, tz );
+		}
+		else if ( model instanceof RigidModel3D )
+		{
+			final RigidModel3D actualModel = ( RigidModel3D ) model;
+			actualModel.set(
+					1, 0, 0, tx,
+					0, 1, 0, ty,
+					0, 0, 1, tz
+				);
+		}
+		else if ( model instanceof SimilarityModel3D )
+		{
+			final SimilarityModel3D actualModel = ( SimilarityModel3D ) model;
+			actualModel.set(
+					1, 0, 0, tx,
+					0, 1, 0, ty,
+					0, 0, 1, tz
+				);
+		}
+		else if ( model instanceof AffineModel3D )
+		{
+			final AffineModel3D actualModel = ( AffineModel3D ) model;
+			actualModel.set(
+					1, 0, 0, tx,
+					0, 1, 0, ty,
+					0, 0, 1, tz
+				);
+		}
+		else if ( model instanceof InterpolatedAffineModel3D )
+		{
+			final InterpolatedAffineModel3D< ?, ? > actualModel = ( InterpolatedAffineModel3D< ?, ? > ) model;
+			updateModel3DWithTranslation( actualModel.getA(), tx, ty, tz );
+			updateModel3DWithTranslation( actualModel.getB(), tx, ty, tz );
+			actualModel.set(
+					1, 0, 0, tx,
+					0, 1, 0, ty,
+					0, 0, 1, tz
+				);
+		}
+		else if ( !( model instanceof ConstantAffineModel3D< ? > ) )
+		{
+			throw new NotImplementedException( "model updating is not implemented for " + model );
+		}
+	}
+
+	// replacing the model of the existing tile is not supported, thus need to replace the tile while keeping all point matches
+	private static Tile< ? > getReplacementTile( final Tile< ? > tile, final Model< ? > replacementModel )
+	{
+		final Tile< ? > replacementTile = new ImagePlusTimePoint(
+				( ( ImagePlusTimePoint ) tile ).getImagePlus(),
+				( ( ImagePlusTimePoint ) tile ).getImpId(),
+				( ( ImagePlusTimePoint ) tile ).getTimePoint(),
+				replacementModel,
+				( ( ImagePlusTimePoint ) tile ).getElement()
+			);
+		replacementTile.addMatches( tile.getMatches() );
+		for ( final Tile< ? > connectedTile : tile.getConnectedTiles() )
+		{
+			// don't use removeConnectedTile() because it tries too hard and removes point matches from both sides which we would like to preserve
+			connectedTile.getConnectedTiles().remove( tile );
+			connectedTile.addConnectedTile( replacementTile );
+			replacementTile.addConnectedTile( connectedTile );
+		}
+		return replacementTile;
+	}
+
+	private static Model< ? > getTranslationReplacementModel( final Tile< ? > tile )
+	{
+		final int dim = tile.getMatches().iterator().next().getP1().getL().length;
+		final Model< ? > replacementModel = dim == 2 ? new TranslationModel2D() : new TranslationModel3D();
+		return replacementModel;
+	}
+
+	private static Model< ? > getSimilarityReplacementModel( final Tile< ? > tile )
+	{
+		final int dim = tile.getMatches().iterator().next().getP1().getL().length;
+		final Model< ? > replacementModel;
+		if ( dim == 2 )
+		{
+			replacementModel = new InterpolatedAffineModel2D<>(
+					new SimilarityModel2D(),
+					new TranslationModel2D(),
+					REGULARIZER_TRANSLATION
+				);
+		}
+		else
+		{
+			replacementModel = new InterpolatedAffineModel3D<>(
+					new SimilarityModel3D(),
+					new TranslationModel3D(),
+					REGULARIZER_TRANSLATION
+				);
+		}
+		return replacementModel;
 	}
 
 	private static TreeMap< Integer, Integer > getGraphsSize( final Set< Tile< ? > > tilesSet )
