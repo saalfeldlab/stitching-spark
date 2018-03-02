@@ -193,7 +193,7 @@ public class GlobalOptimizationPerformer
 
 		elapsed = System.nanoTime() - elapsed;
 
-		writeLog( logWriter, "Optimization round took " + elapsed/1e9 + "s" );
+		writeLog( logWriter, String.format( "Optimization round took %.2fs", elapsed / 1e9 ) );
 
 		final double avgError = tc.getError();
 		final double maxError = tc.getMaxError();
@@ -205,7 +205,7 @@ public class GlobalOptimizationPerformer
 				longestDisplacement = Math.max( p.getDistance(), longestDisplacement );
 
 		writeLog( logWriter, "" );
-		writeLog( logWriter, "Max pairwise match displacement: " + longestDisplacement );
+		writeLog( logWriter, String.format( "Max pairwise match displacement: %.2fpx", longestDisplacement ) );
 		writeLog( logWriter, String.format( "avg error: %.2fpx", avgError ) );
 		writeLog( logWriter, String.format( "max error: %.2fpx", maxError ) );
 
@@ -214,7 +214,7 @@ public class GlobalOptimizationPerformer
 
 		// find out what tiles have been thrown out
 		lostTiles = getLostTiles( tilesSet, comparePointPairs );
-		System.out.println( "Tiles lost: " + lostTiles.size() );
+		writeLog( logWriter, "Tiles lost: " + lostTiles.size() );
 
 		// create a list of image informations containing their positions
 		final ArrayList< ImagePlusTimePoint > imageInformationList = new ArrayList< >();
@@ -222,7 +222,6 @@ public class GlobalOptimizationPerformer
 			imageInformationList.add( (ImagePlusTimePoint)t );
 
 		Collections.sort( imageInformationList );
-
 		return imageInformationList;
 	}
 
