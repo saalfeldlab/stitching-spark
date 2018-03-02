@@ -30,7 +30,7 @@ public class WarpedStitchingOptimizer implements Serializable
 
 	private static final int MAX_PARTITIONS = 15000;
 
-	private static final double INITIAL_MAX_ALLOWED_ERROR = 15;
+	private static final double INITIAL_MAX_ALLOWED_ERROR = 20;
 
 	private static final class OptimizationParameters
 	{
@@ -94,17 +94,25 @@ public class WarpedStitchingOptimizer implements Serializable
 			if ( translationOnlyStitching != other.translationOnlyStitching && Math.min( remainingGraphSize, other.remainingGraphSize ) > 0 )
 				throw new RuntimeException( "some tiles have translation model while some others have affine model" );
 
-			// if both are above the error threshold, the order is determined solely by smaller or higher error
+			// if both are above the error threshold, the order is determined by the resulting graph size and max.error
 			if ( maxDisplacement > maxAllowedError || other.maxDisplacement > other.maxAllowedError )
+			{
+				if ( remainingGraphSize != other.remainingGraphSize )
+					return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
 				return Double.compare( maxDisplacement, other.maxDisplacement );
+			}
 
-			// better if the remaining graph is bigger, and in case of a tie, if more edges have been preserved
+			// better if the resulting graph is larger
 			if ( remainingGraphSize != other.remainingGraphSize )
 				return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
+
+			/*
+			// better when the resulting graph has more edges
 			if ( remainingPairs != other.remainingPairs )
 				return -Integer.compare( remainingPairs, other.remainingPairs );
+			*/
 
-			// for the same graph characteristics, it is better when less tiles have simplified model
+			// for the same graph characteristics, it is better when fewer tiles have simplified model
 			if ( replacedTilesTranslation != other.replacedTilesTranslation )
 				return Integer.compare( replacedTilesTranslation, other.replacedTilesTranslation );
 
@@ -217,10 +225,6 @@ public class WarpedStitchingOptimizer implements Serializable
 				final List< ImagePlusTimePoint > optimized;
 
 				optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
-
-				// ignore this configuration if some tiles do not have enough matches
-//				if ( optimizationPerformer.replacedTilesTranslation != 0 )
-//					return null;
 
 				if ( optimizationPerformer.translationOnlyStitching && optimizationPerformer.replacedTilesTranslation != 0 )
 					throw new RuntimeException( "some tiles have their models replaced while translation-only stitching mode was reported" );
