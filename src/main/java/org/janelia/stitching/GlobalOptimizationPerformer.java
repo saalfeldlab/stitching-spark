@@ -212,14 +212,9 @@ public class GlobalOptimizationPerformer
 		avgDisplacement = avgError;
 		maxDisplacement = maxError;
 
-		lostTiles = new TreeMap<>();
-		for ( final ComparePointPair comparePointPair : comparePointPairs )
-			for ( final ImagePlusTimePoint t : new ImagePlusTimePoint[] { comparePointPair.getTile1(), comparePointPair.getTile2() } )
-				lostTiles.put( t.getImpId(), t );
-		for ( final Tile< ? > t : tc.getTiles() )
-			lostTiles.remove( ( ( ImagePlusTimePoint ) t ).getImpId() );
+		// find out what tiles have been thrown out
+		lostTiles = getLostTiles( tilesSet, comparePointPairs );
 		System.out.println( "Tiles lost: " + lostTiles.size() );
-
 
 		// create a list of image informations containing their positions
 		final ArrayList< ImagePlusTimePoint > imageInformationList = new ArrayList< >();
@@ -334,6 +329,20 @@ public class GlobalOptimizationPerformer
 			if ( comparePointPair.getIsValidOverlap() && remainingTilesSet.contains( comparePointPair.getTile1() ) && remainingTilesSet.contains( comparePointPair.getTile2() ) )
 				++remainingPairs;
 		return remainingPairs;
+	}
+
+	private static Map< Integer, Tile< ? > > getLostTiles( final Set< Tile< ? > > tilesSet, final Vector< ComparePointPair > comparePointPairs )
+	{
+		final Map< Integer, Tile< ? > > lostTiles = new TreeMap<>();
+
+		for ( final ComparePointPair comparePointPair : comparePointPairs )
+			for ( final ImagePlusTimePoint t : new ImagePlusTimePoint[] { comparePointPair.getTile1(), comparePointPair.getTile2() } )
+				lostTiles.put( t.getImpId(), t );
+
+		for ( final Tile< ? > t : tilesSet )
+			lostTiles.remove( ( ( ImagePlusTimePoint ) t ).getImpId() );
+
+		return lostTiles;
 	}
 
 	private static void writeLog( final PrintWriter logWriter, final String log )
