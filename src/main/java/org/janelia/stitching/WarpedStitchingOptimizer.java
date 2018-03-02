@@ -58,7 +58,6 @@ public class WarpedStitchingOptimizer implements Serializable
 		public final double avgDisplacement;
 
 		public final boolean translationOnlyStitching;
-		public final int replacedTilesSimilarity;
 		public final int replacedTilesTranslation;
 
 		public OptimizationResult(
@@ -71,7 +70,6 @@ public class WarpedStitchingOptimizer implements Serializable
 				final double avgDisplacement,
 				final double maxDisplacement,
 				final boolean translationOnlyStitching,
-				final int replacedTilesSimilarity,
 				final int replacedTilesTranslation )
 		{
 			this.optimized = optimized;
@@ -82,7 +80,6 @@ public class WarpedStitchingOptimizer implements Serializable
 			this.avgDisplacement = avgDisplacement;
 			this.maxDisplacement = maxDisplacement;
 			this.translationOnlyStitching = translationOnlyStitching;
-			this.replacedTilesSimilarity = replacedTilesSimilarity;
 			this.replacedTilesTranslation = replacedTilesTranslation;
 
 			retainedGraphRatio = ( double ) remainingGraphSize / fullGraphSize;
@@ -110,8 +107,6 @@ public class WarpedStitchingOptimizer implements Serializable
 			// for the same graph characteristics, it is better when less tiles have simplified model
 			if ( replacedTilesTranslation != other.replacedTilesTranslation )
 				return Integer.compare( replacedTilesTranslation, other.replacedTilesTranslation );
-			if ( replacedTilesSimilarity != other.replacedTilesSimilarity )
-				return Integer.compare( replacedTilesSimilarity, other.replacedTilesSimilarity );
 
 			// if everything above is the same, the order is determined by smaller or higher error
 			return Double.compare( maxDisplacement, other.maxDisplacement );
@@ -227,7 +222,7 @@ public class WarpedStitchingOptimizer implements Serializable
 //				if ( optimizationPerformer.replacedTilesTranslation != 0 )
 //					return null;
 
-				if ( optimizationPerformer.translationOnlyStitching && ( optimizationPerformer.replacedTilesSimilarity != 0 || optimizationPerformer.replacedTilesTranslation != 0 ) )
+				if ( optimizationPerformer.translationOnlyStitching && optimizationPerformer.replacedTilesTranslation != 0 )
 					throw new RuntimeException( "some tiles have their models replaced while translation-only stitching mode was reported" );
 
 				final OptimizationResult optimizationResult = new OptimizationResult(
@@ -240,7 +235,6 @@ public class WarpedStitchingOptimizer implements Serializable
 						optimizationPerformer.avgDisplacement,
 						optimizationPerformer.maxDisplacement,
 						optimizationPerformer.translationOnlyStitching,
-						optimizationPerformer.replacedTilesSimilarity,
 						optimizationPerformer.replacedTilesTranslation
 					);
 				return optimizationResult;
@@ -274,7 +268,6 @@ public class WarpedStitchingOptimizer implements Serializable
 					{
 						modelSpecificationLog =
 								";  higher-order model stitching" +
-								"; tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity +
 								"; tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation;
 					}
 				}
