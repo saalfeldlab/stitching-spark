@@ -27,6 +27,7 @@ public interface DataProvider
 	public URI getUri( final String path ) throws URISyntaxException;
 
 	public boolean fileExists( final URI uri ) throws IOException;
+	public void createFolder( final URI uri ) throws IOException;
 
 	public void copyFile( final URI uriSrc, final URI uriDst ) throws IOException;
 	public void copyFolder( final URI uriSrc, final URI uriDst ) throws IOException;

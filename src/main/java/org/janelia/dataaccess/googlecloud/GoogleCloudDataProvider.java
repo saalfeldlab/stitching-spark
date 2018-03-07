@@ -103,6 +103,12 @@ public class GoogleCloudDataProvider implements DataProvider
 	}
 
 	@Override
+	public void createFolder( final URI uri ) throws IOException
+	{
+		// folders are reflected by the object key structure, so no need to create them explicitly
+	}
+
+	@Override
 	public void copyFile( final URI uriSrc, final URI uriDst ) throws IOException
 	{
 		final GoogleCloudStorageURI googleCloudUriSrc = new GoogleCloudStorageURI( uriSrc );

@@ -190,7 +190,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final String iterationDirname = "iter" + iteration;
 		final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 		final String pairwiseFilename = "pairwise.json";
-
+		dataProvider.createFolder( URI.create( PathResolver.get( basePath, iterationDirname ) ) );
 		final String pairwisePath = PathResolver.get( basePath, iterationDirname, pairwiseFilename );
 
 		if ( iteration == 0 )

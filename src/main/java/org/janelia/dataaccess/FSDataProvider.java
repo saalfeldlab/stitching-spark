@@ -1,5 +1,6 @@
 package org.janelia.dataaccess;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
@@ -54,6 +55,12 @@ class FSDataProvider implements DataProvider
 	public boolean fileExists( final URI uri )
 	{
 		return Files.exists( getPath( uri ) );
+	}
+
+	@Override
+	public void createFolder( final URI uri ) throws IOException
+	{
+		new File( uri.toString() ).mkdirs();
 	}
 
 	@Override

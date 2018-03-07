@@ -116,6 +116,12 @@ public class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
+	public void createFolder( final URI uri ) throws IOException
+	{
+		// folders are reflected by the object key structure, so no need to create them explicitly
+	}
+
+	@Override
 	public void deleteFile( final URI uri ) throws IOException
 	{
 		final AmazonS3URI s3Uri = decodeS3Uri( uri );
