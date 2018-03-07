@@ -140,7 +140,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			System.out.println( "Processing channel #" + channel );
 
 			final String absoluteChannelPath = job.getArgs().inputTileConfigurations().get( channel );
-			final String absoluteChannelPathNoExt = absoluteChannelPath.lastIndexOf( '.' ) != -1 ? absoluteChannelPath.substring( 0, absoluteChannelPath.lastIndexOf( '.' ) ) : absoluteChannelPath;
+			final String absoluteChannelPathNoFinal = Utils.removeFilenameSuffix( absoluteChannelPath, "-final" ); // adjust the path in order to use original flatfields
+			final String absoluteChannelPathNoFinalNoExt = absoluteChannelPathNoFinal.lastIndexOf( '.' ) != -1 ? absoluteChannelPathNoFinal.substring( 0, absoluteChannelPathNoFinal.lastIndexOf( '.' ) ) : absoluteChannelPathNoFinal;
 
 			n5.createGroup( N5ExportMetadata.getChannelGroupPath( channel ) );
 
@@ -154,7 +155,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// use it as a folder with the input file's name
 			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
 					dataProvider,
-					absoluteChannelPathNoExt,
+					absoluteChannelPathNoFinalNoExt,
 					job.getDimensionality()
 				);
 			if ( flatfieldCorrection != null )
