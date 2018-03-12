@@ -10,8 +10,8 @@ import java.util.List;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.saalfeldlab.n5.N5Reader;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.spark.N5RemoveSpark;
 import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5OffsetScalePyramidSpark;
 
@@ -45,14 +45,14 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 	private final List< String > scalePyramidDatasetPaths;
 	private final List< long[] > scalePyramidDatasetDimensions;
 
-	private final DataAccessType dataAccessType;
+	private final DataProviderType dataProviderType;
 	private final String histogramsN5BasePath;
 
 	public ShiftedDownsampling( final JavaSparkContext sparkContext, final HistogramsProvider histogramsProvider ) throws IOException
 	{
 		this(
 				sparkContext,
-				histogramsProvider.getDataAccessType(),
+				histogramsProvider.getDataProviderType(),
 				histogramsProvider.getHistogramsN5BasePath(),
 				histogramsProvider.getHistogramsDataset(),
 				histogramsProvider.getWorkingInterval()
@@ -62,13 +62,13 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 	@SuppressWarnings( "unchecked" )
 	public ShiftedDownsampling(
 			final JavaSparkContext sparkContext,
-			final DataAccessType dataAccessType,
+			final DataProviderType dataProviderType,
 			final String histogramsN5BasePath,
 			final String fullScaleHistogramsDataset,
 			final Interval workingInterval ) throws IOException
 	{
 		this.sparkContext = sparkContext;
-		this.dataAccessType = dataAccessType;
+		this.dataProviderType = dataProviderType;
 		this.histogramsN5BasePath = histogramsN5BasePath;
 
 		if ( workingInterval.numDimensions() == 2 )
@@ -83,7 +83,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 			downsamplingTransform.set( -0.5, d, downsamplingTransform.numDimensions() );
 		}
 
-		final DataProvider dataProvider = DataProviderFactory.createByType( dataAccessType );
+		final DataProvider dataProvider = DataProviderFactory.createByType( dataProviderType );
 
 		final String histogramsDatasetParentGroupPath = ( Paths.get( fullScaleHistogramsDataset ).getParent() != null ? Paths.get( fullScaleHistogramsDataset ).getParent().toString() : "" );
 		downsampledHistogramsGroupPath = Paths.get( histogramsDatasetParentGroupPath, "histograms-downsampled" ).toString();
@@ -102,7 +102,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 		scalePyramidDatasetPaths.add( fullScaleHistogramsDataset );
 		scalePyramidDatasetPaths.addAll( N5OffsetScalePyramidSpark.downsampleOffsetScalePyramid(
 				sparkContext,
-				() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
 				fullScaleHistogramsDataset,
 				downsampledHistogramsGroupPath,
 				downsamplingFactors,
@@ -186,13 +186,13 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 
 	public void cleanupDownsampledHistograms() throws IOException
 	{
-		final DataAccessType dataAccessType = this.dataAccessType;
+		final DataProviderType dataProviderType = this.dataProviderType;
 		final String histogramsN5BasePath = this.histogramsN5BasePath;
 		final String downsampledHistogramsGroupPath = this.downsampledHistogramsGroupPath;
 
 		N5RemoveSpark.remove(
 				sparkContext,
-				() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
 				downsampledHistogramsGroupPath
 			);
 	}

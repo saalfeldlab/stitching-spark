@@ -9,9 +9,9 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.junit.After;
 import org.junit.Assert;
@@ -160,7 +160,7 @@ public class ReferenceHistogramTest
 			assert histogram.length == bins;
 
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
-		final DataAccessType dataAccessType = DataAccessType.FILESYSTEM;
+		final DataProviderType dataProviderType = DataProviderType.FILESYSTEM;
 
 		final long[] dimensions = new long[] { 1, 1, histograms.size() };
 		final int[] blockSize = new int[] { 1, 1, histograms.size() / 2 };
@@ -186,7 +186,7 @@ public class ReferenceHistogramTest
 
 		final double[] referenceHistogram = HistogramsProvider.estimateReferenceHistogram(
 				sparkContext,
-				dataProvider, dataAccessType,
+				dataProvider, dataProviderType,
 				histogramsN5BasePath, histogramsDataset,
 				dimensions, blockSize,
 				REFERENCE_HISTOGRAM_POINTS_PERCENT,

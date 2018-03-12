@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -25,18 +24,16 @@ import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5NonIsotropicScalePyramidSpark3D;
+import org.janelia.stitching.FusionPerformer.FusionMode;
 import org.janelia.util.Conversions;
 
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalDimensions;
-import net.imglib2.FinalInterval;
-import net.imglib2.Interval;
 import net.imglib2.img.cell.CellGrid;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
-import net.imglib2.util.IntervalsHelper;
 import net.imglib2.view.RandomAccessiblePairNullable;
 
 /**
