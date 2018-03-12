@@ -5,15 +5,6 @@ The code is based on the Stitching plugin for Fiji https://github.com/fiji/Stitc
 
 ## Usage
 
-### 0. Prerequisites
-
-Build the required dependencies that have been specifically patched for this application:
-
-```bash
-git clone -b serializable-new https://github.com/igorpisarev/n5.git
-mvn clean install -f n5
-```
-
 ### 1. Building the package
 
 Clone the repository with submodules:
