@@ -277,7 +277,15 @@ public class StitchingOptimizer implements Serializable
 			logWriter.println( "Scanning parameter space for the optimizer: min.cross.correlation and min.variance:" );
 			logWriter.println();
 			for ( final OptimizationResult optimizationResult : optimizationResultList )
-				logWriter.println( "score=" + optimizationResult.score + ", graph=" + optimizationResult.remainingGraphSize + ", pairs=" + optimizationResult.remainingPairs + ", avg.error=" + optimizationResult.avgDisplacement + ", max.error=" + optimizationResult.maxDisplacement + ";  cross.corr=" + optimizationResult.optimizationParameters.minCrossCorrelation + ", variance=" + optimizationResult.optimizationParameters.minVariance );
+				logWriter.println(
+						"score=" + String.format( "%.2f", optimizationResult.score ) +
+						", graph=" + optimizationResult.remainingGraphSize +
+						", pairs=" + optimizationResult.remainingPairs +
+						", avg.error=" + String.format( "%.2f", optimizationResult.avgDisplacement ) +
+						", max.error=" + String.format( "%.2f", optimizationResult.maxDisplacement ) +
+						";  cross.corr=" + String.format( "%.2f", optimizationResult.optimizationParameters.minCrossCorrelation ) +
+						", variance=" + String.format( "%.2f", optimizationResult.optimizationParameters.minVariance )
+					);
 		}
 
 		return optimizationResultList.get( 0 ).optimizationParameters;
