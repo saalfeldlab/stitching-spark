@@ -16,26 +16,16 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.analysis.CheckConnectedGraphs;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
+import org.janelia.util.Conversions;
 
 public class ParseTilesImageList
 {
 	public static void main( final String[] args ) throws Exception
 	{
 		final String imageListFilepath = args[ 0 ];
+		final String tileImagesFolder = args.length > 2 ? args[ 1 ] : null;
+		final double[] pixelResolution = Conversions.parseDoubleArray( ( tileImagesFolder == null ? args[ 1 ] : args[ 2 ] ).trim().split( "," ) );
 
-		final double[] pixelResolution;
-		if ( args.length > 1 )
-		{
-			final String voxelDimensions = args[ 1 ];
-			final String[] tokens = voxelDimensions.trim().split( "," );
-			pixelResolution = new double[ tokens.length ];
-			for ( int i = 0; i < pixelResolution.length; i++ )
-				pixelResolution[ i ] = Double.parseDouble( tokens[ i ] );
-		}
-		else
-		{
-			pixelResolution = new double[] { 0.097, 0.097, 0.18 };
-		}
 		System.out.println( "Pixel resolution: " + Arrays.toString( pixelResolution ) );
 
 		final String fileNamePattern = "^.*?_(\\d{3})nm_.*?_(\\d{3}x_\\d{3}y_\\d{3}z)_.*?\\.tif$";
@@ -51,7 +41,7 @@ public class ParseTilesImageList
 			{
 				final String[] columns = line.split( "," );
 
-				final String filepath = columns[ 0 ];
+				final String filepath = tileImagesFolder == null ? columns[ 0 ] : Paths.get( tileImagesFolder, columns[ 1 ] ).toString();
 				final String filename = Paths.get( filepath ).getFileName().toString();
 
 				// swap X and Y
@@ -99,7 +89,7 @@ public class ParseTilesImageList
 		// trace overlaps to ensure that tile positions are accurate
 		System.out.println();
 		final long[] tileSize = tiles.firstEntry().getValue().get( 0 ).getSize();
-		System.out.println( "tile size = " + Arrays.toString( tileSize ) );
+		System.out.println( "tile size in px = " + Arrays.toString( tileSize ) );
 		for ( int d = 0; d < tiles.firstEntry().getValue().get( 0 ).numDimensions(); ++d )
 		{
 			final List< TilePair > adjacentPairsDim = FilterAdjacentShifts.filterAdjacentPairs( overlappingPairs, d );
@@ -115,7 +105,7 @@ public class ParseTilesImageList
 					avgOverlap += overlap;
 				}
 				avgOverlap /= adjacentPairsDim.size();
-				System.out.println( String.format( "Overlaps for [%c] adjacent pairs: min=%d, max=%d, avg=%d",
+				System.out.println( String.format( "Overlaps for [%c] adjacent pairs: min=%d px, max=%d px, avg=%d px",
 						new char[] { 'x', 'y', 'z' }[ d ],
 						Math.round( minOverlap ),
 						Math.round( maxOverlap ),
