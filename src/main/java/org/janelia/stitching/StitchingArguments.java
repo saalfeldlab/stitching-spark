@@ -1,8 +1,10 @@
 package org.janelia.stitching;
 
 import java.io.Serializable;
+import java.nio.file.Paths;
 import java.util.List;
 
+import org.janelia.dataaccess.CloudURI;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -114,6 +116,15 @@ public class StitchingArguments implements Serializable {
 				restitchingMode = RestitchingMode.INCREMENTAL;
 			else
 				throw new IllegalArgumentException( "Invalid restitching mode. Possible values are: 'restitching-full' or 'restitching-incremental'" );
+		}
+
+		// make sure that inputTileConfigurations contains absolute file paths if running on a traditional filesystem
+		for ( int i = 0; i < inputTileConfigurations.size(); ++i )
+		{
+			if ( !CloudURI.isCloudURI( inputTileConfigurations.get( i ) ) )
+			{
+				inputTileConfigurations.set( i, Paths.get( inputTileConfigurations.get( i ) ).toAbsolutePath().toString() );
+			}
 		}
 	}
 

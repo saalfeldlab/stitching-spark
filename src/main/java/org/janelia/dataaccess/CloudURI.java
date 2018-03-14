@@ -61,4 +61,29 @@ public class CloudURI
 	{
 		return s3Uri != null ? s3Uri.getKey() : googleCloudUri.getKey();
 	}
+
+	public static boolean isCloudURI( final URI uri )
+	{
+		try
+		{
+			new CloudURI( uri );
+			return true;
+		}
+		catch ( final IllegalArgumentException e )
+		{
+			return false;
+		}
+	}
+
+	public static boolean isCloudURI( final String path )
+	{
+		try
+		{
+			return isCloudURI( URI.create( path ) );
+		}
+		catch ( final IllegalArgumentException e )
+		{
+			return false;
+		}
+	}
 }

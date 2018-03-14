@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Paths;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -23,7 +24,7 @@ public class N5ToSliceTiffSpark
 	public static void main( final String[] args ) throws Exception
 	{
 		int lastArg = 0;
-		final String n5Path = args[ lastArg++ ];
+		final String n5Path = Paths.get( args[ lastArg++ ] ).toAbsolutePath().toString();
 
 		final Integer requestedChannel;
 		{
@@ -52,6 +53,7 @@ public class N5ToSliceTiffSpark
 		final int scaleLevel = binned ? SCALE_LEVEL_BINNED : SCALE_LEVEL;
 		System.out.println( "Using scale level " + scaleLevel + " to generate slice TIFFs" );
 
+		// FIXME: does not really work with AWS/GoogleCloud because its parent will be null.
 		final String outBaseFolder = PathResolver.getParent( n5Path );
 		final String outFolder = "slice-tiff" + ( binned ? "-binned" : "" );
 		final String outputPath = PathResolver.get( outBaseFolder, outFolder );
