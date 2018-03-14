@@ -22,7 +22,7 @@ public class ParseTilesImageList
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final String imageListFilepath = args[ 0 ];
+		final String imageListFilepath = Paths.get( args[ 0 ] ).toAbsolutePath().toString();
 		final String tileImagesFolder = args.length > 2 ? args[ 1 ] : null;
 		final double[] pixelResolution = Conversions.parseDoubleArray( ( tileImagesFolder == null ? args[ 1 ] : args[ 2 ] ).trim().split( "," ) );
 
