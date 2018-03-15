@@ -3,11 +3,13 @@ package org.janelia.stitching;
 import java.io.IOException;
 import java.io.Serializable;
 import java.net.URI;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
@@ -67,6 +69,18 @@ abstract class TilesToN5Converter
 				System.err.println( e.getMessage() );
 				parser.printUsage( System.err );
 			}
+
+			// make sure that inputTileConfigurations contains absolute file paths if running on a traditional filesystem
+			for ( int i = 0; i < inputChannelsPath.size(); ++i )
+			{
+				if ( !CloudURI.isCloudURI( inputChannelsPath.get( i ) ) )
+				{
+					inputChannelsPath.set( i, Paths.get( inputChannelsPath.get( i ) ).toAbsolutePath().toString() );
+				}
+			}
+			// make sure that n5OutputPath is absolute if running on a traditional filesystem
+			if ( !CloudURI.isCloudURI( n5OutputPath ) )
+				n5OutputPath = Paths.get( n5OutputPath ).toAbsolutePath().toString();
 		}
 
 		public boolean parsedSuccessfully() { return parsedSuccessfully; }

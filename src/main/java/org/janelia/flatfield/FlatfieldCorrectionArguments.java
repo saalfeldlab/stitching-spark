@@ -1,5 +1,8 @@
 package org.janelia.flatfield;
 
+import java.nio.file.Paths;
+
+import org.janelia.dataaccess.CloudURI;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -59,6 +62,10 @@ public class FlatfieldCorrectionArguments
 			System.err.println( e.getMessage() );
 			parser.printUsage( System.err );
 		}
+
+		// make sure that inputTileConfigurations contains absolute file paths if running on a traditional filesystem
+		if ( !CloudURI.isCloudURI( inputFilePath ) )
+			inputFilePath = Paths.get( inputFilePath ).toAbsolutePath().toString();
 	}
 
 	public boolean parsedSuccessfully() { return parsedSuccessfully; }
