@@ -30,7 +30,7 @@ public class ParseTilesImageList
 		try
 		{
 			imageListFilepath = Paths.get( args[ 0 ] ).toAbsolutePath().toString();
-			tileImagesFolder = args.length > 2 ? args[ 1 ] : null;
+			tileImagesFolder = args.length > 3 ? args[ 1 ] : null;
 			pixelResolution = Conversions.parseDoubleArray( ( tileImagesFolder == null ? args[ 1 ] : args[ 2 ] ).trim().split( "," ) );
 			axisMappingStr = ( tileImagesFolder == null ? args[ 2 ] : args[ 3 ] ).trim().split( "," );
 		}
