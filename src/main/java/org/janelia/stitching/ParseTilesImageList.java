@@ -22,10 +22,29 @@ public class ParseTilesImageList
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		final String imageListFilepath = Paths.get( args[ 0 ] ).toAbsolutePath().toString();
-		final String tileImagesFolder = args.length > 2 ? args[ 1 ] : null;
-		final double[] pixelResolution = Conversions.parseDoubleArray( ( tileImagesFolder == null ? args[ 1 ] : args[ 2 ] ).trim().split( "," ) );
-		final String[] axisMappingStr = ( tileImagesFolder == null ? args[ 2 ] : args[ 3 ] ).trim().split( "," );
+		final String imageListFilepath;
+		final String tileImagesFolder;
+		final double[] pixelResolution;
+		final String[] axisMappingStr;
+
+		try
+		{
+			imageListFilepath = Paths.get( args[ 0 ] ).toAbsolutePath().toString();
+			tileImagesFolder = args.length > 2 ? args[ 1 ] : null;
+			pixelResolution = Conversions.parseDoubleArray( ( tileImagesFolder == null ? args[ 1 ] : args[ 2 ] ).trim().split( "," ) );
+			axisMappingStr = ( tileImagesFolder == null ? args[ 2 ] : args[ 3 ] ).trim().split( "," );
+		}
+		catch ( final Exception e )
+		{
+			throw new RuntimeException(
+					"Usage:" + System.lineSeparator() +
+					"python parse-imagelist.py " + System.lineSeparator() +
+					"  <path to ImageList.csv> " + System.lineSeparator() +
+					"  <path to tile images directory> " + System.lineSeparator() +
+					"  <pixel resolution, e.g. 0.097,0.097,0.18> " + System.lineSeparator() +
+					"  <objective to pixel coordinates axis mapping, e.g. -y,x,z>"
+				);
+		}
 
 		if ( pixelResolution.length != 3 && axisMappingStr.length != 3 )
 			throw new IllegalArgumentException( "expected three-dimensional pixelResolution and axisMapping" );
