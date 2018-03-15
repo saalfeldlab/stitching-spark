@@ -25,8 +25,15 @@ public class ParseTilesImageList
 		final String imageListFilepath = Paths.get( args[ 0 ] ).toAbsolutePath().toString();
 		final String tileImagesFolder = args.length > 2 ? args[ 1 ] : null;
 		final double[] pixelResolution = Conversions.parseDoubleArray( ( tileImagesFolder == null ? args[ 1 ] : args[ 2 ] ).trim().split( "," ) );
+		final String[] axisMappingStr = ( tileImagesFolder == null ? args[ 2 ] : args[ 3 ] ).trim().split( "," );
+
+		if ( pixelResolution.length != 3 && axisMappingStr.length != 3 )
+			throw new IllegalArgumentException( "expected three-dimensional pixelResolution and axisMapping" );
+
+		final AxisMapping axisMapping = new AxisMapping( axisMappingStr );
 
 		System.out.println( "Pixel resolution: " + Arrays.toString( pixelResolution ) );
+		System.out.println( "Axis mapping: " + Arrays.toString( axisMappingStr ) );
 
 		final String fileNamePattern = "^.*?_(\\d{3})nm_.*?_(\\d{3}x_\\d{3}y_\\d{3}z)_.*?\\.tif$";
 		final String baseOutputFolder = Paths.get( imageListFilepath ).getParent().toString();
@@ -44,18 +51,16 @@ public class ParseTilesImageList
 				final String filepath = tileImagesFolder == null ? columns[ 0 ] : Paths.get( tileImagesFolder, columns[ 1 ] ).toString();
 				final String filename = Paths.get( filepath ).getFileName().toString();
 
-				// swap X and Y
+				// FIXME: Utils.getTileCoordinates() still returns y/x/z grid coordinates. Instead, it needs to account for the axis mapping that is used here
 				final double[] objCoords = new double[] {
-						Double.parseDouble( columns[ 6 ] ),
 						Double.parseDouble( columns[ 5 ] ),
+						Double.parseDouble( columns[ 6 ] ),
 						Double.parseDouble( columns[ 7 ] )
 					};
 
-				// flip X
-				objCoords[ 0 ] *= -1;
-
-				for ( int d = 0; d < objCoords.length; ++d )
-					objCoords[ d ] /= pixelResolution[ d ];
+				final double[] pixelCoords = new double[ objCoords.length ];
+				for ( int d = 0; d < pixelCoords.length; ++d )
+					pixelCoords[ d ] = objCoords[ axisMapping.axisMapping[ d ] ] / pixelResolution[ axisMapping.axisMapping[ d ] ] * ( axisMapping.flip[ d ] ? -1 : 1 );
 
 				final int nm = Integer.parseInt( filename.replaceAll( fileNamePattern, "$1" ) );
 
@@ -65,7 +70,7 @@ public class ParseTilesImageList
 				final TileInfo tile = new TileInfo( 3 );
 				tile.setIndex( tiles.get( nm ).size() );
 				tile.setFilePath( filepath );
-				tile.setPosition( objCoords );
+				tile.setPosition( pixelCoords );
 				tile.setSize( null );
 				tile.setPixelResolution( pixelResolution.clone() );
 				tiles.get( nm ).add( tile );
