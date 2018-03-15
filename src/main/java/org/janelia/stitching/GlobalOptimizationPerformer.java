@@ -3,6 +3,7 @@ package org.janelia.stitching;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -14,6 +15,7 @@ import java.util.concurrent.ExecutionException;
 
 import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.InterpolatedModel;
 import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Point;
@@ -27,6 +29,7 @@ import mpicbg.stitching.ImagePlusTimePoint;
 // based on the GlobalOptimization class from the original Fiji's Stitching plugin repository
 public class GlobalOptimizationPerformer
 {
+	private static final double POINT_MATCH_MAX_OFFSET = 10;
 	private static final double DAMPNESS_FACTOR = 0.9;
 
 	public Map< Integer, Tile< ? > > lostTiles = null;
@@ -146,6 +149,9 @@ public class GlobalOptimizationPerformer
 
 		remainingPairs = countRemainingPairs( tilesSet, comparePointPairs );
 
+		// if some of the tiles do not have enough point matches for a high-order model, fall back to simpler model
+		replacedTilesTranslation = ensureEnoughPointMatches( tilesSet );
+
 		// if all tiles have underlying translation models, consider this stitching configuration to be translation-only
 		translationOnlyStitching = true;
 		for ( final Tile< ? > tile : tilesSet )
@@ -161,9 +167,6 @@ public class GlobalOptimizationPerformer
 		if ( !translationOnlyStitching )
 			shiftPointMatches( comparePointPairs );
 
-		// if some of the tiles do not have enough point matches for a high-order model, fall back to simpler model
-		replacedTilesTranslation = ensureEnoughPointMatches( tilesSet );
-
 		final TileConfiguration tc = new TileConfiguration();
 		tc.addTiles( tilesSet );
 
@@ -177,19 +180,80 @@ public class GlobalOptimizationPerformer
 			}
 		}
 
-		tc.preAlign();
-
 		final int iterations = 5000;
-
 		long elapsed = System.nanoTime();
 
-		tc.optimizeSilently(
-				new ErrorStatistic( iterations + 1 ),
-				0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
-				iterations,
-				iterations,
-				translationOnlyStitching ? 1 : DAMPNESS_FACTOR
-			);
+		if ( translationOnlyStitching )
+		{
+			tc.preAlign();
+			tc.optimizeSilently(
+					new ErrorStatistic( iterations + 1 ),
+					0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
+					iterations,
+					iterations,
+					1
+				);
+		}
+		else
+		{
+			// first, prealign with translation-only
+			final Map< Tile< ? >, Double > originalLambdas = new HashMap<>();
+			for ( final Tile< ? > tile : tilesSet )
+			{
+				if ( tile.getModel() instanceof InterpolatedModel )
+				{
+					final InterpolatedModel< ?, ?, ? > model = ( InterpolatedModel< ?, ?, ? > ) tile.getModel();
+					originalLambdas.put( tile, model.getLambda() );
+					model.setLambda( 1 );
+				}
+			}
+			tc.preAlign();
+			tc.optimizeSilently(
+					new ErrorStatistic( iterations + 1 ),
+					0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
+					iterations,
+					iterations,
+					1
+				);
+
+			// then, iteratively solve the models increasing the impact of the affine part on each step
+			final double minRegularizer = originalLambdas.values().stream().mapToDouble( val -> val ).max().getAsDouble();
+			for ( double regularizer = 0.9; regularizer >= minRegularizer + 0.05; regularizer -= 0.1 )
+			{
+				for ( final Tile< ? > tile : tilesSet )
+				{
+					if ( tile.getModel() instanceof InterpolatedModel )
+					{
+						final InterpolatedModel< ?, ?, ? > model = ( InterpolatedModel< ?, ?, ? > ) tile.getModel();
+						model.setLambda( regularizer );
+					}
+				}
+				tc.optimizeSilently(
+						new ErrorStatistic( iterations + 1 ),
+						0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
+						iterations,
+						iterations,
+						DAMPNESS_FACTOR
+					);
+			}
+
+			// third, solve using original models
+			for ( final Tile< ? > tile : tilesSet )
+			{
+				if ( tile.getModel() instanceof InterpolatedModel )
+				{
+					final InterpolatedModel< ?, ?, ? > model = ( InterpolatedModel< ?, ?, ? > ) tile.getModel();
+					model.setLambda( originalLambdas.get( tile ) );
+				}
+			}
+			tc.optimizeSilently(
+					new ErrorStatistic( iterations + 1 ),
+					0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
+					iterations,
+					iterations,
+					DAMPNESS_FACTOR
+				);
+		}
 
 		elapsed = System.nanoTime() - elapsed;
 
@@ -225,6 +289,7 @@ public class GlobalOptimizationPerformer
 		return imageInformationList;
 	}
 
+	// apply random shift in the range of [-POINT_MATCH_MAX_OFFSET, POINT_MATCH_MAX_OFFSET]px to every point match
 	private static void shiftPointMatches( final Vector< ComparePointPair > comparePointPairs )
 	{
 		final Random rnd = new Random( 69997 ); // repeatable results
@@ -233,7 +298,7 @@ public class GlobalOptimizationPerformer
 			final int dim = comparePointPair.getPointPair().getA().getL().length;
 			final double[] shift = new double[ dim ];
 			for ( int d = 0; d < dim; ++d )
-				shift[ d ] = rnd.nextDouble() * 2 - 1; // random shift in the range of [-1.0, 1.0] px
+				shift[ d ] = ( rnd.nextDouble() * 2 - 1 ) * POINT_MATCH_MAX_OFFSET;
 
 			for ( final Point point : comparePointPair.getPointPair().toArray() )
 				for ( int d = 0; d < dim; ++d )
