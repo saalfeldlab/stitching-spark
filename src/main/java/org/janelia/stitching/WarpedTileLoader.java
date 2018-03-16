@@ -30,7 +30,7 @@ import net.imglib2.view.Views;
 
 public class WarpedTileLoader
 {
-	private static final long[] DEFAULT_PADDING = new long[] { 200, 200, 200 };
+	private static final long[] DEFAULT_PADDING = new long[] { 100, 100, 100 };
 
 	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > loadTile(
 			final DataProvider dataProvider,
