@@ -10,7 +10,7 @@ import net.imglib2.realtransform.Translation;
 public class WarpedTileOperations
 {
 	/**
-	 * Returns a warping transformation for the given tile.
+	 * Returns a warping transformation for mapping the tile local coordinate space into the global coordinate space.
 	 */
 	public static InvertibleRealTransform getTileTransform( final TileInfo slabTile, final TileSlabMapping tileSlabMapping )
 	{
@@ -19,20 +19,19 @@ public class WarpedTileOperations
 	}
 
 	/**
-	 * Returns a warping transformation for the given tile.
+	 * Returns a warping transformation for mapping the tile local coordinate space into the global coordinate space.
 	 */
 	public static InvertibleRealTransform getTileTransform( final TileInfo slabTile, final double[] slabMin, final TpsTransformWrapper slabTransform )
 	{
-		final double[] tileSlabPositionMicrons = new double[ slabMin.length ];
+		final Translation tileInSlabTranslation = new Translation( slabTile.numDimensions() );
 		for ( int d = 0; d < slabMin.length; ++d )
-			tileSlabPositionMicrons[ d ] = ( slabTile.getPosition( d ) - slabMin[ d ] ) * slabTile.getPixelResolution( d );
+			tileInSlabTranslation.set( slabTile.getPosition( d ) - slabMin[ d ], d );
 
 		final Scale pixelsToMicrons = new Scale( slabTile.getPixelResolution() );
-		final Translation slabTranslationMicrons = new Translation( tileSlabPositionMicrons );
 
 		final InvertibleRealTransformSequence tileTransform = new InvertibleRealTransformSequence();
+		tileTransform.add( tileInSlabTranslation );
 		tileTransform.add( pixelsToMicrons );
-		tileTransform.add( slabTranslationMicrons );
 		tileTransform.add( slabTransform );
 		tileTransform.add( pixelsToMicrons.inverse() );
 
@@ -40,7 +39,7 @@ public class WarpedTileOperations
 	}
 
 	/**
-	 * Estimates the bounding box of a transformed tile.
+	 * Estimates the bounding box of a transformed tile in the global coordinate space.
 	 */
 	public static Interval estimateBoundingBox( final TileInfo slabTile, final TileSlabMapping tileSlabMapping )
 	{
@@ -49,7 +48,7 @@ public class WarpedTileOperations
 	}
 
 	/**
-	 * Estimates the bounding box of a transformed tile.
+	 * Estimates the bounding box of a transformed tile in the global coordinate space.
 	 */
 	public static Interval estimateBoundingBox( final TileInfo slabTile, final double[] slabMin, final TpsTransformWrapper slabTransform )
 	{

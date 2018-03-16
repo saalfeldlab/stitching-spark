@@ -15,10 +15,9 @@ import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealConverter;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.RealViews;
-import net.imglib2.realtransform.Scale;
 import net.imglib2.realtransform.TransformBoundingBox;
-import net.imglib2.realtransform.Translation;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.ByteType;
@@ -111,34 +110,21 @@ public class WarpedTileLoader
 			final TpsTransformWrapper slabTransform,
 			final long[] padding )
 	{
-		final double[] tileSlabMinPhysicalUnits = new double[ slabMin.length ], tileSlabMaxPhysicalUnits = new double[ slabMin.length ];
-		for ( int d = 0; d < slabMin.length; ++d )
-		{
-			tileSlabMinPhysicalUnits[ d ] = ( slabTile.getPosition( d ) - slabMin[ d ] ) * slabTile.getPixelResolution( d );
-			tileSlabMaxPhysicalUnits[ d ] = ( slabTile.getPosition( d ) - slabMin[ d ] + slabTile.getSize( d ) - 1) * slabTile.getPixelResolution( d );
-		}
-		final RealInterval tileSlabPhysicalUnitsInterval = new FinalRealInterval( tileSlabMinPhysicalUnits, tileSlabMaxPhysicalUnits );
+		if ( !Intervals.equalDimensions( img, new FinalInterval( new FinalDimensions( slabTile.getSize() ) ) ) )
+			throw new RuntimeException( "different dimensions: img != slabTile" );
 
-		final Scale pixelsToMicrons = new Scale( slabTile.getPixelResolution() );
-		final Translation slabTranslationMicrons = new Translation( Intervals.minAsDoubleArray( tileSlabPhysicalUnitsInterval ) );
+		final InvertibleRealTransform tileTransform = WarpedTileOperations.getTileTransform( slabTile, slabMin, slabTransform );
 
-		final RandomAccessible< T > extendedImg = Views.extendZero( img );
-		final RealRandomAccessible< T > interpolatedImg = Views.interpolate( extendedImg, new NLinearInterpolatorFactory<>() );
-		final RealRandomAccessible< T > interpolatedImgMicrons = RealViews.affineReal( interpolatedImg, pixelsToMicrons );
-		final RealRandomAccessible< T > translatedInterpolatedImgMicrons = RealViews.affineReal( interpolatedImgMicrons, slabTranslationMicrons );
-		final RealRandomAccessible< T > transformedImgMicrons = RealViews.transformReal( translatedInterpolatedImgMicrons, slabTransform );
-		final RealRandomAccessible< T > transformedImgPixels = RealViews.affineReal( transformedImgMicrons, pixelsToMicrons.inverse() );
-		final RandomAccessible< T > rasteredTransformedImgPixels = Views.raster( transformedImgPixels );
+		final RandomAccessibleInterval< T > zeroMinImg = Views.zeroMin( img );
+		final RandomAccessible< T > extendedZeroMinImg = Views.extendZero( zeroMinImg );
+		final RealRandomAccessible< T > interpolatedZeroMinImg = Views.interpolate( extendedZeroMinImg, new NLinearInterpolatorFactory<>() );
+		final RealRandomAccessible< T > transformedImg = RealViews.transformReal( interpolatedZeroMinImg, tileTransform );
+		final RandomAccessible< T > rasteredTransformedImg = Views.raster( transformedImg );
 
-		final RealInterval estimatedBoundingBoxPhysicalUnits = TransformBoundingBox.boundingBoxForwardCorners( tileSlabPhysicalUnitsInterval, slabTransform );
-		final long[] paddedBoundingBoxMin = new long[ slabMin.length ], paddedBoundingBoxMax = new long[ slabMin.length ];
-		for ( int d = 0; d < slabMin.length; ++d )
-		{
-			paddedBoundingBoxMin[ d ] = Math.round( estimatedBoundingBoxPhysicalUnits.realMin( d ) / slabTile.getPixelResolution( d ) ) - padding[ d ] / 2;
-			paddedBoundingBoxMax[ d ] = Math.round( estimatedBoundingBoxPhysicalUnits.realMax( d ) / slabTile.getPixelResolution( d ) ) + padding[ d ] / 2 + padding[ d ] % 2;
-		}
-		final Interval paddedBoundingBox = new FinalInterval( paddedBoundingBoxMin, paddedBoundingBoxMax );
+		final RealInterval tileInterval = new FinalRealInterval( Intervals.minAsDoubleArray( zeroMinImg ), Intervals.maxAsDoubleArray( zeroMinImg ) );
+		final RealInterval estimatedBoundingBox = TransformBoundingBox.boundingBoxForwardCorners( tileInterval, tileTransform );
+		final Interval paddedBoundingBox = TileOperations.padInterval( TileOperations.roundRealInterval( estimatedBoundingBox ), padding );
 
-		return Views.interval( rasteredTransformedImgPixels, paddedBoundingBox );
+		return Views.interval( rasteredTransformedImg, paddedBoundingBox );
 	}
 }
