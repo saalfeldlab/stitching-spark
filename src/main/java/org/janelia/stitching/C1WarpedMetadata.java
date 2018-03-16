@@ -8,8 +8,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,7 +28,7 @@ public class C1WarpedMetadata
 	private static final Map< String, String > LANDMARKS;
 	static
 	{
-		LANDMARKS = new HashMap<>();
+		LANDMARKS = new LinkedHashMap<>();
 		LANDMARKS.put( "3z", "ch0_03_serialized.txt" );
 		LANDMARKS.put( "4z", "ch0_04_serialized.txt" );
 		LANDMARKS.put( "5z", "ch0_05_serialized.txt" );
