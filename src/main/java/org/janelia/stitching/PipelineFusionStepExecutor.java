@@ -79,9 +79,6 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 	// TODO: add comprehensive support for 4D images where multiple channels are encoded as the 4th dimension
 	private void runImpl() throws PipelineExecutionException, IOException
 	{
-		for ( int channel = 0; channel < job.getChannels(); channel++ )
-			TileOperations.translateTilesToOriginReal( job.getTiles( channel ) );
-
 		final String overlapsPathSuffix = job.getArgs().exportOverlaps() ? "-overlaps" : "";
 
 		final DataProvider dataProvider = job.getDataProvider();
