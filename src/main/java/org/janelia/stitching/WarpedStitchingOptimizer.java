@@ -144,10 +144,6 @@ public class WarpedStitchingOptimizer implements Serializable
 		final String basePath = job.getBasePath();
 		final String pairwiseShiftsPath = PathResolver.get( basePath, "pairwise.json" );
 
-		// FIXME: skip if solution already exists?
-//		if ( Files.exists( Paths.get( Utils.addFilenameSuffix( pairwiseShiftsPath, "-used" ) ) ) )
-//			return;
-
 		final List< SerializablePairWiseStitchingResult > tileBoxShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 
 		try ( final OutputStream logOut = dataProvider.getOutputStream( URI.create( PathResolver.get( basePath, "optimizer.txt" ) ) ) )
@@ -189,12 +185,8 @@ public class WarpedStitchingOptimizer implements Serializable
 						}
 					}
 
-//					if ( newTiles.size() + optimizationPerformer.lostTiles.size() != tilesMap.size() )
-//						throw new RuntimeException( "Number of stitched tiles does not match" );
-
 					// sort the tiles by their index
 					final TileInfo[] tilesToSave = Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
-//					TileOperations.translateTilesToOriginReal( tilesToSave );
 
 					// save final tiles configuration
 					TileInfoJSONProvider.saveTilesConfiguration(

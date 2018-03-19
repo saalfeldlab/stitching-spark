@@ -177,8 +177,6 @@ public class WarpedStitchingExecutor implements Serializable
 
 									if ( tileBoxPair.getA().getIndex().intValue() > tileBoxPair.getB().getIndex().intValue() )
 										throw new RuntimeException( "should not happen: overlapping tile pairs are already sorted by its indexes" );
-//									if ( tileBoxPair.getA().getIndex().intValue() > tileBoxPair.getB().getIndex().intValue() )
-//										tileBoxPair.swap();
 
 									if ( WarpedSplitTileOperations.isOverlappingTileBoxPair( tileBoxPair, !job.getArgs().useAllPairs(), job.getTileSlabMapping() ) )
 										overlappingBoxesForTilePair.add( tileBoxPair );
@@ -486,6 +484,7 @@ public class WarpedStitchingExecutor implements Serializable
 
 				// get ROIs in the fixed tile box space and moving tile box space, respectively
 				final Pair< Interval, Interval > adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( transformedTileBoxPairFixedBoxSpace, searchRadius );
+
 				if ( adjustedOverlaps == null )
 					throw new RuntimeException( "should not happen: only overlapping tile box pairs were selected, thus adjusted overlaps should always be non-empty too" );
 
