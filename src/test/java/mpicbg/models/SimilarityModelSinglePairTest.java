@@ -1,17 +1,8 @@
 package mpicbg.models;
 
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.janelia.dataaccess.DataProvider;
-import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.stitching.SerializablePairWiseStitchingResult;
-import org.janelia.stitching.TileInfoJSONProvider;
-
 public class SimilarityModelSinglePairTest
 {
-	public static void main( final String[] args ) throws Exception
+	/*public static void main( final String[] args ) throws Exception
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
@@ -55,5 +46,5 @@ public class SimilarityModelSinglePairTest
 		System.out.println( "-- TranslationModel3D --" );
 		System.out.println( model );
 		System.out.println( String.format( "Error: %.2f px", PointMatch.maxDistance( matches ) ) );
-	}
+	}*/
 }

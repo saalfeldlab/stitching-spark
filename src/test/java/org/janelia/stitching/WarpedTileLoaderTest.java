@@ -38,7 +38,7 @@ public class WarpedTileLoaderTest
 		final int channel = 0;
 		final TileInfo[] slabTiles = C1WarpedMetadata.getSlabTiles( slab, channel );
 		final TileInfo slabTile = slabTiles[ slabTiles.length / 2 ];
-		final TpsTransformWrapper transform = C1WarpedMetadata.getTransform( slab );
+		final TpsTransformWrapper transform = C1WarpedMetadata.getSlabTransform( slab );
 		final double[] slabMin = Intervals.minAsDoubleArray( TileOperations.getRealCollectionBoundaries( slabTiles ) );
 
 		if ( slabTile.getPixelResolution() == null )

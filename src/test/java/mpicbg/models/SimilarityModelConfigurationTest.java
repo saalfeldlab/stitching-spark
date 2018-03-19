@@ -1,27 +1,8 @@
 package mpicbg.models;
 
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
-
-import org.janelia.dataaccess.DataProvider;
-import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.stitching.SerializablePairWiseStitchingResult;
-import org.janelia.stitching.TileInfo;
-import org.janelia.stitching.TileInfoJSONProvider;
-import org.janelia.stitching.Utils;
-
-import net.imglib2.realtransform.AffineTransform3D;
-
 public class SimilarityModelConfigurationTest
 {
-	private static final double REGULARIZER_TRANSLATION = 0.1;
+	/*private static final double REGULARIZER_TRANSLATION = 0.1;
 	private static final double DAMPNESS_FACTOR = 0.9;
 
 	public static void main( final String[] args ) throws Exception
@@ -223,5 +204,5 @@ public class SimilarityModelConfigurationTest
 				stitchedTilesSubset.values().toArray( new TileInfo[ 0 ] ),
 				dataProvider.getJsonWriter( URI.create( "/nrs/saalfeld/igor/MB_310C_run2/test-similarity-model/test-tiles-0,1,18,19/stitched/ch0-stitched_0,1,18,19.json" ) )
 			);
-	}
+	}*/
 }
