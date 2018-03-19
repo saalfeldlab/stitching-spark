@@ -1,27 +1,28 @@
 package org.janelia.stitching;
 
 import java.io.Serializable;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-
-import bdv.img.TpsTransformWrapper;
-import net.imglib2.util.Intervals;
+import org.janelia.util.Conversions;
 
 public class C1WarpedStitchingSpark implements Serializable, AutoCloseable
 {
 	public static void main( final String[] args ) throws Exception
 	{
+		final String filteredTilesStr = args.length > 0 ? args[ 0 ] : null;
+		final Set< Integer > filteredTiles;
+		if ( filteredTilesStr != null )
+			filteredTiles = new TreeSet<>( Arrays.asList( Conversions.toBoxedArray( Conversions.parseIntArray( filteredTilesStr.split( "," ) ) ) ) );
+		else
+			filteredTiles = null;
+
 		try ( final C1WarpedStitchingSpark driver = new C1WarpedStitchingSpark() )
 		{
-			driver.run();
+			driver.run( filteredTiles );
 		}
 	}
 
@@ -30,50 +31,9 @@ public class C1WarpedStitchingSpark implements Serializable, AutoCloseable
 	private C1WarpedStitchingJob job;
 	private transient JavaSparkContext sparkContext;
 
-	public void run() throws Exception
+	public void run( final Set< Integer > filteredTiles ) throws Exception
 	{
-		// load tile & slab metadata
-		final List< Map< String, TileInfo[] > > slabsTilesChannels = new ArrayList<>();
-		final Map< String, double[] > slabsMin = new HashMap<>();
-		final Map< String, TpsTransformWrapper > slabsTransforms = new HashMap<>();
-
-		for ( int channel = 0; channel < C1WarpedMetadata.NUM_CHANNELS; ++channel )
-		{
-			final Map< String, TileInfo[] > slabsTiles = new HashMap<>();
-
-			for ( final String slab : C1WarpedMetadata.getSlabs() )
-			{
-				final TileInfo[] slabTiles = C1WarpedMetadata.getSlabTiles( slab, channel );
-
-				for ( final TileInfo tile : slabTiles )
-					if ( !Files.exists( Paths.get( tile.getFilePath() ) ) )
-						throw new PipelineExecutionException( "Tile " + tile.getIndex() + " in ch" + channel + " cannot be found: " + tile.getFilePath() );
-
-				slabsTiles.put( slab, slabTiles );
-
-				final double[] slabMin = Intervals.minAsDoubleArray( TileOperations.getRealCollectionBoundaries( slabTiles ) );
-				slabsMin.put( slab, slabMin );
-
-				if ( !slabsTransforms.containsKey( slab ) )
-					slabsTransforms.put( slab, C1WarpedMetadata.getTransform( slab ) );
-			}
-
-			slabsTilesChannels.add( slabsTiles );
-		}
-
-		System.out.println();
-		for ( int channel = 0; channel < slabsTilesChannels.size(); ++channel )
-		{
-			int numTiles = 0;
-			for ( final Entry< String, TileInfo[] > entry : slabsTilesChannels.get( channel ).entrySet() )
-				numTiles += entry.getValue().length;
-			System.out.println( "ch" + channel + ": " + numTiles + " tiles" );
-		}
-		System.out.println();
-
-		final TileSlabMapping tileSlabMapping = new TileSlabMapping( slabsTilesChannels, slabsMin, slabsTransforms );
-
-		job = new C1WarpedStitchingJob( tileSlabMapping );
+		job = new C1WarpedStitchingJob( C1WarpedMetadata.getTileSlabMapping(), filteredTiles );
 
 		final SerializableStitchingParameters params = new SerializableStitchingParameters();
 		params.channel1 = 1;
@@ -81,9 +41,6 @@ public class C1WarpedStitchingSpark implements Serializable, AutoCloseable
 		params.checkPeaks = 100;
 		params.computeOverlap = true;
 		params.subpixelAccuracy = true;
-		params.virtual = false;
-		params.absoluteThreshold = 5;
-		params.relativeThreshold = 3;
 		params.dimensionality = C1WarpedMetadata.NUM_DIMENSIONS;
 		job.setParams( params );
 

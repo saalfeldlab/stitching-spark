@@ -2,6 +2,9 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -14,6 +17,8 @@ public class C1WarpedStitchingJob implements Serializable {
 
 	private final TileSlabMapping tileSlabMapping;
 
+	private final Set< Integer > filteredTileIndexes;
+
 	private transient DataProvider dataProvider;
 
 	private SerializableStitchingParameters params;
@@ -23,7 +28,14 @@ public class C1WarpedStitchingJob implements Serializable {
 
 	public C1WarpedStitchingJob( final TileSlabMapping tileSlabMapping )
 	{
+		this( tileSlabMapping, null );
+	}
+
+	public C1WarpedStitchingJob( final TileSlabMapping tileSlabMapping, final Set< Integer > filteredTileIndexes )
+	{
 		this.tileSlabMapping = tileSlabMapping;
+		this.filteredTileIndexes = filteredTileIndexes;
+
 		dataProvider = DataProviderFactory.createFSDataProvider();
 		args = new C1WarpedStitchingArguments();
 	}
@@ -43,7 +55,18 @@ public class C1WarpedStitchingJob implements Serializable {
 
 	public int getChannels() { return C1WarpedMetadata.NUM_CHANNELS; }
 
-	public TileInfo[] getTiles( final int channel ) throws IOException { return C1WarpedMetadata.getTiles( channel ); }
+	public TileInfo[] getTiles( final int channel ) throws IOException
+	{
+		final TileInfo[] allTiles = C1WarpedMetadata.getTiles( channel );
+		if ( filteredTileIndexes == null )
+			return allTiles;
+
+		final List< TileInfo > filteredTiles = new ArrayList<>();
+		for ( final TileInfo tile : allTiles )
+			if ( filteredTileIndexes.contains( tile.getIndex() ) )
+				filteredTiles.add( tile );
+		return filteredTiles.toArray( new TileInfo[ 0 ] );
+	}
 
 	public String getFlatfieldPath( final int channel ) { return C1WarpedMetadata.getFlatfieldPath( channel ); };
 
