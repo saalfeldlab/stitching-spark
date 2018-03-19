@@ -148,8 +148,6 @@ public class C1WarpedMetadata
 		for ( final TileInfo tile : slabTiles )
 			tile.setFilePath( Paths.get( NEW_TILES_LOCATION, Paths.get( tile.getFilePath() ).getFileName().toString() ).toString() );
 
-		// hack to remove a non-existing tile 18808 in ch1
-		if ( channel == 1 )
 		// new mode: if requested, remove missing tiles in both channels
 		if ( removeMissing )
 		{

@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
@@ -37,6 +38,8 @@ public class GlobalOptimizationPerformer
 	public boolean translationOnlyStitching = false;
 
 	public int replacedTilesTranslation = 0;
+
+	private final Random rnd = new Random( 69997 ); // repeatable results
 
 	static private final java.io.PrintStream originalOut, suppressedOut;
 	static
@@ -104,7 +107,7 @@ public class GlobalOptimizationPerformer
 			final PrintWriter logWriter ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
 	{
 		// create a set of tiles
-		final Set< Tile< ? > > tilesSet = new HashSet<>();
+		final Set< Tile< ? > > tilesSet = new LinkedHashSet<>();
 		int pairsAdded = 0;
 		for ( final ComparePointPair comparePointPair : comparePointPairs )
 		{
@@ -115,10 +118,34 @@ public class GlobalOptimizationPerformer
 				final Tile< ? > t1 = comparePointPair.getTile1();
 				final Tile< ? > t2 = comparePointPair.getTile2();
 
+				// calculate point matches between middle points of the tile boxes to the correct corresponding location in the other tile
+
+				final TilePair tileBoxPair = comparePointPair.getTileBoxPair();
+				final TileInfo fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
 				final float weight = comparePointPair.getCrossCorrelation();
 
-				t1.addMatch( new PointMatch( comparePointPair.getPointPair().getA(), comparePointPair.getPointPair().getB(), weight ) );
-				t2.addMatch( new PointMatch( comparePointPair.getPointPair().getB(), comparePointPair.getPointPair().getA(), weight ) );
+//				final double[] fixedPoint = SplitTileOperations.getTileBoxMiddlePoint( fixedTileBox );
+//				final double[] movingToFixedPoint = new double[ fixedPoint.length ];
+//				for ( int d = 0; d < movingToFixedPoint.length; ++d )
+//					movingToFixedPoint[ d ] = fixedPoint[ d ] + comparePointPair.relativeShift[ d ];
+//				t1.addMatch( new PointMatch( new Point( fixedPoint ), new Point( movingToFixedPoint ), weight ) );
+//
+//				final double[] movingPoint = SplitTileOperations.getTileBoxMiddlePoint( movingTileBox );
+//				final double[] fixedToMovingPoint = new double[ movingPoint.length ];
+//				for ( int d = 0; d < fixedToMovingPoint.length; ++d )
+//					fixedToMovingPoint[ d ] = 0;
+//				t2.addMatch( new PointMatch( new Point( movingPoint ), new Point( fixedToMovingPoint ), weight ) );
+
+				final Point p1 = new Point( SplitTileOperations.getTileBoxMiddlePoint( fixedTileBox ) );
+				final double[] movingTileBoxCenter = new double[ p1.getL().length ];
+				for ( int d = 0; d < movingTileBoxCenter.length; ++d )
+					movingTileBoxCenter[ d ] = p1.getL()[ d ] - comparePointPair.getRelativeShift()[ d ];
+				final Point p2 = new Point( movingTileBoxCenter );
+
+				shiftPoints( p1, p2 );
+
+				t1.addMatch( new PointMatch( p1, p2, weight ) );
+				t2.addMatch( new PointMatch( p2, p1, weight ) );
 
 				t1.addConnectedTile( t2 );
 				t2.addConnectedTile( t1 );
@@ -164,8 +191,8 @@ public class GlobalOptimizationPerformer
 		}
 
 		// when stitching using higher-order models, avoid degenerate models by shifting point matches for each tile by [-1.0, 1.0] px so that they are not on the same plane
-		if ( !translationOnlyStitching )
-			shiftPointMatches( comparePointPairs );
+//		if ( !translationOnlyStitching )
+//			shiftPointMatches( comparePointPairs );
 
 		final TileConfiguration tc = new TileConfiguration();
 		tc.addTiles( tilesSet );
@@ -196,6 +223,10 @@ public class GlobalOptimizationPerformer
 		}
 		else
 		{
+			// FIXME: for testing translation-only stitching
+			if ( !tilesSet.isEmpty() )
+				throw new RuntimeException( "FIXME -- translation-only stitching" );
+
 			// first, prealign with translation-only
 			final Map< Tile< ? >, Double > originalLambdas = new HashMap<>();
 			for ( final Tile< ? > tile : tilesSet )
@@ -217,7 +248,7 @@ public class GlobalOptimizationPerformer
 				);
 
 			// then, iteratively solve the models increasing the impact of the affine part on each step
-			final double minRegularizer = originalLambdas.values().stream().mapToDouble( val -> val ).max().getAsDouble();
+			/*final double minRegularizer = originalLambdas.values().stream().mapToDouble( val -> val ).max().getAsDouble();
 			for ( double regularizer = 0.9; regularizer >= minRegularizer + 0.05; regularizer -= 0.1 )
 			{
 				for ( final Tile< ? > tile : tilesSet )
@@ -235,7 +266,7 @@ public class GlobalOptimizationPerformer
 						iterations,
 						DAMPNESS_FACTOR
 					);
-			}
+			}*/
 
 			// third, solve using original models
 			for ( final Tile< ? > tile : tilesSet )
@@ -290,7 +321,7 @@ public class GlobalOptimizationPerformer
 	}
 
 	// apply random shift in the range of [-POINT_MATCH_MAX_OFFSET, POINT_MATCH_MAX_OFFSET]px to every point match
-	private static void shiftPointMatches( final Vector< ComparePointPair > comparePointPairs )
+	/*private static void shiftPointMatches( final Vector< ComparePointPair > comparePointPairs )
 	{
 		final Random rnd = new Random( 69997 ); // repeatable results
 		for ( final ComparePointPair comparePointPair : comparePointPairs )
@@ -304,6 +335,17 @@ public class GlobalOptimizationPerformer
 				for ( int d = 0; d < dim; ++d )
 					point.getL()[ d ] += shift[ d ];
 		}
+	}*/
+	private void shiftPoints( final Point... points )
+	{
+		final int dim = points[ 0 ].getL().length;
+		final double[] shift = new double[ dim ];
+		for ( int d = 0; d < dim; ++d )
+			shift[ d ] = ( rnd.nextDouble() * 2 - 1 ) * POINT_MATCH_MAX_OFFSET;
+
+		for ( final Point point : points )
+			for ( int d = 0; d < dim; ++d )
+				point.getL()[ d ] += shift[ d ];
 	}
 
 	private static int ensureEnoughPointMatches( final Set< Tile< ? > > tilesSet )

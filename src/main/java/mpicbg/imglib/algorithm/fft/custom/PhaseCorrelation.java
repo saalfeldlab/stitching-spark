@@ -641,6 +641,12 @@ public class PhaseCorrelation<T extends RealType<T>, S extends RealType<S>> impl
 		return peakList;
 	}
 
+	/**
+	 * Given an offset between ROIs, calculates the offset between tiles and checks whether the given peak falls within the confidence interval.
+	 *
+	 * @param roiOffset
+	 * @return
+	 */
 	private boolean fallsIntoConfidenceInterval( final int[] roiOffset )
 	{
 		final long[] tileOffset = offsetConverter.roiOffsetToTileOffset( roiOffset );

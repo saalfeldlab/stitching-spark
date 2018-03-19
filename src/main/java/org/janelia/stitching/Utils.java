@@ -10,7 +10,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.util.Conversions;
 
 import ij.IJ;
 import ij.ImagePlus;
@@ -64,9 +63,10 @@ public class Utils {
 	{
 		final File file = new File( tile.getFilePath() );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
-		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
+//		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.numDimensions() );
-		e.setModel( TileModelFactory.createOffsetModel( tile ) );
+//		e.setModel( TileModelFactory.createOffsetModel( tile ) );
+		e.setModel( TileModelFactory.createDefaultModel( tile.numDimensions() ) );
 		return e;
 	}
 
@@ -74,7 +74,7 @@ public class Utils {
 	{
 		final File file = new File( tile.getFilePath() );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
-		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
+//		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.numDimensions() );
 		e.setModel( TileModelFactory.createAffineModel( tile ) );
 		return e;

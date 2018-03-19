@@ -13,7 +13,9 @@ public class ComparePointPair
 	// the local shift of impB relative to impA
 	float[] relativeShift;
 
-	PointPair pointPair;
+	TilePair tileBoxPair;
+
+//	PointPair pointPair;
 
 	public ComparePointPair( final ImagePlusTimePoint impA, final ImagePlusTimePoint impB )
 	{
@@ -43,6 +45,9 @@ public class ComparePointPair
 	public void setIsValidOverlap( final boolean state ) { this.validOverlap = state; }
 	public boolean getIsValidOverlap() { return validOverlap; }
 
-	public void setPointPair( final PointPair pointPair ) { this.pointPair = pointPair; }
-	public PointPair getPointPair() { return pointPair; }
+//	public void setPointPair( final PointPair pointPair ) { this.pointPair = pointPair; }
+//	public PointPair getPointPair() { return pointPair; }
+
+	public void setTileBoxPair( final TilePair tileBoxPair ) { this.tileBoxPair = tileBoxPair; }
+	public TilePair getTileBoxPair() { return tileBoxPair; }
 }

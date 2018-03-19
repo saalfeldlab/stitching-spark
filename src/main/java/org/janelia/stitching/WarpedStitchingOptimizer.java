@@ -6,7 +6,6 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -91,9 +90,6 @@ public class WarpedStitchingOptimizer implements Serializable
 		@Override
 		public int compareTo( final OptimizationResult other )
 		{
-			if ( translationOnlyStitching != other.translationOnlyStitching && Math.min( remainingGraphSize, other.remainingGraphSize ) > 0 )
-				throw new RuntimeException( "some tiles have translation model while some others have affine model" );
-
 			// if both are above the error threshold, the order is determined by the resulting graph size and max.error
 			if ( maxDisplacement > maxAllowedError && other.maxDisplacement > other.maxAllowedError )
 			{
@@ -124,8 +120,8 @@ public class WarpedStitchingOptimizer implements Serializable
 			*/
 
 			// for the same graph characteristics, it is better when fewer tiles have simplified model
-			if ( replacedTilesTranslation != other.replacedTilesTranslation )
-				return Integer.compare( replacedTilesTranslation, other.replacedTilesTranslation );
+//			if ( replacedTilesTranslation != other.replacedTilesTranslation )
+//				return Integer.compare( replacedTilesTranslation, other.replacedTilesTranslation );
 
 			// if everything above is the same, the order is determined by smaller or higher error
 			return Double.compare( maxDisplacement, other.maxDisplacement );
@@ -216,7 +212,7 @@ public class WarpedStitchingOptimizer implements Serializable
 	private OptimizationResult findBestOptimization( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final double maxAllowedError, final PrintWriter logWriter ) throws IOException
 	{
 		final List< OptimizationParameters > optimizationParametersList = new ArrayList<>();
-		for ( double testMinCrossCorrelation = 0.1; testMinCrossCorrelation <= 1; testMinCrossCorrelation += 0.05 )
+		for ( double testMinCrossCorrelation = -1.0; testMinCrossCorrelation <= 1; testMinCrossCorrelation += testMinCrossCorrelation > 0 ? 0.05 : 0.1 )
 			for ( double testMinVariance = 0; testMinVariance <= 300; testMinVariance += 1 + ( int ) testMinVariance / 10 )
 				optimizationParametersList.add( new OptimizationParameters( testMinCrossCorrelation, testMinVariance ) );
 
@@ -236,9 +232,6 @@ public class WarpedStitchingOptimizer implements Serializable
 				final List< ImagePlusTimePoint > optimized;
 
 				optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
-
-				if ( optimizationPerformer.translationOnlyStitching && optimizationPerformer.replacedTilesTranslation != 0 )
-					throw new RuntimeException( "some tiles have their models replaced while translation-only stitching mode was reported" );
 
 				final OptimizationResult optimizationResult = new OptimizationResult(
 						optimized,
@@ -319,15 +312,18 @@ public class WarpedStitchingOptimizer implements Serializable
 	private Vector< ComparePointPair > createComparePointPairs( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final OptimizationParameters optimizationParameters )
 	{
 		// validate points
-		for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts )
+		/*for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts )
 		{
+			if ( tileBoxShift == null )
+				continue;
+
 			final double[] movingAdjustedPos = new double[ tileBoxShift.getNumDimensions() ];
 			for ( int d = 0; d < movingAdjustedPos.length; ++d )
 				movingAdjustedPos[ d ] = tileBoxShift.getPointPair().getB().getL()[ d ] - tileBoxShift.getPointPair().getA().getL()[ d ] + tileBoxShift.getOffset( d );
 			for ( int d = 0; d < movingAdjustedPos.length; ++d )
 				if ( Math.abs( movingAdjustedPos[ d ] ) > 1e-3 )
 					throw new RuntimeException( "movingAdjustedPos = " + Arrays.toString( movingAdjustedPos ) );
-		}
+		}*/
 
 		// Create fake tile objects so that they don't hold any image data
 		// required by the GlobalOptimization
@@ -341,8 +337,8 @@ public class WarpedStitchingOptimizer implements Serializable
 					try
 					{
 						// --- FIXME: test translation-only solution
-						final ImageCollectionElement el = Utils.createElementAffineModel( originalTileInfo );
-//						final ImageCollectionElement el = Utils.createElementTranslationModel( originalTileInfo );
+//						final ImageCollectionElement el = Utils.createElementAffineModel( originalTileInfo );
+						final ImageCollectionElement el = Utils.createElementTranslationModel( originalTileInfo );
 						final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), ( java.awt.Image ) null );
 						final ImagePlusTimePoint fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
 						fakeTileImagesMap.put( originalTileInfo.getIndex(), fakeTile );
@@ -364,7 +360,8 @@ public class WarpedStitchingOptimizer implements Serializable
 					fakeTileImagesMap.get( tileBoxShift.getTilePair().getB().getOriginalTile().getIndex() )
 				);
 
-			comparePointPair.setPointPair( tileBoxShift.getPointPair().clone() );
+//			comparePointPair.setPointPair( tileBoxShift.getPointPair().clone() );
+			comparePointPair.setTileBoxPair( tileBoxShift.getTilePair() );
 			comparePointPair.setRelativeShift( tileBoxShift.getOffset() == null ? null : tileBoxShift.getOffset().clone() );
 			comparePointPair.setCrossCorrelation( tileBoxShift.getCrossCorrelation() );
 			comparePointPair.setIsValidOverlap(
