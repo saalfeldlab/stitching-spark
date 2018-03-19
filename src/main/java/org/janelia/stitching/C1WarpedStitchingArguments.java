@@ -16,6 +16,8 @@ public class C1WarpedStitchingArguments implements Serializable {
 	private long[] maxCoord = null;
 	private boolean allPairs = false;
 	private boolean noLeaves = false;
+	private boolean translationOnlyStitching = true;
+	private boolean affineOnlyStitching = false;
 	private StitchingMode stitchingMode = StitchingMode.INCREMENTAL;
 	private int splitOverlapParts = 2;
 
@@ -28,6 +30,8 @@ public class C1WarpedStitchingArguments implements Serializable {
 	public double blurSigma() { return blurSigma; }
 	public boolean useAllPairs() { return allPairs; }
 	public boolean noLeaves() { return noLeaves; }
+	public boolean translationOnlyStitching() { return translationOnlyStitching; }
+	public boolean affineOnlyStitching() { return affineOnlyStitching; }
 	public int splitOverlapParts() { return splitOverlapParts; }
 	public StitchingMode stitchingMode() { return stitchingMode; }
 }

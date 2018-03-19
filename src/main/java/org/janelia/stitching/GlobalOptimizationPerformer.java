@@ -233,10 +233,6 @@ public class GlobalOptimizationPerformer
 		}
 		else
 		{
-			// FIXME: for testing translation-only stitching
-			if ( !tilesSet.isEmpty() )
-				throw new RuntimeException( "FIXME -- translation-only stitching" );
-
 			// first, prealign with translation-only
 			final Map< Tile< ? >, Double > originalLambdas = new HashMap<>();
 			for ( final Tile< ? > tile : tilesSet )

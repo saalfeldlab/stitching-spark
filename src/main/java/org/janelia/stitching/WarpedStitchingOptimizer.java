@@ -45,6 +45,8 @@ public class WarpedStitchingOptimizer implements Serializable
 
 	private static final class OptimizationResult implements Comparable< OptimizationResult >
 	{
+		private final C1WarpedStitchingArguments args;
+
 		public final List< ImagePlusTimePoint > optimized;
 
 		public final OptimizationParameters optimizationParameters;
@@ -60,6 +62,7 @@ public class WarpedStitchingOptimizer implements Serializable
 		public final int replacedTilesTranslation;
 
 		public OptimizationResult(
+				final C1WarpedStitchingArguments args,
 				final List< ImagePlusTimePoint > optimized,
 				final double maxAllowedError,
 				final OptimizationParameters optimizationParameters,
@@ -71,6 +74,7 @@ public class WarpedStitchingOptimizer implements Serializable
 				final boolean translationOnlyStitching,
 				final int replacedTilesTranslation )
 		{
+			this.args = args;
 			this.optimized = optimized;
 			this.maxAllowedError = maxAllowedError;
 			this.optimizationParameters = optimizationParameters;
@@ -120,8 +124,8 @@ public class WarpedStitchingOptimizer implements Serializable
 			*/
 
 			// for the same graph characteristics, it is better when fewer tiles have simplified model
-//			if ( replacedTilesTranslation != other.replacedTilesTranslation )
-//				return Integer.compare( replacedTilesTranslation, other.replacedTilesTranslation );
+			if ( args.affineOnlyStitching() && replacedTilesTranslation != other.replacedTilesTranslation )
+				return Integer.compare( replacedTilesTranslation, other.replacedTilesTranslation );
 
 			// if everything above is the same, the order is determined by smaller or higher error
 			return Double.compare( maxDisplacement, other.maxDisplacement );
@@ -211,6 +215,9 @@ public class WarpedStitchingOptimizer implements Serializable
 
 	private OptimizationResult findBestOptimization( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final double maxAllowedError, final PrintWriter logWriter ) throws IOException
 	{
+		if ( job.getArgs().translationOnlyStitching() && job.getArgs().affineOnlyStitching() )
+			throw new IllegalArgumentException( "translationOnly & affineOnly are not allowed at the same time" );
+
 		final List< OptimizationParameters > optimizationParametersList = new ArrayList<>();
 		for ( double testMinCrossCorrelation = -1.0; testMinCrossCorrelation <= 1; testMinCrossCorrelation += testMinCrossCorrelation > 0 ? 0.05 : 0.1 )
 			for ( double testMinVariance = 0; testMinVariance <= 300; testMinVariance += 1 + ( int ) testMinVariance / 10 )
@@ -234,6 +241,7 @@ public class WarpedStitchingOptimizer implements Serializable
 				optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
 
 				final OptimizationResult optimizationResult = new OptimizationResult(
+						job.getArgs(),
 						optimized,
 						maxAllowedError,
 						optimizationParameters,
@@ -259,74 +267,14 @@ public class WarpedStitchingOptimizer implements Serializable
 			throw new RuntimeException( "No results available" );
 
 		if ( logWriter != null )
-		{
-			logWriter.println();
-			logWriter.println( "Scanning parameter space for the optimizer: min.cross.correlation and min.variance:" );
-			logWriter.println();
-			boolean aboveErrorThreshold = false;
-			for ( final OptimizationResult optimizationResult : optimizationResultList )
-			{
-				if ( optimizationResult.maxDisplacement > optimizationResult.maxAllowedError && !aboveErrorThreshold )
-				{
-					// first item that is above the specified error threshold
-					aboveErrorThreshold = true;
-					logWriter.println();
-					logWriter.println( "--------------- Max.error above threshold ---------------" );
-				}
-
-				final String modelSpecificationLog;
-				if ( optimizationResult.remainingGraphSize != 0 )
-				{
-					if ( optimizationResult.translationOnlyStitching )
-					{
-						modelSpecificationLog = ";  translation-only stitching";
-					}
-					else
-					{
-						modelSpecificationLog =
-								";  higher-order model stitching" +
-								"; tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation;
-					}
-				}
-				else
-				{
-					modelSpecificationLog = "";
-				}
-
-				logWriter.println(
-						"retainedGraphRatio=" + String.format( "%.2f", optimizationResult.retainedGraphRatio ) +
-						", graph=" + optimizationResult.remainingGraphSize +
-						", pairs=" + optimizationResult.remainingPairs +
-						",  avg.error=" + String.format( "%.2f", optimizationResult.avgDisplacement ) +
-						", max.error=" + String.format( "%.2f", optimizationResult.maxDisplacement ) +
-						";  cross.corr=" + String.format( "%.2f", optimizationResult.optimizationParameters.minCrossCorrelation ) +
-						", variance=" + String.format( "%.2f", optimizationResult.optimizationParameters.minVariance ) +
-						modelSpecificationLog
-					);
-			}
-		}
+			logOptimizationResults( logWriter, optimizationResultList );
 
 		return optimizationResultList.get( 0 );
 	}
 
 	private Vector< ComparePointPair > createComparePointPairs( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final OptimizationParameters optimizationParameters )
 	{
-		// validate points
-		/*for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts )
-		{
-			if ( tileBoxShift == null )
-				continue;
-
-			final double[] movingAdjustedPos = new double[ tileBoxShift.getNumDimensions() ];
-			for ( int d = 0; d < movingAdjustedPos.length; ++d )
-				movingAdjustedPos[ d ] = tileBoxShift.getPointPair().getB().getL()[ d ] - tileBoxShift.getPointPair().getA().getL()[ d ] + tileBoxShift.getOffset( d );
-			for ( int d = 0; d < movingAdjustedPos.length; ++d )
-				if ( Math.abs( movingAdjustedPos[ d ] ) > 1e-3 )
-					throw new RuntimeException( "movingAdjustedPos = " + Arrays.toString( movingAdjustedPos ) );
-		}*/
-
-		// Create fake tile objects so that they don't hold any image data
-		// required by the GlobalOptimization
+		// create tile models
 		final TreeMap< Integer, ImagePlusTimePoint > fakeTileImagesMap = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts )
 		{
@@ -336,9 +284,13 @@ public class WarpedStitchingOptimizer implements Serializable
 				{
 					try
 					{
-						// --- FIXME: test translation-only solution
-//						final ImageCollectionElement el = Utils.createElementAffineModel( originalTileInfo );
-						final ImageCollectionElement el = Utils.createElementTranslationModel( originalTileInfo );
+						final ImageCollectionElement el;
+
+						if ( job.getArgs().translationOnlyStitching() )
+							el = Utils.createElementTranslationModel( originalTileInfo );
+						else
+							el = Utils.createElementAffineModel( originalTileInfo );
+
 						final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), ( java.awt.Image ) null );
 						final ImagePlusTimePoint fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
 						fakeTileImagesMap.put( originalTileInfo.getIndex(), fakeTile );
@@ -360,7 +312,6 @@ public class WarpedStitchingOptimizer implements Serializable
 					fakeTileImagesMap.get( tileBoxShift.getTilePair().getB().getOriginalTile().getIndex() )
 				);
 
-//			comparePointPair.setPointPair( tileBoxShift.getPointPair().clone() );
 			comparePointPair.setTileBoxPair( tileBoxShift.getTilePair() );
 			comparePointPair.setRelativeShift( tileBoxShift.getOffset() == null ? null : tileBoxShift.getOffset().clone() );
 			comparePointPair.setCrossCorrelation( tileBoxShift.getCrossCorrelation() );
@@ -374,5 +325,53 @@ public class WarpedStitchingOptimizer implements Serializable
 		}
 
 		return comparePairs;
+	}
+
+	private void logOptimizationResults( final PrintWriter logWriter, final List< OptimizationResult > optimizationResultList )
+	{
+		logWriter.println();
+		logWriter.println( "Scanning parameter space for the optimizer: min.cross.correlation and min.variance:" );
+		logWriter.println();
+		boolean aboveErrorThreshold = false;
+		for ( final OptimizationResult optimizationResult : optimizationResultList )
+		{
+			if ( optimizationResult.maxDisplacement > optimizationResult.maxAllowedError && !aboveErrorThreshold )
+			{
+				// first item that is above the specified error threshold
+				aboveErrorThreshold = true;
+				logWriter.println();
+				logWriter.println( "--------------- Max.error above threshold ---------------" );
+			}
+
+			final String modelSpecificationLog;
+			if ( optimizationResult.remainingGraphSize != 0 )
+			{
+				if ( optimizationResult.translationOnlyStitching )
+				{
+					modelSpecificationLog = ";  translation-only stitching";
+				}
+				else
+				{
+					modelSpecificationLog =
+							";  higher-order model stitching" +
+							"; tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation;
+				}
+			}
+			else
+			{
+				modelSpecificationLog = "";
+			}
+
+			logWriter.println(
+					"retainedGraphRatio=" + String.format( "%.2f", optimizationResult.retainedGraphRatio ) +
+					", graph=" + optimizationResult.remainingGraphSize +
+					", pairs=" + optimizationResult.remainingPairs +
+					",  avg.error=" + String.format( "%.2f", optimizationResult.avgDisplacement ) +
+					", max.error=" + String.format( "%.2f", optimizationResult.maxDisplacement ) +
+					";  cross.corr=" + String.format( "%.2f", optimizationResult.optimizationParameters.minCrossCorrelation ) +
+					", variance=" + String.format( "%.2f", optimizationResult.optimizationParameters.minVariance ) +
+					modelSpecificationLog
+				);
+		}
 	}
 }
