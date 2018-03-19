@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.janelia.util.Conversions;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -159,14 +160,16 @@ public class SplitTileOperationsTest
 		final OffsetConverter offsetConverter = SplitTileOperations.getOffsetConverter( adjustedOverlaps );
 		final int[] testRoiOffset = new int[] { -1, -1 };
 
-		// find the offset between the tiles
-		final long[] tileOffset = offsetConverter.roiOffsetToTileOffset( testRoiOffset );
-		Assert.assertArrayEquals( new long[] { -3, -7 }, tileOffset );
+		// find the offset between the tile boxes
+		final long[] tileBoxOffset = offsetConverter.roiOffsetToTileOffset( testRoiOffset );
+		Assert.assertArrayEquals( new long[] { -3, -7 }, tileBoxOffset );
 
-		// find the final position that is the position of the moving tile box in the fixed space so it is compatible with the search radius test
-		final double[] finalPosition = offsetConverter.tileOffsetToGlobalPosition( tileOffset );
-		Assert.assertArrayEquals( new double[] { -3, -7 }, finalPosition, EPSILON );
+		// find the position of the moving tile box in the fixed box space so it is compatible with the search radius test
+		final double[] movingBoxPosition = offsetConverter.tileOffsetToGlobalPosition( tileBoxOffset );
+		Assert.assertArrayEquals( new double[] { -3, -7 }, movingBoxPosition, EPSILON );
+		Assert.assertTrue( searchRadius.testPoint( movingBoxPosition ) );
 
-		Assert.assertTrue( searchRadius.testPoint( finalPosition ) );
+		// test full tile offsets
+		Assert.assertArrayEquals( new double[] { -3, -17 }, SplitTileOperations.getFullTileOffset( tileBoxPair, Conversions.toDoubleArray( tileBoxOffset ) ), EPSILON );
 	}
 }
