@@ -16,10 +16,11 @@ public class C1WarpedStitchingArguments implements Serializable {
 	private long[] maxCoord = null;
 	private boolean allPairs = false;
 	private boolean noLeaves = false;
-	private boolean translationOnlyStitching = true;
-	private boolean affineOnlyStitching = false;
+	private boolean translationOnlyStitching = false;
+	private boolean affineOnlyStitching = true;
 	private StitchingMode stitchingMode = StitchingMode.INCREMENTAL;
 	private int splitOverlapParts = 2;
+	private double maxStitchingError = 5.0;
 
 	public long[] padding() { return padding; }
 	public long[] minCoord() { return minCoord; }
@@ -34,4 +35,5 @@ public class C1WarpedStitchingArguments implements Serializable {
 	public boolean affineOnlyStitching() { return affineOnlyStitching; }
 	public int splitOverlapParts() { return splitOverlapParts; }
 	public StitchingMode stitchingMode() { return stitchingMode; }
+	public double maxStitchingError() { return maxStitchingError; }
 }

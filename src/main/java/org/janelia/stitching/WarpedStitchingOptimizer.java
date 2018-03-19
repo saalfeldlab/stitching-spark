@@ -29,8 +29,6 @@ public class WarpedStitchingOptimizer implements Serializable
 
 	private static final int MAX_PARTITIONS = 15000;
 
-	private static final double INITIAL_MAX_ALLOWED_ERROR = 20;
-
 	private static final class OptimizationParameters
 	{
 		public final double minCrossCorrelation;
@@ -117,11 +115,9 @@ public class WarpedStitchingOptimizer implements Serializable
 			if ( remainingGraphSize != other.remainingGraphSize )
 				return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
 
-			/*
 			// better when the resulting graph has more edges
 			if ( remainingPairs != other.remainingPairs )
 				return -Integer.compare( remainingPairs, other.remainingPairs );
-			*/
 
 			// for the same graph characteristics, it is better when fewer tiles have simplified model
 			if ( args.affineOnlyStitching() && replacedTilesTranslation != other.replacedTilesTranslation )
@@ -161,7 +157,7 @@ public class WarpedStitchingOptimizer implements Serializable
 				logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
 				System.out.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
 
-				final double maxAllowedError = INITIAL_MAX_ALLOWED_ERROR;
+				final double maxAllowedError = job.getArgs().maxStitchingError();
 				logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 
 				final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter );
