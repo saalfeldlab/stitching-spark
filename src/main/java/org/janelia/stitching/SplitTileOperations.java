@@ -32,8 +32,16 @@ public class SplitTileOperations
 		final List< TileInfo > tileSplitBoxes = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 		{
-			final Interval zeroMinTileInterval = new FinalInterval( tile.getSize() );
-			final List< TileInfo > splitTile = TileOperations.divideSpaceByCount( zeroMinTileInterval, gridSize );
+			// make sure that all tile boxes are of same size
+			final long[] tileBoxSize = new long[ tile.numDimensions() ];
+			for ( int d = 0; d < tileBoxSize.length; ++d )
+				tileBoxSize[ d ] = tile.getSize( d ) / gridSize[ d ];
+
+			final List< TileInfo > splitTile = TileOperations.divideSpaceIgnoreSmaller(
+					new FinalInterval( tile.getSize() ),
+					new FinalDimensions( tileBoxSize )
+				);
+
 			for ( final TileInfo box : splitTile )
 			{
 				box.setOriginalTile( tile );

@@ -6,6 +6,8 @@ import java.util.Random;
 import org.junit.Assert;
 import org.junit.Test;
 
+import net.imglib2.FinalDimensions;
+
 /**
  * @author Igor Pisarev
  */
@@ -13,7 +15,7 @@ import org.junit.Test;
 public class DivideSpaceTest {
 
 	@Test
-	public void test1d() {
+	public void test() {
 		final Boundaries space = new Boundaries( 1 );
 		space.setMin( 0, 10 );	space.setMax( 0, 40 );
 		final ArrayList< TileInfo > res = TileOperations.divideSpaceBySize( space, 14 );
@@ -25,6 +27,20 @@ public class DivideSpaceTest {
 		Assert.assertEquals( 10, res.get( 0 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 14, res.get( 0 ).getSize( 0 ) );
 		Assert.assertEquals( 24, res.get( 1 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 14, res.get( 1 ).getSize( 0 ) );
 		Assert.assertEquals( 38, res.get( 2 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 3,  res.get( 2 ).getSize( 0 ) );
+	}
+
+	@Test
+	public void testIgnoreSmaller() {
+		final Boundaries space = new Boundaries( 1 );
+		space.setMin( 0, 10 );	space.setMax( 0, 40 );
+		final ArrayList< TileInfo > res = TileOperations.divideSpaceIgnoreSmaller( space, new FinalDimensions( 14 ) );
+		Assert.assertEquals( 2, res.size() );
+
+		for ( int i = 0; i < res.size(); i++ )
+			Assert.assertEquals( i, (int)res.get(i).getIndex() );
+
+		Assert.assertEquals( 10, res.get( 0 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 14, res.get( 0 ).getSize( 0 ) );
+		Assert.assertEquals( 24, res.get( 1 ).getPosition( 0 ), 0.f );	Assert.assertEquals( 14, res.get( 1 ).getSize( 0 ) );
 	}
 
 	@Test

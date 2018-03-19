@@ -416,7 +416,7 @@ public class TileOperations
 	}
 
 	/**
-	 * Cuts given region into a set of non-overlapping tiles of a specified size.
+	 * Cuts given region into a set of non-overlapping tiles of specified size.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
 	public static ArrayList< TileInfo > divideSpace( final Interval space, final Dimensions subregionDims )
@@ -424,15 +424,42 @@ public class TileOperations
 		return divideSpace( space, subregionDims, new int[ space.numDimensions() ] );
 	}
 
-	private static ArrayList< TileInfo > divideSpace( final Interval space, final Dimensions subregionDims, final int[] sizePlusOneCount )
+	/**
+	 * Cuts given region into a set of non-overlapping tiles of specified size. Ignores tiles that are smaller than specified size.
+	 * @return
+	 */
+	public static ArrayList< TileInfo > divideSpaceIgnoreSmaller( final Interval space, final Dimensions subregionDims )
+	{
+		return divideSpace( space, subregionDims, new int[ space.numDimensions() ], true );
+	}
+
+	private static ArrayList< TileInfo > divideSpace(
+			final Interval space,
+			final Dimensions subregionDims,
+			final int[] sizePlusOneCount )
+	{
+		return divideSpace( space, subregionDims, sizePlusOneCount, false );
+	}
+	private static ArrayList< TileInfo > divideSpace(
+			final Interval space,
+			final Dimensions subregionDims,
+			final int[] sizePlusOneCount,
+			final boolean ignoreSmaller )
 	{
 		final ArrayList< TileInfo > subregions = new ArrayList<>();
-		divideSpaceRecursive( space, subregionDims, sizePlusOneCount, subregions, new TileInfo( space.numDimensions() ), 0 );
+		divideSpaceRecursive( space, subregionDims, sizePlusOneCount, ignoreSmaller, subregions, new TileInfo( space.numDimensions() ), 0 );
 		for ( int i = 0; i < subregions.size(); i++ )
 			subregions.get( i ).setIndex( i );
 		return subregions;
 	}
-	private static void divideSpaceRecursive( final Interval space, final Dimensions subregionDims, final int[] sizePlusOneCount, final List< TileInfo > subregions, final TileInfo currSubregion, final int currDim )
+	private static void divideSpaceRecursive(
+			final Interval space,
+			final Dimensions subregionDims,
+			final int[] sizePlusOneCount,
+			final boolean ignoreSmaller,
+			final List< TileInfo > subregions,
+			final TileInfo currSubregion,
+			final int currDim )
 	{
 		if ( currDim == space.numDimensions() )
 		{
@@ -453,7 +480,10 @@ public class TileOperations
 				newSubregion.setSize( currDim, newSubregion.getSize( currDim ) + 1 );
 			}
 
-			divideSpaceRecursive( space, subregionDims, sizePlusOneCount, subregions, newSubregion, currDim + 1 );
+			if ( ignoreSmaller && newSubregion.getSize( currDim ) < subregionDims.dimension( currDim ) )
+				continue;
+
+			divideSpaceRecursive( space, subregionDims, sizePlusOneCount, ignoreSmaller, subregions, newSubregion, currDim + 1 );
 		}
 	}
 }
