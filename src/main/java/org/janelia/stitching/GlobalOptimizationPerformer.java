@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
@@ -13,6 +15,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.Vector;
 import java.util.concurrent.ExecutionException;
+
+import org.janelia.util.Conversions;
 
 import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
@@ -107,7 +111,7 @@ public class GlobalOptimizationPerformer
 			final PrintWriter logWriter ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
 	{
 		// create a set of tiles
-		final Set< Tile< ? > > tilesSet = new LinkedHashSet<>();
+		final LinkedHashMap< Tile< ? >, Map< Tile< ? >, List< PointMatch > > > connectedTilesMap = new LinkedHashMap<>();
 		int pairsAdded = 0;
 		for ( final ComparePointPair comparePointPair : comparePointPairs )
 		{
@@ -115,47 +119,53 @@ public class GlobalOptimizationPerformer
 			{
 				++pairsAdded;
 
-				final Tile< ? > t1 = comparePointPair.getTile1();
-				final Tile< ? > t2 = comparePointPair.getTile2();
-
-				// calculate point matches between middle points of the tile boxes to the correct corresponding location in the other tile
-
 				final TilePair tileBoxPair = comparePointPair.getTileBoxPair();
 				final TileInfo fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
+				final TileInfo[] tileBoxes = tileBoxPair.toArray();
 				final float weight = comparePointPair.getCrossCorrelation();
+				final double[] fullTileOffset = SplitTileOperations.getFullTileOffset( tileBoxPair, Conversions.toDoubleArray( comparePointPair.getRelativeShift() ) );
 
-//				final double[] fixedPoint = SplitTileOperations.getTileBoxMiddlePoint( fixedTileBox );
-//				final double[] movingToFixedPoint = new double[ fixedPoint.length ];
-//				for ( int d = 0; d < movingToFixedPoint.length; ++d )
-//					movingToFixedPoint[ d ] = fixedPoint[ d ] + comparePointPair.relativeShift[ d ];
-//				t1.addMatch( new PointMatch( new Point( fixedPoint ), new Point( movingToFixedPoint ), weight ) );
-//
-//				final double[] movingPoint = SplitTileOperations.getTileBoxMiddlePoint( movingTileBox );
-//				final double[] fixedToMovingPoint = new double[ movingPoint.length ];
-//				for ( int d = 0; d < fixedToMovingPoint.length; ++d )
-//					fixedToMovingPoint[ d ] = 0;
-//				t2.addMatch( new PointMatch( new Point( movingPoint ), new Point( fixedToMovingPoint ), weight ) );
+				final Tile< ? > t1 = comparePointPair.getTile1();
+				final Tile< ? > t2 = comparePointPair.getTile2();
+				final Tile< ? >[] t = new Tile< ? >[] { t1, t2 };
 
-				final Point p1 = new Point( SplitTileOperations.getTileBoxMiddlePoint( fixedTileBox ) );
-				final double[] movingTileBoxCenter = new double[ p1.getL().length ];
-				for ( int d = 0; d < movingTileBoxCenter.length; ++d )
-					movingTileBoxCenter[ d ] = p1.getL()[ d ] - comparePointPair.getRelativeShift()[ d ];
-				final Point p2 = new Point( movingTileBoxCenter );
+				// add empty collections if not present
+				for ( int i = 0; i < 2; ++i )
+				{
+					if ( !connectedTilesMap.containsKey( t[ i ] ) )
+						connectedTilesMap.put( t[ i ], new HashMap<>() );
 
-				shiftPoints( p1, p2 );
+					if ( !connectedTilesMap.get( t[ i ] ).containsKey( t[ ( i + 1 ) % 2 ] ) )
+						connectedTilesMap.get( t[ i ] ).put( t[ ( i + 1 ) % 2 ], new ArrayList<>() );
+				}
 
-				t1.addMatch( new PointMatch( p1, p2, weight ) );
-				t2.addMatch( new PointMatch( p2, p1, weight ) );
-
-				t1.addConnectedTile( t2 );
-				t2.addConnectedTile( t1 );
-
-				tilesSet.add( t1 );
-				tilesSet.add( t2 );
+				// add two matches:
+				// 1) middle point of the fixed tile box -> moving tile
+				// 2) middle point of the moving tile box -> fixed tile
+				for ( int i = 0; i < 2; ++i )
+				{
+					final Point p1 = new Point( SplitTileOperations.getTileBoxMiddlePoint( tileBoxes[ i ] ) );
+					final double[] p2Coords = new double[ fullTileOffset.length ];
+					for ( int d = 0; d < p2Coords.length; ++d )
+						p2Coords[ d ] = p1.getL()[ d ] - ( i == 0 ? 1 : -1 ) * fullTileOffset[ d ]; // inverse mapping, thus - for fixed->moving mapping and + for moving->fixed
+					final Point p2 = new Point( p2Coords );
+					shiftPoints( p1, p2 );
+					connectedTilesMap.get( t[ i ] ).get( t[ ( i + 1 ) % 2 ] ).add( new PointMatch( p1, p2, weight ) );
+				}
 			}
 		}
 
+		// connect the tiles
+		for ( final Entry< Tile< ? >, Map< Tile< ? >, List< PointMatch > > > connectedTiles : connectedTilesMap.entrySet() )
+		{
+			final Tile< ? > tile = connectedTiles.getKey();
+			for ( final Entry< Tile< ? >, List< PointMatch > > connectedTile : connectedTiles.getValue().entrySet() )
+				tile.connect( connectedTile.getKey(), connectedTile.getValue() );
+		}
+
 		writeLog( logWriter, "Pairs above the threshold: " + pairsAdded + ", pairs total = " + comparePointPairs.size() );
+
+		final Set< Tile< ? > > tilesSet = new LinkedHashSet<>( connectedTilesMap.keySet() );
 
 		if ( tilesSet.isEmpty() )
 			return null;

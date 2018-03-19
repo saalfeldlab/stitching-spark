@@ -477,8 +477,8 @@ public class WarpedStitchingExecutor implements Serializable
 						);
 					final StitchingResult result = new StitchingResult( pairwiseResult, searchRadius != null ? searchRadius.getEllipseRadius() : null );
 					result.globalTilePositionsDebug = new TreeMap<>();
-					result.globalTilePositionsDebug.put( tileBoxPair.getA().getOriginalTile().getIndex(), Intervals.minAsLongArray( transformedTileBoxPairGlobalSpace.getA() ) );
-					result.globalTilePositionsDebug.put( tileBoxPair.getB().getOriginalTile().getIndex(), Intervals.minAsLongArray( transformedTileBoxPairGlobalSpace.getB() ) );
+					result.globalTilePositionsDebug.put( tileBoxPair.getA().getIndex(), Intervals.minAsLongArray( transformedTileBoxPairGlobalSpace.getA() ) );
+					result.globalTilePositionsDebug.put( tileBoxPair.getB().getIndex(), Intervals.minAsLongArray( transformedTileBoxPairGlobalSpace.getB() ) );
 					return result;
 				}*/
 
@@ -565,17 +565,17 @@ public class WarpedStitchingExecutor implements Serializable
 			for ( final TileInfo tile : job.getTiles( ch ) )
 			{
 				final TileInfo debugTile = tile.clone();
-//				debugTile.setPosition( Conversions.toDoubleArray( tilesGlobalSpacePosition.get( debugTile.getIndex() ) ) );
-//				debugTile.setTransform( null );
-				final double[] position = Conversions.toDoubleArray( tilesGlobalSpacePosition.get( debugTile.getIndex() ) );
-				final AffineTransform3D translationTransform = new AffineTransform3D();
-				translationTransform.setTranslation( position );
-				debugTile.setTransform( translationTransform );
+				debugTile.setPosition( Conversions.toDoubleArray( tilesGlobalSpacePosition.get( debugTile.getIndex() ) ) );
+				debugTile.setTransform( null );
+//				final double[] position = Conversions.toDoubleArray( tilesGlobalSpacePosition.get( debugTile.getIndex() ) );
+//				final AffineTransform3D translationTransform = new AffineTransform3D();
+//				translationTransform.setTranslation( position );
+//				debugTile.setTransform( translationTransform );
 				debugTiles.add( debugTile );
 			}
 			TileInfoJSONProvider.saveTilesConfiguration(
 					debugTiles.toArray( new TileInfo[ 0 ] ),
-					job.getDataProvider().getJsonWriter( URI.create( "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/restitching-affine/10-11z_21-22x_21-22y/fixed/without-rematching/without-tile-boxes/debug/debug-ch" + ch + ".json" ) )
+					job.getDataProvider().getJsonWriter( URI.create( "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/stitching/restitching-affine/10-11z_21-22x_21-22y/fixed/without-rematching/with-tile-boxes/debug/debug-ch" + ch + ".json" ) )
 				);
 		}*/
 		// ----------------------
@@ -817,7 +817,7 @@ public class WarpedStitchingExecutor implements Serializable
 		}
 		else
 		{
-			// compute new offset between original tiles
+			// compute new offset between tile boxes
 			final double[] originalTileOffset = offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( result.getOffset() ) );
 			for ( int d = 0; d < originalTileOffset.length; ++d )
 				result.getOffset()[ d ] = ( float ) originalTileOffset[ d ];
