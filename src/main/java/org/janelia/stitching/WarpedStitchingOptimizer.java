@@ -207,7 +207,7 @@ public class WarpedStitchingOptimizer implements Serializable
 			throw new IllegalArgumentException( "translationOnly & affineOnly are not allowed at the same time" );
 
 		final List< OptimizationParameters > optimizationParametersList = new ArrayList<>();
-		for ( double testMinCrossCorrelation = -1.0; testMinCrossCorrelation <= 1; testMinCrossCorrelation += testMinCrossCorrelation > 0 ? 0.05 : 0.1 )
+		for ( double testMinCrossCorrelation = 0.1; testMinCrossCorrelation <= 1; testMinCrossCorrelation += 0.05 )
 			for ( double testMinVariance = 0; testMinVariance <= 300; testMinVariance += 1 + ( int ) testMinVariance / 10 )
 				optimizationParametersList.add( new OptimizationParameters( testMinCrossCorrelation, testMinVariance ) );
 
