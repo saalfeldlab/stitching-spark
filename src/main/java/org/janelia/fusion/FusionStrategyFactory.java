@@ -19,6 +19,8 @@ public interface FusionStrategyFactory
 			return new BlendingFusionStrategy<>( targetInterval, type );
 		case MAX_INTENSITY:
 			return new MaxIntensityFusionStrategy<>( targetInterval, type );
+		case DEBUG_OVERLAPS:
+			return new DebugOverlapsFusionStrategy<>( targetInterval, type );
 		default:
 			throw new RuntimeException( "Unknown fusion mode" );
 		}

@@ -69,7 +69,7 @@ public class StitchingArguments implements Serializable {
 	private StitchingMode stitchingMode = null;
 
 	@Option(name = "-f", aliases = { "--fusion-mode" }, required = false,
-			usage = "Fusion mode (can be 'max-min-distance', 'max-intensity' or 'blending')")
+			usage = "Fusion mode (can be 'max-min-distance', 'max-intensity', 'blending', or 'debug-overlaps')")
 	private String fusionModeStr = "max-min-distance";
 	private FusionMode fusionMode = null;
 
