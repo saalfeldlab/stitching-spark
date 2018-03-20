@@ -360,7 +360,7 @@ public class GlobalOptimizationPerformer
 		final Set< Tile< ? > > newTilesSet = new HashSet<>();
 		for ( final Tile< ? > tile : tilesSet )
 		{
-			if ( tile.getMatches().size() < tile.getModel().getMinNumMatches() )
+			if ( tile.getMatches().size() < 2 * tile.getModel().getMinNumMatches() ) // x2 because each tile pair is matched both ways
 			{
 				final int dim = tile.getMatches().iterator().next().getP1().getL().length;
 				final Model< ? > replacementModel = dim == 2 ? new TranslationModel2D() : new TranslationModel3D();
