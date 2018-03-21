@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
@@ -18,13 +20,21 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrection;
+import org.janelia.fusion.DebugOverlapsFusionStrategy;
+import org.janelia.fusion.DebugOverlapsFusionStrategy.DebugOverlapsFusionResult;
+import org.janelia.fusion.FusionMode;
 import org.janelia.fusion.FusionPerformer;
+import org.janelia.fusion.FusionResult;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.N5RemoveSpark;
 import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5NonIsotropicScalePyramidSpark3D;
 import org.janelia.util.Conversions;
 
@@ -32,12 +42,15 @@ import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.cell.CellGrid;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.integer.IntType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsHelper;
 import net.imglib2.view.RandomAccessiblePairNullable;
+import net.imglib2.view.Views;
 
 /**
  * Fuses a set of tiles within a set of small square cells using linear blending.
@@ -207,7 +220,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		return cellSize;
 	}
 
-	private void fuse( final String n5ExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
+	@SuppressWarnings( "unchecked" )
+	private void fuse(
+			final String n5ExportPath,
+			final String fullScaleOutputPath,
+			final TileInfo[] tiles ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		final int[] cellSize = getOptimalCellSize();
@@ -223,14 +240,29 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final Interval boundingBox = roi != null ? IntervalsHelper.translate( roi, offset ) : fullBoundingBox;
 		final long[] dimensions = Intervals.dimensionsAsLongArray( boundingBox );
 
+		// if the debug overlaps mode is requested, create a separate dataset for storing tile indexes
+		final String debugOverlapsTileIndexesDataset = job.getArgs().fusionMode() == FusionMode.DEBUG_OVERLAPS ? fullScaleOutputPath + "-tile-indexes" : null;
+		final String exportDataset = fullScaleOutputPath + ( job.getArgs().fusionMode() == FusionMode.DEBUG_OVERLAPS ? "-intermediate-export" : "" );
+
 		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ) );
 		n5.createDataset(
-				fullScaleOutputPath,
+				exportDataset,
 				dimensions,
 				cellSize,
 				N5Utils.dataType( ( T ) tiles[ 0 ].getType().getType() ),
 				new GzipCompression()
 			);
+
+		if ( job.getArgs().fusionMode() == FusionMode.DEBUG_OVERLAPS )
+		{
+			n5.createDataset(
+					debugOverlapsTileIndexesDataset,
+					dimensions,
+					cellSize,
+					DataType.INT32,
+					new GzipCompression()
+				);
+		}
 
 		// use the size of the tile as a bigger cell to minimize the number of loads for each image
 		final int[] biggerCellSize = new int[ cellSize.length ];
@@ -301,13 +333,76 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 						broadcastedFlatfieldCorrection.value(),
 						broadcastedPairwiseConnectionsMap.value()
 					);
+
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( n5ExportPath ) );
-				N5Utils.saveBlock( fusionResult.getOutImage(), n5Local, fullScaleOutputPath, biggerCellGridOffsetPosition );
+				N5Utils.saveBlock( fusionResult.getOutImage(), n5Local, exportDataset, biggerCellGridOffsetPosition );
+
+				if ( job.getArgs().fusionMode() == FusionMode.DEBUG_OVERLAPS )
+				{
+					final DebugOverlapsFusionResult< T > debugOverlapsFusionResult = ( DebugOverlapsFusionResult< T > ) fusionResult;
+					N5Utils.saveBlock( debugOverlapsFusionResult.getTileIndexesImage(), n5Local, debugOverlapsTileIndexesDataset, biggerCellGridOffsetPosition );
+				}
 			}
 		);
 
 		broadcastedTilesMap.destroy();
 		broadcastedTransformedTilesBoundingBoxes.destroy();
+
+		// finalize the export step if the debug overlaps mode is requested
+		if ( job.getArgs().fusionMode() == FusionMode.DEBUG_OVERLAPS )
+		{
+			paintTileTransitionsForDebugging( n5ExportPath, exportDataset, fullScaleOutputPath, debugOverlapsTileIndexesDataset );
+			N5RemoveSpark.remove( sparkContext, () -> job.getDataProvider().createN5Writer( URI.create( n5ExportPath ) ), exportDataset );
+		}
+	}
+
+	private void paintTileTransitionsForDebugging(
+			final String n5ExportPath,
+			final String srcDataset,
+			final String dstDataset,
+			final String debugOverlapsTileIndexesDataset ) throws IOException
+	{
+		final DataProvider dataProvider = job.getDataProvider();
+		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ) );
+		final DatasetAttributes attributes = n5.getDatasetAttributes( srcDataset );
+		final long[] dimensions = attributes.getDimensions();
+		final int[] blockSize = attributes.getBlockSize();
+		n5.createDataset(
+				dstDataset,
+				dimensions,
+				blockSize,
+				attributes.getDataType(),
+				attributes.getCompression()
+			);
+
+		final CellGrid cellGrid = new CellGrid( dimensions, blockSize );
+		final long numBlocks = Intervals.numElements( cellGrid.getGridDimensions() );
+		final List< Long > blockIndexes = LongStream.range( 0, numBlocks ).boxed().collect( Collectors.toList() );
+
+		sparkContext.parallelize( blockIndexes, Math.min( blockIndexes.size(), MAX_PARTITIONS ) ).foreach( blockIndex ->
+		{
+			final CellGrid cellGridLocal = new CellGrid( dimensions, blockSize );
+			final long[] blockGridPosition = new long[ cellGridLocal.numDimensions() ];
+			cellGridLocal.getCellGridPositionFlat( blockIndex, blockGridPosition );
+
+			final long[] blockMin = new long[ cellGridLocal.numDimensions() ], blockMax = new long[ cellGridLocal.numDimensions() ];
+			final int[] cellDimensions = new int[ cellGridLocal.numDimensions() ];
+			cellGridLocal.getCellDimensions( blockGridPosition, blockMin, cellDimensions );
+			for ( int d = 0; d < cellGridLocal.numDimensions(); ++d )
+				blockMax[ d ] = blockMin[ d ] + cellDimensions[ d ] - 1;
+			final Interval blockInterval = new FinalInterval( blockMin, blockMax );
+
+			final DataProvider dataProviderLocal = job.getDataProvider();
+			final N5Reader n5ReaderLocal = dataProviderLocal.createN5Reader( URI.create( n5ExportPath ) );
+
+			final RandomAccessibleInterval< T > data = N5Utils.open( n5ReaderLocal, srcDataset );
+			final RandomAccessibleInterval< T > dataBlock = Views.interval( data, blockInterval );
+			final RandomAccessibleInterval< IntType > tileIndexes = N5Utils.open( n5ReaderLocal, debugOverlapsTileIndexesDataset );
+			final RandomAccessibleInterval< T > dataBlockWithTransitions = DebugOverlapsFusionStrategy.< T >fillTileTransitions( dataBlock, tileIndexes );
+
+			final N5Writer n5WriterLocal = dataProviderLocal.createN5Writer( URI.create( n5ExportPath ) );
+			N5Utils.saveBlock( dataBlockWithTransitions, n5WriterLocal, dstDataset, blockGridPosition );
+		} );
 	}
 
 	private Map< Integer, Set< Integer > > getPairwiseConnectionsMap( final String channelPath ) throws PipelineExecutionException

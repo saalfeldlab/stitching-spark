@@ -1,5 +1,7 @@
 package org.janelia.fusion;
 
+import java.util.Arrays;
+
 import org.janelia.stitching.TileInfo;
 
 import net.imglib2.Cursor;
@@ -7,12 +9,14 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealLocalizable;
+import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.IntType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 
 /**
@@ -92,28 +96,53 @@ public class DebugOverlapsFusionStrategy< T extends RealType< T > & NativeType< 
 		return new DebugOverlapsFusionResult<>( out, tileIndexes );
 	}
 
-
-
-	private void paintTransitionsBlack()
+	/**
+	 * Paints tile transitions black.
+	 * It is required to do this as a post-processing step after saving all fused data blocks and corresponding tile indexes
+	 * because it looks at neighboring pixels, and if the tile transition happens to appear exactly along the block boundary,
+	 * it will miss it if done on a simple per-block basis.
+	 *
+	 * @param data
+	 * @param tileIndexes
+	 */
+	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > fillTileTransitions(
+			final RandomAccessibleInterval< T > data,
+			final RandomAccessibleInterval< IntType > tileIndexes )
 	{
-		final Cursor< T > outCursor = Views.iterable( out ).localizingCursor();
+		final RandomAccessibleInterval< T > out = Views.translate(
+				new ArrayImgFactory< T >().create( data, Util.getTypeFromInterval( data ).createVariable() ),
+				Intervals.minAsLongArray( data )
+			);
+
+		final Cursor< T > dataCursor = Views.iterable( data ).localizingCursor();
+		final RandomAccess< T > outRandomAccess = out.randomAccess();
 		final RandomAccess< IntType > tileIndexesRandomAccess = Views.extendZero( tileIndexes ).randomAccess();
-		final int[] position = new int[ out.numDimensions() ];
-		while ( outCursor.hasNext() )
+		final int[] position = new int[ data.numDimensions() ];
+		while ( dataCursor.hasNext() )
 		{
-			outCursor.fwd();
-			tileIndexesRandomAccess.setPosition( outCursor );
+			try
+			{
+				dataCursor.fwd();
+			}
+			catch ( final Exception e )
+			{
+				throw new RuntimeException( "Failed on block: min=" + Arrays.toString( Intervals.minAsLongArray( data ) ) + ", size=" + Arrays.toString( Intervals.dimensionsAsLongArray( data ) ) + System.lineSeparator() + e.getMessage() );
+			}
+
+			outRandomAccess.setPosition( dataCursor );
+			tileIndexesRandomAccess.setPosition( dataCursor );
+
+			boolean isTransitioningPixel = false;
 			final int currentTileIndex = tileIndexesRandomAccess.get().get();
+
 			if ( currentTileIndex != 0 )
 			{
-				// if it is a painted output pixel, check neighboring pixels (6 for 3D, 4 for 2D) to see if it is a transitioning pixel
-				boolean isTransitioningPixel = false;
-
-				for ( int d = 0; d < out.numDimensions() && !isTransitioningPixel; ++d )
+				// if it is a non-empty output pixel, check neighboring pixels (6 for 3D, 4 for 2D) to see if it is a transitioning pixel
+				for ( int d = 0; d < data.numDimensions() && !isTransitioningPixel; ++d )
 				{
 					for ( final int shift : new int[] { -1, 1 } )
 					{
-						outCursor.localize( position );
+						dataCursor.localize( position );
 						position[ d ] += shift;
 						tileIndexesRandomAccess.setPosition( position );
 						final int neighboringTile = tileIndexesRandomAccess.get().get();
@@ -124,10 +153,14 @@ public class DebugOverlapsFusionStrategy< T extends RealType< T > & NativeType< 
 						}
 					}
 				}
-
-				if ( isTransitioningPixel )
-					outCursor.get().setZero();
 			}
+
+			if ( isTransitioningPixel )
+				outRandomAccess.get().setZero();
+			else
+				outRandomAccess.get().set( dataCursor.get() );
 		}
+
+		return out;
 	}
 }

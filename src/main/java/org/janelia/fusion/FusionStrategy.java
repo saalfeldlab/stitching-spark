@@ -8,7 +8,6 @@ import net.imglib2.RealLocalizable;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
-import net.imglib2.util.Intervals;
 
 public abstract class FusionStrategy< T extends RealType< T > & NativeType< T > >
 {
@@ -16,7 +15,7 @@ public abstract class FusionStrategy< T extends RealType< T > & NativeType< T > 
 
 	public FusionStrategy( final Interval targetInterval, final T type )
 	{
-		this.out = new ArrayImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), type.createVariable() );
+		this.out = new ArrayImgFactory< T >().create( targetInterval, type.createVariable() );
 	}
 
 	public FusionResult< T > getFusionResult()
