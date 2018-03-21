@@ -7,7 +7,6 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -24,7 +23,7 @@ public class BlendingFusionStrategy< T extends RealType< T > & NativeType< T > >
 
 	private Cursor< FloatType > weightsCursor;
 	private Cursor< FloatType > valuesCursor;
-	private boolean outImageFilled = false;
+	private FusionResult< T > result;
 
 	public BlendingFusionStrategy( final Interval targetInterval, final T type )
 	{
@@ -56,7 +55,7 @@ public class BlendingFusionStrategy< T extends RealType< T > & NativeType< T > >
 	@Override
 	public void updateValue( final TileInfo tile, final RealLocalizable pointInsideTile, final T value )
 	{
-		if ( outImageFilled )
+		if ( result != null )
 			throw new IllegalStateException( "Populating out image after it has been filled" );
 
 		final double weight = getBlendingWeight( pointInsideTile, tile.getSize() );
@@ -65,10 +64,10 @@ public class BlendingFusionStrategy< T extends RealType< T > & NativeType< T > >
 	}
 
 	@Override
-	public ImagePlusImg< T, ? > getOutImage()
+	public FusionResult< T > getFusionResult()
 	{
-		if ( outImageFilled )
-			return out;
+		if ( result != null )
+			return result;
 
 		setCursors( out );
 		final Cursor< T > outCursor = Views.flatIterable( out ).cursor();
@@ -78,9 +77,8 @@ public class BlendingFusionStrategy< T extends RealType< T > & NativeType< T > >
 			final double value = valuesCursor.next().getRealDouble();
 			outCursor.next().setReal( weight == 0 ? 0 : value / weight );
 		}
-
-		outImageFilled = true;
-		return out;
+		result = new FusionResult<>( out );
+		return result;
 	}
 
 	private double getBlendingWeight( final RealLocalizable pointInsideTile, final long[] tileDimensions )

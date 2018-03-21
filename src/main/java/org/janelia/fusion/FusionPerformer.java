@@ -21,7 +21,6 @@ import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealPoint;
-import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.type.NativeType;
@@ -33,7 +32,7 @@ import net.imglib2.view.Views;
 
 public class FusionPerformer
 {
-	public static < T extends RealType< T > & NativeType< T > > ImagePlusImg< T, ? > fuseTilesWithinCell(
+	public static < T extends RealType< T > & NativeType< T > > FusionResult< T > fuseTilesWithinCell(
 			final DataProvider dataProvider,
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
@@ -45,7 +44,7 @@ public class FusionPerformer
 	public static <
 		T extends RealType< T > & NativeType< T >,
 		U extends RealType< U > & NativeType< U > >
-	ImagePlusImg< T, ? > fuseTilesWithinCell(
+	FusionResult< T > fuseTilesWithinCell(
 			final DataProvider dataProvider,
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
@@ -75,7 +74,7 @@ public class FusionPerformer
 		T extends RealType< T > & NativeType< T >,
 		U extends RealType< U > & NativeType< U >,
 		R extends RealType< R > & NativeType< R > >
-	ImagePlusImg< T, ? > fuseTilesWithinCell(
+	FusionResult< T > fuseTilesWithinCell(
 			final DataProvider dataProvider,
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
@@ -177,12 +176,12 @@ public class FusionPerformer
 			}
 		}
 
-		final ImagePlusImg< T, ? > outImage = fusionStrategy.getOutImage();
+		final FusionResult< T > fusionResult = fusionStrategy.getFusionResult();
 
 		// retain only requested content within overlaps that corresponds to pairwise connections map, if required
 		if ( tileIndexes != null )
 		{
-			final Cursor< T > outCursor = Views.flatIterable( outImage ).cursor();
+			final Cursor< T > outCursor = Views.flatIterable( fusionResult.getOutImage() ).cursor();
 			final Cursor< Set< Integer > > tileIndexesCursor = Views.flatIterable( tileIndexes ).cursor();
 			while ( outCursor.hasNext() || tileIndexesCursor.hasNext() )
 			{
@@ -206,7 +205,7 @@ public class FusionPerformer
 			}
 		}
 
-		return outImage;
+		return fusionResult;
 	}
 
 

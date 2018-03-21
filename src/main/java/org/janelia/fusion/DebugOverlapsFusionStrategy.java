@@ -8,7 +8,6 @@ import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.IntType;
@@ -21,14 +20,28 @@ import net.imglib2.view.Views;
  */
 public class DebugOverlapsFusionStrategy< T extends RealType< T > & NativeType< T > > extends FusionStrategy< T >
 {
+	public static class DebugOverlapsFusionResult< T extends RealType< T > & NativeType< T > > extends FusionResult< T >
+	{
+		private final RandomAccessibleInterval< IntType > tileIndexes;
+
+		public DebugOverlapsFusionResult( final RandomAccessibleInterval< T > out, final RandomAccessibleInterval< IntType > tileIndexes )
+		{
+			super( out );
+			this.tileIndexes = tileIndexes;
+		}
+
+		public RandomAccessibleInterval< IntType > getTileIndexesImage()
+		{
+			return tileIndexes;
+		}
+	}
+
 	private final RandomAccessibleInterval< FloatType > maxMinDistances;
 	private final RandomAccessibleInterval< IntType > tileIndexes;
 
 	private Cursor< FloatType > maxMinDistancesCursor;
 	private Cursor< IntType > tileIndexesCursor;
 	private Cursor< T > outCursor;
-
-	private boolean outImageReady = false;
 
 	public DebugOverlapsFusionStrategy( final Interval targetInterval, final T type )
 	{
@@ -74,11 +87,15 @@ public class DebugOverlapsFusionStrategy< T extends RealType< T > & NativeType< 
 	}
 
 	@Override
-	public ImagePlusImg< T, ? > getOutImage()
+	public DebugOverlapsFusionResult< T > getFusionResult()
 	{
-		if ( outImageReady )
-			return out;
+		return new DebugOverlapsFusionResult<>( out, tileIndexes );
+	}
 
+
+
+	private void paintTransitionsBlack()
+	{
 		final Cursor< T > outCursor = Views.iterable( out ).localizingCursor();
 		final RandomAccess< IntType > tileIndexesRandomAccess = Views.extendZero( tileIndexes ).randomAccess();
 		final int[] position = new int[ out.numDimensions() ];
@@ -112,8 +129,5 @@ public class DebugOverlapsFusionStrategy< T extends RealType< T > & NativeType< 
 					outCursor.get().setZero();
 			}
 		}
-
-		outImageReady = true;
-		return out;
 	}
 }

@@ -33,7 +33,6 @@ import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.img.cell.CellGrid;
-import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
@@ -294,7 +293,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 					biggerCellGridOffsetPosition[ d ] = biggerCellGridPosition[ d ] - gridOffset[ d ];
 
 				final DataProvider dataProviderLocal = job.getDataProvider();
-				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
+				final FusionResult< T > fusionResult = FusionPerformer.fuseTilesWithinCell(
 						dataProviderLocal,
 						job.getArgs().fusionMode(),
 						tilesWithinCell,
@@ -303,7 +302,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 						broadcastedPairwiseConnectionsMap.value()
 					);
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( n5ExportPath ) );
-				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridOffsetPosition );
+				N5Utils.saveBlock( fusionResult.getOutImage(), n5Local, fullScaleOutputPath, biggerCellGridOffsetPosition );
 			}
 		);
 
