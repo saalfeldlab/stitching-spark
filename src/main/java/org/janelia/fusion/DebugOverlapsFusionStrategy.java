@@ -1,7 +1,5 @@
 package org.janelia.fusion;
 
-import java.util.Arrays;
-
 import org.janelia.stitching.TileInfo;
 
 import net.imglib2.Cursor;
@@ -120,15 +118,7 @@ public class DebugOverlapsFusionStrategy< T extends RealType< T > & NativeType< 
 		final int[] position = new int[ data.numDimensions() ];
 		while ( dataCursor.hasNext() )
 		{
-			try
-			{
-				dataCursor.fwd();
-			}
-			catch ( final Exception e )
-			{
-				throw new RuntimeException( "Failed on block: min=" + Arrays.toString( Intervals.minAsLongArray( data ) ) + ", size=" + Arrays.toString( Intervals.dimensionsAsLongArray( data ) ) + System.lineSeparator() + e.getMessage() );
-			}
-
+			dataCursor.fwd();
 			outRandomAccess.setPosition( dataCursor );
 			tileIndexesRandomAccess.setPosition( dataCursor );
 
