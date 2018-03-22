@@ -360,6 +360,11 @@ public class GlobalOptimizationPerformer
 		final Set< Tile< ? > > newTilesSet = new HashSet<>();
 		for ( final Tile< ? > tile : tilesSet )
 		{
+			if ( tile.getMatches().isEmpty() )
+				throw new RuntimeException( "tile does not have any point matches" );
+			else if ( tile.getMatches().size() % 2 != 0 )
+				throw new RuntimeException( "tile has odd number of point matches: inconsistent with current scheme of generating them both ways" );
+
 			if ( tile.getMatches().size() < 2 * tile.getModel().getMinNumMatches() ) // x2 because each tile pair is matched both ways
 			{
 				final int dim = tile.getMatches().iterator().next().getP1().getL().length;
