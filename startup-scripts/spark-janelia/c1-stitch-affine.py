@@ -14,6 +14,7 @@ flintstone_path = os.path.join(curr_script_dir, flintstone_file)
 os.environ['SPARK_VERSION'] = 'test'
 os.environ['N_DRIVER_THREADS'] = '16'
 os.environ['MEMORY_PER_NODE'] = '105'
+os.environ['RUNTIME'] = '24:00'
 os.environ['TERMINATE'] = '1'
 
 nodes = int(sys.argv[1])
