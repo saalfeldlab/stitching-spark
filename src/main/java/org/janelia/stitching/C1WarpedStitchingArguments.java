@@ -7,7 +7,7 @@ public class C1WarpedStitchingArguments implements Serializable {
 	private static final long serialVersionUID = -8996450783846140673L;
 
 	private int minStatsNeighborhood = 5;
-	private double searchRadiusMultiplier = 50;
+	private double searchRadiusMultiplier = 100;
 	private int[] statsWindowSizeTiles = new int[] { 3, 3, 3 };
 	private int fusionCellSize = 128;
 	private double blurSigma = 2.0;
@@ -20,7 +20,7 @@ public class C1WarpedStitchingArguments implements Serializable {
 	private boolean affineOnlyStitching = true;
 	private StitchingMode stitchingMode = StitchingMode.INCREMENTAL;
 	private int splitOverlapParts = 2;
-	private double maxStitchingError = 5.0;
+	private double maxStitchingError = 10.0;
 
 	public long[] padding() { return padding; }
 	public long[] minCoord() { return minCoord; }
