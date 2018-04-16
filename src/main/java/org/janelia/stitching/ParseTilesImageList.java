@@ -105,8 +105,8 @@ public class ParseTilesImageList
 
 		// check that tile configuration forms a single graph
 		// NOTE: may fail with StackOverflowError. Pass -Xss to the JVM
-		final List< TilePair > overlappingPairs = TileOperations.findOverlappingTiles( tiles.firstEntry().getValue().toArray( new TileInfo[ 0 ] ) );
-		final List< Integer > connectedComponentsSize = CheckConnectedGraphs.connectedComponentsSize( overlappingPairs );
+		final TileInfo[] tileInfos = tiles.firstEntry().getValue().toArray( new TileInfo[ 0 ] );
+		final List< Integer > connectedComponentsSize = CheckConnectedGraphs.connectedComponentsSize( tileInfos );
 		if ( connectedComponentsSize.size() > 1 )
 			throw new Exception( "Expected single graph, got several components of size " + connectedComponentsSize );
 
@@ -114,6 +114,7 @@ public class ParseTilesImageList
 		System.out.println();
 		final long[] tileSize = tiles.firstEntry().getValue().get( 0 ).getSize();
 		System.out.println( "tile size in px = " + Arrays.toString( tileSize ) );
+		final List< TilePair > overlappingPairs = TileOperations.findOverlappingTiles( tileInfos );
 		for ( int d = 0; d < tiles.firstEntry().getValue().get( 0 ).numDimensions(); ++d )
 		{
 			final List< TilePair > adjacentPairsDim = FilterAdjacentShifts.filterAdjacentPairs( overlappingPairs, d );

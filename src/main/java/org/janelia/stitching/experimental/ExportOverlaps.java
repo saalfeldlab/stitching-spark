@@ -18,7 +18,6 @@ import org.janelia.stitching.TileOperations;
 import org.janelia.stitching.TilePair;
 import org.janelia.stitching.Utils;
 import org.janelia.stitching.analysis.CheckConnectedGraphs;
-import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.ImageImporter;
 
 import ij.IJ;
@@ -160,17 +159,8 @@ public class ExportOverlaps
 				tile.setPosition( d, tile.getPosition( d ) / voxelSize[ d ] );
 
 		final ArrayList< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( tiles );
-		System.out.println( "There are " + overlappingTiles.size() + " overlapping pairs" );
-		// Remove pairs with small overlap area if only adjacent pairs are requested
-		if ( args.length > 2 && args[ 2 ].equals( "--adjacent" ) )
-		{
-			final List< TilePair > adjacentOverlappingTiles = FilterAdjacentShifts.filterAdjacentPairs( overlappingTiles );
-			overlappingTiles.clear();
-			overlappingTiles.addAll( adjacentOverlappingTiles );
-			System.out.println( "Retaining only " + overlappingTiles.size() + " adjacent pairs of them" );
-		}
 
-		final List< Integer > connectedComponentsSize = CheckConnectedGraphs.connectedComponentsSize( overlappingTiles );
+		final List< Integer > connectedComponentsSize = CheckConnectedGraphs.connectedComponentsSize( tiles );
 		if ( connectedComponentsSize.size() > 1 )
 			throw new PipelineExecutionException( "Overlapping pairs form more than one connected component: " + connectedComponentsSize );
 		if ( connectedComponentsSize.get( 0 ) != tiles.length )
