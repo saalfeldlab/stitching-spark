@@ -36,15 +36,43 @@ public class SearchRadius implements PointValidator
 	private final double[] ellipseRadius;
 	private final double[][] uncertaintyVectors;
 
-	public SearchRadius( final double searchRadiusMultiplier, final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix ) throws PipelineExecutionException
+	public SearchRadius(
+			final double searchRadiusMultiplier,
+			final double[] offsetsMeanValues,
+			final double[][] offsetsCovarianceMatrix
+		) throws PipelineExecutionException
 	{
-		this( searchRadiusMultiplier, offsetsMeanValues, offsetsCovarianceMatrix, null );
+		this(
+				searchRadiusMultiplier,
+				offsetsMeanValues,
+				offsetsCovarianceMatrix,
+				null
+			);
 	}
-	public SearchRadius( final double searchRadiusMultiplier, final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix, final List< Integer > usedPointsIndexes ) throws PipelineExecutionException
+
+	public SearchRadius(
+			final double searchRadiusMultiplier,
+			final double[] offsetsMeanValues,
+			final double[][] offsetsCovarianceMatrix,
+			final List< Integer > usedPointsIndexes
+		) throws PipelineExecutionException
 	{
-		this( searchRadiusMultiplier, offsetsMeanValues, offsetsCovarianceMatrix, usedPointsIndexes, null );
+		this(
+				searchRadiusMultiplier,
+				offsetsMeanValues,
+				offsetsCovarianceMatrix,
+				usedPointsIndexes,
+				null
+			);
 	}
-	public SearchRadius( final double searchRadiusMultiplier, final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix, final List< Integer > usedPointsIndexes, final double[] stagePosition ) throws PipelineExecutionException
+
+	public SearchRadius(
+			final double searchRadiusMultiplier,
+			final double[] offsetsMeanValues,
+			final double[][] offsetsCovarianceMatrix,
+			final List< Integer > usedPointsIndexes,
+			final double[] stagePosition
+		) throws PipelineExecutionException
 	{
 		this.offsetsMeanValues = offsetsMeanValues;
 		this.offsetsCovarianceMatrix = offsetsCovarianceMatrix;
@@ -90,7 +118,6 @@ public class SearchRadius implements PointValidator
         	if ( Math.abs( Math.sqrt( sumSq ) - ellipseRadius[ dRow ] ) > 1e-8 )
         		throw new RuntimeException( "radius validation failed" );
 		}
-
 
 
         ellipseCenter = new double[ offsetsMeanValues.length ];

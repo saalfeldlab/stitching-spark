@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -57,7 +58,7 @@ public class C1WarpedStitchingJob implements Serializable {
 
 	public TileInfo[] getTiles( final int channel ) throws IOException
 	{
-		final TileInfo[] allTiles = C1WarpedMetadata.getTiles( channel );
+		final TileInfo[] allTiles = getAllTiles( channel );
 		if ( filteredTileIndexes == null )
 			return allTiles;
 
@@ -66,6 +67,17 @@ public class C1WarpedStitchingJob implements Serializable {
 			if ( filteredTileIndexes.contains( tile.getIndex() ) )
 				filteredTiles.add( tile );
 		return filteredTiles.toArray( new TileInfo[ 0 ] );
+	}
+
+	public TileInfo[] getAllTiles( final int channel ) throws IOException
+	{
+		return C1WarpedMetadata.getTiles( channel );
+	}
+
+	public TileInfo[] getStageTiles( final int channel ) throws IOException
+	{
+		return TileInfoJSONProvider.loadTilesConfiguration( getDataProvider().getJsonReader(
+				URI.create( "/nrs/saalfeld/igor/illumination-correction/Sample1_C1/input-tiles-updated-paths/ch" + channel + ".json" ) ) );
 	}
 
 	public String getFlatfieldPath( final int channel ) { return C1WarpedMetadata.getFlatfieldPath( channel ); };

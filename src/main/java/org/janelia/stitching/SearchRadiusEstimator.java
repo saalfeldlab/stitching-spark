@@ -1,6 +1,5 @@
 package org.janelia.stitching;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -16,10 +15,8 @@ import net.imglib2.RealPoint;
 import net.imglib2.neighborsearch.IntervalNeighborSearchOnKDTree;
 import net.imglib2.neighborsearch.KNearestNeighborSearchOnKDTree;
 
-public class SearchRadiusEstimator implements Serializable
+public class SearchRadiusEstimator
 {
-	private static final long serialVersionUID = -1337122618818271339L;
-
 	private final Map< Integer, double[] > stageValues, stitchedValues;
 	private final double[] estimationWindowSize;
 	private final double searchRadiusMultiplier;

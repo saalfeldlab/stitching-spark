@@ -7,8 +7,9 @@ public class C1WarpedStitchingArguments implements Serializable {
 	private static final long serialVersionUID = -8996450783846140673L;
 
 	private int minStatsNeighborhood = 5;
-	private double searchRadiusMultiplier = 100;
-	private int[] statsWindowSizeTiles = new int[] { 3, 3, 3 };
+	private double defaultSearchRadius = 50;
+	private double searchRadiusMultiplier = 3; // 3 * std
+	private int[] estimationWindowSizeTiles = new int[] { 3, 3, 3 }; // 3x tile size
 	private int fusionCellSize = 128;
 	private double blurSigma = 2.0;
 	private long[] padding = new long[ 3 ];
@@ -26,6 +27,8 @@ public class C1WarpedStitchingArguments implements Serializable {
 	public long[] minCoord() { return minCoord; }
 	public long[] maxCoord() { return maxCoord; }
 	public int minStatsNeighborhood() { return minStatsNeighborhood; }
+	public int[] estimationWindowSizeTiles() { return estimationWindowSizeTiles; }
+	public double defaultSearchRadius() { return defaultSearchRadius; }
 	public double searchRadiusMultiplier() { return searchRadiusMultiplier; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurSigma() { return blurSigma; }

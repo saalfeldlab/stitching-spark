@@ -1,6 +1,5 @@
 package org.janelia.stitching;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -13,10 +12,8 @@ import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.util.Intervals;
 
-public class TileSearchRadiusEstimator implements Serializable
+public class TileSearchRadiusEstimator
 {
-	private static final long serialVersionUID = 3966655006478467424L;
-
 	private static final double ESTIMATION_WINDOW_SIZE_TIMES = 3;
 
 	private final Map< Integer, TileInfo > stageTilesMap, stitchedTilesMap;

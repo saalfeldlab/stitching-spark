@@ -33,6 +33,7 @@ import ij.ImagePlus;
 import mpicbg.imglib.custom.OffsetConverter;
 import mpicbg.imglib.custom.PointValidator;
 import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
@@ -50,6 +51,7 @@ import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsNullable;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
+import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 import scala.Tuple2;
@@ -417,6 +419,45 @@ public class WarpedStitchingExecutor implements Serializable
 	}
 
 	/**
+	 * Creates a search radius estimator by mapping original stage tiles coordinate into manually warped space.
+	 * Expected to give a relatively good statistics on x/y/z shifts in a local neighborhood.
+	 *
+	 * @return
+	 * @throws IOException
+	 */
+	private SearchRadiusEstimator getSearchRadiusEstimator( final TileInfo[] stageTiles ) throws IOException
+	{
+		final Map< Integer, double[] > stageValues = new TreeMap<>();
+		for ( final TileInfo stageTile : stageTiles )
+		{
+			if ( stageTile.getTransform() != null )
+				throw new RuntimeException( "stage tile transform != null" );
+			stageValues.put( stageTile.getIndex(), stageTile.getPosition().clone() );
+		}
+
+		final Map< Integer, double[] > transformedValues = new TreeMap<>();
+		for ( final TileInfo tile : job.getAllTiles( 0 ) )
+		{
+			final int[] noSplitParts = new int[ job.getDimensionality() ];
+			Arrays.fill( noSplitParts, 1 );
+			final TileInfo tileBox = SplitTileOperations.splitTilesIntoBoxes( new TileInfo[] { tile }, noSplitParts ).iterator().next();
+			final Interval transformedTile = WarpedSplitTileOperations.transformTileBox( tileBox, job.getTileSlabMapping() );
+			transformedValues.put( tile.getIndex(), Intervals.minAsDoubleArray( transformedTile ) );
+		}
+
+		final double[] estimationWindowSize = new double[ job.getDimensionality() ];
+		for ( int d = 0; d < job.getDimensionality(); ++d )
+			estimationWindowSize[ d ] = stageTiles[ 0 ].getSize( d ) * job.getArgs().estimationWindowSizeTiles()[ d ];
+
+		return new SearchRadiusEstimator(
+				stageValues,
+				transformedValues,
+				estimationWindowSize,
+				job.getArgs().searchRadiusMultiplier()
+			);
+	}
+
+	/**
 	 * Computes the best possible pairwise shifts between every pair of tiles on a Spark cluster.
 	 * It uses phase correlation for measuring similarity between two images.
 	 * @throws IOException
@@ -441,6 +482,13 @@ public class WarpedStitchingExecutor implements Serializable
 		final LongAccumulator noOverlapWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 
+		final TileInfo[] stageTiles = job.getStageTiles( 0 );
+		System.out.println( "Creating search radius estimator..." );
+		final SearchRadiusEstimator searchRadiusEstimator = getSearchRadiusEstimator( stageTiles );
+
+		final Broadcast< Map< Integer, TileInfo > > broadcastedStageTilesMap = sparkContext.broadcast( Utils.createTilesMap( stageTiles ) );
+		final Broadcast< SearchRadiusEstimator > broadcastedSearchRadiusEstimator = sparkContext.broadcast( searchRadiusEstimator );
+
 		final JavaRDD< StitchingResult > pairwiseStitching = sparkContext.parallelize( overlappingBoxes, Math.min( overlappingBoxes.size(), MAX_PARTITIONS ) ).map( tileBoxPair ->
 			{
 				System.out.println( "Processing tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
@@ -450,19 +498,74 @@ public class WarpedStitchingExecutor implements Serializable
 
 				// map them into the fixed tile box coordinate space (that is, transformedTileBoxPair.getA() will have zero min in the target space)
 				final Pair< Interval, Interval > transformedTileBoxPairFixedBoxSpace = SplitTileOperations.globalToFixedBoxSpace( transformedTileBoxPairGlobalSpace );
+				if ( !Views.isZeroMin( transformedTileBoxPairFixedBoxSpace.getA() ) )
+					throw new PipelineExecutionException( "fixed tile box interval is expected to be zero-min" );
 
 				// validate that they actually intersect
 				if ( IntervalsNullable.intersect( transformedTileBoxPairFixedBoxSpace.getA(), transformedTileBoxPairFixedBoxSpace.getB() ) == null )
 					throw new RuntimeException( "should not happen: only overlapping tile box pairs were selected" );
 
 				// find their 'mean' offset around which an error ellipse will be defined (as intervals are now defined in the fixed tile box space, it is just the position of the moving tile box in this space)
-				final long[] meanOffset = Intervals.minAsLongArray( transformedTileBoxPairFixedBoxSpace.getB() );
+				final double[] meanOffset = Conversions.toDoubleArray( Intervals.minAsLongArray( transformedTileBoxPairFixedBoxSpace.getB() ) );
 
 				// define search radius in the fixed tile box space
-				final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
+				/*final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
 				final double sphereRadiusPixels = job.getArgs().searchRadiusMultiplier();
 				final SearchRadius searchRadius = new SearchRadius( sphereRadiusPixels, Conversions.toDoubleArray( meanOffset ), offsetsCovarianceMatrix );
+				*/
 
+				final Map< Integer, TileInfo > localStageTilesMap = broadcastedStageTilesMap.value();
+				final SearchRadiusEstimator localSearchRadiusEstimator = broadcastedSearchRadiusEstimator.value();
+				final SearchRadius[] tilePairSearchRadiusArr = new SearchRadius[ 2 ];
+				for ( int i = 0; i < 2; ++i )
+				{
+					final TileInfo originalTile = new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ).toArray()[ i ];
+					final TileInfo stageTile = localStageTilesMap.get( originalTile.getIndex() );
+					tilePairSearchRadiusArr[ i ] = localSearchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( stageTile.getPosition() );
+					if ( tilePairSearchRadiusArr[ i ].getUsedPointsIndexes().size() < job.getArgs().minStatsNeighborhood() )
+					{
+						notEnoughNeighborsWithinConfidenceIntervalPairsCount.add( 1 );
+
+//						System.out.println( "Found " + searchRadiusEstimationWindow.getUsedPointsIndexes().size() + " neighbors within the search window but we require " + numNearestNeighbors + " nearest neighbors, perform a K-nearest neighbor search instead..." );
+						System.out.println();
+						System.out.println( new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) + ": found " + tilePairSearchRadiusArr[ i ].getUsedPointsIndexes().size() + " neighbors within the search window of the " + ( i == 0 ? "fixed" : "moving" ) + " tile but we require at least " + job.getArgs().minStatsNeighborhood() + " nearest neighbors, so create a default search sphere of radius " + job.getArgs().defaultSearchRadius() );
+						System.out.println();
+
+						// create default search radius
+						final double[][] unitSphereOffsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
+						tilePairSearchRadiusArr[ i ] = new SearchRadius(
+								job.getArgs().defaultSearchRadius(),
+								meanOffset,
+								unitSphereOffsetsCovarianceMatrix
+							);
+					}
+					else
+					{
+						System.out.println( new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) + ": found " + tilePairSearchRadiusArr[ i ].getUsedPointsIndexes().size() + " neighbors within the search window for the " + ( i == 0 ? "fixed" : "moving" ) + " tile, estimated search radius based on that" );
+
+						// we don't really care about the estimated mean shift as we have it already estimated from warping both tiles in the global space
+						tilePairSearchRadiusArr[ i ] = new SearchRadius(
+								job.getArgs().searchRadiusMultiplier(),
+								meanOffset,
+								tilePairSearchRadiusArr[ i ].getOffsetsCovarianceMatrix(),
+								tilePairSearchRadiusArr[ i ].getUsedPointsIndexes()
+							);
+					}
+				}
+				final SearchRadius searchRadius;
+				{
+					final SearchRadius combinedSearchRadius = localSearchRadiusEstimator.getCombinedCovariancesSearchRadius(
+							tilePairSearchRadiusArr[ 0 ],
+							tilePairSearchRadiusArr[ 1 ]
+						);
+					// we don't really care about the estimated mean shift as we have it already estimated from warping both tiles in the global space
+					searchRadius = new SearchRadius(
+							job.getArgs().searchRadiusMultiplier(),
+							meanOffset,
+							combinedSearchRadius.getOffsetsCovarianceMatrix(),
+							combinedSearchRadius.getUsedPointsIndexes()
+						);
+				}
 
 
 				// FIXME -- test without rematching
@@ -483,10 +586,18 @@ public class WarpedStitchingExecutor implements Serializable
 
 
 				// get ROIs in the fixed tile box space and moving tile box space, respectively
-				final Pair< Interval, Interval > adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( transformedTileBoxPairFixedBoxSpace, searchRadius );
+				Pair< Interval, Interval > adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( transformedTileBoxPairFixedBoxSpace, searchRadius );
 
 				if ( adjustedOverlaps == null )
-					throw new RuntimeException( "should not happen: only overlapping tile box pairs were selected, thus adjusted overlaps should always be non-empty too" );
+				{
+					// the bounding box of the search radius is too big so putting the moving tile in its corners does not yield overlap with the fixed tile
+//					throw new RuntimeException( "should not happen: only overlapping tile box pairs were selected, thus adjusted overlaps should always be non-empty too" );
+					// for now, set the adjusted overlaps to full tile boxes
+					adjustedOverlaps = new ValuePair<>(
+							new FinalInterval( Intervals.dimensionsAsLongArray( transformedTileBoxPairFixedBoxSpace.getA() ) ),
+							new FinalInterval( Intervals.dimensionsAsLongArray( transformedTileBoxPairFixedBoxSpace.getB() ) )
+						);
+				}
 
 				// get ROI in the full tiles for cropping
 				final Pair< Interval, Interval > adjustedOverlapsInFullTile = SplitTileOperations.getOverlapsInFullTile( tileBoxPair, adjustedOverlaps );
@@ -518,6 +629,8 @@ public class WarpedStitchingExecutor implements Serializable
 
 		final List< StitchingResult > stitchingResults = pairwiseStitching.collect();
 
+		broadcastedStageTilesMap.destroy();
+		broadcastedSearchRadiusEstimator.destroy();
 		broadcastedFlatfieldCorrectionForChannels.destroy();
 		broadcastedCoordsToTilesChannels.destroy();
 
