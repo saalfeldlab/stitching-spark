@@ -235,7 +235,7 @@ public class WarpedStitchingExecutor implements Serializable
 			for ( final StitchingResult result : stitchingResults )
 				pairwiseShifts.add( result.shift );
 
-//			saveSearchRadiusStats( stitchingResults, PathResolver.get( basePath, iterationDirname, "searchRadiusStats.txt" ) );
+			saveSearchRadiusStats( stitchingResults, PathResolver.get( basePath, "searchRadiusStats.txt" ) );
 
 			try
 			{
@@ -393,17 +393,17 @@ public class WarpedStitchingExecutor implements Serializable
 									+ " "
 									+ "%.2f %.2f %.2f",
 
-									result.shift.getTilePair().getA().getIndex(),
-									Utils.getTileCoordinates( result.shift.getTilePair().getA() )[ 0 ],
-									Utils.getTileCoordinates( result.shift.getTilePair().getA() )[ 1 ],
-									Utils.getTileCoordinates( result.shift.getTilePair().getA() )[ 2 ],
-									Utils.getTileTimestamp( result.shift.getTilePair().getA() ),
+									result.shift.getTilePair().getA().getOriginalTile().getIndex(),
+									Utils.getTileCoordinates( result.shift.getTilePair().getA().getOriginalTile() )[ 0 ],
+									Utils.getTileCoordinates( result.shift.getTilePair().getA().getOriginalTile() )[ 1 ],
+									Utils.getTileCoordinates( result.shift.getTilePair().getA().getOriginalTile() )[ 2 ],
+									Utils.getTileTimestamp( result.shift.getTilePair().getA().getOriginalTile() ),
 
-									result.shift.getTilePair().getB().getIndex(),
-									Utils.getTileCoordinates( result.shift.getTilePair().getB() )[ 0 ],
-									Utils.getTileCoordinates( result.shift.getTilePair().getB() )[ 1 ],
-									Utils.getTileCoordinates( result.shift.getTilePair().getB() )[ 2 ],
-									Utils.getTileTimestamp( result.shift.getTilePair().getB() ),
+									result.shift.getTilePair().getB().getOriginalTile().getIndex(),
+									Utils.getTileCoordinates( result.shift.getTilePair().getB().getOriginalTile() )[ 0 ],
+									Utils.getTileCoordinates( result.shift.getTilePair().getB().getOriginalTile() )[ 1 ],
+									Utils.getTileCoordinates( result.shift.getTilePair().getB().getOriginalTile() )[ 2 ],
+									Utils.getTileTimestamp( result.shift.getTilePair().getB().getOriginalTile() ),
 
 									result.searchRadiusLength != null ? result.searchRadiusLength[ 0 ] : -1,
 									result.searchRadiusLength != null ? result.searchRadiusLength[ 1 ] : -1,
@@ -568,15 +568,18 @@ public class WarpedStitchingExecutor implements Serializable
 				}
 
 
+
+
+
 				// FIXME -- test without rematching
 				/*if ( meanOffset.length > 0 )
 				{
 					final SerializablePairWiseStitchingResult pairwiseResult = new SerializablePairWiseStitchingResult(
 							tileBoxPair,
-							Conversions.toFloatArray( Conversions.toDoubleArray( meanOffset ) ),
+							Conversions.toFloatArray( meanOffset ),
 							1.f, 1.f, 1000.
 						);
-					final StitchingResult result = new StitchingResult( pairwiseResult, searchRadius != null ? searchRadius.getEllipseRadius() : null );
+					final StitchingResult result = new StitchingResult( pairwiseResult, searchRadius == null ? null : searchRadius.getEllipseRadius() );
 					result.globalTilePositionsDebug = new TreeMap<>();
 					result.globalTilePositionsDebug.put( tileBoxPair.getA().getIndex(), Intervals.minAsLongArray( transformedTileBoxPairGlobalSpace.getA() ) );
 					result.globalTilePositionsDebug.put( tileBoxPair.getB().getIndex(), Intervals.minAsLongArray( transformedTileBoxPairGlobalSpace.getB() ) );
