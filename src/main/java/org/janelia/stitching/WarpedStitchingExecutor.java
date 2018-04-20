@@ -92,7 +92,9 @@ public class WarpedStitchingExecutor implements Serializable
 		final List< TilePair > overlappingBoxes = findOverlappingBoxes();
 		preparePairwiseShifts( overlappingBoxes );
 
-		final WarpedStitchingOptimizer optimizer = new WarpedStitchingOptimizer( job, sparkContext );
+		sparkContext.close();
+
+		final WarpedStitchingOptimizer optimizer = new WarpedStitchingOptimizer( job );
 		optimizer.optimize();
 	}
 

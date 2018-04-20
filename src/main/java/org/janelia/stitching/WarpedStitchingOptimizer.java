@@ -11,14 +11,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.Vector;
+import java.util.concurrent.ExecutionException;
 
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
+import org.janelia.util.concurrent.MultithreadedExecutor;
 
 import ij.ImagePlus;
 import mpicbg.models.Affine3D;
+import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -129,12 +131,10 @@ public class WarpedStitchingOptimizer implements Serializable
 	}
 
 	private final C1WarpedStitchingJob job;
-	private transient final JavaSparkContext sparkContext;
 
-	public WarpedStitchingOptimizer( final C1WarpedStitchingJob job, final JavaSparkContext sparkContext )
+	public WarpedStitchingOptimizer( final C1WarpedStitchingJob job )
 	{
 		this.job = job;
-		this.sparkContext = sparkContext;
 	}
 
 	public void optimize() throws IOException
@@ -214,38 +214,58 @@ public class WarpedStitchingOptimizer implements Serializable
 		final SerializableStitchingParameters stitchingParameters = job.getParams();
 		final int tilesCount = job.getTiles( 0 ).length;
 
-		final Broadcast< List< SerializablePairWiseStitchingResult > > broadcastedTileBoxShifts = sparkContext.broadcast( tileBoxShifts );
-
 		GlobalOptimizationPerformer.suppressOutput();
 
-		final List< OptimizationResult > optimizationResultList = new ArrayList<>( sparkContext.parallelize( optimizationParametersList, Math.min( optimizationParametersList.size(), MAX_PARTITIONS ) ).map( optimizationParameters ->
-			{
-				final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters );
+		final List< OptimizationResult > optimizationResultList = new ArrayList<>();
+		try ( final MultithreadedExecutor threadPool = new MultithreadedExecutor() )
+		{
+			threadPool.run( optimizationParametersIndex ->
+					{
+						final OptimizationParameters optimizationParameters = optimizationParametersList.get( optimizationParametersIndex );
 
-				final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
-				GlobalOptimizationPerformer.suppressOutput();
-				final List< ImagePlusTimePoint > optimized;
+						final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( tileBoxShifts, optimizationParameters );
 
-				optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
+						final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
+						GlobalOptimizationPerformer.suppressOutput();
+						final List< ImagePlusTimePoint > optimized;
 
-				final OptimizationResult optimizationResult = new OptimizationResult(
-						job.getArgs(),
-						optimized,
-						maxAllowedError,
-						optimizationParameters,
-						tilesCount,
-						optimizationPerformer.remainingGraphSize,
-						optimizationPerformer.remainingPairs,
-						optimizationPerformer.avgDisplacement,
-						optimizationPerformer.maxDisplacement,
-						optimizationPerformer.translationOnlyStitching,
-						optimizationPerformer.replacedTilesTranslation
-					);
-				return optimizationResult;
-			}
-		).collect() );
+						try
+						{
+							optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
+						}
+						catch ( final NotEnoughDataPointsException | IllDefinedDataPointsException | InterruptedException | ExecutionException e )
+						{
+							throw new RuntimeException( e );
+						}
 
-		broadcastedTileBoxShifts.destroy();
+						final OptimizationResult optimizationResult = new OptimizationResult(
+								job.getArgs(),
+								optimized,
+								maxAllowedError,
+								optimizationParameters,
+								tilesCount,
+								optimizationPerformer.remainingGraphSize,
+								optimizationPerformer.remainingPairs,
+								optimizationPerformer.avgDisplacement,
+								optimizationPerformer.maxDisplacement,
+								optimizationPerformer.translationOnlyStitching,
+								optimizationPerformer.replacedTilesTranslation
+							);
+
+						synchronized ( optimizationResultList )
+						{
+							optimizationResultList.add( optimizationResult );
+							System.err.println( "  done " + optimizationResultList.size() + " out of " + optimizationParametersList.size() );
+						}
+					},
+					optimizationParametersList.size()
+				);
+		}
+		catch ( final InterruptedException | ExecutionException e )
+		{
+			throw new RuntimeException( e );
+		}
+
 		GlobalOptimizationPerformer.restoreOutput();
 
 		optimizationResultList.removeAll( Collections.singleton( null ) );
