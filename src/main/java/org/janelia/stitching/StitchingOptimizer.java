@@ -206,17 +206,9 @@ public class StitchingOptimizer implements Serializable
 		final List< OptimizationResult > optimizationResultList = new ArrayList<>( sparkContext.parallelize( optimizationParametersList, optimizationParametersList.size() ).map( optimizationParameters ->
 			{
 				final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters );
-
-				int validPairs = 0;
-				for ( final ComparePointPair comparePointPair : comparePointPairs )
-					if ( comparePointPair.getIsValidOverlap() )
-						++validPairs;
-
 				final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
 				GlobalOptimizationPerformer.suppressOutput();
-				final List< ImagePlusTimePoint > optimized;
-
-				optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
+				final List< ImagePlusTimePoint > optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
 
 				final OptimizationResult optimizationResult = new OptimizationResult(
 						optimized,
@@ -224,7 +216,7 @@ public class StitchingOptimizer implements Serializable
 						optimizationParameters,
 						tilesCount,
 						optimizationPerformer.remainingGraphSize,
-						validPairs,
+						optimizationPerformer.remainingPairs,
 						optimizationPerformer.avgDisplacement,
 						optimizationPerformer.maxDisplacement,
 						optimizationPerformer.replacedTilesSimilarity,
