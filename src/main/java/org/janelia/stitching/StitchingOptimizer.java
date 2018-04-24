@@ -96,17 +96,26 @@ public class StitchingOptimizer implements Serializable
 		@Override
 		public int compareTo( final OptimizationResult other )
 		{
-			// if both are above the error threshold, the order is determined solely by smaller or higher error
+			// if both are above the error threshold, the order is determined by the resulting graph size and max.error
 			if ( maxDisplacement > maxAllowedError || other.maxDisplacement > other.maxAllowedError )
-				return Double.compare( maxDisplacement, other.maxDisplacement );
+			{
+				if ( remainingGraphSize != other.remainingGraphSize )
+					return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
 
-			// better if the remaining graph is bigger, and in case of a tie, if more edges have been preserved
+				return Double.compare( maxDisplacement, other.maxDisplacement );
+			}
+
+			//  better if the resulting graph is larger
 			if ( remainingGraphSize != other.remainingGraphSize )
 				return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
+
+			/*
+			// better when the resulting graph has more edges
 			if ( remainingPairs != other.remainingPairs )
 				return -Integer.compare( remainingPairs, other.remainingPairs );
+			*/
 
-			// for the same graph characteristics, it is better when less tiles have simplified model
+			// for the same graph characteristics, it is better when fewer tiles have simplified model
 			if ( replacedTilesTranslation != other.replacedTilesTranslation )
 				return Integer.compare( replacedTilesTranslation, other.replacedTilesTranslation );
 			if ( replacedTilesSimilarity != other.replacedTilesSimilarity )
