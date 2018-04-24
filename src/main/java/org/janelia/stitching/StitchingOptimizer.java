@@ -257,8 +257,8 @@ public class StitchingOptimizer implements Serializable
 						"retainedGraphRatio=" + optimizationResult.retainedGraphRatio +
 						", graph=" + optimizationResult.remainingGraphSize +
 						", pairs=" + optimizationResult.remainingPairs +
-						", avg.error=" + optimizationResult.avgDisplacement +
-						", max.error=" + optimizationResult.maxDisplacement +
+						", avg.error=" + String.format( "%.2f", optimizationResult.avgDisplacement ) +
+						", max.error=" + String.format( "%.2f", optimizationResult.maxDisplacement ) +
 						";  cross.corr=" + String.format( "%.2f", optimizationResult.optimizationParameters.minCrossCorrelation ) +
 						", variance=" + String.format( "%.2f", optimizationResult.optimizationParameters.minVariance ) +
 									";  tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity +
