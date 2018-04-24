@@ -68,9 +68,6 @@ public class StitchingSpark implements Serializable, AutoCloseable
 		params.checkPeaks = 100;
 		params.computeOverlap = true;
 		params.subpixelAccuracy = true;
-		params.virtual = false;
-		params.absoluteThreshold = 5;
-		params.relativeThreshold = 3;
 		job.setParams( params );
 
 		sparkContext = new JavaSparkContext( new SparkConf()
