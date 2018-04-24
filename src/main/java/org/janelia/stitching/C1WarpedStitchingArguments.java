@@ -20,7 +20,7 @@ public class C1WarpedStitchingArguments implements Serializable {
 	private boolean affineOnlyStitching = true;
 	private StitchingMode stitchingMode = StitchingMode.INCREMENTAL;
 	private int splitOverlapParts = 2;
-	private double maxStitchingError = 10.0;
+	private double maxStitchingError = 30.0;
 
 	public long[] padding() { return padding; }
 	public long[] minCoord() { return minCoord; }
