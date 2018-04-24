@@ -11,7 +11,7 @@ import net.imglib2.util.Pair;
  * @author Igor Pisarev
  */
 
-public class PointPair implements Pair< Point, Point >, Serializable
+public class PointPair implements Pair< Point, Point >, Cloneable, Serializable
 {
 	private static final long serialVersionUID = -8431265615061089934L;
 
@@ -39,5 +39,11 @@ public class PointPair implements Pair< Point, Point >, Serializable
 	public Point[] toArray()
 	{
 		return pointPair.clone();
+	}
+
+	@Override
+	public PointPair clone()
+	{
+		return new PointPair( pointPair[ 0 ].clone(), pointPair[ 1 ].clone() );
 	}
 }

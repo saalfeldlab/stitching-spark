@@ -303,7 +303,7 @@ public class StitchingOptimizer implements Serializable
 					fakeTileImagesMap.get( tileBoxShift.getTilePair().getB().getOriginalTile().getIndex() )
 				);
 
-			comparePointPair.setPointPair( tileBoxShift.getPointPair() );
+			comparePointPair.setPointPair( tileBoxShift.getPointPair().clone() );
 			comparePointPair.setRelativeShift( tileBoxShift.getOffset() == null ? null : tileBoxShift.getOffset().clone() );
 			comparePointPair.setCrossCorrelation( tileBoxShift.getCrossCorrelation() );
 			comparePointPair.setIsValidOverlap(
