@@ -62,6 +62,7 @@ public class StitchingOptimizer implements Serializable
 		public final double avgDisplacement;
 
 		public final int replacedTilesSimilarity;
+		public final int replacedTilesTranslation;
 
 		public OptimizationResult(
 				final List< ImagePlusTimePoint > optimized,
@@ -72,7 +73,8 @@ public class StitchingOptimizer implements Serializable
 				final int remainingPairs,
 				final double avgDisplacement,
 				final double maxDisplacement,
-				final int replacedTilesSimilarity )
+				final int replacedTilesSimilarity,
+				final int replacedTilesTranslation )
 		{
 			this.optimized = optimized;
 			this.optimizationParameters = optimizationParameters;
@@ -81,6 +83,7 @@ public class StitchingOptimizer implements Serializable
 			this.avgDisplacement = avgDisplacement;
 			this.maxDisplacement = maxDisplacement;
 			this.replacedTilesSimilarity = replacedTilesSimilarity;
+			this.replacedTilesTranslation = replacedTilesTranslation;
 
 			final double remainingGraphToFullGraphRatio = ( double ) remainingGraphSize / fullGraphSize;
 			assert remainingGraphToFullGraphRatio >= 0 && remainingGraphToFullGraphRatio <= 0;
@@ -215,10 +218,6 @@ public class StitchingOptimizer implements Serializable
 
 				optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
 
-				// ignore this configuration if some tiles do not have enough matches
-				if ( optimizationPerformer.replacedTilesTranslation != 0 )
-					return null;
-
 				final OptimizationResult optimizationResult = new OptimizationResult(
 						optimized,
 						maxAllowedError,
@@ -228,7 +227,8 @@ public class StitchingOptimizer implements Serializable
 						validPairs,
 						optimizationPerformer.avgDisplacement,
 						optimizationPerformer.maxDisplacement,
-						optimizationPerformer.replacedTilesSimilarity
+						optimizationPerformer.replacedTilesSimilarity,
+						optimizationPerformer.replacedTilesTranslation
 					);
 				return optimizationResult;
 			}
@@ -249,7 +249,7 @@ public class StitchingOptimizer implements Serializable
 			logWriter.println( "Scanning parameter space for the optimizer: min.cross.correlation and min.variance:" );
 			logWriter.println();
 			for ( final OptimizationResult optimizationResult : optimizationResultList )
-				logWriter.println( "score=" + optimizationResult.score + ", graph=" + optimizationResult.remainingGraphSize + ", pairs=" + optimizationResult.remainingPairs + ", avg.error=" + optimizationResult.avgDisplacement + ", max.error=" + optimizationResult.maxDisplacement + ";  cross.corr=" + optimizationResult.optimizationParameters.minCrossCorrelation + ", variance=" + optimizationResult.optimizationParameters.minVariance + ";  tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity);
+				logWriter.println( "score=" + optimizationResult.score + ", graph=" + optimizationResult.remainingGraphSize + ", pairs=" + optimizationResult.remainingPairs + ", avg.error=" + optimizationResult.avgDisplacement + ", max.error=" + optimizationResult.maxDisplacement + ";  cross.corr=" + optimizationResult.optimizationParameters.minCrossCorrelation + ", variance=" + optimizationResult.optimizationParameters.minVariance + ";  tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity + ";  tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation );
 		}
 
 		return optimizationResultList.get( 0 );

@@ -128,7 +128,6 @@ public class GlobalOptimizationPerformer
 		}
 
 
-
 		// check if there are enough point matches
 		{
 			final Set< Tile< ? > > newTilesSet = new HashSet<>();
@@ -160,19 +159,9 @@ public class GlobalOptimizationPerformer
 				}
 			}
 
-			// --- FIXME: test translation-only solution
-//			if ( replacedTilesTranslation != 0 )
-//				throw new RuntimeException( "shouldn't happen" );
-
 			tilesSet.clear();
 			tilesSet.addAll( newTilesSet );
 		}
-
-
-		// FIXME: don't consider configurations where some affine models have been replaced by translation models
-		if ( replacedTilesTranslation != 0 )
-			return null;
-
 
 		// --- FIXME: test translation-only solution
 		// instead of pre-aligning, apply the models of the approximate tile transforms to the point matches
