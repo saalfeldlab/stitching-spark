@@ -54,7 +54,8 @@ public class StitchingOptimizer implements Serializable
 		public final List< ImagePlusTimePoint > optimized;
 
 		public final OptimizationParameters optimizationParameters;
-		public final double score;
+		public final double retainedGraphRatio;
+		public final double maxAllowedError;
 
 		public final int remainingGraphSize;
 		public final int remainingPairs;
@@ -77,6 +78,7 @@ public class StitchingOptimizer implements Serializable
 				final int replacedTilesTranslation )
 		{
 			this.optimized = optimized;
+			this.maxAllowedError = maxAllowedError;
 			this.optimizationParameters = optimizationParameters;
 			this.remainingGraphSize = remainingGraphSize;
 			this.remainingPairs = remainingPairs;
@@ -85,24 +87,33 @@ public class StitchingOptimizer implements Serializable
 			this.replacedTilesSimilarity = replacedTilesSimilarity;
 			this.replacedTilesTranslation = replacedTilesTranslation;
 
-			final double remainingGraphToFullGraphRatio = ( double ) remainingGraphSize / fullGraphSize;
-			assert remainingGraphToFullGraphRatio >= 0 && remainingGraphToFullGraphRatio <= 0;
-
-//			assert maxDisplacement >= 0;
-//			final double displacementScore = 1 - maxDisplacement / MAX_DISPLACEMENT_LIMIT;
-//
-//			score = remainingGraphToFullGraphRatio * displacementScore;
-
-			score = remainingGraphSize == 0 || maxDisplacement > maxAllowedError ? Double.NEGATIVE_INFINITY : remainingGraphToFullGraphRatio;
+			retainedGraphRatio = ( double ) remainingGraphSize / fullGraphSize;
 		}
 
-		/*
-		 * Defines descending sorting order based on score
+		/**
+		 * Defines descending sorting order.
 		 */
 		@Override
 		public int compareTo( final OptimizationResult other )
 		{
-			return Double.compare( other.score, score );
+			// if both are above the error threshold, the order is determined solely by smaller or higher error
+			if ( maxDisplacement > maxAllowedError || other.maxDisplacement > other.maxAllowedError )
+				return Double.compare( maxDisplacement, other.maxDisplacement );
+
+			// better if the remaining graph is bigger, and in case of a tie, if more edges have been preserved
+			if ( remainingGraphSize != other.remainingGraphSize )
+				return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
+			if ( remainingPairs != other.remainingPairs )
+				return -Integer.compare( remainingPairs, other.remainingPairs );
+
+			// for the same graph characteristics, it is better when less tiles have simplified model
+			if ( replacedTilesTranslation != other.replacedTilesTranslation )
+				return Integer.compare( replacedTilesTranslation, other.replacedTilesTranslation );
+			if ( replacedTilesSimilarity != other.replacedTilesSimilarity )
+				return Integer.compare( replacedTilesSimilarity, other.replacedTilesSimilarity );
+
+			// if everything above is the same, the order is determined by smaller or higher error
+			return Double.compare( maxDisplacement, other.maxDisplacement );
 		}
 	}
 
@@ -241,7 +252,19 @@ public class StitchingOptimizer implements Serializable
 			logWriter.println( "Scanning parameter space for the optimizer: min.cross.correlation and min.variance:" );
 			logWriter.println();
 			for ( final OptimizationResult optimizationResult : optimizationResultList )
-				logWriter.println( "score=" + optimizationResult.score + ", graph=" + optimizationResult.remainingGraphSize + ", pairs=" + optimizationResult.remainingPairs + ", avg.error=" + optimizationResult.avgDisplacement + ", max.error=" + optimizationResult.maxDisplacement + ";  cross.corr=" + optimizationResult.optimizationParameters.minCrossCorrelation + ", variance=" + optimizationResult.optimizationParameters.minVariance + ";  tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity + ";  tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation );
+			{
+				logWriter.println(
+						"retainedGraphRatio=" + optimizationResult.retainedGraphRatio +
+						", graph=" + optimizationResult.remainingGraphSize +
+						", pairs=" + optimizationResult.remainingPairs +
+						", avg.error=" + optimizationResult.avgDisplacement +
+						", max.error=" + optimizationResult.maxDisplacement +
+						";  cross.corr=" + String.format( "%.2f", optimizationResult.optimizationParameters.minCrossCorrelation ) +
+						", variance=" + String.format( "%.2f", optimizationResult.optimizationParameters.minVariance ) +
+									";  tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity +
+									";  tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation
+					);
+			}
 		}
 
 		return optimizationResultList.get( 0 );
