@@ -334,4 +334,23 @@ public class SplitTileOperations
 			minDimensions[ d ] = Math.min( pair.getA().getSize( d ), pair.getB().getSize( d ) );
 		return new FinalDimensions( minDimensions );
 	}
+
+	/**
+	 * Returns the offset between full tiles based on the offset between tile boxes and their positions within respective tiles.
+	 *
+	 * @param tileBoxPair
+	 * @param tileBoxOffset
+	 * @return
+	 */
+	public static double[] getFullTileOffset( final TilePair tileBoxPair, final double[] tileBoxOffset )
+	{
+		final TileInfo fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
+		if ( fixedTileBox.getOriginalTile() == null || movingTileBox.getOriginalTile() == null )
+			throw new IllegalArgumentException( "was given full tiles instead of tile boxes" );
+
+		final double[] fullTileOffset = new double[ tileBoxOffset.length ];
+		for ( int d = 0; d < fullTileOffset.length; ++d )
+			fullTileOffset[ d ] = tileBoxOffset[ d ] + fixedTileBox.getPosition( d ) - movingTileBox.getPosition( d );
+		return fullTileOffset;
+	}
 }

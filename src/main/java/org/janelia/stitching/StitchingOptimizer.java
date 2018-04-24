@@ -62,7 +62,7 @@ public class StitchingOptimizer implements Serializable
 		public final double maxDisplacement;
 		public final double avgDisplacement;
 
-		public final int replacedTilesSimilarity;
+		public final boolean translationOnlyStitching;
 		public final int replacedTilesTranslation;
 
 		public OptimizationResult(
@@ -74,7 +74,7 @@ public class StitchingOptimizer implements Serializable
 				final int remainingPairs,
 				final double avgDisplacement,
 				final double maxDisplacement,
-				final int replacedTilesSimilarity,
+				final boolean translationOnlyStitching,
 				final int replacedTilesTranslation )
 		{
 			this.optimized = optimized;
@@ -84,7 +84,7 @@ public class StitchingOptimizer implements Serializable
 			this.remainingPairs = remainingPairs;
 			this.avgDisplacement = avgDisplacement;
 			this.maxDisplacement = maxDisplacement;
-			this.replacedTilesSimilarity = replacedTilesSimilarity;
+			this.translationOnlyStitching = translationOnlyStitching;
 			this.replacedTilesTranslation = replacedTilesTranslation;
 
 			retainedGraphRatio = ( double ) remainingGraphSize / fullGraphSize;
@@ -126,11 +126,11 @@ public class StitchingOptimizer implements Serializable
 				return -Integer.compare( remainingPairs, other.remainingPairs );
 			*/
 
+			/*
 			// for the same graph characteristics, it is better when fewer tiles have simplified model
 			if ( replacedTilesTranslation != other.replacedTilesTranslation )
 				return Integer.compare( replacedTilesTranslation, other.replacedTilesTranslation );
-			if ( replacedTilesSimilarity != other.replacedTilesSimilarity )
-				return Integer.compare( replacedTilesSimilarity, other.replacedTilesSimilarity );
+			*/
 
 			// if everything above is the same, the order is determined by smaller or higher error
 			return Double.compare( maxDisplacement, other.maxDisplacement );
@@ -153,10 +153,6 @@ public class StitchingOptimizer implements Serializable
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
 		final String iterationDirname = "iter" + iteration;
 		final String pairwiseShiftsPath = PathResolver.get( basePath, iterationDirname, "pairwise.json" );
-
-		// FIXME: skip if solution already exists?
-//		if ( Files.exists( Paths.get( Utils.addFilenameSuffix( pairwiseShiftsPath, "-used" ) ) ) )
-//			return;
 
 		final List< SerializablePairWiseStitchingResult > tileBoxShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 
@@ -199,12 +195,8 @@ public class StitchingOptimizer implements Serializable
 						}
 					}
 
-//					if ( newTiles.size() + optimizationPerformer.lostTiles.size() != tilesMap.size() )
-//						throw new RuntimeException( "Number of stitched tiles does not match" );
-
 					// sort the tiles by their index
 					final TileInfo[] tilesToSave = Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
-//					TileOperations.translateTilesToOriginReal( tilesToSave );
 
 					// save final tiles configuration
 					TileInfoJSONProvider.saveTilesConfiguration(
@@ -250,7 +242,7 @@ public class StitchingOptimizer implements Serializable
 						optimizationPerformer.remainingPairs,
 						optimizationPerformer.avgDisplacement,
 						optimizationPerformer.maxDisplacement,
-						optimizationPerformer.replacedTilesSimilarity,
+						optimizationPerformer.translationOnlyStitching,
 						optimizationPerformer.replacedTilesTranslation
 					);
 				return optimizationResult;
@@ -282,16 +274,34 @@ public class StitchingOptimizer implements Serializable
 					logWriter.println( "--------------- Max.error above threshold ---------------" );
 				}
 
+				final String modelSpecificationLog;
+				if ( optimizationResult.remainingGraphSize != 0 )
+				{
+					if ( optimizationResult.translationOnlyStitching )
+					{
+						modelSpecificationLog = ";  translation-only stitching";
+					}
+					else
+					{
+						modelSpecificationLog =
+								";  higher-order model stitching" +
+								"; tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation;
+					}
+				}
+				else
+				{
+					modelSpecificationLog = "";
+				}
+
 				logWriter.println(
-						"retainedGraphRatio=" + optimizationResult.retainedGraphRatio +
+						"retainedGraphRatio=" + String.format( "%.2f", optimizationResult.retainedGraphRatio ) +
 						", graph=" + optimizationResult.remainingGraphSize +
 						", pairs=" + optimizationResult.remainingPairs +
-						", avg.error=" + String.format( "%.2f", optimizationResult.avgDisplacement ) +
+						",  avg.error=" + String.format( "%.2f", optimizationResult.avgDisplacement ) +
 						", max.error=" + String.format( "%.2f", optimizationResult.maxDisplacement ) +
 						";  cross.corr=" + String.format( "%.2f", optimizationResult.optimizationParameters.minCrossCorrelation ) +
 						", variance=" + String.format( "%.2f", optimizationResult.optimizationParameters.minVariance ) +
-									";  tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity +
-									";  tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation
+						modelSpecificationLog
 					);
 			}
 		}
@@ -323,9 +333,7 @@ public class StitchingOptimizer implements Serializable
 				{
 					try
 					{
-						// --- FIXME: test translation-only solution
 						final ImageCollectionElement el = Utils.createElementAffineModel( originalTileInfo );
-//						final ImageCollectionElement el = Utils.createElementTranslationModel( originalTileInfo );
 						final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), ( java.awt.Image ) null );
 						final ImagePlusTimePoint fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
 						fakeTileImagesMap.put( originalTileInfo.getIndex(), fakeTile );
@@ -347,7 +355,7 @@ public class StitchingOptimizer implements Serializable
 					fakeTileImagesMap.get( tileBoxShift.getTilePair().getB().getOriginalTile().getIndex() )
 				);
 
-			comparePointPair.setPointPair( tileBoxShift.getPointPair().clone() );
+			comparePointPair.setTileBoxPair( tileBoxShift.getTilePair() );
 			comparePointPair.setRelativeShift( tileBoxShift.getOffset() == null ? null : tileBoxShift.getOffset().clone() );
 			comparePointPair.setCrossCorrelation( tileBoxShift.getCrossCorrelation() );
 			comparePointPair.setIsValidOverlap(
