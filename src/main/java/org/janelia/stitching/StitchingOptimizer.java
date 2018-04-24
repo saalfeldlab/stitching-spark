@@ -97,13 +97,24 @@ public class StitchingOptimizer implements Serializable
 		public int compareTo( final OptimizationResult other )
 		{
 			// if both are above the error threshold, the order is determined by the resulting graph size and max.error
-			if ( maxDisplacement > maxAllowedError || other.maxDisplacement > other.maxAllowedError )
+			if ( maxDisplacement > maxAllowedError && other.maxDisplacement > other.maxAllowedError )
 			{
 				if ( remainingGraphSize != other.remainingGraphSize )
 					return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
 
 				return Double.compare( maxDisplacement, other.maxDisplacement );
 			}
+			// otherwise, the one that is above the error threshold goes last
+			else if ( maxDisplacement > maxAllowedError )
+			{
+				return 1;
+			}
+			else if ( other.maxDisplacement > other.maxAllowedError )
+			{
+				return -1;
+			}
+
+			// both are within the accepted error range
 
 			//  better if the resulting graph is larger
 			if ( remainingGraphSize != other.remainingGraphSize )
@@ -260,8 +271,17 @@ public class StitchingOptimizer implements Serializable
 			logWriter.println();
 			logWriter.println( "Scanning parameter space for the optimizer: min.cross.correlation and min.variance:" );
 			logWriter.println();
+			boolean aboveErrorThreshold = false;
 			for ( final OptimizationResult optimizationResult : optimizationResultList )
 			{
+				if ( optimizationResult.maxDisplacement > optimizationResult.maxAllowedError && !aboveErrorThreshold )
+				{
+					// first item that is above the specified error threshold
+					aboveErrorThreshold = true;
+					logWriter.println();
+					logWriter.println( "--------------- Max.error above threshold ---------------" );
+				}
+
 				logWriter.println(
 						"retainedGraphRatio=" + optimizationResult.retainedGraphRatio +
 						", graph=" + optimizationResult.remainingGraphSize +
