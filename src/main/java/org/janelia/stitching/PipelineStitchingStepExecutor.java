@@ -552,25 +552,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 				final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( tileBoxPair, roiImps, searchRadius, offsetConverter );
 
-				final StitchingResult stitchingResult;
-				if ( pairwiseResult == null )
-				{
-					// no matches were found
-					stitchingResult = new StitchingResult( null, searchRadius != null ? searchRadius.getEllipseRadius() : null );
-				}
-				else
-				{
-					// put other properties and store the result
-
-					stitchingResult = new StitchingResult( pairwiseResult, searchRadius != null ? searchRadius.getEllipseRadius() : null );
-				}
-
 				for ( int i = 0; i < 2; i++ )
 					roiImps[ i ].close();
 
 				System.out.println( "Stitched tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
 
-				return stitchingResult;
+				return new StitchingResult( pairwiseResult, searchRadius != null ? searchRadius.getEllipseRadius() : null );
 			} );
 
 		final List< StitchingResult > stitchingResults = pairwiseStitching.collect();
