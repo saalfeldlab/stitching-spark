@@ -70,7 +70,13 @@ public class TileLoader
 		if ( n5.datasetExists( tileDatasetPath ) )
 			return N5Utils.open( n5, tileDatasetPath );
 
-		final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
-		return ImagePlusImgs.from( imp );
+		// if it is a file, try to read it as an image file
+		if ( dataProvider.fileExists( URI.create( tile.getFilePath() ) ) )
+		{
+			final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
+			return ImagePlusImgs.from( imp );
+		}
+
+		throw new IOException( "Tile image does not exist: " + tile.getFilePath() );
 	}
 }
