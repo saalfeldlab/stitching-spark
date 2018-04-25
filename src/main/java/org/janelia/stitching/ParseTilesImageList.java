@@ -14,6 +14,7 @@ import java.util.TreeMap;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.stitching.PipelineMetadataStepExecutor.NonExistingTilesException;
 import org.janelia.stitching.analysis.CheckConnectedGraphs;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.Conversions;
@@ -26,24 +27,29 @@ public class ParseTilesImageList
 		final String tileImagesFolder;
 		final double[] pixelResolution;
 		final String[] axisMappingStr;
+		final boolean skipNonExistingTiles;
 
 		try
 		{
 			imageListFilepath = Paths.get( args[ 0 ] ).toAbsolutePath().toString();
-			tileImagesFolder = args.length > 3 ? args[ 1 ] : null;
-			pixelResolution = Conversions.parseDoubleArray( ( tileImagesFolder == null ? args[ 1 ] : args[ 2 ] ).trim().split( "," ) );
-			axisMappingStr = ( tileImagesFolder == null ? args[ 2 ] : args[ 3 ] ).trim().split( "," );
+			tileImagesFolder = args[ 1 ];
+			pixelResolution = Conversions.parseDoubleArray( args[ 2 ].trim().split( "," ) );
+			axisMappingStr = args[ 3 ].trim().split( "," );
+			skipNonExistingTiles = args.length > 4 && args[ 4 ].equalsIgnoreCase( "--skip" );
 		}
 		catch ( final Exception e )
 		{
-			throw new RuntimeException(
+			System.err.println(
 					"Usage:" + System.lineSeparator() +
 					"python parse-imagelist.py " + System.lineSeparator() +
 					"  <path to ImageList.csv> " + System.lineSeparator() +
 					"  <path to tile images directory> " + System.lineSeparator() +
 					"  <pixel resolution, e.g. 0.097,0.097,0.18> " + System.lineSeparator() +
-					"  <objective to pixel coordinates axis mapping, e.g. -y,x,z>"
+					"  <objective to pixel coordinates axis mapping, e.g. -y,x,z>" + System.lineSeparator() +
+					"  [--skip, optional for skipping tiles that do not exist instead of failing]"
 				);
+			System.exit( 1 );
+			return; // avoid initializing all final variables as null
 		}
 
 		if ( pixelResolution.length != 3 && axisMappingStr.length != 3 )
@@ -101,7 +107,14 @@ public class ParseTilesImageList
 			System.out.println( String.format( "  ch%d: %d tiles", entry.getKey(), entry.getValue().size() ) );
 
 		// run metadata step
-		PipelineMetadataStepExecutor.process( tiles );
+		try
+		{
+			PipelineMetadataStepExecutor.process( tiles, skipNonExistingTiles );
+		}
+		catch ( final NonExistingTilesException e )
+		{
+			System.exit( 1 );
+		}
 
 		// check that tile configuration forms a single graph
 		// NOTE: may fail with StackOverflowError. Pass -Xss to the JVM

@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -36,12 +37,17 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 {
 	private static final long serialVersionUID = -4817219922945295127L;
 
+	public static class NonExistingTilesException extends Exception
+	{
+		private static final long serialVersionUID = -4061495837544440214L;
+	}
+
 	public PipelineMetadataStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
 		super( job, sparkContext );
 	}
 
-	public static void process( final TreeMap< Integer, List< TileInfo > > tileChannels ) throws Exception
+	public static void process( final TreeMap< Integer, List< TileInfo > > tileChannels, final boolean skipNonExistingTiles ) throws Exception
 	{
 		System.out.println( "Searching for missing tiles..." );
 		final Map< Integer, Integer > missingTilesAdded = addMissingTiles( tileChannels );
@@ -62,12 +68,41 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		}
 
 		System.out.println( "Searching for lost tiles to remove (that don't exist on the hard drive)..." );
+		final Map< Integer, Set< String > > tilePathsBeforeRemoving = new TreeMap<>();
+		for ( final int channel : tileChannels.keySet() )
+		{
+			final Set< String > tilePathsForChannel = new HashSet<>();
+			for ( final TileInfo tile : tileChannels.get( channel ) )
+				tilePathsForChannel.add( tile.getFilePath() );
+			tilePathsBeforeRemoving.put( channel, tilePathsForChannel );
+		}
 		final Map< Integer, Integer > nonExistingTilesRemoved = removeNonExistingTiles( tileChannels );
 		{
 			final StringBuilder sb = new StringBuilder( "  tiles removed:" );
 			for ( final int channel : tileChannels.keySet() )
 				sb.append( channel != tileChannels.firstKey() ? ", " : " " ).append( "ch" + channel ).append( "=" ).append( nonExistingTilesRemoved.get( channel ) );
 			System.out.println( sb.toString() );
+		}
+		if ( !skipNonExistingTiles && Collections.max( nonExistingTilesRemoved.values() ).intValue() > 0 )
+		{
+			System.err.println( System.lineSeparator() + "Some of the tiles do not exist on the hard drive, please check the paths and try to restore the missing files:" );
+			for ( final int channel : tilePathsBeforeRemoving.keySet() )
+			{
+				final Set< String > tilePathsBeforeRemovingForChannel = tilePathsBeforeRemoving.get( channel );
+				final Set< String > tilePathsAfterRemovingForChannel = new HashSet<>();
+				for ( final TileInfo tile : tileChannels.get( channel ) )
+					tilePathsAfterRemovingForChannel.add( tile.getFilePath() );
+				tilePathsBeforeRemovingForChannel.removeAll( tilePathsAfterRemovingForChannel );
+
+				if ( !tilePathsBeforeRemovingForChannel.isEmpty() )
+				{
+					System.err.println( "  " + "ch" + channel + ":" );
+					for ( final String tilePath : tilePathsBeforeRemovingForChannel )
+						System.err.println( "    " + tilePath );
+				}
+			}
+			System.err.println( "If the files cannot be restored, supply an additional argument [--skip] to exclude these tiles and proceed without them." );
+			throw new NonExistingTilesException();
 		}
 
 		System.out.println( "Filling metadata..." );
