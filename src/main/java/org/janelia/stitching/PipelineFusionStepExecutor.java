@@ -122,11 +122,14 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			baseExportPath = DataProviderFactory.createBucketUri( dataProviderType, exportBucket ).toString();
 		}
 
-		// FIXME: allow it for now
-//		if ( Files.exists( Paths.get( baseExportPath ) ) )
-//			throw new PipelineExecutionException( "Export path already exists: " + baseExportPath );
-
 		final String n5ExportPath = baseExportPath;
+
+		if ( dataProvider.createN5Reader( URI.create( n5ExportPath ) ).exists( "/" ) )
+		{
+			throw new PipelineExecutionException( "Export path already exists: " + n5ExportPath + System.lineSeparator() +
+					"Aborting to prevent possible overwriting of useful data. Please make sure everything is correct, and in case it was intended, delete the existing export first and run it again." );
+		}
+
 		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ), N5ExportMetadata.getGsonBuilder() );
 
 		List< String > downsampledDatasets = null;
@@ -167,19 +170,15 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final String fullScaleOutputPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, 0 );
 
 			// Generate export of the first scale level
-			// FIXME: remove. But it saves time for now
-			if ( !n5.datasetExists( fullScaleOutputPath ) )
-				fuse( n5ExportPath, fullScaleOutputPath, job.getTiles( channel ) );
+			fuse( n5ExportPath, fullScaleOutputPath, job.getTiles( channel ) );
 
 			// Generate lower scale levels
-			// FIXME: remove. But it saves time for now
-			if ( !n5.datasetExists( N5ExportMetadata.getScaleLevelDatasetPath( channel, 1 ) ) )
-				downsampledDatasets = N5NonIsotropicScalePyramidSpark3D.downsampleNonIsotropicScalePyramid(
-						sparkContext,
-						() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( n5ExportPath ) ),
-						fullScaleOutputPath,
-						voxelDimensions
-					);
+			downsampledDatasets = N5NonIsotropicScalePyramidSpark3D.downsampleNonIsotropicScalePyramid(
+					sparkContext,
+					() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( n5ExportPath ) ),
+					fullScaleOutputPath,
+					voxelDimensions
+				);
 
 			broadcastedPairwiseConnectionsMap.destroy();
 			broadcastedFlatfieldCorrection.destroy();
