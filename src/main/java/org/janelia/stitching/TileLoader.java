@@ -61,7 +61,7 @@ public class TileLoader
 		return n5.getDatasetAttributes( tileDatasetPath );
 	}
 
-	public static < T extends NativeType< T > & RealType< T > > RandomAccessibleInterval< T > loadTile( final TileInfo tile, final DataProvider dataProvider )
+	public static < T extends NativeType< T > & RealType< T > > RandomAccessibleInterval< T > loadTile( final TileInfo tile, final DataProvider dataProvider ) throws IOException
 	{
 		// check if a given tile path is an N5 dataset
 		final String n5Path  = PathResolver.getParent( PathResolver.getParent( tile.getFilePath() ) );
@@ -77,7 +77,13 @@ public class TileLoader
 		{
 		}
 
-		final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
-		return ImagePlusImgs.from( imp );
+		// if it is a file, try to read it as an image file
+		if ( dataProvider.fileExists( URI.create( tile.getFilePath() ) ) )
+		{
+			final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
+			return ImagePlusImgs.from( imp );
+		}
+
+		throw new IOException( "Tile image does not exist: " + tile.getFilePath() );
 	}
 }

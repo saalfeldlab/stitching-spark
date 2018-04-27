@@ -1,5 +1,7 @@
 package org.janelia.stitching;
 
+import java.io.IOException;
+
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 
@@ -22,7 +24,7 @@ public class TransformedTileImageLoader
 {
 	public static < T extends RealType< T > & NativeType< T > > RandomAccessibleInterval< T > loadTile(
 			final TileInfo tile,
-			final DataProvider dataProvider )
+			final DataProvider dataProvider ) throws IOException
 	{
 		return loadTile( tile, dataProvider, null );
 	}
@@ -30,7 +32,7 @@ public class TransformedTileImageLoader
 	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > loadTile(
 			final TileInfo tile,
 			final DataProvider dataProvider,
-			final RandomAccessiblePairNullable< U, U > flatfield )
+			final RandomAccessiblePairNullable< U, U > flatfield ) throws IOException
 	{
 		final RandomAccessibleInterval< T > img = TileLoader.loadTile( tile, dataProvider );
 
