@@ -45,6 +45,8 @@ import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.IntervalsNullable;
+import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
@@ -85,20 +87,18 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	@Override
 	public void run() throws PipelineExecutionException
 	{
-		final DataProvider dataProvider = job.getDataProvider();
-
-		// split tiles into 8 boxes
-		final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
-		Arrays.fill( tileBoxesGridSize, job.getArgs().splitOverlapParts() );
-		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
-		final List< TilePair > overlappingBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
-
-		final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );
 		try
 		{
+			final DataProvider dataProvider = job.getDataProvider();
+			final boolean higherOrderStitching = false;
+
 			for ( int iteration = 0; ; ++iteration )
 			{
-				// check if number of stitched tiles has increased compared to the previous iteration
+				final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
+				Arrays.fill( tileBoxesGridSize, higherOrderStitching ? 2 : 1 );
+				final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
+				final List< TilePair > overlappingBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
+
 				final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
 				final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
 				final String iterationDirname = "iter" + iteration;
@@ -108,7 +108,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				{
 					System.out.println( "************** Iteration " + iteration + " **************" );
 					preparePairwiseShifts( overlappingBoxes, iteration );
-					optimizer.optimize( iteration );
+
+					final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );
+					optimizer.optimize( iteration, higherOrderStitching );
 				}
 				else
 				{
@@ -125,41 +127,43 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 //				overlappingTiles.clear();
 //				overlappingTiles.addAll( newPairs );
 
-				if ( iteration == 0 )
+				// stop if all input tiles are included in the stitched set
+				if ( stageTiles.length == stitchedTiles.length )
 				{
-					// stop if all input tiles are included in the stitched set
-					/*if ( stageTiles.length == stitchedTiles.length )
-					{
-						System.out.println( "Stopping on iteration " + iteration + ": all input tiles (n=" + stageTiles.length + ") are included in the stitched set" );
-						copyFinalSolution( iteration );
-						break;
-					}*/
-					// FIXME: stop after first iteration because proper use of previous stitched solution is not implemented yet
-					if ( stitchedTiles.length > 0 )
-						break;
+					System.out.println( "Stopping on iteration " + iteration + ": all input tiles (n=" + stageTiles.length + ") are included in the stitched set" );
+					copyFinalSolution( iteration );
+					break;
 				}
-				else
+				else if ( iteration > 0 )
 				{
-					final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
-
+					final String previousIterationDirname = "iter" + ( iteration - 1 );
 					final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 					final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
 
-					final String usedPairsFilepath = PathResolver.get( basePath, iterationDirname, "pairwise-used.json" );
-					final String previousUsedPairsFilepath = PathResolver.get( basePath, previousIterationDirname, "pairwise-used.json" );
-					final List< SerializablePairWiseStitchingResult > usedPairs = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( usedPairsFilepath ) ) );
-					final List< SerializablePairWiseStitchingResult > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( previousUsedPairsFilepath ) ) );
+					//final String usedPairsFilepath = PathResolver.get( basePath, iterationDirname, "pairwise-used.json" );
+					//final String previousUsedPairsFilepath = PathResolver.get( basePath, previousIterationDirname, "pairwise-used.json" );
+					//final List< SerializablePairWiseStitchingResult > usedPairs = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( usedPairsFilepath ) ) );
+					//final List< SerializablePairWiseStitchingResult > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( previousUsedPairsFilepath ) ) );
 
-					if ( stitchedTiles.length < previousStitchedTiles.length || ( stitchedTiles.length == previousStitchedTiles.length && usedPairs.size() <= previousUsedPairs.size() ) )
+					if ( stitchedTiles.length <= previousStitchedTiles.length )
 					{
-						// mark the last solution as not used because it is worse than from the previous iteration
-						dataProvider.moveFolder(
-								URI.create( PathResolver.get( basePath, iterationDirname ) ),
-								URI.create( PathResolver.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) ) )
-							);
-						copyFinalSolution( iteration - 1 );
-						System.out.println( "Stopping on iteration " + iteration + ": the new solution (n=" + stitchedTiles.length + ") is not greater than the previous solution (n=" + previousStitchedTiles.length + "). Input tiles n=" + stageTiles.length );
-						break;
+//					if ( stitchedTiles.length < previousStitchedTiles.length || ( stitchedTiles.length == previousStitchedTiles.length && usedPairs.size() <= previousUsedPairs.size() ) )
+//					{
+//						if ( !higherOrderStitching )
+//						{
+//							higherOrderStitching = true;
+//						}
+//						else
+						{
+							// mark the last solution as not used because it is worse than from the previous iteration
+							dataProvider.moveFolder(
+									URI.create( PathResolver.get( basePath, iterationDirname ) ),
+									URI.create( PathResolver.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) ) )
+								);
+							copyFinalSolution( iteration - 1 );
+							System.out.println( "Stopping on iteration " + iteration + ": the new solution (n=" + stitchedTiles.length + ") is not greater than the previous solution (n=" + previousStitchedTiles.length + "). Input tiles n=" + stageTiles.length );
+							break;
+						}
 					}
 				}
 			}
@@ -293,13 +297,15 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		{
 			if ( job.getArgs().stitchingMode() == StitchingMode.INCREMENTAL )
 			{
-				System.out.println( "Restitching only excluded pairs" );
+				throw new UnsupportedOperationException( "TODO: handle pairwise-used.json correctly in StitchingOptimizer. Incremental stitching is disabled for now." );
+
+				/*System.out.println( "Restitching only excluded pairs" );
 				// use pairwise-used from the previous iteration, so they will not be restitched
 				if ( !dataProvider.fileExists( URI.create( pairwisePath ) ) )
 					dataProvider.copyFile(
 							URI.create( PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) ) ),
 							URI.create( pairwisePath )
-						);
+						);*/
 			}
 			else
 			{
@@ -509,7 +515,62 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 						throw new RuntimeException( "shouldn't happen" );
 				}
 
-				final Interval movingBoxInFixedSpace = SplitTileOperations.transformMovingTileBox( tileBoxPair );
+				// both tile boxes are transformed into the global coordinate space
+				final Pair< Interval, Interval > transformedTileBoxPairGlobalSpace = SplitTileOperations.transformTileBoxPair( tileBoxPair );
+
+				// map them into the fixed tile box coordinate space (that is, transformedTileBoxPair.getA() will have zero min in the target space)
+				final Pair< Interval, Interval > transformedTileBoxPairFixedBoxSpace = SplitTileOperations.globalToFixedBoxSpace( transformedTileBoxPairGlobalSpace );
+
+				// validate that they actually intersect
+				if ( IntervalsNullable.intersect( transformedTileBoxPairFixedBoxSpace.getA(), transformedTileBoxPairFixedBoxSpace.getB() ) == null )
+					throw new RuntimeException( "should not happen: only overlapping tile box pairs were selected" );
+
+				// find their 'mean' offset around which an error ellipse will be defined (as intervals are now defined in the fixed tile box space, it is just the position of the moving tile box in this space)
+				final long[] meanOffset = Intervals.minAsLongArray( transformedTileBoxPairFixedBoxSpace.getB() );
+
+				// define search radius in the fixed tile box space
+				final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
+				final double sphereRadiusPixels = 50;//job.getArgs().searchRadiusMultiplier();
+				final SearchRadius searchRadius = new SearchRadius( sphereRadiusPixels, Conversions.toDoubleArray( meanOffset ), offsetsCovarianceMatrix );
+
+				// get ROIs in the fixed tile box space and moving tile box space, respectively
+				final Pair< Interval, Interval > adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( transformedTileBoxPairFixedBoxSpace, searchRadius );
+
+				if ( adjustedOverlaps == null )
+					throw new RuntimeException( "should not happen: only overlapping tile box pairs were selected, thus adjusted overlaps should always be non-empty too" );
+
+				// get ROI in the full tiles for cropping
+				final Pair< Interval, Interval > adjustedOverlapsInFullTile = SplitTileOperations.getOverlapsInFullTile( tileBoxPair, adjustedOverlaps );
+
+				// prepare ROI images
+				final ImagePlus[] roiImps = prepareRoiImages(
+						new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ),
+						adjustedOverlapsInFullTile,
+						broadcastedCoordsToTilesChannels.value(),
+						broadcastedFlatfieldCorrectionForChannels.value()
+					);
+
+				// get required offsets for roi parts
+				final OffsetConverter offsetConverter = SplitTileOperations.getOffsetConverter( adjustedOverlaps );
+
+				final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( tileBoxPair, roiImps, searchRadius, offsetConverter );
+
+				// compute variance within ROI for both images
+				if ( pairwiseResult != null )
+					pairwiseResult.setVariance( computeVariance( roiImps ) );
+
+				for ( int i = 0; i < 2; i++ )
+					roiImps[ i ].close();
+
+				System.out.println( "Stitched tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
+
+				return new StitchingResult( pairwiseResult, searchRadius != null ? searchRadius.getEllipseRadius() : null );
+
+
+
+
+
+				/*final Interval movingBoxInFixedSpace = SplitTileOperations.transformMovingTileBox( tileBoxPair );
 
 				// stats
 				final TileSearchRadiusEstimator localSearchRadiusEstimator = broadcastedSearchRadiusEstimator.value();
@@ -557,7 +618,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 				System.out.println( "Stitched tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
 
-				return new StitchingResult( pairwiseResult, searchRadius != null ? searchRadius.getEllipseRadius() : null );
+				return new StitchingResult( pairwiseResult, searchRadius != null ? searchRadius.getEllipseRadius() : null );*/
 			} );
 
 		final List< StitchingResult > stitchingResults = pairwiseStitching.collect();
@@ -690,13 +751,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	}
 
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > ImagePlus[] prepareRoiImages(
-			final TilePair tileBoxPair,
-			final Interval[] overlapsInOriginalTileSpace,
+			final TilePair originalTilePair,
+			final Pair< Interval, Interval > overlapsInOriginalTileSpace,
 			final List< Map< String, TileInfo > > coordsToTilesChannels,
 			final List< RandomAccessiblePairNullable< U, U > > flatfieldCorrectionChannels ) throws Exception
 	{
 		final DataProvider dataProvider = job.getDataProvider();
-		final TilePair originalTilePair = new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() );
 		final double[] voxelDimensions = originalTilePair.getA().getPixelResolution();
 		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
 		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
@@ -707,18 +767,19 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		final ImagePlus[] roiImps = new ImagePlus[ 2 ];
 		final TileInfo[] originalTilePairArr = originalTilePair.toArray();
-		final int numChannels = job.getArgs().inputTileConfigurations().size();
+		final Interval[] overlapsInOriginalTileSpaceArr = new Interval[] { overlapsInOriginalTileSpace.getA(), overlapsInOriginalTileSpace.getB() };
+
+		final int numChannels = job.getChannels();
 		for ( int j = 0; j < 2; j++ )
 		{
 			System.out.println( "Averaging corresponding tile images for " + numChannels + " channels" );
 			final String coordsStr = Utils.getTileCoordinatesString( originalTilePairArr[ j ] );
 			int channelsUsed = 0;
-			final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( overlapsInOriginalTileSpace[ j ] ) );
+			final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( overlapsInOriginalTileSpaceArr[ j ] ) );
 			for ( int channel = 0; channel < numChannels; channel++ )
 			{
 				final TileInfo tileInfo = coordsToTilesChannels.get( channel ).get( coordsStr );
 
-				// skip if no tile exists for this channel at this particular stage position
 				if ( tileInfo == null )
 					throw new PipelineExecutionException( originalTilePair + ": cannot find corresponding tile for this channel" );
 
@@ -737,8 +798,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				if ( !Arrays.equals( Intervals.dimensionsAsLongArray( img ), tileInfo.getSize() ) )
 					throw new PipelineExecutionException( String.format( "Image size %s does not match the value from metadata %s", Arrays.toString( Intervals.dimensionsAsLongArray( img ) ), Arrays.toString( tileInfo.getSize() ) ) );
 
-				// crop roi
-				final RandomAccessibleInterval< T > imgCrop = Views.interval( img, overlapsInOriginalTileSpace[ j ] );
+				// crop ROI
+				final RandomAccessibleInterval< T > imgCrop = Views.interval( img, overlapsInOriginalTileSpaceArr[ j ] );
 
 				// get flatfield-corrected source if the flatfields are provided
 				final RandomAccessibleInterval< FloatType > sourceInterval;
@@ -815,9 +876,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			final PointValidator pointValidator,
 			final OffsetConverter offsetConverter )
 	{
-		// compute variance within this ROI for both images
-		final double variance = computeVariance( roiImps );
-
 		final int timepoint = 1;
 		final int numPeaks = 1;
 		PairwiseStitchingPerformer.setThreads( 1 );
@@ -839,16 +897,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 		else
 		{
-			// compute new offset between original tiles
+			// compute new offset between tile boxes
 			final double[] originalTileOffset = offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( result.getOffset() ) );
 			for ( int d = 0; d < originalTileOffset.length; ++d )
 				result.getOffset()[ d ] = ( float ) originalTileOffset[ d ];
 
-			final PointPair pointPair = SplitTileOperations.createPointPair( tileBoxPair, originalTileOffset );
-
-			result.setPointPair( pointPair );
 			result.setTilePair( tileBoxPair );
-			result.setVariance( variance );
 
 			return result;
 		}

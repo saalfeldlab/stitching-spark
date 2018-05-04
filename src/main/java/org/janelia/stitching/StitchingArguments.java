@@ -85,10 +85,6 @@ public class StitchingArguments implements Serializable {
 			usage = "Export the dataset using max intensity strategy instead of hardcut (max.min.distance)")
 	private boolean maxIntensity = false;
 
-	@Option(name = "-s", aliases = { "--split" }, required = false,
-			usage = "Number of parts the overlap is split in along every 'long' edge")
-	private int splitOverlapParts = 2;
-
 	/**
 	 * Toggle pipeline stages. By default all stages are executed.
 	 */
@@ -163,7 +159,6 @@ public class StitchingArguments implements Serializable {
 	public boolean useAllPairs() { return allPairs; }
 	public boolean noLeaves() { return noLeaves; }
 	public boolean exportOverlaps() { return exportOverlaps; }
-	public int splitOverlapParts() { return splitOverlapParts; }
 
 	public boolean stitchOnly() { return stitchOnly; }
 	public boolean fuseOnly() { return fuseOnly; }

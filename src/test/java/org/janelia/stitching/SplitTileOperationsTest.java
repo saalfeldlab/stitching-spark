@@ -1,5 +1,7 @@
 package org.janelia.stitching;
 
+import static org.junit.Assert.fail;
+
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -12,6 +14,10 @@ import mpicbg.imglib.custom.OffsetConverter;
 import net.imglib2.Interval;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.IntervalsHelper;
+import net.imglib2.util.IntervalsNullable;
+import net.imglib2.util.Pair;
+import net.imglib2.util.ValuePair;
 
 public class SplitTileOperationsTest
 {
@@ -81,7 +87,8 @@ public class SplitTileOperationsTest
 		{
 			final TileInfo movingTileBox = tileBoxes.get( 8 );
 			Assert.assertArrayEquals( new double[] { 22.5, 20, 17.5 }, SplitTileOperations.getTileBoxMiddlePoint( movingTileBox ), EPSILON );
-			final Interval transformedSecondTileBox = SplitTileOperations.transformMovingTileBox( TileOperations.getTileTransform( tiles[ 0 ] ), movingTileBox );
+			final Pair< Interval, Interval > transformedInGlobalSpace = SplitTileOperations.transformTileBoxPair( new TilePair( tileBoxes.get( 0 ), movingTileBox ) );
+			final Interval transformedSecondTileBox = SplitTileOperations.globalToFixedBoxSpace( transformedInGlobalSpace ).getB();
 			Assert.assertArrayEquals( new long[] { 40, 10, -10 }, Intervals.minAsLongArray( transformedSecondTileBox ) );
 			Assert.assertArrayEquals( movingTileBox.getSize(), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
 		}
@@ -90,7 +97,8 @@ public class SplitTileOperationsTest
 		{
 			final TileInfo movingTileBox = tileBoxes.get( 15 );
 			Assert.assertArrayEquals( new double[] { 67.5, 60, 52.5 }, SplitTileOperations.getTileBoxMiddlePoint( movingTileBox ), EPSILON );
-			final Interval transformedSecondTileBox = SplitTileOperations.transformMovingTileBox( TileOperations.getTileTransform( tiles[ 0 ] ), movingTileBox );
+			final Pair< Interval, Interval > transformedInGlobalSpace = SplitTileOperations.transformTileBoxPair( new TilePair( tileBoxes.get( 0 ), movingTileBox ) );
+			final Interval transformedSecondTileBox = SplitTileOperations.globalToFixedBoxSpace( transformedInGlobalSpace ).getB();
 			Assert.assertArrayEquals( new long[] { 85, 50, 25 }, Intervals.minAsLongArray( transformedSecondTileBox ) );
 			Assert.assertArrayEquals( movingTileBox.getSize(), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
 		}
@@ -155,73 +163,107 @@ public class SplitTileOperationsTest
 	@Test
 	public void testOverlaps() throws PipelineExecutionException
 	{
-		final TileInfo[] tiles = new TileInfo[ 2 ];
-		tiles[ 0 ] = new TileInfo( 3 );
-		tiles[ 0 ].setIndex( 0 );
-		tiles[ 0 ].setPosition( new double[] { 100, 200, 300 } );
-		tiles[ 0 ].setSize( new long[] { 50, 60, 70 } );
+		final TileInfo fixedTile = new TileInfo( 2 );
+		fixedTile.setIndex( 0 );
+		fixedTile.setPosition( new double[] { 50, 50 } );
+		fixedTile.setSize( new long[] { 20, 20 } );
 
-		tiles[ 1 ] = new TileInfo( 3 );
-		tiles[ 1 ].setIndex( 1 );
-		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
-		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
+		final TileInfo movingTile = new TileInfo( 2 );
+		movingTile.setIndex( 1 );
+		movingTile.setPosition( new double[] { 46, 32 } );
+		movingTile.setSize( new long[] { 20, 20 } );
 
-		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
-		Assert.assertEquals( 16, tileBoxes.size() );
+		final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( new TileInfo[] { fixedTile,  movingTile }, new int[] { 2, 2 } );
+		Assert.assertEquals( 8, tileBoxes.size() );
 
-		final List< TilePair > overlappingTileBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes, true );
-		Assert.assertEquals( 4, overlappingTileBoxes.size() );
-
-		final Map< Integer, Map< Integer, TilePair > > overlappingTileBoxesMap = new TreeMap<>();
-		for ( final TilePair tileBoxPair : overlappingTileBoxes )
+		final TilePair tileBoxPair;
 		{
-			if ( !overlappingTileBoxesMap.containsKey( tileBoxPair.getA().getIndex() ) )
-				overlappingTileBoxesMap.put( tileBoxPair.getA().getIndex(), new TreeMap<>() );
-			overlappingTileBoxesMap.get( tileBoxPair.getA().getIndex() ).put( tileBoxPair.getB().getIndex(), tileBoxPair );
+			TileInfo fixedTileBox = null;
+			TileInfo movingTileBox = null;
+			for ( final TileInfo tileBox : tileBoxes )
+			{
+				if ( tileBox.getOriginalTile().getIndex().intValue() == 0 )
+				{
+					// top-right box of the fixed tile
+					if ( Math.round( tileBox.getPosition( 0 ) ) == 10 && Math.round( tileBox.getPosition( 1 ) ) == 0 )
+					{
+						if ( fixedTileBox != null )
+							fail();
+						fixedTileBox = tileBox;
+					}
+				}
+				else if ( tileBox.getOriginalTile().getIndex().intValue() == 1 )
+				{
+					// bottom-right box of the moving tile
+					if ( Math.round( tileBox.getPosition( 0 ) ) == 10 && Math.round( tileBox.getPosition( 1 ) ) == 10 )
+					{
+						if ( movingTileBox != null )
+							fail();
+						movingTileBox = tileBox;
+					}
+				}
+				else
+				{
+					fail();
+				}
+			}
+			if ( fixedTileBox == null || movingTileBox == null )
+				fail();
+			tileBoxPair = new TilePair( fixedTileBox, movingTileBox );
 		}
+		Assert.assertArrayEquals( new long[] { 10, 0 }, Intervals.minAsLongArray( tileBoxPair.getA().getBoundaries() ) );
+		Assert.assertArrayEquals( new long[] { 10, 10 }, Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) );
 
-		final TilePair tileBoxPair = overlappingTileBoxesMap.get( 4 ).get( 8 );
+		final Pair< Interval, Interval > intervalsInGlobalSpace = new ValuePair<>(
+				IntervalsHelper.translate( tileBoxPair.getA().getBoundaries(), Intervals.minAsLongArray( tileBoxPair.getA().getOriginalTile().getBoundaries() ) ),
+				IntervalsHelper.translate( tileBoxPair.getB().getBoundaries(), Intervals.minAsLongArray( tileBoxPair.getB().getOriginalTile().getBoundaries() ) )
+			);
 
-		// test overlaps between tile boxes
-		final Interval[] overlaps = SplitTileOperations.getOverlapIntervals( tileBoxPair );
-		Assert.assertArrayEquals( new long[] { 40, 10, 0 }, Intervals.minAsLongArray( overlaps[ 0 ] ) );
-		Assert.assertArrayEquals( new long[] { 0, 0, 10 }, Intervals.minAsLongArray( overlaps[ 1 ] ) );
-		final long[] overlapDimensions = new long[] { 10, 20, 25 };
-		Assert.assertArrayEquals( overlapDimensions, Intervals.dimensionsAsLongArray( overlaps[ 0 ] ) );
-		Assert.assertArrayEquals( overlapDimensions, Intervals.dimensionsAsLongArray( overlaps[ 1 ] ) );
+		final Pair< Interval, Interval > intervalsInFixedBoxSpace = SplitTileOperations.globalToFixedBoxSpace( intervalsInGlobalSpace );
 
-		// test padded overlaps between tile boxes
-		final Interval[] paddedOverlaps = SplitTileOperations.getPaddedOverlapIntervals( tileBoxPair, new long[] { 16, 16, 16 } );
-		Assert.assertArrayEquals( new long[] { 24, 2, 0 }, Intervals.minAsLongArray( paddedOverlaps[ 0 ] ) );
-		Assert.assertArrayEquals( new long[] { 0, 0, 2 }, Intervals.minAsLongArray( paddedOverlaps[ 1 ] ) );
-		final long[] paddedOverlapDimensions = new long[] { 26, 36, 41 };
-		Assert.assertArrayEquals( paddedOverlapDimensions, Intervals.dimensionsAsLongArray( paddedOverlaps[ 0 ] ) );
-		Assert.assertArrayEquals( paddedOverlapDimensions, Intervals.dimensionsAsLongArray( paddedOverlaps[ 1 ] ) );
+		Assert.assertArrayEquals( new long[] { 60, 50 }, Intervals.minAsLongArray( IntervalsNullable.intersect( intervalsInGlobalSpace.getA(), intervalsInGlobalSpace.getB() ) ) );
+		Assert.assertArrayEquals( new long[] { 65, 51 }, Intervals.maxAsLongArray( IntervalsNullable.intersect( intervalsInGlobalSpace.getA(), intervalsInGlobalSpace.getB() ) ) );
 
-		// test adjusted overlaps with respect to the search radius
-		final double[] offsetsMeanValues = new double[] { 40, 10, -10 };
+		Assert.assertArrayEquals( new long[] { 0, 0 }, Intervals.minAsLongArray( IntervalsNullable.intersect( intervalsInFixedBoxSpace.getA(), intervalsInFixedBoxSpace.getB() ) ) );
+		Assert.assertArrayEquals( new long[] { 5, 1 }, Intervals.maxAsLongArray( IntervalsNullable.intersect( intervalsInFixedBoxSpace.getA(), intervalsInFixedBoxSpace.getB() ) ) );
+
+		Assert.assertArrayEquals( new long[] { 0, 0 }, Intervals.minAsLongArray( intervalsInFixedBoxSpace.getA() ) );
+		Assert.assertArrayEquals( new long[] { -4, -8 }, Intervals.minAsLongArray( intervalsInFixedBoxSpace.getB() ) );
+
+		final double ellipseRadius = 2;
+		final double[] offsetsMeanValues = Intervals.minAsDoubleArray( intervalsInFixedBoxSpace.getB() );
 		final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
-		final double sphereRadiusPixels = 9;
-		final SearchRadius searchRadius = new SearchRadius( sphereRadiusPixels, offsetsMeanValues, offsetsCovarianceMatrix );
-		final Interval[] adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( tileBoxPair, searchRadius );
-		Assert.assertArrayEquals( new long[] { 31, 1, 0 }, Intervals.minAsLongArray( adjustedOverlaps[ 0 ] ) );
-		Assert.assertArrayEquals( new long[] { 0, 0, 1 }, Intervals.minAsLongArray( adjustedOverlaps[ 1 ] ) );
-		final long[] adjustedOverlapDimensions = new long[] { 19, 59, 69 };
-		Assert.assertArrayEquals( adjustedOverlapDimensions, Intervals.dimensionsAsLongArray( adjustedOverlaps[ 0 ] ) );
-		Assert.assertArrayEquals( adjustedOverlapDimensions, Intervals.dimensionsAsLongArray( adjustedOverlaps[ 1 ] ) );
+		final SearchRadius searchRadius = new SearchRadius( ellipseRadius, offsetsMeanValues, offsetsCovarianceMatrix );
 
-		// test offset converter
-		final OffsetConverter offsetConverter = SplitTileOperations.getOffsetConverter( tileBoxPair, adjustedOverlaps );
-		final int[] roiOffset = new int[] { 3, 4, 5 };
-		final long[] originalTileOffset = offsetConverter.roiOffsetToTileOffset( roiOffset );
-		Assert.assertArrayEquals( new long[] { 34, 5, 4 }, originalTileOffset );
-		Assert.assertArrayEquals( new double[] { 34, 5, 4 }, offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( roiOffset ) ), EPSILON ); // test that double implementation does the same
-		final double[] movingTileBoxPosition = offsetConverter.tileOffsetToGlobalPosition( originalTileOffset );
-		Assert.assertArrayEquals( new double[] { 34, 5, 4 }, movingTileBoxPosition, EPSILON );
+		final Pair< Interval, Interval > adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( intervalsInFixedBoxSpace, searchRadius );
 
-		// test point match
-		final PointPair pointPair = SplitTileOperations.createPointPair( tileBoxPair, Conversions.toDoubleArray( originalTileOffset ) );
-		Assert.assertArrayEquals( new double[] { 37.5, 15, 17.5 }, pointPair.getA().getL(), EPSILON );
-		Assert.assertArrayEquals( new double[] { 3.5, 10, 13.5 }, pointPair.getB().getL(), EPSILON );
+		Assert.assertArrayEquals( new long[] { 0, 0 }, Intervals.minAsLongArray( adjustedOverlaps.getA() ) );
+		Assert.assertArrayEquals( new long[] { 7, 3 }, Intervals.maxAsLongArray( adjustedOverlaps.getA() ) );
+
+		Assert.assertArrayEquals( new long[] { 2, 6 }, Intervals.minAsLongArray( adjustedOverlaps.getB() ) );
+		Assert.assertArrayEquals( new long[] { 9, 9 }, Intervals.maxAsLongArray( adjustedOverlaps.getB() ) );
+
+		final Pair< Interval, Interval > adjustedOverlapsInFullTile = SplitTileOperations.getOverlapsInFullTile( tileBoxPair, adjustedOverlaps );
+
+		Assert.assertArrayEquals( new long[] { 10, 0 }, Intervals.minAsLongArray( adjustedOverlapsInFullTile.getA() ) );
+		Assert.assertArrayEquals( new long[] { 17, 3 }, Intervals.maxAsLongArray( adjustedOverlapsInFullTile.getA() ) );
+
+		Assert.assertArrayEquals( new long[] { 12, 16 }, Intervals.minAsLongArray( adjustedOverlapsInFullTile.getB() ) );
+		Assert.assertArrayEquals( new long[] { 19, 19 }, Intervals.maxAsLongArray( adjustedOverlapsInFullTile.getB() ) );
+
+		final OffsetConverter offsetConverter = SplitTileOperations.getOffsetConverter( adjustedOverlaps );
+		final int[] testRoiOffset = new int[] { -1, -1 };
+
+		// find the offset between the tile boxes
+		final long[] tileBoxOffset = offsetConverter.roiOffsetToTileOffset( testRoiOffset );
+		Assert.assertArrayEquals( new long[] { -3, -7 }, tileBoxOffset );
+
+		// find the position of the moving tile box in the fixed box space so it is compatible with the search radius test
+		final double[] movingBoxPosition = offsetConverter.tileOffsetToGlobalPosition( tileBoxOffset );
+		Assert.assertArrayEquals( new double[] { -3, -7 }, movingBoxPosition, EPSILON );
+		Assert.assertTrue( searchRadius.testPoint( movingBoxPosition ) );
+
+		// test full tile offsets
+		Assert.assertArrayEquals( new double[] { -3, -17 }, SplitTileOperations.getFullTileOffset( tileBoxPair, Conversions.toDoubleArray( tileBoxOffset ) ), EPSILON );
 	}
 }

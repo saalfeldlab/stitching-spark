@@ -45,14 +45,29 @@ public class TileSearchRadiusEstimator implements Serializable
 		stageTilesMap = Utils.createTilesMap( stageTiles );
 		stitchedTilesMap = Utils.createTilesMap( stitchedTiles );
 
-		stitchedTilesOffset = getStitchedTilesOffset( stageTilesMap, stitchedTilesMap );
-
 		final Map< Integer, double[] > stageValues = new HashMap<>(), stitchedValues = new HashMap<>();
 		for ( final Entry< Integer, TileInfo > stageEntry : stageTilesMap.entrySet() )
 			stageValues.put( stageEntry.getKey(), stageEntry.getValue().getPosition().clone() );
 
 		for ( final Entry< Integer, TileInfo > stitchedEntry : stitchedTilesMap.entrySet() )
-			stitchedValues.put( stitchedEntry.getKey(), getOffsetCoordinates( stitchedEntry.getValue().getPosition(), stitchedTilesOffset ) );
+		{
+			final int[] noSplitParts = new int[ stitchedEntry.getValue().numDimensions() ];
+			Arrays.fill( noSplitParts, 1 );
+			final TileInfo tileBox = SplitTileOperations.splitTilesIntoBoxes( new TileInfo[] { stitchedEntry.getValue() }, noSplitParts ).iterator().next();
+			final Interval transformedTileBox = SplitTileOperations.transformTileBox( tileBox );
+//			stitchedValues.put( stitchedEntry.getKey(), getOffsetCoordinates( stitchedEntry.getValue().getPosition(), stitchedTilesOffset ) );
+			stitchedValues.put( stitchedEntry.getKey(), Intervals.minAsDoubleArray( transformedTileBox ) );
+		}
+
+		// find offset
+		final Integer referenceTileIndex = getReferenceTileIndex( stageTilesMap, stitchedTilesMap );
+		stitchedTilesOffset = new double[ stageTilesMap.get( referenceTileIndex ).numDimensions() ];
+		for ( int d = 0; d < stitchedTilesOffset.length; ++d )
+			stitchedTilesOffset[ d ] = stitchedValues.get( referenceTileIndex )[ d ] - stageValues.get( referenceTileIndex )[ d ];
+
+		// apply offset
+		for ( final Entry< Integer, double[] > stitchedEntry : stitchedValues.entrySet() )
+			stitchedEntry.setValue( getOffsetCoordinates( stitchedEntry.getValue(), stitchedTilesOffset ) );
 
 		estimator = new SearchRadiusEstimator( stageValues, stitchedValues, estimationWindowSize, searchRadiusMultiplier );
 
@@ -65,7 +80,6 @@ public class TileSearchRadiusEstimator implements Serializable
 				offset[ d ] = stitchedPos[ d ] - stagePos[ d ];
 			tileOffsets.put( stitchedEntry.getKey(), offset );
 		}
-
 
 		// print stage bounding box
 		final Boundaries stageBoundingBox = TileOperations.getCollectionBoundaries( stageTiles );
@@ -156,7 +170,7 @@ public class TileSearchRadiusEstimator implements Serializable
 	 * @param stitchedTilesMap
 	 * @return
 	 */
-	public static double[] getStitchedTilesOffset( final Map< Integer, TileInfo > stageTilesMap, final Map< Integer, TileInfo > stitchedTilesMap )
+	public static Integer getReferenceTileIndex( final Map< Integer, TileInfo > stageTilesMap, final Map< Integer, TileInfo > stitchedTilesMap )
 	{
 		long minTimestampStitched = Long.MAX_VALUE;
 		TileInfo minTimestampStitchedTile = null;
@@ -178,11 +192,7 @@ public class TileSearchRadiusEstimator implements Serializable
 			}
 		}
 
-		final TileInfo correspondingStageTile = stageTilesMap.get( minTimestampStitchedTile.getIndex() );
-		final double[] stitchedTilesOffset = new double[ minTimestampStitchedTile.numDimensions() ];
-		for ( int d = 0; d < stitchedTilesOffset.length; ++d )
-			stitchedTilesOffset[ d ] = minTimestampStitchedTile.getPosition( d ) - correspondingStageTile.getPosition( d );
-		return stitchedTilesOffset;
+		return minTimestampStitchedTile.getIndex();
 	}
 
 	public static double[] getOffsetCoordinates( final double[] coords, final double[] offset )
