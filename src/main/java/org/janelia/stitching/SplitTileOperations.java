@@ -150,6 +150,7 @@ public class SplitTileOperations
 	/**
 	 * Returns overlap intervals that have been extended to capture the bounding box of a given search radius entirely.
 	 * Expects that both tile box intervals and the search radius are given in the fixed box coordinate space (that is, tileBoxPair.getA() should have zero min).
+	 * Returns overlap intervals in relative coordinate space of each tile box, e.g. (overlap in fixed tile box, overlap in moving tile box).
 	 *
 	 * @param tileBoxPair
 	 * @param searchRadius
@@ -157,9 +158,8 @@ public class SplitTileOperations
 	 */
 	public static Pair< Interval, Interval > getAdjustedOverlapIntervals( final Pair< Interval, Interval > tileBoxPair, final SearchRadius searchRadius )
 	{
-		final Interval fixedInterval = tileBoxPair.getA(), movingInterval = tileBoxPair.getB();
-
-		if ( !Views.isZeroMin( fixedInterval ) )
+		final Interval fixedIntervalInFixedSpace = tileBoxPair.getA(), movingIntervalInFixedSpace = tileBoxPair.getB();
+		if ( !Views.isZeroMin( fixedIntervalInFixedSpace ) )
 			throw new IllegalArgumentException( "not in the fixed tile box space" );
 
 		final Interval searchRadiusBoundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
@@ -189,10 +189,10 @@ public class SplitTileOperations
 				testMovingPositionInFixedSpace[ d ] = ( cornersPos[ d ] == 0 ? searchRadiusBoundingBox.min( d ) : searchRadiusBoundingBox.max( d ) );
 
 			// get test moving interval in the fixed space
-			final Interval testMovingIntervalInFixedSpace = IntervalsHelper.setPosition( movingInterval, testMovingPositionInFixedSpace );
+			final Interval testMovingIntervalInFixedSpace = IntervalsHelper.setPosition( movingIntervalInFixedSpace, testMovingPositionInFixedSpace );
 
 			// get overlap between tile boxes in the fixed space
-			final Interval testOverlapInFixedSpace = IntervalsNullable.intersect( fixedInterval, testMovingIntervalInFixedSpace );
+			final Interval testOverlapInFixedSpace = IntervalsNullable.intersect( fixedIntervalInFixedSpace, testMovingIntervalInFixedSpace );
 
 			if ( testOverlapInFixedSpace != null )
 			{
@@ -226,6 +226,38 @@ public class SplitTileOperations
 			throw new RuntimeException( "should not happen: adjusted overlap intervals are expected to be of the exact same size" );
 
 		return adjustedOverlaps;
+	}
+
+	/**
+	 * Returns overlap intervals that have been extended by the given padding value.
+	 * Expects that both tile box intervals are given in the fixed box coordinate space (that is, tileBoxPair.getA() should have zero min).
+	 * Returns overlap intervals in relative coordinate space of each tile box, e.g. (overlap in fixed tile box, overlap in moving tile box).
+	 *
+	 * @param tileBoxPair
+	 * @param padding
+	 * @return
+	 */
+	public static Pair< Interval, Interval > getPaddedOverlapIntervals( final Pair< Interval, Interval > tileBoxPair, final long[] padding )
+	{
+		final Interval fixedIntervalInFixedSpace = tileBoxPair.getA(), movingIntervalInFixedSpace = tileBoxPair.getB();
+		if ( !Views.isZeroMin( fixedIntervalInFixedSpace ) )
+			throw new IllegalArgumentException( "not in the fixed tile box space" );
+
+		final Interval overlapInFixedSpace = IntervalsNullable.intersect( fixedIntervalInFixedSpace, movingIntervalInFixedSpace );
+		final Interval overlapInMovingSpace = IntervalsHelper.offset( overlapInFixedSpace, Intervals.minAsLongArray( movingIntervalInFixedSpace ) );
+
+		final Interval paddedOverlapInFixedSpace = TileOperations.padInterval(
+				overlapInFixedSpace,
+				new FinalDimensions( Intervals.dimensionsAsLongArray( fixedIntervalInFixedSpace ) ),
+				padding
+			);
+		final Interval paddedOverlapInMovingSpace = TileOperations.padInterval(
+				overlapInMovingSpace,
+				new FinalDimensions( Intervals.dimensionsAsLongArray( movingIntervalInFixedSpace ) ),
+				padding
+			);
+
+		return new ValuePair<>( paddedOverlapInFixedSpace, paddedOverlapInMovingSpace );
 	}
 
 	/**

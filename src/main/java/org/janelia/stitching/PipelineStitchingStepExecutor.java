@@ -149,11 +149,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					{
 //					if ( stitchedTiles.length < previousStitchedTiles.length || ( stitchedTiles.length == previousStitchedTiles.length && usedPairs.size() <= previousUsedPairs.size() ) )
 //					{
-//						if ( !higherOrderStitching )
-//						{
-//							higherOrderStitching = true;
-//						}
-//						else
+						/*if ( !higherOrderStitching )
+						{
+							higherOrderStitching = true;
+						}
+						else*/
 						{
 							// mark the last solution as not used because it is worse than from the previous iteration
 							dataProvider.moveFolder(
@@ -205,12 +205,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	/**
 	 * Initiates the computation for pairs that have not been precomputed. Stores the pairwise file for this iteration of stitching.
 	 *
-	 * @param overlappingTiles
+	 * @param overlappingBoxes
 	 * @param iteration
 	 * @throws PipelineExecutionException
 	 * @throws IOException
 	 */
-	private void preparePairwiseShifts( final List< TilePair > overlappingTiles, final int iteration ) throws PipelineExecutionException, IOException
+	private void preparePairwiseShifts( final List< TilePair > overlappingBoxes, final int iteration ) throws PipelineExecutionException, IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
@@ -228,9 +228,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = tryLoadPrecomputedShifts( basePath, iteration );
-		final List< TilePair > pendingOverlappingTiles = removePrecomputedPendingPairs( pairwisePath, overlappingTiles, pairwiseShifts );
+		final List< TilePair > pendingOverlappingBoxes = removePrecomputedPendingPairs( pairwisePath, overlappingBoxes, pairwiseShifts );
 
-		if ( pendingOverlappingTiles.isEmpty() && !pairwiseShifts.isEmpty() )
+		if ( pendingOverlappingBoxes.isEmpty() && !pairwiseShifts.isEmpty() )
 		{
 			// If we're able to load precalculated pairwise results, save some time skipping this step and jump to the global optimization
 			System.out.println( "Successfully loaded all pairwise results from disk!" );
@@ -247,7 +247,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				);
 
 			// Initiate the computation
-			final List< StitchingResult > stitchingResults = computePairwiseShifts( pendingOverlappingTiles, statsTileConfigurationPath );
+			final List< StitchingResult > stitchingResults = computePairwiseShifts( pendingOverlappingBoxes, statsTileConfigurationPath );
 
 			// merge results with preloaded pairwise shifts
 			for ( final StitchingResult result : stitchingResults )
@@ -487,14 +487,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		System.out.println( "Processing " + overlappingBoxes.size() + " pairs..." );
 
-		final boolean tilesHaveAffineTransform;
-		{
-			boolean tilesHaveAffineTransformHelper = false;
-			for ( final TilePair tileBoxPair : overlappingBoxes )
-				tilesHaveAffineTransformHelper |= tileBoxPair.getA().getOriginalTile().getTransform() != null || tileBoxPair.getB().getOriginalTile().getTransform() != null;
-			tilesHaveAffineTransform = tilesHaveAffineTransformHelper;
-		}
-
 		final LongAccumulator notEnoughNeighborsWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 		final LongAccumulator noOverlapWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
@@ -502,18 +494,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final JavaRDD< StitchingResult > pairwiseStitching = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() ).map( tileBoxPair ->
 			{
 				System.out.println( "Processing tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
-
-				// verify serialization of affine transforms
-				if ( tilesHaveAffineTransform )
-				{
-					if ( tileBoxPair.getA().getOriginalTile().getTransform() == null || tileBoxPair.getB().getOriginalTile().getTransform() == null )
-						throw new RuntimeException( "serialization issue: affine transform of original tile is not serialized" );
-				}
-				else
-				{
-					if ( tileBoxPair.getA().getOriginalTile().getTransform() != null || tileBoxPair.getB().getOriginalTile().getTransform() != null )
-						throw new RuntimeException( "shouldn't happen" );
-				}
 
 				// both tile boxes are transformed into the global coordinate space
 				final Pair< Interval, Interval > transformedTileBoxPairGlobalSpace = SplitTileOperations.transformTileBoxPair( tileBoxPair );
@@ -525,16 +505,29 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				if ( IntervalsNullable.intersect( transformedTileBoxPairFixedBoxSpace.getA(), transformedTileBoxPairFixedBoxSpace.getB() ) == null )
 					throw new RuntimeException( "should not happen: only overlapping tile box pairs were selected" );
 
-				// find their 'mean' offset around which an error ellipse will be defined (as intervals are now defined in the fixed tile box space, it is just the position of the moving tile box in this space)
-				final long[] meanOffset = Intervals.minAsLongArray( transformedTileBoxPairFixedBoxSpace.getB() );
-
-				// define search radius in the fixed tile box space
-				final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
-				final double sphereRadiusPixels = 50;//job.getArgs().searchRadiusMultiplier();
-				final SearchRadius searchRadius = new SearchRadius( sphereRadiusPixels, Conversions.toDoubleArray( meanOffset ), offsetsCovarianceMatrix );
+				final TileSearchRadiusEstimator localSearchRadiusEstimator = broadcastedSearchRadiusEstimator.value();
+				final SearchRadius searchRadius;
+				if ( localSearchRadiusEstimator == null )
+				{
+					searchRadius = null;
+				}
+				else
+				{
+					searchRadius = estimateSearchRadius( localSearchRadiusEstimator, tileBoxPair );
+					if ( searchRadius == null )
+						return new StitchingResult( null, null );
+				}
 
 				// get ROIs in the fixed tile box space and moving tile box space, respectively
-				final Pair< Interval, Interval > adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( transformedTileBoxPairFixedBoxSpace, searchRadius );
+				final Pair< Interval, Interval > adjustedOverlaps;
+				if ( searchRadius == null )
+				{
+					adjustedOverlaps = SplitTileOperations.getPaddedOverlapIntervals( transformedTileBoxPairFixedBoxSpace, job.getArgs().padding() );
+				}
+				else
+				{
+					adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( transformedTileBoxPairFixedBoxSpace, searchRadius );
+				}
 
 				if ( adjustedOverlaps == null )
 					throw new RuntimeException( "should not happen: only overlapping tile box pairs were selected, thus adjusted overlaps should always be non-empty too" );
@@ -748,6 +741,50 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			searchRadiusEstimator = null;
 		}
 		return searchRadiusEstimator;
+	}
+
+	/**
+	 * Returns estimated search radius. Shift vectors of the moving tile with respect to the fixed tile will be accepted within this radius.
+	 * The returned search radius is a combination of individual error ellipses for the fixed tile and the moving tile.
+	 *
+	 * @param searchRadiusEstimator
+	 * @param tileBoxPair
+	 * @return
+	 * @throws PipelineExecutionException
+	 */
+	private SearchRadius estimateSearchRadius( final TileSearchRadiusEstimator searchRadiusEstimator, final TilePair tileBoxPair ) throws PipelineExecutionException
+	{
+		final SearchRadius[] tilePairSearchRadiusArr = new SearchRadius[ 2 ];
+		for ( int i = 0; i < 2; ++i )
+		{
+			final TileInfo originalTile = new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ).toArray()[ i ];
+			tilePairSearchRadiusArr[ i ] = searchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( originalTile );
+			if ( tilePairSearchRadiusArr[ i ].getUsedPointsIndexes().size() < job.getArgs().minStatsNeighborhood() )
+			{
+//				notEnoughNeighborsWithinConfidenceIntervalPairsCount.add( 1 );
+
+//				System.out.println( "Found " + searchRadiusEstimationWindow.getUsedPointsIndexes().size() + " neighbors within the search window but we require " + numNearestNeighbors + " nearest neighbors, perform a K-nearest neighbor search instead..." );
+				System.out.println();
+				System.out.println( new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) + ": found " + tilePairSearchRadiusArr[ i ].getUsedPointsIndexes().size() + " neighbors within the search window of the " + ( i == 0 ? "fixed" : "moving" ) + " tile but we require at least " + job.getArgs().minStatsNeighborhood() + " nearest neighbors" );
+				System.out.println();
+
+				return null;
+				// create default search radius
+//				final double[][] unitSphereOffsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
+//				tilePairSearchRadiusArr[ i ] = new SearchRadius(
+//						job.getArgs().defaultSearchRadius(),
+//						meanOffset,
+//						unitSphereOffsetsCovarianceMatrix
+//					);
+			}
+		}
+
+		final SearchRadius combinedSearchRadius = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
+				tilePairSearchRadiusArr[ 0 ],
+				tilePairSearchRadiusArr[ 1 ]
+			);
+
+		return combinedSearchRadius;
 	}
 
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > ImagePlus[] prepareRoiImages(

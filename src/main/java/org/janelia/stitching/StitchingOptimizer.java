@@ -154,15 +154,14 @@ public class StitchingOptimizer implements Serializable
 		final String pairwiseShiftsPath = PathResolver.get( basePath, iterationDirname, "pairwise.json" );
 
 		final List< SerializablePairWiseStitchingResult > tileBoxShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
+		final double maxAllowedError = getMaxAllowedError( iteration );
 
 		try ( final OutputStream logOut = dataProvider.getOutputStream( URI.create( PathResolver.get( basePath, iterationDirname, "optimizer.txt" ) ) ) )
 		{
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
 				logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
-				System.out.println( "Stitching iteration " + iteration + ": Tiles total per channel: " + job.getTiles( 0 ).length );
-
-				final double maxAllowedError = getMaxAllowedError( iteration );
+				logWriter.println( "Stitching mode: " + ( higherOrderStitching ? "affine" : "translation" ) );
 				logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 
 				final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter, higherOrderStitching );
