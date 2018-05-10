@@ -21,6 +21,8 @@ import org.janelia.util.Conversions;
 
 public class ParseTilesImageList
 {
+	private static final int NUM_COLUMNS_FULL = 8; // filepath,filename,stageX,stageY,stageZ,objectiveX,objectiveY,objectiveZ
+
 	public static void main( final String[] args ) throws Exception
 	{
 		final String imageListFilepath;
@@ -73,14 +75,31 @@ public class ParseTilesImageList
 			{
 				final String[] columns = line.split( "," );
 
-				final String filepath = tileImagesFolder == null ? columns[ 0 ] : Paths.get( tileImagesFolder, columns[ 1 ] ).toString();
+				final String filepath;
+				if ( tileImagesFolder == null || tileImagesFolder.isEmpty() )
+				{
+					// base images dir is not provided, use the filepath column
+					filepath = columns[ 0 ];
+				}
+				else if ( columns.length >= NUM_COLUMNS_FULL )
+				{
+					// all columns are present, join base images dir and the filename column
+					filepath = Paths.get( tileImagesFolder, columns[ 1 ] ).toString();
+				}
+				else
+				{
+					// workaround when the filename column is possibly omitted, join base images dir and filename obtained from the filepath column
+					filepath = Paths.get( tileImagesFolder, Paths.get( columns[ 0 ] ).getFileName().toString() ).toString();
+				}
+
 				final String filename = Paths.get( filepath ).getFileName().toString();
 
+				// get objective coordinates from the last three columns
 				// FIXME: Utils.getTileCoordinates() still returns y/x/z grid coordinates. Instead, it needs to account for the axis mapping that is used here
 				final double[] objCoords = new double[] {
-						Double.parseDouble( columns[ 5 ] ),
-						Double.parseDouble( columns[ 6 ] ),
-						Double.parseDouble( columns[ 7 ] )
+						Double.parseDouble( columns[ columns.length - 3 ] ),
+						Double.parseDouble( columns[ columns.length - 2 ] ),
+						Double.parseDouble( columns[ columns.length - 1 ] )
 					};
 
 				final double[] pixelCoords = new double[ objCoords.length ];
