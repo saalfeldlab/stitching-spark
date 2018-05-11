@@ -13,6 +13,10 @@ import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.util.Intervals;
 
+/**
+ * Wrapper for {@link SearchRadiusEstimator} that simplifies estimating a search radius for a tile.
+ * Takes stage position of the given tile and delegates the call to the underlying {@link SearchRadiusEstimator}.
+ */
 public class TileSearchRadiusEstimator implements Serializable
 {
 	private static final long serialVersionUID = 3966655006478467424L;
@@ -53,7 +57,7 @@ public class TileSearchRadiusEstimator implements Serializable
 		{
 			final int[] noSplitParts = new int[ stitchedEntry.getValue().numDimensions() ];
 			Arrays.fill( noSplitParts, 1 );
-			final TileInfo tileBox = SplitTileOperations.splitTilesIntoBoxes( new TileInfo[] { stitchedEntry.getValue() }, noSplitParts ).iterator().next();
+			final SubdividedTileBox tileBox = SplitTileOperations.splitTilesIntoBoxes( new TileInfo[] { stitchedEntry.getValue() }, noSplitParts ).iterator().next();
 			final Interval transformedTileBox = SplitTileOperations.transformTileBox( tileBox );
 //			stitchedValues.put( stitchedEntry.getKey(), getOffsetCoordinates( stitchedEntry.getValue().getPosition(), stitchedTilesOffset ) );
 			stitchedValues.put( stitchedEntry.getKey(), Intervals.minAsDoubleArray( transformedTileBox ) );
@@ -97,7 +101,7 @@ public class TileSearchRadiusEstimator implements Serializable
 	@Deprecated
 	public SearchRadius getSearchRadiusWithinEstimationWindow( final TileInfo tile ) throws PipelineExecutionException
 	{
-		return estimator.getSearchRadiusWithinEstimationWindow( getStagePosition( tile ) );
+		return estimator.getSearchRadiusWithinEstimationWindow( getTileStagePosition( tile ) );
 	}
 	@Deprecated
 	public SearchRadius getSearchRadiusWithinInterval( final Interval neighborSearchInterval ) throws PipelineExecutionException
@@ -105,17 +109,27 @@ public class TileSearchRadiusEstimator implements Serializable
 		return estimator.getSearchRadiusWithinInterval( neighborSearchInterval );
 	}
 
+	public SearchRadius getSearchRadiusTreeWithinEstimationWindow( final SubdividedTileBox tileBox ) throws PipelineExecutionException
+	{
+		return estimator.getSearchRadiusTreeWithinEstimationWindow( getTileBoxMiddlePointStagePosition( tileBox ) );
+	}
 	public SearchRadius getSearchRadiusTreeWithinEstimationWindow( final TileInfo tile ) throws PipelineExecutionException
 	{
-		return estimator.getSearchRadiusTreeWithinEstimationWindow( getStagePosition( tile ) );
+		return estimator.getSearchRadiusTreeWithinEstimationWindow( getTileStagePosition( tile ) );
 	}
+
 	public SearchRadius getSearchRadiusTreeWithinInterval( final Interval neighborSearchInterval ) throws PipelineExecutionException
 	{
 		return estimator.getSearchRadiusTreeWithinInterval( neighborSearchInterval );
 	}
+
+	public SearchRadius getSearchRadiusTreeUsingKNearestNeighbors( final SubdividedTileBox tileBox, final int numNearestNeighbors ) throws PipelineExecutionException
+	{
+		return estimator.getSearchRadiusTreeUsingKNearestNeighbors( getTileBoxMiddlePointStagePosition( tileBox ), numNearestNeighbors );
+	}
 	public SearchRadius getSearchRadiusTreeUsingKNearestNeighbors( final TileInfo tile, final int numNearestNeighbors ) throws PipelineExecutionException
 	{
-		return estimator.getSearchRadiusTreeUsingKNearestNeighbors( getStagePosition( tile ), numNearestNeighbors );
+		return estimator.getSearchRadiusTreeUsingKNearestNeighbors( getTileStagePosition( tile ), numNearestNeighbors );
 	}
 
 	public SearchRadius getCombinedCovariancesSearchRadius( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius ) throws PipelineExecutionException
@@ -138,13 +152,18 @@ public class TileSearchRadiusEstimator implements Serializable
 		return tileOffsets.size();
 	}
 
-	public double[] getStagePosition( final TileInfo tile )
+	public double[] getTileBoxMiddlePointStagePosition( final SubdividedTileBox tileBox )
 	{
-		return getStagePosition( tile.getIndex() );
+		final double[] tileStagePosition = getTileStagePosition( tileBox.getFullTile() );
+		final double[] tileBoxMiddlePoint = SplitTileOperations.getTileBoxMiddlePoint( tileBox );
+		final double[] tileBoxStagePosition = new double[ tileBox.numDimensions() ];
+		for ( int d = 0; d < tileBoxStagePosition.length; ++d )
+			tileBoxStagePosition[ d ] = tileStagePosition[ d ] + tileBoxMiddlePoint[ d ];
+		return tileBoxStagePosition;
 	}
-	public double[] getStagePosition( final Integer tileIndex )
+	public double[] getTileStagePosition( final TileInfo tile )
 	{
-		return stageTilesMap.get( tileIndex ).getPosition();
+		return stageTilesMap.get( tile.getIndex() ).getPosition();
 	}
 
 	public Dimensions getEstimationWindowSize()

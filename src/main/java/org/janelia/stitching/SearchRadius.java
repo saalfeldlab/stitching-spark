@@ -12,12 +12,13 @@ import org.ojalgo.matrix.store.MatrixStore;
 import org.ojalgo.matrix.store.PhysicalStore;
 import org.ojalgo.matrix.store.PrimitiveDenseStore;
 
-import mpicbg.imglib.custom.PointValidator;
+import mpicbg.imglib.custom.OffsetValidator;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.iterator.IntervalIterator;
+import net.imglib2.realtransform.RealTransform;
 
-public class SearchRadius implements PointValidator
+public class SearchRadius implements OffsetValidator
 {
 	private final double[] offsetsMeanValues;
 	private final double[][] offsetsCovarianceMatrix;
@@ -36,15 +37,31 @@ public class SearchRadius implements PointValidator
 	private final double[] ellipseRadius;
 	private final double[][] uncertaintyVectors;
 
-	public SearchRadius( final double searchRadiusMultiplier, final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix ) throws PipelineExecutionException
+	private RealTransform offsetTransform;
+
+	public SearchRadius(
+			final double searchRadiusMultiplier,
+			final double[] offsetsMeanValues,
+			final double[][] offsetsCovarianceMatrix ) throws PipelineExecutionException
 	{
 		this( searchRadiusMultiplier, offsetsMeanValues, offsetsCovarianceMatrix, null );
 	}
-	public SearchRadius( final double searchRadiusMultiplier, final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix, final List< Integer > usedPointsIndexes ) throws PipelineExecutionException
+
+	public SearchRadius(
+			final double searchRadiusMultiplier,
+			final double[] offsetsMeanValues,
+			final double[][] offsetsCovarianceMatrix,
+			final List< Integer > usedPointsIndexes ) throws PipelineExecutionException
 	{
-		this( searchRadiusMultiplier, offsetsMeanValues, offsetsCovarianceMatrix, usedPointsIndexes, null );
+		this( searchRadiusMultiplier, offsetsMeanValues, offsetsCovarianceMatrix, usedPointsIndexes, new double[ offsetsMeanValues.length ] );
 	}
-	public SearchRadius( final double searchRadiusMultiplier, final double[] offsetsMeanValues, final double[][] offsetsCovarianceMatrix, final List< Integer > usedPointsIndexes, final double[] stagePosition ) throws PipelineExecutionException
+
+	public SearchRadius(
+			final double searchRadiusMultiplier,
+			final double[] offsetsMeanValues,
+			final double[][] offsetsCovarianceMatrix,
+			final List< Integer > usedPointsIndexes,
+			final double[] stagePosition ) throws PipelineExecutionException
 	{
 		this.offsetsMeanValues = offsetsMeanValues;
 		this.offsetsCovarianceMatrix = offsetsCovarianceMatrix;
@@ -81,7 +98,6 @@ public class SearchRadius implements PointValidator
         	}
         }
 
-
 		for ( int dRow = 0; dRow < numDimensions(); ++dRow )
 		{
 			double sumSq = 0;
@@ -91,11 +107,9 @@ public class SearchRadius implements PointValidator
         		throw new RuntimeException( "radius validation failed" );
 		}
 
-
-
         ellipseCenter = new double[ offsetsMeanValues.length ];
         for ( int d = 0; d < ellipseCenter.length; ++d )
-        	ellipseCenter[ d ] = offsetsMeanValues[ d ] + ( stagePosition != null ? stagePosition[ d ] : 0 );
+        	ellipseCenter[ d ] = offsetsMeanValues[ d ];
 
         // build a transformation matrix for this ellipse
 		final int dim = ellipseCenter.length;
@@ -158,24 +172,45 @@ public class SearchRadius implements PointValidator
 	}
 
 	@Override
-	public boolean testPoint( final double... coords )
+	public boolean testOffset( final double... offset )
 	{
+		return getUnitSphereCoordinates( offset ) <= 1;
+	}
+
+	double getUnitSphereCoordinates( final double... offset )
+	{
+		// if transformation is present, convert the offset to the user-specified coordinate space in which the error ellipse is defined
+		final double[] transformedOffset = offset.clone();
+		if ( offsetTransform != null )
+			offsetTransform.apply( transformedOffset, transformedOffset );
+
 		// build a vector with point coordinates
 		final BasicMatrix.Factory< PrimitiveMatrix > matrixFactory = PrimitiveMatrix.FACTORY;
-        final Builder< PrimitiveMatrix > coordsVectorBuilder = matrixFactory.getBuilder( coords.length + 1, 1 );
-        for ( int dRow = 0; dRow < coords.length; ++dRow )
-        	coordsVectorBuilder.set( dRow, 0, coords[ dRow ] );
-        coordsVectorBuilder.set( coords.length, 0, 1 );
+        final Builder< PrimitiveMatrix > coordsVectorBuilder = matrixFactory.getBuilder( transformedOffset.length + 1, 1 );
+        for ( int dRow = 0; dRow < transformedOffset.length; ++dRow )
+        	coordsVectorBuilder.set( dRow, 0, transformedOffset[ dRow ] );
+        coordsVectorBuilder.set( transformedOffset.length, 0, 1 );
         final PrimitiveMatrix coordsVector = coordsVectorBuilder.get();
 
         // get the inverse transform to map the the point to the unit sphere
         final PrimitiveMatrix transformedCoordsVector = inverseTransformMatrix.multiply( coordsVector );
 
-        // check whether the transformed point lies within the unit sphere
+        // calculate unit sphere coordinates
         double coordsSumSquared = 0;
-        for ( int dRow = 0; dRow < coords.length; ++dRow )
+        for ( int dRow = 0; dRow < transformedOffset.length; ++dRow )
         	coordsSumSquared += Math.pow( transformedCoordsVector.get( dRow, 0 ), 2 );
-        return coordsSumSquared <= 1;
+
+        return Math.sqrt( coordsSumSquared );
+	}
+
+	public RealTransform getOffsetTransform()
+	{
+		return offsetTransform;
+	}
+
+	public void setOffsetTransform( final RealTransform offsetTransform )
+	{
+		this.offsetTransform = offsetTransform;
 	}
 
 	@Override

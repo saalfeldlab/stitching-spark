@@ -2,10 +2,12 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 
 import net.imglib2.FinalInterval;
@@ -16,6 +18,11 @@ import net.imglib2.RealPoint;
 import net.imglib2.neighborsearch.IntervalNeighborSearchOnKDTree;
 import net.imglib2.neighborsearch.KNearestNeighborSearchOnKDTree;
 
+/**
+ * Takes two sets of points: stage positions and stitched positions.
+ * Then, for any given point in the stage coordinate space (not necessarily from the set) fetches neighboring points from the given sets and
+ * estimates an expected position in the stitched coordinate space along with a confidence interval (error ellipse).
+ */
 public class SearchRadiusEstimator implements Serializable
 {
 	private static final long serialVersionUID = -1337122618818271339L;
@@ -46,7 +53,8 @@ public class SearchRadiusEstimator implements Serializable
 			stageSubsetPositions.add( new RealPoint( correspondingStageVal ) );
 		}
 
-		// build a search tree
+		// build a search tree to be able to look up stage positions and corresponding stitched positions
+		// in the neighborhood for any given stage position
 		tree = new KDTree<>( stageSubsetIndexes, stageSubsetPositions );
 	}
 
@@ -184,22 +192,84 @@ public class SearchRadiusEstimator implements Serializable
 		return estimationWindowSize.length;
 	}
 
-	public SearchRadius getCombinedCovariancesSearchRadius( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius ) throws PipelineExecutionException
+	/**
+	 * When estimating a pairwise shift vector between a pair of tiles, both of them have
+	 * an expected offset and a confidence interval where they can be possibly shifted.
+	 *
+	 * For pairwise matching, one of the tiles is 'fixed' and the other one is 'moving'.
+	 * This function combines these confidence intervals of the two tiles to just one interval that represents
+	 * variability of the new offset between them vs. stage offset between them.
+	 *
+	 * @param fixedSearchRadius
+	 * @param movingSearchRadius
+	 * @return
+	 * @throws PipelineExecutionException
+	 */
+	public SearchRadius getCombinedCovariancesSearchRadius(
+			final SearchRadius fixedSearchRadius,
+			final SearchRadius movingSearchRadius ) throws PipelineExecutionException
 	{
-		final double[][] combinedOffsetsCovarianceMatrix = new double[ numDimensions() ][ numDimensions() ];
-		for ( int dRow = 0; dRow < numDimensions(); ++dRow )
-			for ( int dCol = 0; dCol < numDimensions(); ++dCol )
+		return new SearchRadius(
+				searchRadiusMultiplier,
+				getCombinedMeanOffset( fixedSearchRadius, movingSearchRadius ),
+				getCombinedCovariances( fixedSearchRadius, movingSearchRadius ),
+				getCombinedPointIndexes( fixedSearchRadius, movingSearchRadius ),
+				null
+			);
+	}
+
+	/**
+	 * When estimating a pairwise shift vector between a pair of tiles, both of them have
+	 * an expected offset and a confidence interval where they can be possibly shifted.
+	 *
+	 * For pairwise matching, one of the tiles is 'fixed' and the other one is 'moving'.
+	 * This function combines these confidence intervals of the two tiles to just one interval that represents
+	 * variability of the new offset between them vs. stage offset between them.
+	 *
+	 * @param searchRadiusMultiplier
+	 * @param fixedSearchRadius
+	 * @param movingSearchRadius
+	 * @return
+	 * @throws PipelineExecutionException
+	 */
+	public static SearchRadius getCombinedCovariancesSearchRadius(
+			final double searchRadiusMultiplier,
+			final SearchRadius fixedSearchRadius,
+			final SearchRadius movingSearchRadius ) throws PipelineExecutionException
+	{
+		return new SearchRadius(
+				searchRadiusMultiplier,
+				getCombinedMeanOffset( fixedSearchRadius, movingSearchRadius ),
+				getCombinedCovariances( fixedSearchRadius, movingSearchRadius ),
+				getCombinedPointIndexes( fixedSearchRadius, movingSearchRadius ),
+				null
+			);
+	}
+
+	public static double[][] getCombinedCovariances( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius )
+	{
+		final int dim = Math.max( fixedSearchRadius.numDimensions(), movingSearchRadius.numDimensions() );
+		final double[][] combinedOffsetsCovarianceMatrix = new double[ dim ][ dim ];
+		for ( int dRow = 0; dRow < dim; ++dRow )
+			for ( int dCol = 0; dCol < dim; ++dCol )
 				combinedOffsetsCovarianceMatrix[ dRow ][ dCol ] = fixedSearchRadius.getOffsetsCovarianceMatrix()[ dRow ][ dCol ] + movingSearchRadius.getOffsetsCovarianceMatrix()[ dRow ][ dCol ];
+		return combinedOffsetsCovarianceMatrix;
+	}
 
-		final double[] combinedOffsetsMeanValues = new double[ numDimensions() ];
-		for ( int d = 0; d < numDimensions(); ++d )
+	public static double[] getCombinedMeanOffset( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius )
+	{
+		final int dim = Math.max( fixedSearchRadius.numDimensions(), movingSearchRadius.numDimensions() );
+		final double[] combinedOffsetsMeanValues = new double[ dim ];
+		for ( int d = 0; d < dim; ++d )
 			combinedOffsetsMeanValues[ d ] = movingSearchRadius.getOffsetsMeanValues()[ d ] - fixedSearchRadius.getOffsetsMeanValues()[ d ];
+		return combinedOffsetsMeanValues;
+	}
 
+	public static List< Integer > getCombinedPointIndexes( final SearchRadius fixedSearchRadius, final SearchRadius movingSearchRadius )
+	{
 		final Set< Integer > combinedPointIndexesSet = new HashSet<>();
-		combinedPointIndexesSet.addAll( fixedSearchRadius.getUsedPointsIndexes() );
-		combinedPointIndexesSet.addAll( movingSearchRadius.getUsedPointsIndexes() );
-		final List< Integer > combinedPointIndexes = new ArrayList<>( combinedPointIndexesSet );
-
-		return new SearchRadius( searchRadiusMultiplier, combinedOffsetsMeanValues, combinedOffsetsCovarianceMatrix, combinedPointIndexes, movingSearchRadius.getStagePosition() );
+		combinedPointIndexesSet.addAll( Optional.ofNullable( fixedSearchRadius.getUsedPointsIndexes() ).orElse( Collections.emptyList() ) );
+		combinedPointIndexesSet.addAll( Optional.ofNullable( movingSearchRadius.getUsedPointsIndexes() ).orElse( Collections.emptyList() ) );
+		return new ArrayList<>( combinedPointIndexesSet );
 	}
 }
