@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.janelia.dataaccess.DataProvider;
@@ -22,7 +23,7 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealPoint;
 import net.imglib2.img.list.ListImg;
-import net.imglib2.realtransform.AffineGet;
+import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
@@ -108,8 +109,12 @@ public class FusionPerformer
 
 		for ( final TileInfo tile : tilesWithinCell )
 		{
-			final AffineGet tileTransform = TileOperations.getTileTransform( tile );
-			final RandomAccessibleInterval< T > transformedTileImg = TransformedTileImageLoader.loadTile( tile, dataProvider, flatfield );
+			final InvertibleRealTransform tileTransform = TileOperations.getTileTransform( tile );
+			final RandomAccessibleInterval< T > transformedTileImg = TransformedTileImageLoader.loadTile(
+					tile,
+					dataProvider,
+					Optional.ofNullable( flatfield )
+				);
 
 			final FinalRealInterval intersection = IntervalsNullable.intersectReal( transformedTileImg, targetInterval );
 			if ( intersection == null )
