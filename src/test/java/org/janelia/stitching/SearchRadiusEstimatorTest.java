@@ -36,6 +36,7 @@ import net.imglib2.exception.ImgLibException;
 import net.imglib2.img.imageplus.FloatImagePlus;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.img.imageplus.IntImagePlus;
+import net.imglib2.iterator.IntervalIterator;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.ComparablePair;
@@ -101,24 +102,23 @@ public class SearchRadiusEstimatorTest
 		Assert.assertArrayEquals( new long[] {  50, 150, 250 }, Intervals.minAsLongArray( boundingBox ) );
 		Assert.assertArrayEquals( new long[] { 150, 250, 350 }, Intervals.maxAsLongArray( boundingBox ) );
 
-		Assert.assertTrue( searchRadius.testPoint( 100, 200, 300 ) );
-		Assert.assertTrue( searchRadius.testPoint( 51, 200, 300 ) );
-		Assert.assertTrue( searchRadius.testPoint( 149, 200, 300 ) );
-		Assert.assertTrue( searchRadius.testPoint( 100, 151, 300 ) );
-		Assert.assertTrue( searchRadius.testPoint( 100, 249, 300 ) );
-		Assert.assertTrue( searchRadius.testPoint( 100, 200, 251 ) );
-		Assert.assertTrue( searchRadius.testPoint( 100, 200, 349 ) );
+		Assert.assertTrue( searchRadius.testOffset( 100, 200, 300 ) );
+		Assert.assertTrue( searchRadius.testOffset( 51, 200, 300 ) );
+		Assert.assertTrue( searchRadius.testOffset( 149, 200, 300 ) );
+		Assert.assertTrue( searchRadius.testOffset( 100, 151, 300 ) );
+		Assert.assertTrue( searchRadius.testOffset( 100, 249, 300 ) );
+		Assert.assertTrue( searchRadius.testOffset( 100, 200, 251 ) );
+		Assert.assertTrue( searchRadius.testOffset( 100, 200, 349 ) );
 
-		Assert.assertFalse( searchRadius.testPoint( 50, 150, 250 ) );
-		Assert.assertFalse( searchRadius.testPoint( 50, 150, 350 ) );
-		Assert.assertFalse( searchRadius.testPoint( 50, 250, 250 ) );
-		Assert.assertFalse( searchRadius.testPoint( 50, 250, 350 ) );
-		Assert.assertFalse( searchRadius.testPoint( 150, 150, 250 ) );
-		Assert.assertFalse( searchRadius.testPoint( 150, 150, 350 ) );
-		Assert.assertFalse( searchRadius.testPoint( 150, 250, 250 ) );
-		Assert.assertFalse( searchRadius.testPoint( 150, 250, 350 ) );
+		Assert.assertFalse( searchRadius.testOffset( 50, 150, 250 ) );
+		Assert.assertFalse( searchRadius.testOffset( 50, 150, 350 ) );
+		Assert.assertFalse( searchRadius.testOffset( 50, 250, 250 ) );
+		Assert.assertFalse( searchRadius.testOffset( 50, 250, 350 ) );
+		Assert.assertFalse( searchRadius.testOffset( 150, 150, 250 ) );
+		Assert.assertFalse( searchRadius.testOffset( 150, 150, 350 ) );
+		Assert.assertFalse( searchRadius.testOffset( 150, 250, 250 ) );
+		Assert.assertFalse( searchRadius.testOffset( 150, 250, 350 ) );
 	}
-
 
 	@Test
 	public void testEigen() throws PipelineExecutionException
@@ -169,6 +169,61 @@ public class SearchRadiusEstimatorTest
 		Assert.assertEquals( 1.0, getVectorLength( eigenVectorsSorted[ 0 ] ), EPSILON );
 		Assert.assertEquals( 1.0, getVectorLength( eigenVectorsSorted[ 1 ] ), EPSILON );
 		Assert.assertEquals( 1.0, getVectorLength( eigenVectorsSorted[ 2 ] ), EPSILON );
+	}
+
+	@Test
+	public void testCombinedSearchRadius() throws PipelineExecutionException
+	{
+		final double[] fixedTileStageCoords = new double[] { 100, 200 };
+		final double[] fixedMeanOffset = new double[] { 50, 20 };
+		final double[][] fixedOffsetsCovariances = new double[][] { new double[] { 10, 0 }, new double[] { 0, 6 } };
+		final SearchRadius fixedSearchRadius = new SearchRadius(
+				SEARCH_RADIUS_MULTIPLIER,
+				fixedMeanOffset,
+				fixedOffsetsCovariances,
+				null,
+				fixedTileStageCoords
+			);
+
+		final double[] movingTileStageCoords = new double[] { 300, 50 };
+		final double[] movingMeanOffset = new double[] { 51, 15 };
+		final double[][] movingOffsetsCovariances = new double[][] { new double[] { 5, 0 }, new double[] { 0, 2 } };
+		final SearchRadius movingSearchRadius = new SearchRadius(
+				SEARCH_RADIUS_MULTIPLIER,
+				movingMeanOffset,
+				movingOffsetsCovariances,
+				null,
+				movingTileStageCoords
+			);
+
+		final SearchRadius combinedSearchRadius = SearchRadiusEstimator.getCombinedCovariancesSearchRadius(
+				SEARCH_RADIUS_MULTIPLIER,
+				fixedSearchRadius,
+				movingSearchRadius
+			);
+		Assert.assertArrayEquals( new double[] { 1, -5 }, combinedSearchRadius.getEllipseCenter(), EPSILON );
+
+		final double[] newFixedTileStageCoords = new double[ fixedTileStageCoords.length ], newMovingTileStageCoords = new double[ fixedTileStageCoords.length ];
+		for ( int d = 0; d < combinedSearchRadius.numDimensions(); ++d )
+		{
+			newFixedTileStageCoords[ d ] = fixedSearchRadius.getStagePosition()[ d ] + fixedSearchRadius.getOffsetsMeanValues()[ d ];
+			newMovingTileStageCoords[ d ] = movingSearchRadius.getStagePosition()[ d ] + movingSearchRadius.getOffsetsMeanValues()[ d ];
+		}
+
+		final double[] stageTilesOffset = new double[ combinedSearchRadius.numDimensions() ], newTilesOffset = new double[ combinedSearchRadius.numDimensions() ];
+		for ( int d = 0; d < combinedSearchRadius.numDimensions(); ++d )
+		{
+			stageTilesOffset[ d ] = movingSearchRadius.getStagePosition()[ d ] - fixedSearchRadius.getStagePosition()[ d ];
+			newTilesOffset[ d ] = newMovingTileStageCoords[ d ] - newFixedTileStageCoords[ d ];
+		}
+
+		final double[] relativeOffset = new double[ combinedSearchRadius.numDimensions() ];
+		for ( int d = 0; d < combinedSearchRadius.numDimensions(); ++d )
+			relativeOffset[ d ] = newTilesOffset[ d ] - stageTilesOffset[ d ];
+
+		Assert.assertArrayEquals( new double[] { 1, -5 }, relativeOffset, EPSILON );
+		Assert.assertEquals( 0, combinedSearchRadius.getUnitSphereCoordinates( relativeOffset ), EPSILON );
+		Assert.assertTrue( combinedSearchRadius.testOffset( relativeOffset ) );
 	}
 
 //	@Test
@@ -251,7 +306,7 @@ public class SearchRadiusEstimatorTest
 				final PrimitiveMatrix inverseScaledVector = inverseScalingMatrix.multiply( vectorBuilder.get() );
 
 				final double x = inverseScaledVector.get(0, 0), y = inverseScaledVector.get(1, 0);
-				if ( radius.testPoint( x + radius.getStagePosition()[ 0 ], y + radius.getStagePosition()[ 1 ] ) )
+				if ( radius.testOffset( x, y ) )
 					ip.setf( xDisplay, yDisplay, 1 );
 			}
 		}
@@ -380,7 +435,7 @@ public class SearchRadiusEstimatorTest
 			final PrimitiveMatrix inverseScaledVector = inverseScalingMatrix.multiply( vectorBuilder.get() );
 
 			final double x = inverseScaledVector.get(0, 0), y = inverseScaledVector.get(1, 0), z = inverseScaledVector.get(2, 0);
-			if ( radius.testPoint( x + radius.getStagePosition()[ 0 ], y + radius.getStagePosition()[ 1 ], z + radius.getStagePosition()[ 2 ] ) )
+			if ( radius.testOffset( x, y, z ) )
 				imgCursor.get().set( 1 );
 		}
 
@@ -442,8 +497,8 @@ public class SearchRadiusEstimatorTest
 		final int width = 1200;
 		final int height = 1200;
 
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" ) ) );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z.json" ) ) );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
 		final int dx = 0, dy = 1;
@@ -526,7 +581,7 @@ public class SearchRadiusEstimatorTest
 					final PrimitiveMatrix inverseScaledVector = inverseScalingMatrix.multiply( vectorBuilder.get() );
 
 					final double x = inverseScaledVector.get(0, 0), y = inverseScaledVector.get(1, 0);
-					insideEllipse[ pix ] = radius.testPoint( x + radius.getStagePosition()[ 0 ], y + radius.getStagePosition()[ 1 ] );
+					insideEllipse[ pix ] = radius.testOffset( x, y );
 				},
 				insideEllipse.length );
 		}
@@ -582,49 +637,12 @@ public class SearchRadiusEstimatorTest
 
 		// draw the bounding box corners of the error ellipse
 		final double[][] boundingBoxCorners = new double[][] { Intervals.minAsDoubleArray( radius.getBoundingBox() ), Intervals.maxAsDoubleArray( radius.getBoundingBox() ) };
-		for ( int i = 0; i < 2; ++i )
-			for ( int d = 0; d < 2; ++d )
-				boundingBoxCorners[ i ][ d ] -= radius.getStagePosition()[ d ];
-		final int[][] boundingBoxCornersDisplay = new int[ 2 ][ 2 ];
-		for ( int i = 0; i < 2; ++i )
-		{
-			final double[] point = boundingBoxCorners[ i ];
-			for ( int d = 0; d < point.length; ++d )
-				point[ d ] = i == 0 ? Math.floor( point[ d ] ) : Math.ceil( point[ d ] );
-
-			final Builder< PrimitiveMatrix > vectorBuilder = PrimitiveMatrix.FACTORY.getBuilder( 2, 1 );
-			vectorBuilder.set( 0, 0, point[ 0 ] );
-			vectorBuilder.set( 1, 0, point[ 1 ] );
-			final PrimitiveMatrix scaledVector = scalingMatrix.multiply( vectorBuilder.get() );
-
-			final int xDisplay = ( int ) Math.round( scaledVector.get(0, 0) ) + width  / 2;
-			final int yDisplay = ( int ) Math.round( scaledVector.get(1, 0) ) + height / 2;
-
-			boundingBoxCornersDisplay[ i ][ 0 ] = xDisplay;
-			boundingBoxCornersDisplay[ i ][ 1 ] = yDisplay;
-		}
-		for ( int dFixed = 0; dFixed < 2; ++dFixed )
-		{
-			for ( int dMove = 0; dMove < 2; ++dMove )
-			{
-				if ( dFixed != dMove)
-				{
-					for ( int i = 0; i < 2; ++i )
-					{
-						posDisplay[ dFixed ] = boundingBoxCornersDisplay[ i ][ dFixed ];
-						for ( int c = boundingBoxCornersDisplay[ 0 ][ dMove ]; c <= boundingBoxCornersDisplay[ 1 ][ dMove ]; ++c )
-						{
-							posDisplay[ dMove ] = c;
-							if ( posDisplay[ 0 ] >= 0 && posDisplay[ 0 ] < width && posDisplay[ 1 ] >= 0 && posDisplay[ 1 ] < height )
-							{
-								imgRandomAccess.setPosition( posDisplay );
-								imgRandomAccess.get().set( 9 );
-							}
-						}
-					}
-				}
-			}
-		}
+		drawRectangle(
+				boundingBoxCorners,
+				scalingMatrix,
+				new int[] { width, height },
+				imgRandomAccess
+			);
 
 		System.out.println( "Opening an image..." );
 		final ImagePlus imp = img.getImagePlus();
@@ -632,7 +650,7 @@ public class SearchRadiusEstimatorTest
 
 		new ImageJ();
 		imp.show();
-		Thread.sleep( 5 * 1000 );
+		Thread.sleep( 60 * 1000 );
 	}
 
 
@@ -646,8 +664,8 @@ public class SearchRadiusEstimatorTest
 		final int height = 600;
 		final int depth = 600;
 
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" ) ) );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z.json" ) ) );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
 		final double[] estimationWindowSize = new double[ 3 ];
@@ -706,7 +724,7 @@ public class SearchRadiusEstimatorTest
 					final PrimitiveMatrix inverseScaledVector = inverseScalingMatrix.multiply( vectorBuilder.get() );
 
 					final double x = inverseScaledVector.get(0, 0), y = inverseScaledVector.get(1, 0), z = inverseScaledVector.get(2, 0);
-					insideEllipse[ pix ] = radius.testPoint( x + radius.getStagePosition()[ 0 ], y + radius.getStagePosition()[ 1 ], z + radius.getStagePosition()[ 2 ] );
+					insideEllipse[ pix ] = radius.testOffset( x, y, z );
 				},
 				insideEllipse.length );
 		}
@@ -759,6 +777,15 @@ public class SearchRadiusEstimatorTest
 			}
 		}
 
+		// draw the bounding box corners of the error ellipse
+		final double[][] boundingBoxCorners = new double[][] { Intervals.minAsDoubleArray( radius.getBoundingBox() ), Intervals.maxAsDoubleArray( radius.getBoundingBox() ) };
+		drawRectangle(
+				boundingBoxCorners,
+				scalingMatrix,
+				new int[] { width, height, depth },
+				imgRandomAccess
+			);
+
 		System.out.println( "Opening an image..." );
 		final ImagePlus imp = img.getImagePlus();
 		Utils.workaroundImagePlusNSlices( imp );
@@ -777,8 +804,8 @@ public class SearchRadiusEstimatorTest
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z.json" ) ) );
-		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/less-blur,smaller-radius/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
+		final TileInfo[] stageTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z.json" ) ) );
+		final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( "/nrs/saalfeld/igor/170210_SomatoYFP_MBP_Caspr/stitching/flip-x/5z/restitching/ch0_mirroredX_5z-final.json" ) ) );
 		System.out.println( "Stage tiles = " + stageTiles.length + ", stitched tiles = " + stitchedTiles.length );
 
 		final TileSearchRadiusEstimator estimator = new TileSearchRadiusEstimator(
@@ -792,7 +819,7 @@ public class SearchRadiusEstimatorTest
 		TilePair tilePair = null;
 		SearchRadius fixedTileSearchRadius = null, movingTileSearchRadius = null;
 		boolean foundNeighborhood = false;
-		final int minNeighborhood = 20;
+		final int minNeighborhood = 5;
 		while ( !foundNeighborhood )
 		{
 			tilePair = overlappingTilePairs.get( rnd.nextInt( overlappingTilePairs.size() ) );
@@ -834,11 +861,14 @@ public class SearchRadiusEstimatorTest
 			for ( int d = 0; d < fixedTileUnitSpherePoint.length; ++d )
 				fixedTileUnitSpherePointVectorBuilder.set( d, 0, fixedTileUnitSpherePoint[ d ] );
 			fixedTileUnitSpherePointVectorBuilder.set( fixedTileUnitSpherePoint.length, 0, 1 );
-			final PrimitiveMatrix fixedTilePointVector = fixedTileSearchRadius.getTransformMatrix().multiply( fixedTileUnitSpherePointVectorBuilder.get() );
-			final double[] fixedTilePoint = new double[ fixedTileUnitSpherePoint.length ];
-			for ( int d = 0; d < fixedTilePoint.length; ++d )
-				fixedTilePoint[ d ] = fixedTilePointVector.get( d, 0 );
-			Assert.assertTrue( fixedTileSearchRadius.testPoint( fixedTilePoint ) );
+			final PrimitiveMatrix fixedTileOffsetVector = fixedTileSearchRadius.getTransformMatrix().multiply( fixedTileUnitSpherePointVectorBuilder.get() );
+			final double[] fixedTileOffset = new double[ fixedTileUnitSpherePoint.length ];
+			for ( int d = 0; d < fixedTileOffset.length; ++d )
+				fixedTileOffset[ d ] = fixedTileOffsetVector.get( d, 0 );
+			Assert.assertTrue( fixedTileSearchRadius.testOffset( fixedTileOffset ) );
+			final double[] fixedTilePointStage = new double[ fixedTileOffset.length ];
+			for ( int d = 0; d < fixedTilePointStage.length; ++d )
+				fixedTilePointStage[ d ] = fixedTileSearchRadius.getStagePosition()[ d ] + fixedTileOffset[ d ];
 
 			// 3. Sample a point within unit cube for the moving tile
 			final double[] movingTileUnitCubePoint = new double[ movingTileSearchRadius.numDimensions() ];
@@ -850,37 +880,43 @@ public class SearchRadiusEstimatorTest
 			for ( int d = 0; d < movingTileUnitCubePoint.length; ++d )
 				movingTileUnitCubePointVectorBuilder.set( d, 0, movingTileUnitCubePoint[ d ] );
 			movingTileUnitCubePointVectorBuilder.set( movingTileUnitCubePoint.length, 0, 1 );
-			final PrimitiveMatrix movingTilePointVector = movingTileSearchRadius.getTransformMatrix().multiply( movingTileUnitCubePointVectorBuilder.get() );
-			final double[] movingTilePoint = new double[ movingTileUnitCubePoint.length ];
-			for ( int d = 0; d < movingTilePoint.length; ++d )
-				movingTilePoint[ d ] = movingTilePointVector.get( d, 0 );
+			final PrimitiveMatrix movingTileOffsetVector = movingTileSearchRadius.getTransformMatrix().multiply( movingTileUnitCubePointVectorBuilder.get() );
+			final double[] movingTileOffset = new double[ movingTileUnitCubePoint.length ];
+			for ( int d = 0; d < movingTileOffset.length; ++d )
+				movingTileOffset[ d ] = movingTileOffsetVector.get( d, 0 );
+			final double[] movingTilePointStage = new double[ movingTileOffset.length ];
+			for ( int d = 0; d < movingTilePointStage.length; ++d )
+				movingTilePointStage[ d ] = movingTileSearchRadius.getStagePosition()[ d ] + movingTileOffset[ d ];
 
-			// 5. Compute a vector between fixedTilePoint and movingTilePoint
-			final double[] movingTileRelativeOffset = new double[ movingTilePoint.length ];
-			for ( int d = 0; d < movingTileRelativeOffset.length; ++d )
-				movingTileRelativeOffset[ d ] = movingTilePoint[ d ] - fixedTilePoint[ d ];
+			// 5. Compute new offset between the two tiles
+			final double[] tilesNewOffset = new double[ movingTilePointStage.length ];
+			for ( int d = 0; d < tilesNewOffset.length; ++d )
+				tilesNewOffset[ d ] = movingTilePointStage[ d ] - fixedTilePointStage[ d ];
 
-			// 6. Find new moving tile point in the coordinate space of the fixed tile (with respect to the combined search radius)
-			final double[] movingTileRelativePoint = new double[ movingTilePoint.length ];
-			for ( int d = 0; d < movingTileRelativePoint.length; ++d )
-				movingTileRelativePoint[ d ] = tilePair.getA().getPosition( d ) + movingTileRelativeOffset[ d ];
+			// 6. Compute relative offset with respect to the mean offset of the fixed tile
+			final double[] tilesStageOffset = new double[ tilesNewOffset.length ];
+			for ( int d = 0; d < tilesStageOffset.length; ++d )
+				tilesStageOffset[ d ] = movingTileSearchRadius.getStagePosition()[ d ] - fixedTileSearchRadius.getStagePosition()[ d ];
+			final double[] relativeMovingTileOffset = new double[ tilesNewOffset.length ];
+			for ( int d = 0; d < relativeMovingTileOffset.length; ++d )
+				relativeMovingTileOffset[ d ] = tilesNewOffset[ d ] - tilesStageOffset[ d ];
 
-			// 7. Find whether the moving tile point falls within moving tile search radius
+			// 7. Find whether the new offset falls within the search radius
 			double sumSq = 0;
 			for ( int d = 0; d < movingTileUnitCubePoint.length; ++d )
 				sumSq += Math.pow( movingTileUnitCubePoint[ d ], 2 );
 			final boolean movingTilePointWithinUnitSphere = ( sumSq <= 1 );
-			Assert.assertEquals( movingTilePointWithinUnitSphere, movingTileSearchRadius.testPoint( movingTilePoint ) );
+			Assert.assertEquals( movingTilePointWithinUnitSphere, movingTileSearchRadius.testOffset( movingTileOffset ) );
 
-			// 8. Test the new relative moving tile point against the combined error ellipse and compare the result with the expected outcome
+			// 8. Test the new offset against the combined error ellipse and compare the result with the expected outcome
 			try
 			{
-				Assert.assertEquals( movingTilePointWithinUnitSphere, combinedErrorEllipse.testPoint( movingTileRelativePoint ) );
+				Assert.assertEquals( movingTilePointWithinUnitSphere, combinedErrorEllipse.testOffset( relativeMovingTileOffset ) );
 			}
 			catch ( final AssertionError e )
 			{
 				System.out.println();
-				System.out.println( "Ouch! Testing relative moving tile point " + Arrays.toString( movingTileRelativePoint ) );
+				System.out.println( "Ouch! Testing relative moving tile point " + Arrays.toString( relativeMovingTileOffset ) );
 				throw e;
 			}
 		}
@@ -1055,7 +1091,7 @@ public class SearchRadiusEstimatorTest
 				{
 					final double[] testFixedTileSearchRadiusPoint = new double[] { xFixedTileSearchRadius, yFixedTileSearchRadius };
 					final double[] testMovingTileSearchRadiusPoint = new double[] { xFixedTileSearchRadius + movingTileRelativeOffset[ 0 ], yFixedTileSearchRadius + movingTileRelativeOffset[ 1 ] };
-					if ( fixedTileSearchRadius.testPoint( testFixedTileSearchRadiusPoint ) && movingTileSearchRadius.testPoint( testMovingTileSearchRadiusPoint ) )
+					if ( fixedTileSearchRadius.testOffset( testFixedTileSearchRadiusPoint ) && movingTileSearchRadius.testOffset( testMovingTileSearchRadiusPoint ) )
 					{
 						fixedTilePointPossibleTranslation = testFixedTileSearchRadiusPoint;
 						movingTilePointPossibleTranslation = testMovingTileSearchRadiusPoint;
@@ -1076,7 +1112,7 @@ public class SearchRadiusEstimatorTest
 				movingTileRelativePoint[ d ] = fixedTile.getPosition( d ) + movingTileRelativeOffset[ d ];
 
 			// 8. Test the new relative moving tile point against the combined error ellipse and compare the result with the expected outcome
-			final boolean isPossibleOffset = ( fixedTileSearchRadius.testPoint( fixedTilePointPossibleTranslation ) && movingTileSearchRadius.testPoint( movingTilePointPossibleTranslation ) );
+			final boolean isPossibleOffset = ( fixedTileSearchRadius.testOffset( fixedTilePointPossibleTranslation ) && movingTileSearchRadius.testOffset( movingTilePointPossibleTranslation ) );
 			try
 			{
 				Assert.fail( "FIXME" );
@@ -1085,7 +1121,7 @@ public class SearchRadiusEstimatorTest
 			catch ( final AssertionError e )
 			{
 				System.out.println();
-				System.out.println( "Assertion testing relative moving tile point " + Arrays.toString( movingTileRelativePoint ) + ":  expected(movingTileSearchRadius)=" + isPossibleOffset + ", actual(combinedSearchRadius)=" + combinedSearchRadius.testPoint( movingTileRelativePoint ) );
+				System.out.println( "Assertion testing relative moving tile point " + Arrays.toString( movingTileRelativePoint ) + ":  expected(movingTileSearchRadius)=" + isPossibleOffset + ", actual(combinedSearchRadius)=" + combinedSearchRadius.testOffset( movingTileRelativePoint ) );
 
 
 				// Create a .dat file with sorted tile offsets
@@ -1304,7 +1340,7 @@ public class SearchRadiusEstimatorTest
 					final boolean[][] fixedTileSearchRadiusTest = new boolean[ ( int ) fixedTileSearchRadiusBoundingBox.dimension( 0 ) ][ ( int ) fixedTileSearchRadiusBoundingBox.dimension( 1 ) ];
 					for ( int xTest = ( int ) fixedTileSearchRadiusBoundingBox.min( 0 ); xTest <= ( int ) fixedTileSearchRadiusBoundingBox.max( 0 ); ++xTest )
 						for ( int yTest = ( int ) fixedTileSearchRadiusBoundingBox.min( 1 ); yTest <= ( int ) fixedTileSearchRadiusBoundingBox.max( 1 ); ++yTest )
-							if ( fixedTileSearchRadius.testPoint( xTest, yTest ) )
+							if ( fixedTileSearchRadius.testOffset( xTest, yTest ) )
 								fixedTileSearchRadiusTest[ xTest - fixedTileSearchRadiusBoundingBoxOffset[ 0 ] ][ yTest - fixedTileSearchRadiusBoundingBoxOffset[ 1 ] ] = true;
 					for ( int i = 0; i < fixedTileSearchRadiusTest.length; ++i )
 					{
@@ -1339,7 +1375,7 @@ public class SearchRadiusEstimatorTest
 					final boolean[][] movingTileSearchRadiusTest = new boolean[ ( int ) movingTileSearchRadiusBoundingBox.dimension( 0 ) ][ ( int ) movingTileSearchRadiusBoundingBox.dimension( 1 ) ];
 					for ( int xTest = ( int ) movingTileSearchRadiusBoundingBox.min( 0 ); xTest <= ( int ) movingTileSearchRadiusBoundingBox.max( 0 ); ++xTest )
 						for ( int yTest = ( int ) movingTileSearchRadiusBoundingBox.min( 1 ); yTest <= ( int ) movingTileSearchRadiusBoundingBox.max( 1 ); ++yTest )
-							if ( movingTileSearchRadius.testPoint( xTest, yTest ) )
+							if ( movingTileSearchRadius.testOffset( xTest, yTest ) )
 								movingTileSearchRadiusTest[ xTest - movingTileSearchRadiusBoundingBoxOffset[ 0 ] ][ yTest - movingTileSearchRadiusBoundingBoxOffset[ 1 ] ] = true;
 					for ( int i = 0; i < movingTileSearchRadiusTest.length; ++i )
 					{
@@ -1374,7 +1410,7 @@ public class SearchRadiusEstimatorTest
 					final boolean[][] combinedSearchRadiusTest = new boolean[ ( int ) combinedSearchRadiusBoundingBox.dimension( 0 ) ][ ( int ) combinedSearchRadiusBoundingBox.dimension( 1 ) ];
 					for ( int xTest = ( int ) combinedSearchRadiusBoundingBox.min( 0 ); xTest <= ( int ) combinedSearchRadiusBoundingBox.max( 0 ); ++xTest )
 						for ( int yTest = ( int ) combinedSearchRadiusBoundingBox.min( 1 ); yTest <= ( int ) combinedSearchRadiusBoundingBox.max( 1 ); ++yTest )
-							if ( combinedSearchRadius.testPoint( xTest, yTest ) )
+							if ( combinedSearchRadius.testOffset( xTest, yTest ) )
 								combinedSearchRadiusTest[ xTest - combinedSearchRadiusBoundingBoxOffset[ 0 ] ][ yTest - combinedSearchRadiusBoundingBoxOffset[ 1 ] ] = true;
 					for ( int i = 0; i < combinedSearchRadiusTest.length; ++i )
 					{
@@ -1875,7 +1911,7 @@ public class SearchRadiusEstimatorTest
 							final double[] position = new double[ indexes.length ];
 							for ( int d = 0; d < position.length; ++d )
 								position[ d ] = indexes[ d ] + fixedTileSearchRadiusBoundingBox.min( d );
-							if ( searchRadius.testPoint( position ) )
+							if ( searchRadius.testOffset( position ) )
 								fixedTileSearchRadiusTest[ indexes[ 0 ] ][ indexes[ 1 ] ][ indexes[ 2 ] ] = true;
 						},
 						( int ) Intervals.numElements( fixedTileSearchRadiusBoundingBox ) );
@@ -1935,7 +1971,7 @@ public class SearchRadiusEstimatorTest
 							final double[] position = new double[ indexes.length ];
 							for ( int d = 0; d < position.length; ++d )
 								position[ d ] = indexes[ d ] + movingTileSearchRadiusBoundingBox.min( d );
-							if ( searchRadius.testPoint( position ) )
+							if ( searchRadius.testOffset( position ) )
 								movingTileSearchRadiusTest[ indexes[ 0 ] ][ indexes[ 1 ] ][ indexes[ 2 ] ] = true;
 						},
 						( int ) Intervals.numElements( movingTileSearchRadiusBoundingBox ) );
@@ -2067,7 +2103,7 @@ public class SearchRadiusEstimatorTest
 							final double[] position = new double[ indexes.length ];
 							for ( int d = 0; d < position.length; ++d )
 								position[ d ] = indexes[ d ] + combinedCovariancesBoundingBox.min( d );
-							if ( combinedCovariances.testPoint( position ) )
+							if ( combinedCovariances.testOffset( position ) )
 								combinedCovariancesTest[ indexes[ 0 ] ][ indexes[ 1 ] ][ indexes[ 2 ] ] = true;
 						},
 						( int ) Intervals.numElements( combinedCovariancesBoundingBox ) );
@@ -2233,5 +2269,68 @@ public class SearchRadiusEstimatorTest
 		}
 
 		return new ValuePair<>( overlaps[ 0 ], overlaps[ 1 ] );
+	}
+
+	private void drawRectangle(
+			final double[][] rectCorners,
+			final PrimitiveMatrix scalingMatrix,
+			final int[] displaySize,
+			final RandomAccess< FloatType > imgRandomAccess )
+	{
+		final int dim = displaySize.length;
+		final int[][] rectDisplayCorners = new int[ 2 ][ dim ];
+		final int[] posDisplay = new int[ dim ];
+
+		for ( int i = 0; i < 2; ++i )
+		{
+			final double[] point = rectCorners[ i ];
+			for ( int d = 0; d < dim; ++d )
+				point[ d ] = i == 0 ? Math.floor( point[ d ] ) : Math.ceil( point[ d ] );
+
+			final Builder< PrimitiveMatrix > vectorBuilder = PrimitiveMatrix.FACTORY.getBuilder( dim, 1 );
+			for ( int d = 0; d < dim; ++d )
+				vectorBuilder.set( d, 0, point[ d ] );
+			final PrimitiveMatrix scaledVector = scalingMatrix.multiply( vectorBuilder.get() );
+
+			for ( int d = 0; d < dim; ++d )
+				rectDisplayCorners[ i ][ d ] = ( int ) Math.round( scaledVector.get(d, 0) ) + displaySize[ d ] / 2;
+		}
+
+		for ( int dMove = 0; dMove < dim; ++dMove )
+		{
+			final int[] fixedDimsPossibilities = new int[ dim - 1 ];
+			Arrays.fill( fixedDimsPossibilities, 2 );
+			final IntervalIterator fixedDimsPossibilitiesIterator = new IntervalIterator( fixedDimsPossibilities );
+
+			final List< Integer > fixedDims = new ArrayList<>();
+			for ( int d = 0; d < dim; ++d )
+				if ( d != dMove )
+					fixedDims.add( d );
+
+			while ( fixedDimsPossibilitiesIterator.hasNext() )
+			{
+				fixedDimsPossibilitiesIterator.fwd();
+				for ( int fixedDimIndex = 0; fixedDimIndex < fixedDims.size(); ++fixedDimIndex )
+				{
+					final int dFixed = fixedDims.get( fixedDimIndex );
+					final int minOrMax = fixedDimsPossibilitiesIterator.getIntPosition( fixedDimIndex );
+					posDisplay[ dFixed ] = rectDisplayCorners[ minOrMax ][ dFixed ];
+				}
+
+				for ( int c = rectDisplayCorners[ 0 ][ dMove ]; c <= rectDisplayCorners[ 1 ][ dMove ]; ++c )
+				{
+					posDisplay[ dMove ] = c;
+					boolean insideView = true;
+					for ( int d = 0; d < dim; ++d )
+						insideView &= ( posDisplay[ d ] >= 0 && posDisplay[ d ] < displaySize[ d ] );
+
+					if ( insideView )
+					{
+						imgRandomAccess.setPosition( posDisplay );
+						imgRandomAccess.get().set( 9 );
+					}
+				}
+			}
+		}
 	}
 }

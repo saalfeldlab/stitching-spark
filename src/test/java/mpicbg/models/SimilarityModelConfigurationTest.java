@@ -38,7 +38,7 @@ public class SimilarityModelConfigurationTest
 		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > connectedTiles = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult[] shiftMulti : shiftsMulti )
 		{
-			final int[] vals = new int[] { shiftMulti[ 0 ].getTilePair().getA().getIndex().intValue(), shiftMulti[ 0 ].getTilePair().getB().getIndex().intValue() };
+			final int[] vals = new int[] { shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex().intValue(), shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex().intValue() };
 			for ( int i = 0; i < 2; ++i )
 			{
 				if ( !connectedTiles.containsKey( vals[ i ] ) )
@@ -126,13 +126,13 @@ public class SimilarityModelConfigurationTest
 				{
 					stageOffset = new double[ shift.getNumDimensions() ];
 					for ( int d = 0; d < stageOffset.length; ++d )
-						stageOffset[ d ] = shift.getTilePair().getB().getPosition( d ) - shift.getTilePair().getA().getPosition( d );
-					System.out.println( shift.getTilePair() );
+						stageOffset[ d ] = shift.getTileBoxPair().getOriginalTilePair().getB().getPosition( d ) - shift.getTileBoxPair().getOriginalTilePair().getA().getPosition( d );
+					System.out.println( shift.getTileBoxPair() );
 				}
 				else
 				{
 					for ( int d = 0; d < stageOffset.length; ++d )
-						if ( Math.abs( stageOffset[ d ] - shift.getTilePair().getB().getPosition( d ) - shift.getTilePair().getA().getPosition( d ) ) > 1e10 )
+						if ( Math.abs( stageOffset[ d ] - shift.getTileBoxPair().getOriginalTilePair().getB().getPosition( d ) - shift.getTileBoxPair().getOriginalTilePair().getA().getPosition( d ) ) > 1e10 )
 							throw new RuntimeException( "inconsistent tile configuration" );
 				}
 
@@ -199,7 +199,7 @@ public class SimilarityModelConfigurationTest
 			for ( int d = 0; d < diff.length; ++d )
 				diff[ d ] = stageOffset[ d ] - stitchedOffset[ d ];
 
-			System.out.println( connectedTiles.get( ind1 ).get( ind2 )[ 0 ].getTilePair() + ": stage vs. stitched offset = " + Arrays.toString( diff ) );
+			System.out.println( connectedTiles.get( ind1 ).get( ind2 )[ 0 ].getTileBoxPair() + ": stage vs. stitched offset = " + Arrays.toString( diff ) );
 		}
 
 		// save stitched square configuration to .json file
