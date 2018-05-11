@@ -14,6 +14,7 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
+@Deprecated
 public class GroupTilesByTimestamp
 {
 	public static void main( final String[] args ) throws Exception
@@ -51,7 +52,7 @@ public class GroupTilesByTimestamp
 				groupTileIndexes.add( tile.getIndex() );
 			final List< SerializablePairWiseStitchingResult > groupShifts = new ArrayList<>();
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
-				if ( groupTileIndexes.contains( shift.getTilePair().getA().getIndex() ) && groupTileIndexes.contains( shift.getTilePair().getB().getIndex() ) )
+				if ( groupTileIndexes.contains( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ) && groupTileIndexes.contains( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ) )
 					groupShifts.add( shift );
 
 			final String groupSuffix = "_group" + i;

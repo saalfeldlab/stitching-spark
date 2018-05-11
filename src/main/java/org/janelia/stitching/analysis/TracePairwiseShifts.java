@@ -16,6 +16,7 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
+@Deprecated
 public class TracePairwiseShifts
 {
 	public static void main( final String[] args ) throws Exception
@@ -50,7 +51,7 @@ public class TracePairwiseShifts
 		final PrintWriter writer = new PrintWriter(outFilepath, "UTF-8");
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			final TileInfo[] tilePair = shift.getTilePair().toArray();
+			final TileInfo[] tilePair = shift.getTileBoxPair().getOriginalTilePair().toArray();
 
 			if ( tilePair[ 0 ].getIndex() > tilePair[ 1 ].getIndex() )
 				System.out.println( "Indices are unsorted" );

@@ -21,6 +21,7 @@ import ij.ImagePlus;
 import ij.plugin.ZProjector;
 import net.imglib2.multithreading.SimpleMultiThreading;
 
+@Deprecated
 public class TilesCoverage
 {
 	public static void main( final String[] args ) throws Exception
@@ -82,7 +83,7 @@ public class TilesCoverage
 		final Map< Integer, TileInfo > uncoveredTiles = new TreeMap<>( tilesMap );
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( shift.getIsValidOverlap() )
-				for ( final TileInfo tile : shift.getTilePair().toArray() )
+				for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 					uncoveredTiles.remove( tile.getIndex() );
 		return uncoveredTiles;
 	}
@@ -91,7 +92,7 @@ public class TilesCoverage
 		final Map< Integer, TileInfo > remainingTiles = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( shift.getIsValidOverlap() )
-				for ( final TileInfo tile : shift.getTilePair().toArray() )
+				for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 					remainingTiles.put( tile.getIndex(), tile );
 		return remainingTiles;
 	}

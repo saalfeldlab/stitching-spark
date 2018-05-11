@@ -15,6 +15,7 @@ import org.janelia.stitching.Utils;
 
 import net.imglib2.util.Pair;
 
+@Deprecated
 public class FilterPairwiseShifts
 {
 	// TODO: Add flexibility. Currently hardcoded for Z
@@ -33,7 +34,7 @@ public class FilterPairwiseShifts
 		for ( final Iterator< SerializablePairWiseStitchingResult > it = shifts.iterator(); it.hasNext(); )
 		{
 			final SerializablePairWiseStitchingResult shift = it.next();
-			if ( tileIndexToCoordinates.get( shift.getTilePair().getA().getIndex() )[ 2 ] - tileIndexToCoordinates.get( shift.getTilePair().getB().getIndex() )[ 2 ] != 0 )
+			if ( tileIndexToCoordinates.get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() )[ 2 ] - tileIndexToCoordinates.get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() )[ 2 ] != 0 )
 				it.remove();
 		}
 		final int sizeAfter = shifts.size();

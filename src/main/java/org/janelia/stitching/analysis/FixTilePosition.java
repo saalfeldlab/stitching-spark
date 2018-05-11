@@ -12,6 +12,7 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
+@Deprecated
 public class FixTilePosition
 {
 	public static void main( final String[] args ) throws Exception
@@ -35,7 +36,7 @@ public class FixTilePosition
 			final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( Utils.addFilenameSuffix( args[ 0 ], "_pairwise" ) ) ) );
 			final List< SerializablePairWiseStitchingResult > fixedShifts = new ArrayList<>();
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
-				if ( shift.getTilePair().getA().getIndex() != tileIndex && shift.getTilePair().getB().getIndex() != tileIndex )
+				if ( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() != tileIndex && shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() != tileIndex )
 					fixedShifts.add( shift );
 			TileInfoJSONProvider.savePairwiseShifts( fixedShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( outFilename, "_pairwise" ) ) ) );
 		}

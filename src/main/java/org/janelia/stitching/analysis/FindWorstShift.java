@@ -22,6 +22,7 @@ import org.janelia.stitching.Utils;
  * @author Igor Pisarev
  */
 
+@Deprecated
 public class FindWorstShift
 {
 	public static void main( final String[] args ) throws Exception
@@ -38,7 +39,7 @@ public class FindWorstShift
 				continue;
 
 			validShiftsCount++;
-			final TilePair pair = shift.getTilePair();
+			final TilePair pair = shift.getTileBoxPair().getOriginalTilePair();
 			final double dist[] = new double[ shift.getNumDimensions() ];
 
 			for ( int d = 0; d < shift.getNumDimensions(); d++ )

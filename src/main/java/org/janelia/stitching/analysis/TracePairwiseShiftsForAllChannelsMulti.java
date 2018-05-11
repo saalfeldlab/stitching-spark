@@ -16,6 +16,7 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
+@Deprecated
 public class TracePairwiseShiftsForAllChannelsMulti
 {
 	public static void main( final String[] args ) throws Exception
@@ -63,15 +64,15 @@ public class TracePairwiseShiftsForAllChannelsMulti
 		final PrintWriter writer = new PrintWriter(outFilepath, "UTF-8");
 		for ( int ind = 0; ind < shiftsForCombinedChannels.size(); ind++ )
 		{
-			if ( shiftsForCombinedChannels.get( ind )[0].getTilePair().getA().getIndex().intValue() != shifts[ 0 ].get( ind )[0].getTilePair().getA().getIndex().intValue() ||
-					shiftsForCombinedChannels.get( ind )[0].getTilePair().getB().getIndex().intValue() != shifts[ 0 ].get( ind )[0].getTilePair().getB().getIndex().intValue() ||
-					tilesPerChannel+shiftsForCombinedChannels.get( ind )[0].getTilePair().getA().getIndex().intValue() != shifts[ 1 ].get( ind )[0].getTilePair().getA().getIndex().intValue() ||
-					tilesPerChannel+shiftsForCombinedChannels.get( ind )[0].getTilePair().getB().getIndex().intValue() != shifts[ 1 ].get( ind )[0].getTilePair().getB().getIndex().intValue() )
+			if ( shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getA().getIndex().intValue() != shifts[ 0 ].get( ind )[0].getTileBoxPair().getOriginalTilePair().getA().getIndex().intValue() ||
+					shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getB().getIndex().intValue() != shifts[ 0 ].get( ind )[0].getTileBoxPair().getOriginalTilePair().getB().getIndex().intValue() ||
+					tilesPerChannel+shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getA().getIndex().intValue() != shifts[ 1 ].get( ind )[0].getTileBoxPair().getOriginalTilePair().getA().getIndex().intValue() ||
+					tilesPerChannel+shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getB().getIndex().intValue() != shifts[ 1 ].get( ind )[0].getTileBoxPair().getOriginalTilePair().getB().getIndex().intValue() )
 			{
-				throw new Exception( "Tile indices don't match: ch0=("+shifts[0].get( ind )[0].getTilePair().getA().getIndex()+","+shifts[0].get( ind )[0].getTilePair().getB().getIndex()+"), ch1=("+
-						shifts[1].get( ind )[0].getTilePair().getA().getIndex()+","+shifts[1].get( ind )[0].getTilePair().getB().getIndex()+"), combined="+
-						shiftsForCombinedChannels.get( ind )[0].getTilePair().getA().getIndex()+","+shiftsForCombinedChannels.get( ind )[0].getTilePair().getB().getIndex()+"), combined sum="+
-						(tilesPerChannel+shiftsForCombinedChannels.get( ind )[0].getTilePair().getA().getIndex())+","+(tilesPerChannel+shiftsForCombinedChannels.get( ind )[0].getTilePair().getB().getIndex())+")");
+				throw new Exception( "Tile indices don't match: ch0=("+shifts[0].get( ind )[0].getTileBoxPair().getOriginalTilePair().getA().getIndex()+","+shifts[0].get( ind )[0].getTileBoxPair().getOriginalTilePair().getB().getIndex()+"), ch1=("+
+						shifts[1].get( ind )[0].getTileBoxPair().getOriginalTilePair().getA().getIndex()+","+shifts[1].get( ind )[0].getTileBoxPair().getOriginalTilePair().getB().getIndex()+"), combined="+
+						shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getA().getIndex()+","+shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getB().getIndex()+"), combined sum="+
+						(tilesPerChannel+shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getA().getIndex())+","+(tilesPerChannel+shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getB().getIndex())+")");
 			}
 
 			if ( !shiftsForCombinedChannels.get( ind )[0].getIsValidOverlap() )
@@ -80,8 +81,8 @@ public class TracePairwiseShiftsForAllChannelsMulti
 			valid++;
 
 			// append final coordinates
-			if ( !channelsFinalMap[0].containsKey( shiftsForCombinedChannels.get( ind )[0].getTilePair().getA().getIndex() ) ||
-					!channelsFinalMap[0].containsKey( shiftsForCombinedChannels.get( ind )[0].getTilePair().getB().getIndex() ) )
+			if ( !channelsFinalMap[0].containsKey( shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getA().getIndex() ) ||
+					!channelsFinalMap[0].containsKey( shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getB().getIndex() ) )
 			{
 				continue;
 			}
@@ -89,9 +90,9 @@ public class TracePairwiseShiftsForAllChannelsMulti
 			columns = 0;
 			finalPairs++;
 
-			final TileInfo[] ch0TilePair = shifts[ 0 ].get( ind )[0].getTilePair().toArray();
-			final TileInfo[] ch1TilePair = shifts[ 1 ].get( ind )[0].getTilePair().toArray();
-			final TileInfo[] combinedTilePair = shiftsForCombinedChannels.get( ind )[0].getTilePair().toArray();
+			final TileInfo[] ch0TilePair = shifts[ 0 ].get( ind )[0].getTileBoxPair().getOriginalTilePair().toArray();
+			final TileInfo[] ch1TilePair = shifts[ 1 ].get( ind )[0].getTileBoxPair().getOriginalTilePair().toArray();
+			final TileInfo[] combinedTilePair = shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().toArray();
 
 			String outputLine = "";
 			outputLine += combinedTilePair[ 0 ].getPosition(0)+" "+combinedTilePair[ 0 ].getPosition(1)+" "+combinedTilePair[ 0 ].getPosition(2)+" ";
@@ -99,8 +100,8 @@ public class TracePairwiseShiftsForAllChannelsMulti
 			columns+=6;
 
 
-			final TileInfo t1 = channelsFinalMap[0].get( shiftsForCombinedChannels.get( ind )[0].getTilePair().getA().getIndex() );
-			final TileInfo t2 = channelsFinalMap[0].get( shiftsForCombinedChannels.get( ind )[0].getTilePair().getB().getIndex() );
+			final TileInfo t1 = channelsFinalMap[0].get( shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getA().getIndex() );
+			final TileInfo t2 = channelsFinalMap[0].get( shiftsForCombinedChannels.get( ind )[0].getTileBoxPair().getOriginalTilePair().getB().getIndex() );
 			outputLine += t1.getPosition( 0 ) + " " + t1.getPosition( 1 ) + " " + t1.getPosition( 2 ) + " ";
 			outputLine += t2.getPosition( 0 ) + " " + t2.getPosition( 1 ) + " " + t2.getPosition( 2 ) + " ";
 			columns+=6;

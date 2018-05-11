@@ -10,6 +10,7 @@ import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
+@Deprecated
 public class MarkValidShiftsMulti
 {
 	public static void main( final String[] args ) throws Exception
@@ -43,8 +44,8 @@ public class MarkValidShiftsMulti
 		valid = 0;
 		for ( final SerializablePairWiseStitchingResult[] shiftMulti : shiftsMulti )
 		{
-			final int ind1 = Math.min( shiftMulti[ 0 ].getTilePair().getA().getIndex(), shiftMulti[ 0 ].getTilePair().getB().getIndex() );
-			final int ind2 = Math.max( shiftMulti[ 0 ].getTilePair().getA().getIndex(), shiftMulti[ 0 ].getTilePair().getB().getIndex() );
+			final int ind1 = Math.min( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex(), shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() );
+			final int ind2 = Math.max( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex(), shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() );
 
 			final boolean validShift = ( shiftsFinalValidMap.containsKey( ind1 ) && shiftsFinalValidMap.get( ind1 ).containsKey( ind2 ) );
 			if ( validShift )

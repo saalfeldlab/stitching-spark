@@ -12,6 +12,7 @@ import org.janelia.stitching.Utils;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 
+@Deprecated
 public class FilterOutliers
 {
 	static double dist(final double[] a)
@@ -38,7 +39,7 @@ public class FilterOutliers
 			final double[] diff = new double[ 3 ];
 
 			for ( int d = 0; d < 3; d++ )
-				diff[d] = (shifts.get(i).getTilePair().getB().getPosition( d ) - shifts.get(i).getTilePair().getA().getPosition( d )) - shifts.get(i).getOffset( d );
+				diff[d] = (shifts.get(i).getTileBoxPair().getOriginalTilePair().getB().getPosition( d ) - shifts.get(i).getTileBoxPair().getOriginalTilePair().getA().getPosition( d )) - shifts.get(i).getOffset( d );
 
 			if ( dist(diff) <= 40 && shifts.get(i).getCrossCorrelation() >= 0.75 )
 			{
@@ -79,7 +80,7 @@ public class FilterOutliers
 
 			for ( int j = 0; j < 2; j++ )
 				for ( int d = 0; d < 3; d++ )
-					diff[j][d] = (shifts[j].get(i).getTilePair().getB().getPosition( d ) - shifts[j].get(i).getTilePair().getA().getPosition( d )) - shifts[j].get(i).getOffset( d );
+					diff[j][d] = (shifts[j].get(i).getTileBoxPair().getOriginalTilePair().getB().getPosition( d ) - shifts[j].get(i).getTileBoxPair().getOriginalTilePair().getA().getPosition( d )) - shifts[j].get(i).getOffset( d );
 
 			//matches.add( new PairwiseShiftPointMatch( shift, new Point( dist ), zero ) );
 

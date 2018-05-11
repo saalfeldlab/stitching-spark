@@ -17,6 +17,7 @@ import org.janelia.stitching.Utils;
  * @author Igor Pisarev
  */
 
+@Deprecated
 public class RenamePairwise
 {
 	public static void main( final String[] args ) throws Exception
@@ -29,16 +30,16 @@ public class RenamePairwise
 		final Set< Integer > validation = new HashSet<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			validation.add( shift.getTilePair().getA().getIndex() );
-			validation.add( shift.getTilePair().getB().getIndex() );
+			validation.add( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() );
+			validation.add( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() );
 		}
 		if ( tilesMap.size() != validation.size() )
 			throw new Exception( "Different sets of tiles" );
 
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			shift.getTilePair().getA().setFilePath( tilesMap.get( shift.getTilePair().getA().getIndex() ).getFilePath() );
-			shift.getTilePair().getB().setFilePath( tilesMap.get( shift.getTilePair().getB().getIndex() ).getFilePath() );
+			shift.getTileBoxPair().getOriginalTilePair().getA().setFilePath( tilesMap.get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getFilePath() );
+			shift.getTileBoxPair().getOriginalTilePair().getB().setFilePath( tilesMap.get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getFilePath() );
 		}
 
 		TileInfoJSONProvider.savePairwiseShifts( shifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 1 ], "_renamed" ) ) ) );

@@ -37,6 +37,7 @@ import net.imglib2.util.ComparablePair;
  * @author Igor Pisarev
  */
 
+@Deprecated
 public class ThresholdEstimation
 {
 
@@ -50,6 +51,7 @@ public class ThresholdEstimation
 	}
 
 
+	@Deprecated
 	public static double findOptimalThreshold( final List< SerializablePairWiseStitchingResult > shifts )
 	{
 		shifts.sort( new CrossCorrelationComparatorDesc() );
@@ -57,7 +59,7 @@ public class ThresholdEstimation
 		final TreeSet< Integer > uncoveredTiles = new TreeSet<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( shift.getIsValidOverlap() )
-				for ( final TileInfo tile : shift.getTilePair().toArray() )
+				for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 					uncoveredTiles.add( tile.getIndex() );
 
 		double threshold = 1.;
@@ -66,7 +68,7 @@ public class ThresholdEstimation
 			if ( !shift.getIsValidOverlap() )
 				continue;
 
-			for ( final TileInfo tile : shift.getTilePair().toArray() )
+			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 				uncoveredTiles.remove( tile.getIndex() );
 
 			if ( uncoveredTiles.isEmpty() )
@@ -80,20 +82,21 @@ public class ThresholdEstimation
 	}
 
 
+	@Deprecated
 	public static ComparablePair< Double, Integer > findOptimalThresholdWithIndex( final List< SerializablePairWiseStitchingResult > shifts )
 	{
 		shifts.sort( new CrossCorrelationComparatorDesc() );
 
 		final TreeSet< Integer > uncoveredTiles = new TreeSet<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : shift.getTilePair().toArray() )
+			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 				uncoveredTiles.add( tile.getIndex() );
 
 		double threshold = 1.;
 		int index = shifts.size();
 		for ( int i = 0; i < shifts.size(); i++ )
 		{
-			for ( final TileInfo tile : shifts.get( i ).getTilePair().toArray() )
+			for ( final TileInfo tile : shifts.get( i ).getTileBoxPair().getOriginalTilePair().toArray() )
 				uncoveredTiles.remove( tile.getIndex() );
 
 			if ( uncoveredTiles.isEmpty() )
@@ -123,12 +126,13 @@ public class ThresholdEstimation
 	}
 
 
+	@Deprecated
 	public static TreeMap< Integer, SerializablePairWiseStitchingResult > getTilesHighestCorrelationWithPair( final List< SerializablePairWiseStitchingResult > shifts )
 	{
 		// shifts are already sorted
 		final TreeMap< Integer, SerializablePairWiseStitchingResult > ret = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : shift.getTilePair().toArray() )
+			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 				if ( !ret.containsKey( tile.getIndex() ) )
 					ret.put( tile.getIndex(), shift );
 		return ret;
@@ -189,12 +193,13 @@ public class ThresholdEstimation
 
 
 
+	@Deprecated
 	public static TreeMap< Integer, Double > getTilesHighestCorrelation( final List< SerializablePairWiseStitchingResult > shifts )
 	{
 		// shifts are already sorted
 		final TreeMap< Integer, Double > ret = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : shift.getTilePair().toArray() )
+			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 				if ( !ret.containsKey( tile.getIndex() ) )
 					ret.put( tile.getIndex(), ( double ) shift.getCrossCorrelation() );
 		return ret;

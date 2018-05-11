@@ -24,6 +24,7 @@ import org.janelia.stitching.TileOperations;
  * @author Igor Pisarev
  */
 
+@Deprecated
 public class NonOverlappingShifts
 {
 	public static void main( final String[] args ) throws Exception
@@ -40,8 +41,8 @@ public class NonOverlappingShifts
 		final List< SerializablePairWiseStitchingResult> badShifts = new ArrayList<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			final TileInfo t1 = shift.getTilePair().getA().clone();
-			final TileInfo t2 = shift.getTilePair().getB().clone();
+			final TileInfo t1 = shift.getTileBoxPair().getOriginalTilePair().getA().clone();
+			final TileInfo t2 = shift.getTileBoxPair().getOriginalTilePair().getB().clone();
 
 			if ( !TileOperations.overlap( t1, t2 ) )
 				throw new Exception( "impossible" );
@@ -63,7 +64,7 @@ public class NonOverlappingShifts
 		final TreeMap< Integer, Integer > tilesToMistakes = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult badShift : badShifts )
 		{
-			for ( final TileInfo tile : badShift.getTilePair().toArray() )
+			for ( final TileInfo tile : badShift.getTileBoxPair().getOriginalTilePair().toArray() )
 			{
 				if ( !tilesToMistakes.containsKey( tile.getIndex() ) )
 					tilesToMistakes.put( tile.getIndex(), 0 );

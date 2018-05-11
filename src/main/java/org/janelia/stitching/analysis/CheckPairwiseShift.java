@@ -11,6 +11,7 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
 
+@Deprecated
 public class CheckPairwiseShift
 {
 	public static void main( final String[] args ) throws FileNotFoundException, IOException
@@ -24,8 +25,8 @@ public class CheckPairwiseShift
 
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			final int ind1 = Math.min( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
-			final int ind2 = Math.max( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
+			final int ind1 = Math.min( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() );
+			final int ind2 = Math.max( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() );
 
 			if ( i1 == ind1 && i2 == ind2 )
 			{

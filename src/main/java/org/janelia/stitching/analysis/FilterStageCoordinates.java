@@ -16,6 +16,7 @@ import org.janelia.stitching.Utils;
 import net.imglib2.util.Pair;
 
 // TODO: add flexibility
+@Deprecated
 public class FilterStageCoordinates
 {
 	// For extracting Z sections
@@ -47,7 +48,7 @@ public class FilterStageCoordinates
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
 			{
 				boolean desired = true;
-				for ( final TileInfo tile : shift.getTilePair().toArray() )
+				for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 					if ( tileIndexToCoord.get( tile.getIndex() )[ d ] != z )
 						desired = false;
 

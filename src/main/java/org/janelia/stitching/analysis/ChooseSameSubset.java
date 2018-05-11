@@ -11,6 +11,7 @@ import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
+@Deprecated
 public class ChooseSameSubset {
 
 	public static void main( final String[] args ) throws Exception
@@ -28,8 +29,8 @@ public class ChooseSameSubset {
 			{
 				totalCount++;
 
-				final int ind1 = Math.min(shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex());
-				final int ind2 = Math.max(shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex());
+				final int ind1 = Math.min(shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex());
+				final int ind2 = Math.max(shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex());
 
 				if ( !subsetShiftsMap.containsKey(ind1) || !subsetShiftsMap.get(ind1).containsKey(ind2))
 				{

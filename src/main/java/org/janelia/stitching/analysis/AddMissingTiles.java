@@ -26,6 +26,7 @@ import mpicbg.models.Tile;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
 
+@Deprecated
 public class AddMissingTiles
 {
 	public static void main( final String[] args ) throws Exception
@@ -66,12 +67,12 @@ public class AddMissingTiles
 		final List< TilePair > missingPairs = new ArrayList<>();
 		for ( final SerializablePairWiseStitchingResult[] shiftMulti : shiftsMulti )
 		{
-			for ( final TileInfo tileInfo : shiftMulti[ 0 ].getTilePair().toArray() )
+			for ( final TileInfo tileInfo : shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray() )
 			{
 				if ( missingTilesInfo.containsKey( tileInfo.getIndex() ) )
 				{
 					missingPairwiseShiftsMulti.add( shiftMulti );
-					missingPairs.add( shiftMulti[ 0 ].getTilePair() );
+					missingPairs.add( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair() );
 					break;
 				}
 			}
@@ -92,7 +93,7 @@ public class AddMissingTiles
 		final TreeMap< Integer, Tile< ? > > tiles = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult[] shiftMulti : shiftsMulti )
 		{
-			for ( final TileInfo tileInfo : shiftMulti[ 0 ].getTilePair().toArray() )
+			for ( final TileInfo tileInfo : shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray() )
 			{
 				if ( !tiles.containsKey( tileInfo.getIndex() ) )
 				{
@@ -128,18 +129,18 @@ public class AddMissingTiles
 				continue;
 
 			// It could be the case that the pairwise shift is valid, but some of the tiles have formed a separate small graph and therefore have been thrown out
-			if ( !tilesInfoFinal.containsKey( shiftMulti[ 0 ].getTilePair().getA().getIndex() ) || !tilesInfoFinal.containsKey( shiftMulti[ 0 ].getTilePair().getB().getIndex() ) )
+			if ( !tilesInfoFinal.containsKey( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex() ) || !tilesInfoFinal.containsKey( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() ) )
 				continue;
 
 			final Tile[] tilePair = new Tile[ 2 ];
 			for ( int j = 0; j < 2; j++ )
-				tilePair[ j ] = tiles.get( shiftMulti[ 0 ].getTilePair().toArray()[ j ].getIndex() );
+				tilePair[ j ] = tiles.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray()[ j ].getIndex() );
 
 			final Point[] points = new Point[ 2 ];
-			points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ] );
-			final double[] offset = new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ];
+			points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ] );
+			final double[] offset = new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ];
 			for ( int d = 0; d < offset.length; d++ )
-				offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getB().getIndex() ).getPosition( d );
+				offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getPosition( d );
 			points[ 1 ] = new Point( offset );
 
 			for ( int j = 0; j < 2; j++ )
@@ -159,8 +160,8 @@ public class AddMissingTiles
 				possibleMatches.put( key, new ArrayList<>() );
 			for ( final SerializablePairWiseStitchingResult[] shiftMulti : missingAdjacentPairwiseShiftsMulti )
 				for ( int j = 0; j < 2; j++ )
-					if ( tilesInfoFinal.containsKey( shiftMulti[ 0 ].getTilePair().toArray()[ j ].getIndex() ) )
-						possibleMatches.get( shiftMulti[ 0 ].getTilePair().toArray()[ ( j + 1 ) % 2 ].getIndex() ).add( shiftMulti );
+					if ( tilesInfoFinal.containsKey( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray()[ j ].getIndex() ) )
+						possibleMatches.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray()[ ( j + 1 ) % 2 ].getIndex() ).add( shiftMulti );
 
 			// Choose the missing tile which has the largest number of matches with the fixed tiles set
 			int maxMatchesTileIndex = -1;
@@ -179,7 +180,7 @@ public class AddMissingTiles
 				for ( final SerializablePairWiseStitchingResult[] shiftMulti : missingAdjacentPairwiseShiftsMulti )
 				{
 					boolean found = true;
-					for ( final TileInfo key : shiftMulti[ 0 ].getTilePair().toArray() )
+					for ( final TileInfo key : shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray() )
 						if ( !missingTilesInfo.containsKey( key.getIndex() ) || possibleMatches.get( key.getIndex() ).isEmpty() )
 							found = false;
 
@@ -194,7 +195,7 @@ public class AddMissingTiles
 				{
 					System.out.println( "Found a pair of tiles that forms a 3 matches set" );
 
-					final TileInfo[] tilePairInfoToAdd = shiftMultiPairToAdd[ 0 ].getTilePair().toArray();
+					final TileInfo[] tilePairInfoToAdd = shiftMultiPairToAdd[ 0 ].getTileBoxPair().getOriginalTilePair().toArray();
 
 					// Add new tile to the configuration set
 					final Tile< ? >[] tilePairToAdd = new Tile[ 2 ];
@@ -251,11 +252,11 @@ public class AddMissingTiles
 
 							final Tile[] tilePair = new Tile[ 2 ];
 							for ( int j = 0; j < 2; j++ )
-								tilePair[ j ] = tiles.get( shift.getTilePair().toArray()[ j ].getIndex() );
+								tilePair[ j ] = tiles.get( shift.getTileBoxPair().getOriginalTilePair().toArray()[ j ].getIndex() );
 
 							final Point[] points = new Point[ 2 ];
-							points[ 0 ] = new Point( new double[ shift.getTilePair().getA().numDimensions() ] );
-							final double[] offset = new double[ shift.getTilePair().getA().numDimensions() ];
+							points[ 0 ] = new Point( new double[ shift.getTileBoxPair().getOriginalTilePair().getA().numDimensions() ] );
+							final double[] offset = new double[ shift.getTileBoxPair().getOriginalTilePair().getA().numDimensions() ];
 							for ( int d = 0; d < offset.length; d++ )
 								offset[ d ] = -shift.getOffset( d );
 							points[ 1 ] = new Point( offset );
@@ -355,13 +356,13 @@ public class AddMissingTiles
 						{
 							final Tile[] tilePair = new Tile[ 2 ];
 							for ( int j = 0; j < 2; j++ )
-								tilePair[ j ] = tiles.get( shiftMulti[ 0 ].getTilePair().toArray()[ j ].getIndex() );
+								tilePair[ j ] = tiles.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray()[ j ].getIndex() );
 
 							final Point[] points = new Point[ 2 ];
-							points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ] );
-							final double[] offset = new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ];
+							points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ] );
+							final double[] offset = new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ];
 							for ( int d = 0; d < offset.length; d++ )
-								offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getB().getIndex() ).getPosition( d );
+								offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getPosition( d );
 							points[ 1 ] = new Point( offset );
 
 							for ( int j = 0; j < 2; j++ )
@@ -377,7 +378,7 @@ public class AddMissingTiles
 						for ( final TileInfo tileInfoToAdd : tilePairInfoToAdd )
 							for ( final SerializablePairWiseStitchingResult[] shiftMulti : missingAdjacentPairwiseShiftsMulti )
 								for ( int j = 0; j < 2; j++ )
-									if ( shiftMulti[ 0 ].getTilePair().toArray()[ j ].getIndex().intValue() == tileInfoToAdd.getIndex().intValue() )
+									if ( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray()[ j ].getIndex().intValue() == tileInfoToAdd.getIndex().intValue() )
 										shiftsMultiToRemove.add( shiftMulti );
 						missingAdjacentPairwiseShiftsMulti.removeAll( shiftsMultiToRemove );
 					}
@@ -447,11 +448,11 @@ public class AddMissingTiles
 
 						final Tile[] tilePair = new Tile[ 2 ];
 						for ( int j = 0; j < 2; j++ )
-							tilePair[ j ] = tiles.get( shift.getTilePair().toArray()[ j ].getIndex() );
+							tilePair[ j ] = tiles.get( shift.getTileBoxPair().getOriginalTilePair().toArray()[ j ].getIndex() );
 
 						final Point[] points = new Point[ 2 ];
-						points[ 0 ] = new Point( new double[ shift.getTilePair().getA().numDimensions() ] );
-						final double[] offset = new double[ shift.getTilePair().getA().numDimensions() ];
+						points[ 0 ] = new Point( new double[ shift.getTileBoxPair().getOriginalTilePair().getA().numDimensions() ] );
+						final double[] offset = new double[ shift.getTileBoxPair().getOriginalTilePair().getA().numDimensions() ];
 						for ( int d = 0; d < offset.length; d++ )
 							offset[ d ] = -shift.getOffset( d );
 						points[ 1 ] = new Point( offset );
@@ -530,13 +531,13 @@ public class AddMissingTiles
 				{
 					final Tile[] tilePair = new Tile[ 2 ];
 					for ( int j = 0; j < 2; j++ )
-						tilePair[ j ] = tiles.get( shiftMulti[ 0 ].getTilePair().toArray()[ j ].getIndex() );
+						tilePair[ j ] = tiles.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray()[ j ].getIndex() );
 
 					final Point[] points = new Point[ 2 ];
-					points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ] );
-					final double[] offset = new double[ shiftMulti[ 0 ].getTilePair().getA().numDimensions() ];
+					points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ] );
+					final double[] offset = new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ];
 					for ( int d = 0; d < offset.length; d++ )
-						offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTilePair().getB().getIndex() ).getPosition( d );
+						offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getPosition( d );
 					points[ 1 ] = new Point( offset );
 
 					for ( int j = 0; j < 2; j++ )
@@ -551,7 +552,7 @@ public class AddMissingTiles
 				final Set< SerializablePairWiseStitchingResult[] > shiftsMultiToRemove = new HashSet<>();
 				for ( final SerializablePairWiseStitchingResult[] shiftMulti : missingAdjacentPairwiseShiftsMulti )
 					for ( int j = 0; j < 2; j++ )
-						if ( shiftMulti[ 0 ].getTilePair().toArray()[ j ].getIndex().intValue() == tileInfoToAdd.getIndex().intValue() )
+						if ( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray()[ j ].getIndex().intValue() == tileInfoToAdd.getIndex().intValue() )
 							shiftsMultiToRemove.add( shiftMulti );
 				missingAdjacentPairwiseShiftsMulti.removeAll( shiftsMultiToRemove );
 			}

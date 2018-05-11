@@ -27,6 +27,7 @@ import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
 import mpicbg.stitching.TileConfigurationStitching;
 
+@Deprecated
 public class AddMissingTilesMultichannel
 {
 	public static void main( final String[] args ) throws Exception
@@ -63,12 +64,12 @@ public class AddMissingTilesMultichannel
 			final List< TilePair > missingPairs = new ArrayList<>();
 			for ( final SerializablePairWiseStitchingResult shift : shifts[ ch ] )
 			{
-				for ( final TileInfo tile : shift.getTilePair().toArray() )
+				for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 				{
 					if ( missingTiles[ ch ].containsKey( tile.getIndex() ) )
 					{
 						missingPairwiseShifts.add( shift );
-						missingPairs.add( shift.getTilePair() );
+						missingPairs.add( shift.getTileBoxPair().getOriginalTilePair() );
 						break;
 					}
 				}
@@ -93,7 +94,7 @@ public class AddMissingTilesMultichannel
 		{
 			for ( final SerializablePairWiseStitchingResult shift : shifts[ ch ] )
 			{
-				for ( final TileInfo tile : shift.getTilePair().toArray() )
+				for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 				{
 					if ( !fakeTileImages.containsKey( tile.getIndex() ) )
 					{
@@ -125,18 +126,18 @@ public class AddMissingTilesMultichannel
 			for ( final SerializablePairWiseStitchingResult shift : shifts[ ch ] )
 			{
 				if ( !shift.getIsValidOverlap() ||
-						( !tilesFinal[ ch ].containsKey( shift.getTilePair().getA().getIndex() ) || !tilesFinal[ ch ].containsKey( shift.getTilePair().getB().getIndex() ) ) )
+						( !tilesFinal[ ch ].containsKey( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ) || !tilesFinal[ ch ].containsKey( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ) ) )
 					continue;
 
 				final Tile[] tilePair = new Tile[ 2 ];
 				for ( int j = 0; j < 2; j++ )
-					tilePair[ j ] = fakeTileImages.get( shift.getTilePair().toArray()[ j ].getIndex() );
+					tilePair[ j ] = fakeTileImages.get( shift.getTileBoxPair().getOriginalTilePair().toArray()[ j ].getIndex() );
 
 				final Point[] points = new Point[ 2 ];
-				points[ 0 ] = new Point( new double[ shift.getTilePair().getA().numDimensions() ] );
-				final double[] offset = new double[ shift.getTilePair().getA().numDimensions() ];
+				points[ 0 ] = new Point( new double[ shift.getTileBoxPair().getOriginalTilePair().getA().numDimensions() ] );
+				final double[] offset = new double[ shift.getTileBoxPair().getOriginalTilePair().getA().numDimensions() ];
 				for ( int d = 0; d < offset.length; d++ )
-					offset[ d ] = tilesFinal[ ch ].get( shift.getTilePair().getB().getIndex() ).getPosition( d ) - tilesFinal[ ch ].get( shift.getTilePair().getA().getIndex() ).getPosition( d );
+					offset[ d ] = tilesFinal[ ch ].get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getPosition( d ) - tilesFinal[ ch ].get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getPosition( d );
 				points[ 1 ] = new Point( offset );
 
 				for ( int j = 0; j < 2; j++ )

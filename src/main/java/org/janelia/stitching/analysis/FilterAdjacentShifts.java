@@ -31,6 +31,7 @@ import net.imglib2.util.ValuePair;
 
 public class FilterAdjacentShifts
 {
+	@Deprecated
 	public static void main( final String[] args ) throws Exception
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
@@ -114,12 +115,12 @@ public class FilterAdjacentShifts
 			validShifts++;
 			shift.setIsValidOverlap( false );
 
-			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( shift.getTilePair().getA(), shift.getTilePair().getB() );
+			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( shift.getTileBoxPair().getOriginalTilePair().getA(), shift.getTileBoxPair().getOriginalTilePair().getB() );
 
 			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
 			{
-				final int maxPossibleOverlap = ( int ) Math.min( shift.getTilePair().getA().getSize( d ), shift.getTilePair().getB().getSize( d ) );
+				final int maxPossibleOverlap = ( int ) Math.min( shift.getTileBoxPair().getOriginalTilePair().getA().getSize( d ), shift.getTileBoxPair().getOriginalTilePair().getB().getSize( d ) );
 				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
 					shortEdges[d] = true;
 			}
@@ -133,8 +134,8 @@ public class FilterAdjacentShifts
 					)
 				continue;
 
-			final int ind1 = Math.min( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
-			final int ind2 = Math.max( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
+			final int ind1 = Math.min( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() );
+			final int ind2 = Math.max( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() );
 			if ( !validation.containsKey( ind1 ) )
 				validation.put( ind1, new HashSet<>() );
 			validation.get( ind1 ).add( ind2 );
@@ -145,7 +146,7 @@ public class FilterAdjacentShifts
 			{
 				if ( shortEdges[ d ] )
 				{
-					if ( shift.getTilePair().getA().getPosition( d ) > shift.getTilePair().getB().getPosition( d ) )
+					if ( shift.getTileBoxPair().getOriginalTilePair().getA().getPosition( d ) > shift.getTileBoxPair().getOriginalTilePair().getB().getPosition( d ) )
 					{
 						swappedCount++;
 						shift.swap();

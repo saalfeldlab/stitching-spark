@@ -14,6 +14,7 @@ import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TilePair;
 import org.janelia.stitching.Utils;
 
+@Deprecated
 public class ReplaceTilesPairwise
 {
 	public static void main( final String[] args ) throws IOException
@@ -27,10 +28,14 @@ public class ReplaceTilesPairwise
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
 			final TilePair newTilePair = new TilePair(
-					tiles.get( shift.getTilePair().getA().getIndex() ),
-					tiles.get( shift.getTilePair().getB().getIndex() ) );
+					tiles.get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ),
+					tiles.get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ) );
 			final SerializablePairWiseStitchingResult newShift = new SerializablePairWiseStitchingResult(
-					newTilePair, shift.getOffset().clone(), shift.getCrossCorrelation(), shift.getPhaseCorrelation() );
+					null, //FIXME
+					shift.getOffset().clone(),
+					shift.getCrossCorrelation(),
+					shift.getPhaseCorrelation()
+				);
 			newShifts.add( newShift );
 		}
 		TileInfoJSONProvider.savePairwiseShifts( newShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix(args[1], "_pairwise") ) ) );

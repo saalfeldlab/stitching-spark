@@ -18,6 +18,7 @@ import org.janelia.stitching.Utils;
  * @author Igor Pisarev
  */
 
+@Deprecated
 public class CreateFakePairwiseShifts
 {
 	public static void main( final String[] args ) throws Exception
@@ -51,7 +52,10 @@ public class CreateFakePairwiseShifts
 					)
 			{
 				// non-adjacent shift doesn't need to be computed, replace it with a fake
-				final SerializablePairWiseStitchingResult shift = new SerializablePairWiseStitchingResult( pair, new float[pair.getA().numDimensions()], 0.f, 0.f );
+				final SerializablePairWiseStitchingResult shift = new SerializablePairWiseStitchingResult(
+						null, // FIXME
+						new float[pair.getA().numDimensions()], 0.f, 0.f
+					);
 				shift.setIsValidOverlap( false );
 				nonAdjacentShifts.add( shift );
 			}
