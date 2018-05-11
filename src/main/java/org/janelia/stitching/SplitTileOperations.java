@@ -7,14 +7,13 @@ import java.util.List;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 
 import mpicbg.imglib.custom.OffsetConverter;
-import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
 import net.imglib2.iterator.IntervalIterator;
-import net.imglib2.realtransform.InvertibleRealTransform;
+import net.imglib2.realtransform.RealTransform;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.IntervalsNullable;
@@ -30,9 +29,9 @@ public class SplitTileOperations
 	 * @param tiles
 	 * @return
 	 */
-	public static List< TileInfo > splitTilesIntoBoxes( final TileInfo[] tiles, final int[] gridSize )
+	public static List< SubdividedTileBox > splitTilesIntoBoxes( final TileInfo[] tiles, final int[] gridSize )
 	{
-		final List< TileInfo > tileSplitBoxes = new ArrayList<>();
+		final List< SubdividedTileBox > tileSplitBoxes = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 		{
 			// make sure that all tile boxes are of same size
@@ -40,16 +39,18 @@ public class SplitTileOperations
 			for ( int d = 0; d < tileBoxSize.length; ++d )
 				tileBoxSize[ d ] = tile.getSize( d ) / gridSize[ d ];
 
-			final List< TileInfo > splitTile = TileOperations.divideSpaceIgnoreSmaller(
+			final List< Interval > splitTileIntervals = TileOperations.divideSpaceIgnoreSmaller(
 					new FinalInterval( tile.getSize() ),
 					new FinalDimensions( tileBoxSize )
 				);
 
-			for ( final TileInfo box : splitTile )
+			for ( final Interval interval : splitTileIntervals )
 			{
-				box.setOriginalTile( tile );
-				box.setIndex( tileSplitBoxes.size() );
-				tileSplitBoxes.add( box );
+				final SubdividedTileBox tileBox = new SubdividedTileBox( tile );
+				tileBox.setPosition( Intervals.minAsDoubleArray( interval ) );
+				tileBox.setSize( Intervals.dimensionsAsLongArray( interval ) );
+				tileBox.setIndex( tileSplitBoxes.size() );
+				tileSplitBoxes.add( tileBox );
 			}
 		}
 		return tileSplitBoxes;
@@ -63,14 +64,14 @@ public class SplitTileOperations
 	 * @param adjacentOnly
 	 * @return
 	 */
-	public static List< TilePair > findOverlappingTileBoxes( final List< TileInfo > tileBoxes, final boolean adjacentOnly )
+	public static List< SubdividedTileBoxPair > findOverlappingTileBoxes( final List< SubdividedTileBox > tileBoxes, final boolean adjacentOnly )
 	{
-		final List< TilePair > overlappingBoxes = new ArrayList<>();
+		final List< SubdividedTileBoxPair > overlappingBoxes = new ArrayList<>();
 		for ( int i = 0; i < tileBoxes.size(); i++ )
 		{
 			for ( int j = i + 1; j < tileBoxes.size(); j++ )
 			{
-				final TilePair tileBoxPair = new TilePair( tileBoxes.get( i ), tileBoxes.get( j ) );
+				final SubdividedTileBoxPair tileBoxPair = new SubdividedTileBoxPair( tileBoxes.get( i ), tileBoxes.get( j ) );
 				if ( isOverlappingTileBoxPair( tileBoxPair, adjacentOnly ) )
 					overlappingBoxes.add( tileBoxPair );
 			}
@@ -86,15 +87,19 @@ public class SplitTileOperations
 	 * @param adjacent
 	 * @return
 	 */
-	public static boolean isOverlappingTileBoxPair( final TilePair tileBoxPair, final boolean adjacentOnly )
+	public static boolean isOverlappingTileBoxPair( final SubdividedTileBoxPair tileBoxPair, final boolean adjacentOnly )
 	{
-		if ( tileBoxPair.getA().getOriginalTile().getIndex().intValue() != tileBoxPair.getB().getOriginalTile().getIndex().intValue() )
+		if ( tileBoxPair.getA().getFullTile().getIndex().intValue() != tileBoxPair.getB().getFullTile().getIndex().intValue() )
 		{
 			final Pair< Interval, Interval > transformedTileBoxPair = transformTileBoxPair( tileBoxPair );
 			final Interval tileBoxesOverlap = IntervalsNullable.intersect( transformedTileBoxPair.getA(), transformedTileBoxPair.getB() );
 			if ( tileBoxesOverlap != null )
 			{
-				if ( !adjacentOnly || FilterAdjacentShifts.isAdjacent( getMinTileDimensions( tileBoxPair ), tileBoxesOverlap ) )
+				final long[] minTileBoxSize = new long[ Math.max( tileBoxPair.getA().numDimensions(), tileBoxPair.getB().numDimensions() ) ];
+				for ( int d = 0; d < minTileBoxSize.length; ++d )
+					minTileBoxSize[ d ] = Math.min( tileBoxPair.getA().getSize( d ), tileBoxPair.getB().getSize( d ) );
+
+				if ( !adjacentOnly || FilterAdjacentShifts.isAdjacent( new FinalDimensions( minTileBoxSize ), tileBoxesOverlap ) )
 					return true;
 			}
 		}
@@ -107,7 +112,7 @@ public class SplitTileOperations
 	 * @param tileBoxPair
 	 * @return
 	 */
-	public static Pair< Interval, Interval > transformTileBoxPair( final TilePair tileBoxPair )
+	public static Pair< Interval, Interval > transformTileBoxPair( final SubdividedTileBoxPair tileBoxPair )
 	{
 		return new ValuePair<>(
 				transformTileBox( tileBoxPair.getA() ),
@@ -122,14 +127,37 @@ public class SplitTileOperations
 	 * @param tileBox
 	 * @return
 	 */
-	public static Interval transformTileBox( final TileInfo tileBox )
+	public static Interval transformTileBox( final SubdividedTileBox tileBox )
 	{
-		final InvertibleRealTransform tileTransform = TileOperations.getTileTransform( tileBox.getOriginalTile() );
-		final double[] tileBoxMiddlePoint = getTileBoxMiddlePoint( tileBox );
-		final double[] transformedTileBoxMiddlePoint = new double[ tileBoxMiddlePoint.length ];
-		tileTransform.apply( tileBoxMiddlePoint, transformedTileBoxMiddlePoint );
+		return transformTileBox( tileBox, TileOperations.getTileTransform( tileBox.getFullTile() ) );
+	}
+
+	/**
+	 * Returns a tile box interval in the global space.
+	 * The center coordinate of the resulting interval is defined by transforming the middle point of the tile box.
+	 *
+	 * @param tileBox
+	 * @param originalTileTransform
+	 * @return
+	 */
+	public static Interval transformTileBox( final SubdividedTileBox tileBox, final RealTransform originalTileTransform )
+	{
+		final double[] transformedTileBoxMiddlePoint = transformTileBoxMiddlePoint( tileBox, originalTileTransform );
 		final RealInterval transformedTileBoxInterval = getTileBoxInterval( transformedTileBoxMiddlePoint, tileBox.getSize() );
 		return TileOperations.roundRealInterval( transformedTileBoxInterval );
+	}
+
+	/**
+	 * Transforms middle point of a given tile box.
+	 *
+	 * @param tileBox
+	 * @return
+	 */
+	public static double[] transformTileBoxMiddlePoint( final SubdividedTileBox tileBox, final RealTransform originalTileTransform )
+	{
+		final double[] transformedTileBoxMiddlePoint = new double[ tileBox.numDimensions() ];
+		originalTileTransform.apply( getTileBoxMiddlePoint( tileBox ), transformedTileBoxMiddlePoint );
+		return transformedTileBoxMiddlePoint;
 	}
 
 	/**
@@ -267,7 +295,7 @@ public class SplitTileOperations
 	 * @param overlaps
 	 * @return
 	 */
-	public static Pair< Interval, Interval > getOverlapsInFullTile( final TilePair tileBoxPair, final Pair< Interval, Interval > overlaps )
+	public static Pair< Interval, Interval > getOverlapsInFullTile( final SubdividedTileBoxPair tileBoxPair, final Pair< Interval, Interval > overlaps )
 	{
 		return new ValuePair<>(
 				IntervalsHelper.translate( overlaps.getA(), Intervals.minAsLongArray( tileBoxPair.getA().getBoundaries() ) ),
@@ -310,12 +338,12 @@ public class SplitTileOperations
 	}
 
 	/**
-	 * Returns middle point in a given tile box.
+	 * Returns the middle point of a given tile box in the full tile coordinate space.
 	 *
 	 * @param tileBox
 	 * @return
 	 */
-	public static double[] getTileBoxMiddlePoint( final TileInfo tileBox )
+	public static double[] getTileBoxMiddlePoint( final SubdividedTileBox tileBox )
 	{
 		final double[] middlePoint = new double[ tileBox.numDimensions() ];
 		for ( int d = 0; d < middlePoint.length; ++d )
@@ -342,30 +370,16 @@ public class SplitTileOperations
 	}
 
 	/**
-	 * Return min over tile dimensions for both tiles in a given pair.
-	 *
-	 * @param pair
-	 * @return
-	 */
-	public static Dimensions getMinTileDimensions( final TilePair pair )
-	{
-		final long[] minDimensions = new long[ Math.max( pair.getA().numDimensions(), pair.getB().numDimensions() ) ];
-		for ( int d = 0; d < minDimensions.length; ++d )
-			minDimensions[ d ] = Math.min( pair.getA().getSize( d ), pair.getB().getSize( d ) );
-		return new FinalDimensions( minDimensions );
-	}
-
-	/**
 	 * Returns the offset between full tiles based on the offset between tile boxes and their positions within respective tiles.
 	 *
 	 * @param tileBoxPair
 	 * @param tileBoxOffset
 	 * @return
 	 */
-	public static double[] getFullTileOffset( final TilePair tileBoxPair, final double[] tileBoxOffset )
+	public static double[] getFullTileOffset( final SubdividedTileBoxPair tileBoxPair, final double[] tileBoxOffset )
 	{
-		final TileInfo fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
-		if ( fixedTileBox.getOriginalTile() == null || movingTileBox.getOriginalTile() == null )
+		final SubdividedTileBox fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
+		if ( fixedTileBox.getFullTile() == null || movingTileBox.getFullTile() == null )
 			throw new IllegalArgumentException( "was given full tiles instead of tile boxes" );
 
 		final double[] fullTileOffset = new double[ tileBoxOffset.length ];

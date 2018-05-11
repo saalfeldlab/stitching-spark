@@ -19,8 +19,6 @@ public class TileInfo implements Cloneable, RealInterval {
 	private long[] size;
 	private double[] pixelResolution;
 
-	private TileInfo originalTile;
-
 	private AffineTransform3D transform;
 
 	public TileInfo( final int dim ) {
@@ -122,14 +120,6 @@ public class TileInfo implements Cloneable, RealInterval {
 		this.transform = transform;
 	}
 
-	public TileInfo getOriginalTile() {
-		return originalTile;
-	}
-
-	public void setOriginalTile( final TileInfo originalTile ) {
-		this.originalTile = originalTile;
-	}
-
 	public boolean isNull() {
 		return file == null;
 	}
@@ -158,7 +148,6 @@ public class TileInfo implements Cloneable, RealInterval {
 		newTile.setSize( size == null ? null : size.clone() );
 		newTile.setPixelResolution( pixelResolution == null ? null : pixelResolution.clone() );
 		newTile.setTransform( transform == null ? null : transform.copy() );
-		newTile.setOriginalTile( originalTile == null ? null : originalTile.clone() );
 		return newTile;
 	}
 

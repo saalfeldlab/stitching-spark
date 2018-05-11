@@ -119,8 +119,8 @@ public class GlobalOptimizationPerformer
 			{
 				++pairsAdded;
 
-				final TilePair tileBoxPair = comparePointPair.getTileBoxPair();
-				final TileInfo[] tileBoxes = tileBoxPair.toArray();
+				final SubdividedTileBoxPair tileBoxPair = comparePointPair.getTileBoxPair();
+				final SubdividedTileBox[] tileBoxes = tileBoxPair.toArray();
 				final float weight = comparePointPair.getCrossCorrelation();
 				final double[] fullTileOffset = SplitTileOperations.getFullTileOffset( tileBoxPair, Conversions.toDoubleArray( comparePointPair.getRelativeShift() ) );
 
