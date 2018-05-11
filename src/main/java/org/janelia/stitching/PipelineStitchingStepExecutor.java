@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -22,32 +23,42 @@ import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.util.LongAccumulator;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 import org.janelia.flatfield.FlatfieldCorrection;
-import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
-import mpicbg.imglib.custom.OffsetConverter;
-import mpicbg.imglib.custom.PointValidator;
+import mpicbg.imglib.custom.OffsetValidator;
+import mpicbg.models.Affine3D;
+import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.Model;
+import mpicbg.models.NotEnoughDataPointsException;
+import mpicbg.models.Point;
+import mpicbg.models.PointMatch;
 import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealFloatConverter;
+import net.imglib2.exception.ImgLibException;
 import net.imglib2.exception.IncompatibleTypeException;
+import net.imglib2.img.imageplus.FloatImagePlus;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.InvertibleRealTransform;
+import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.realtransform.Translation;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
-import net.imglib2.util.IntervalsNullable;
 import net.imglib2.util.Pair;
-import net.imglib2.util.Util;
+import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
@@ -90,14 +101,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		try
 		{
 			final DataProvider dataProvider = job.getDataProvider();
-			final boolean higherOrderStitching = false;
-
 			for ( int iteration = 0; ; ++iteration )
 			{
 				final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
-				Arrays.fill( tileBoxesGridSize, higherOrderStitching ? 2 : 1 );
-				final List< TileInfo > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
-				final List< TilePair > overlappingBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
+				Arrays.fill( tileBoxesGridSize, 2 );
+				final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
+				final List< SubdividedTileBoxPair > overlappingBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
 
 				final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
 				final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
@@ -110,7 +119,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					preparePairwiseShifts( overlappingBoxes, iteration );
 
 					final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );
-					optimizer.optimize( iteration, higherOrderStitching );
+					optimizer.optimizeAffine( iteration );
 				}
 				else
 				{
@@ -210,7 +219,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 * @throws PipelineExecutionException
 	 * @throws IOException
 	 */
-	private void preparePairwiseShifts( final List< TilePair > overlappingBoxes, final int iteration ) throws PipelineExecutionException, IOException
+	private void preparePairwiseShifts( final List< SubdividedTileBoxPair > overlappingBoxes, final int iteration ) throws PipelineExecutionException, IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
@@ -228,7 +237,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = tryLoadPrecomputedShifts( basePath, iteration );
-		final List< TilePair > pendingOverlappingBoxes = removePrecomputedPendingPairs( pairwisePath, overlappingBoxes, pairwiseShifts );
+		final List< SubdividedTileBoxPair > pendingOverlappingBoxes = removePrecomputedPendingPairs( pairwisePath, overlappingBoxes, pairwiseShifts );
 
 		if ( pendingOverlappingBoxes.isEmpty() && !pairwiseShifts.isEmpty() )
 		{
@@ -350,18 +359,18 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 * @throws PipelineExecutionException
 	 * @throws IOException
 	 */
-	private List< TilePair > removePrecomputedPendingPairs(
+	private List< SubdividedTileBoxPair > removePrecomputedPendingPairs(
 			final String pairwisePath,
-			final List< TilePair > overlappingTiles,
+			final List< SubdividedTileBoxPair > overlappingBoxes,
 			final List< SerializablePairWiseStitchingResult > pairwiseShifts ) throws PipelineExecutionException, IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		// remove redundant pairs (that are not contained in the given overlappingTiles list)
 		final Map< Integer, Set< Integer > > overlappingPairsCache = new TreeMap<>();
-		for ( final TilePair pair : overlappingTiles )
+		for ( final SubdividedTileBoxPair boxPair : overlappingBoxes )
 		{
-			final int ind1 = Math.min( pair.getA().getIndex(), pair.getB().getIndex() );
-			final int ind2 = Math.max( pair.getA().getIndex(), pair.getB().getIndex() );
+			final int ind1 = Math.min( boxPair.getA().getIndex(), boxPair.getB().getIndex() );
+			final int ind2 = Math.max( boxPair.getA().getIndex(), boxPair.getB().getIndex() );
 			if ( !overlappingPairsCache.containsKey( ind1 ) )
 				overlappingPairsCache.put( ind1, new TreeSet<>() );
 			overlappingPairsCache.get( ind1 ).add( ind2 );
@@ -373,8 +382,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			final Integer[] indexes = new Integer[ 2 ];
 			for ( int i = 0; i < 2; ++i )
 				if ( indexes[ i ] == null )
-					indexes[ i ] = result.getTilePair().toArray()[ i ].getIndex();
-				else if ( !indexes[ i ].equals( result.getTilePair().toArray()[ i ].getIndex() ) )
+					indexes[ i ] = result.getTileBoxPair().toArray()[ i ].getIndex();
+				else if ( !indexes[ i ].equals( result.getTileBoxPair().toArray()[ i ].getIndex() ) )
 					throw new PipelineExecutionException( "Tile indexes do not match" );
 
 			final int ind1 = Math.min( indexes[ 0 ], indexes[ 1 ] );
@@ -392,7 +401,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			TileInfoJSONProvider.savePairwiseShifts( pairwiseShifts, dataProvider.getJsonWriter( URI.create( pairwisePath ) ) );
 
 		// find only pairs that need to be computed
-		final List< TilePair > pendingOverlappingTiles = new ArrayList<>();
+		final List< SubdividedTileBoxPair > pendingOverlappingBoxes = new ArrayList<>();
 
 		// Create a cache to efficiently lookup the existing pairs of tiles loaded from disk
 		final Map< Integer, Set< Integer > > cache = new TreeMap<>();
@@ -401,8 +410,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			final Integer[] indexes = new Integer[ 2 ];
 			for ( int i = 0; i < 2; ++i )
 				if ( indexes[ i ] == null )
-					indexes[ i ] = result.getTilePair().toArray()[ i ].getIndex();
-				else if ( !indexes[ i ].equals( result.getTilePair().toArray()[ i ].getIndex() ) )
+					indexes[ i ] = result.getTileBoxPair().toArray()[ i ].getIndex();
+				else if ( !indexes[ i ].equals( result.getTileBoxPair().toArray()[ i ].getIndex() ) )
 					throw new PipelineExecutionException( "Tile indexes do not match" );
 
 			final int firstIndex =  Math.min( indexes[ 0 ], indexes[ 1 ] ), secondIndex  =  Math.max( indexes[ 0 ], indexes[ 1 ] );
@@ -412,15 +421,15 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 
 		// Populate a new list of pending tile pairs (add only those pairs that are not contained in the cache)
-		for ( final TilePair pair : overlappingTiles )
+		for ( final SubdividedTileBoxPair boxPair : overlappingBoxes )
 		{
-			final int firstIndex =  Math.min( pair.getA().getIndex(), pair.getB().getIndex() ),
-					secondIndex =  Math.max( pair.getA().getIndex(), pair.getB().getIndex() );
+			final int firstIndex =  Math.min( boxPair.getA().getIndex(), boxPair.getB().getIndex() ),
+					secondIndex =  Math.max( boxPair.getA().getIndex(), boxPair.getB().getIndex() );
 			if ( !cache.containsKey( firstIndex ) || !cache.get( firstIndex ).contains( secondIndex ) )
-				pendingOverlappingTiles.add( pair );
+				pendingOverlappingBoxes.add( boxPair );
 		}
 
-		return pendingOverlappingTiles;
+		return pendingOverlappingBoxes;
 	}
 
 	/**
@@ -439,6 +448,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			{
 				writer.println( "Tile1_index Tile1_grid_X Tile1_grid_Y Tile1_grid_Z Tile1_timestamp Tile2_index Tile2_grid_X Tile2_grid_Y Tile2_grid_Z Tile2_timestamp Radius_1st Radius_2nd Radius_3rd" );
 				for ( final StitchingResult result : stitchingResults )
+				{
+					final TilePair originalTilePair = result.shift.getTileBoxPair().getOriginalTilePair();
 					writer.println(
 							String.format(
 									""
@@ -448,23 +459,24 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 									+ " "
 									+ "%.2f %.2f %.2f",
 
-									result.shift.getTilePair().getA().getIndex(),
-									Utils.getTileCoordinates( result.shift.getTilePair().getA() )[ 0 ],
-									Utils.getTileCoordinates( result.shift.getTilePair().getA() )[ 1 ],
-									Utils.getTileCoordinates( result.shift.getTilePair().getA() )[ 2 ],
-									Utils.getTileTimestamp( result.shift.getTilePair().getA() ),
+									result.shift.getTileBoxPair().getA().getIndex(),
+									Utils.getTileCoordinates( originalTilePair.getA() )[ 0 ],
+									Utils.getTileCoordinates( originalTilePair.getA() )[ 1 ],
+									Utils.getTileCoordinates( originalTilePair.getA() )[ 2 ],
+									Utils.getTileTimestamp( originalTilePair.getA() ),
 
-									result.shift.getTilePair().getB().getIndex(),
-									Utils.getTileCoordinates( result.shift.getTilePair().getB() )[ 0 ],
-									Utils.getTileCoordinates( result.shift.getTilePair().getB() )[ 1 ],
-									Utils.getTileCoordinates( result.shift.getTilePair().getB() )[ 2 ],
-									Utils.getTileTimestamp( result.shift.getTilePair().getB() ),
+									result.shift.getTileBoxPair().getB().getIndex(),
+									Utils.getTileCoordinates( originalTilePair.getB() )[ 0 ],
+									Utils.getTileCoordinates( originalTilePair.getB() )[ 1 ],
+									Utils.getTileCoordinates( originalTilePair.getB() )[ 2 ],
+									Utils.getTileTimestamp( originalTilePair.getB() ),
 
 									result.searchRadiusLength != null ? result.searchRadiusLength[ 0 ] : -1,
 									result.searchRadiusLength != null ? result.searchRadiusLength[ 1 ] : -1,
 									result.searchRadiusLength != null ? result.searchRadiusLength[ 2 ] : -1
 								)
 						);
+				}
 			}
 		}
 		catch ( final Exception e )
@@ -478,7 +490,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 * It uses phase correlation for measuring similarity between two images.
 	 */
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< StitchingResult > computePairwiseShifts(
-			final List< TilePair > overlappingBoxes,
+			final List< SubdividedTileBoxPair > overlappingBoxes,
 			final String statsTileConfigurationPath ) throws PipelineExecutionException
 	{
 		final Broadcast< TileSearchRadiusEstimator > broadcastedSearchRadiusEstimator = sparkContext.broadcast( loadSearchRadiusEstimator( statsTileConfigurationPath ) );
@@ -492,127 +504,13 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 
 		final JavaRDD< StitchingResult > pairwiseStitching = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() ).map( tileBoxPair ->
-			{
-				System.out.println( "Processing tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
-
-				// both tile boxes are transformed into the global coordinate space
-				final Pair< Interval, Interval > transformedTileBoxPairGlobalSpace = SplitTileOperations.transformTileBoxPair( tileBoxPair );
-
-				// map them into the fixed tile box coordinate space (that is, transformedTileBoxPair.getA() will have zero min in the target space)
-				final Pair< Interval, Interval > transformedTileBoxPairFixedBoxSpace = SplitTileOperations.globalToFixedBoxSpace( transformedTileBoxPairGlobalSpace );
-
-				// validate that they actually intersect
-				if ( IntervalsNullable.intersect( transformedTileBoxPairFixedBoxSpace.getA(), transformedTileBoxPairFixedBoxSpace.getB() ) == null )
-					throw new RuntimeException( "should not happen: only overlapping tile box pairs were selected" );
-
-				final TileSearchRadiusEstimator localSearchRadiusEstimator = broadcastedSearchRadiusEstimator.value();
-				final SearchRadius searchRadius;
-				if ( localSearchRadiusEstimator == null )
-				{
-					searchRadius = null;
-				}
-				else
-				{
-					searchRadius = estimateSearchRadius( localSearchRadiusEstimator, tileBoxPair );
-					if ( searchRadius == null )
-						return new StitchingResult( null, null );
-				}
-
-				// get ROIs in the fixed tile box space and moving tile box space, respectively
-				final Pair< Interval, Interval > adjustedOverlaps;
-				if ( searchRadius == null )
-				{
-					adjustedOverlaps = SplitTileOperations.getPaddedOverlapIntervals( transformedTileBoxPairFixedBoxSpace, job.getArgs().padding() );
-				}
-				else
-				{
-					adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( transformedTileBoxPairFixedBoxSpace, searchRadius );
-				}
-
-				if ( adjustedOverlaps == null )
-					throw new RuntimeException( "should not happen: only overlapping tile box pairs were selected, thus adjusted overlaps should always be non-empty too" );
-
-				// get ROI in the full tiles for cropping
-				final Pair< Interval, Interval > adjustedOverlapsInFullTile = SplitTileOperations.getOverlapsInFullTile( tileBoxPair, adjustedOverlaps );
-
-				// prepare ROI images
-				final ImagePlus[] roiImps = prepareRoiImages(
-						new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ),
-						adjustedOverlapsInFullTile,
-						broadcastedCoordsToTilesChannels.value(),
-						broadcastedFlatfieldCorrectionForChannels.value()
-					);
-
-				// get required offsets for roi parts
-				final OffsetConverter offsetConverter = SplitTileOperations.getOffsetConverter( adjustedOverlaps );
-
-				final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( tileBoxPair, roiImps, searchRadius, offsetConverter );
-
-				// compute variance within ROI for both images
-				if ( pairwiseResult != null )
-					pairwiseResult.setVariance( computeVariance( roiImps ) );
-
-				for ( int i = 0; i < 2; i++ )
-					roiImps[ i ].close();
-
-				System.out.println( "Stitched tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
-
-				return new StitchingResult( pairwiseResult, searchRadius != null ? searchRadius.getEllipseRadius() : null );
-
-
-
-
-
-				/*final Interval movingBoxInFixedSpace = SplitTileOperations.transformMovingTileBox( tileBoxPair );
-
-				// stats
-				final TileSearchRadiusEstimator localSearchRadiusEstimator = broadcastedSearchRadiusEstimator.value();
-				final SearchRadius searchRadius;
-				if ( localSearchRadiusEstimator == null )
-				{
-					// FIXME: for testing purposes
-//					searchRadius = null;
-
-					// mean offset is the top-left coordinate of the moving box in the fixed space
-					final double[] offsetsMeanValues = Intervals.minAsDoubleArray( movingBoxInFixedSpace );
-					final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
-					final double sphereRadiusPixels = job.getArgs().searchRadiusMultiplier();
-					searchRadius = new SearchRadius( sphereRadiusPixels, offsetsMeanValues, offsetsCovarianceMatrix );
-				}
-				else
-				{
-					// FIXME: for testing purposes
-					throw new RuntimeException( "shouldn't happen" );
-//					searchRadius = estimateSearchRadius( localSearchRadiusEstimator, tilePair );
-//					if ( searchRadius == null )
-//						return null;
-				}
-
-				// get ROIs in corresponding images
-				final Interval[] overlapsInOriginalTileSpace = SplitTileOperations.getAdjustedOverlapIntervals( tileBoxPair, searchRadius );
-				if ( overlapsInOriginalTileSpace == null )
-					throw new RuntimeException( "tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) + ": overlapsInOriginalTileSpace == null" );
-
-				// prepare roi images
-				final ImagePlus[] roiImps = prepareRoiImages(
+				stitchTileBoxPair(
 						tileBoxPair,
-						overlapsInOriginalTileSpace,
+						broadcastedSearchRadiusEstimator.value(),
 						broadcastedCoordsToTilesChannels.value(),
 						broadcastedFlatfieldCorrectionForChannels.value()
-					);
-
-				// get required offsets for roi parts
-				final OffsetConverter offsetConverter = SplitTileOperations.getOffsetConverter( tileBoxPair, overlapsInOriginalTileSpace );
-
-				final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( tileBoxPair, roiImps, searchRadius, offsetConverter );
-
-				for ( int i = 0; i < 2; i++ )
-					roiImps[ i ].close();
-
-				System.out.println( "Stitched tile box pair " + tileBoxPair + " of tiles " + new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) );
-
-				return new StitchingResult( pairwiseResult, searchRadius != null ? searchRadius.getEllipseRadius() : null );*/
-			} );
+					)
+			);
 
 		final List< StitchingResult > stitchingResults = pairwiseStitching.collect();
 
@@ -639,6 +537,311 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		return stitchingResults;
 	}
+
+
+
+	/**
+	 * Estimate pairwise shift vector between a pair of tile boxes (smaller parts of input tiles).
+	 * The first tile box of the given pair is considered 'fixed', and the second is 'moving',
+	 * that means, the resulting shift vector will effectively be equal to (NewMovingPos - FixedPos).
+	 *
+	 * @param tileBoxPair
+	 * @param searchRadiusEstimator
+	 * @param coordsToTilesChannels
+	 * @param flatfieldForChannels
+	 * @return
+	 * @throws PipelineExecutionException
+	 */
+	private < U extends NativeType< U > & RealType< U > > StitchingResult stitchTileBoxPair(
+			final SubdividedTileBoxPair tileBoxPair,
+			final TileSearchRadiusEstimator searchRadiusEstimator,
+			final List< Map< String, TileInfo > > coordsToTilesChannels,
+			final List< RandomAccessiblePairNullable< U, U > > flatfieldForChannels ) throws PipelineExecutionException
+	{
+		final SubdividedTileBox[] tileBoxes = tileBoxPair.toArray();
+
+		final InvertibleRealTransform[] estimatedAffines = new AffineTransform3D[ tileBoxes.length ];
+		final ImagePlus[] roiImps = new ImagePlus[ tileBoxes.length ];
+		final Interval[] transformedRoiIntervals = new Interval[ tileBoxes.length ];
+
+		for ( int i = 0; i < tileBoxes.length; ++i )
+		{
+			estimatedAffines[ i ] = estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
+			final Pair< ImagePlus, Interval > roiAndWorldBoundingBox = renderTileBox(
+					tileBoxes[ i ],
+					estimatedAffines[ i ],
+					coordsToTilesChannels,
+					flatfieldForChannels
+				);
+			roiImps[ i ] = roiAndWorldBoundingBox.getA();
+			transformedRoiIntervals[ i ] = roiAndWorldBoundingBox.getB();
+		}
+
+		final SearchRadius combinedSearchRadiusForMovingBox;
+		if ( searchRadiusEstimator != null )
+		{
+			combinedSearchRadiusForMovingBox = getCombinedSearchRadiusForMovingBox(
+					searchRadiusEstimator,
+					tileBoxes,
+					estimatedAffines,
+					transformedRoiIntervals
+				);
+		}
+		else
+		{
+			combinedSearchRadiusForMovingBox = null;
+		}
+
+		// TODO: use smaller ROI instead of whole subdivided box?
+
+		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise(
+				tileBoxPair,
+				roiImps,
+				combinedSearchRadiusForMovingBox
+			);
+
+		// compute variance within ROI for both images
+		if ( pairwiseResult != null )
+			pairwiseResult.setVariance( computeVariance( roiImps ) );
+
+		for ( int i = 0; i < 2; i++ )
+			roiImps[ i ].close();
+
+		System.out.println( "Stitched tile box pair " + tileBoxPair );
+
+		return new StitchingResult(
+				pairwiseResult,
+				combinedSearchRadiusForMovingBox != null ? combinedSearchRadiusForMovingBox.getEllipseRadius() : null
+			);
+	}
+
+	/**
+	 * Estimates an expected affine transformation for a given tile based on offset statistics selected from local neighborhood.
+	 * The estimated transformation does the following mapping: local tile coordinates -> expected world coordinates.
+	 *
+	 * @param tile
+	 * @param searchRadiusEstimator
+	 * @return
+	 * @throws PipelineExecutionException
+	 */
+	private InvertibleRealTransform estimateAffineTransformation(
+			final TileInfo tile,
+			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException
+	{
+		if ( searchRadiusEstimator == null )
+			return TileOperations.getTileTransform( tile );
+
+		final int[] tileBoxesGridSize = new int[ tile.numDimensions() ];
+		Arrays.fill( tileBoxesGridSize, 2 );
+		final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( new TileInfo[] { tile }, tileBoxesGridSize );
+		final List< PointMatch > matches = new ArrayList<>();
+		for ( final SubdividedTileBox tileBox : tileBoxes )
+		{
+			final SearchRadius searchRadius = searchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( tileBox );
+			final double[] stagePosition = searchRadiusEstimator.getTileBoxMiddlePointStagePosition( tileBox );
+			final PointMatch match = new PointMatch( new Point( stagePosition ), new Point( searchRadius.getEllipseCenter() ) );
+			matches.add( match );
+		}
+
+		final Model< ? > model = TileModelFactory.createAffineModel( tile );
+		try
+		{
+			model.fit( matches );
+		}
+		catch ( final NotEnoughDataPointsException | IllDefinedDataPointsException e )
+		{
+			throw new PipelineExecutionException( e );
+		}
+		final Affine3D< ? > affineModel = ( Affine3D< ? > ) model;
+		final double[][] matrix = new double[ 3 ][ 4 ];
+		affineModel.toMatrix( matrix );
+
+		final AffineTransform3D expectedTileTransform = new AffineTransform3D();
+		expectedTileTransform.set( matrix );
+		return expectedTileTransform;
+	}
+
+	/**
+	 * Renders the given tile box in the transformed space averaging and optionally flat-fielding all channels.
+	 * The resulting image is wrapped as {@link ImagePlus}.
+	 *
+	 * @param tileBox
+	 * @param originalTileTransform
+	 * @param coordsToTilesChannels
+	 * @param flatfieldForChannels
+	 * @return pair: (rendered image; its world bounding box)
+	 * @throws PipelineExecutionException
+	 */
+	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > Pair< ImagePlus, Interval > renderTileBox(
+			final SubdividedTileBox tileBox,
+			final InvertibleRealTransform originalTileTransform,
+			final List< Map< String, TileInfo > > coordsToTilesChannels,
+			final List< RandomAccessiblePairNullable< U, U > > flatfieldForChannels ) throws PipelineExecutionException
+	{
+		final DataProvider dataProvider = job.getDataProvider();
+		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( tileBox.getFullTile().getPixelResolution() );
+		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
+		final double[] blurSigmas = new  double[ normalizedVoxelDimensions.length ];
+		for ( int d = 0; d < blurSigmas.length; d++ )
+			blurSigmas[ d ] = job.getArgs().blurSigma() / normalizedVoxelDimensions[ d ];
+
+		System.out.println( "Averaging corresponding tile images for " + job.getChannels() + " channels" );
+		final String coordsStr = Utils.getTileCoordinatesString( tileBox.getFullTile() );
+		int channelsUsed = 0;
+
+		FloatImagePlus< FloatType > avgChannelImg = null;
+		Interval roiBoundingBox = null;
+
+		for ( int channel = 0; channel < job.getChannels(); ++channel )
+		{
+			final TileInfo tile = coordsToTilesChannels.get( channel ).get( coordsStr );
+			if ( tile == null )
+				throw new PipelineExecutionException( tileBox.getFullTile().getIndex() + ": cannot find corresponding tile for channel " + channel );
+
+			if ( tileBox.getFullTile().getIndex().intValue() != tile.getIndex().intValue() )
+				throw new PipelineExecutionException( tileBox.getFullTile().getIndex() + ": different indexes for the same grid position " + Utils.getTileCoordinatesString( tile ) );
+
+			// get ROI image
+			final RandomAccessibleInterval< T > roiImg;
+			try
+			{
+				roiImg = TransformedTileImageLoader.loadTile(
+						tile,
+						dataProvider,
+						Optional.ofNullable( flatfieldForChannels.get( channel ) ),
+						tileBox.getBoundaries(),
+						originalTileTransform
+					);
+			}
+			catch ( final IOException e )
+			{
+				throw new PipelineExecutionException( e );
+			}
+
+			// allocate output image if needed
+			if ( avgChannelImg == null )
+				avgChannelImg = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( roiImg ) );
+			else if ( !Intervals.equalDimensions( avgChannelImg, roiImg ) )
+				throw new PipelineExecutionException( "different ROI dimensions for the same grid position " + Utils.getTileCoordinatesString( tile ) );
+
+			// set transformed bounding box
+			if ( roiBoundingBox == null )
+				roiBoundingBox = new FinalInterval( roiImg );
+			else if ( !Intervals.equals( roiBoundingBox, roiImg ) )
+				throw new PipelineExecutionException( "different ROI coordinates for the same grid position " + Utils.getTileCoordinatesString( tile ) );
+
+			// accumulate data in the output image
+			final RandomAccessibleInterval< FloatType > srcImg = Converters.convert( roiImg, new RealFloatConverter<>(), new FloatType() );
+			final Cursor< FloatType > srcCursor = Views.flatIterable( srcImg ).cursor();
+			final Cursor< FloatType > dstCursor = Views.flatIterable( avgChannelImg ).cursor();
+			while ( dstCursor.hasNext() || srcCursor.hasNext() )
+				dstCursor.next().add( srcCursor.next() );
+
+			++channelsUsed;
+		}
+
+		if ( channelsUsed == 0 )
+			throw new PipelineExecutionException( tileBox.getFullTile().getIndex() + ": images are missing in all channels" );
+
+		// average output image over the number of accumulated channels
+		final FloatType denom = new FloatType( channelsUsed );
+		final Cursor< FloatType > dstCursor = Views.iterable( avgChannelImg ).cursor();
+		while ( dstCursor.hasNext() )
+			dstCursor.next().div( denom );
+
+		// blur with requested sigma
+		System.out.println( String.format( "Blurring the overlap area of size %s with sigmas=%s", Arrays.toString( Intervals.dimensionsAsLongArray( avgChannelImg ) ), Arrays.toString( blurSigmas ) ) );
+		try
+		{
+			blur( avgChannelImg, blurSigmas );
+		}
+		catch ( final IncompatibleTypeException e )
+		{
+			throw new PipelineExecutionException( e );
+		}
+
+		final ImagePlus roiImp;
+		try
+		{
+			roiImp = avgChannelImg.getImagePlus();
+		}
+		catch ( final ImgLibException e )
+		{
+			throw new PipelineExecutionException( e );
+		}
+
+		Utils.workaroundImagePlusNSlices( roiImp );
+
+		return new ValuePair<>( roiImp, roiBoundingBox );
+	}
+
+	private SearchRadius getCombinedSearchRadiusForMovingBox(
+			final TileSearchRadiusEstimator searchRadiusEstimator,
+			final SubdividedTileBox[] tileBoxes,
+			final InvertibleRealTransform[] estimatedTileTransforms,
+			final Interval[] transformedBoxIntervals ) throws PipelineExecutionException
+	{
+		final SearchRadius[] searchRadiusStats = new SearchRadius[ tileBoxes.length ];
+		for ( int i = 0; i < tileBoxes.length; ++i )
+			searchRadiusStats[ i ] = searchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( tileBoxes[ i ] );
+
+		final RealTransform offsetTransform = buildOffsetTransform(
+				tileBoxes,
+				estimatedTileTransforms,
+				transformedBoxIntervals,
+				searchRadiusStats
+			);
+
+		final SearchRadius fixedTileBoxSearchRadius = searchRadiusStats[ 0 ], movingTileBoxSearchRadius = searchRadiusStats[ 1 ];
+
+		final SearchRadius combinedSearchRadiusForMovingBox = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
+				fixedTileBoxSearchRadius,
+				movingTileBoxSearchRadius
+			);
+
+		combinedSearchRadiusForMovingBox.setOffsetTransform( offsetTransform );
+
+		return combinedSearchRadiusForMovingBox;
+	}
+
+	private RealTransform buildOffsetTransform(
+			final SubdividedTileBox[] tileBoxes,
+			final InvertibleRealTransform[] estimatedTileTransforms,
+			final Interval[] transformedBoxIntervals,
+			final SearchRadius[] searchRadiusStats )
+	{
+		final SubdividedTileBox fixedTileBox = tileBoxes[ 0 ], movingTileBox = tileBoxes[ 1 ];
+		final InvertibleRealTransform fixedTileEstimatedTransform = estimatedTileTransforms[ 0 ], movingTileEstimatedTransform = estimatedTileTransforms[ 1 ];
+		final Interval fixedTileBoxTransformedWorldInterval = transformedBoxIntervals[ 0 ], movingTileBoxTransformedWorldInterval = transformedBoxIntervals[ 1 ];
+		final SearchRadius fixedTileBoxSearchRadius = searchRadiusStats[ 0 ], movingTileBoxSearchRadius = searchRadiusStats[ 1 ];
+
+		final RealTransformSequence offsetTransform = new RealTransformSequence();
+
+		// expected offset between ROIs (bounding boxes of transformed fixed tile box and moving tile box)
+		final double[] estimatedWorldRoiOffset = new double[ fixedTileBox.numDimensions() ];
+		for ( int d = 0; d < estimatedWorldRoiOffset.length; ++d )
+			estimatedWorldRoiOffset[ d ] = movingTileBoxTransformedWorldInterval.realMin( d ) - fixedTileBoxTransformedWorldInterval.realMin( d );
+		offsetTransform.add( new Translation( estimatedWorldRoiOffset ).inverse() ); // shift between newly estimated position and expected position
+
+		// expected world coordinate of the middle point in the transformed moving tile box
+		final double[] transformedMovingBoxMiddlePoint = SplitTileOperations.transformTileBoxMiddlePoint( movingTileBox, movingTileEstimatedTransform );
+		offsetTransform.add( new Translation( transformedMovingBoxMiddlePoint ) ); // new world position of the middle point in the transformed moving tile box
+
+		offsetTransform.add( movingTileEstimatedTransform.inverse() ); // new local coordinate of the middle point in the local moving tile box
+
+		// initial (stage) offset between fixed tile box and moving tile box
+		final double[] stageTileBoxOffset = new double[ fixedTileBox.numDimensions() ];
+		for ( int d = 0; d < stageTileBoxOffset.length; ++d )
+			stageTileBoxOffset[ d ] = movingTileBoxSearchRadius.getStagePosition()[ d ] - fixedTileBoxSearchRadius.getStagePosition()[ d ];
+		offsetTransform.add( new Translation( stageTileBoxOffset ) ); // add relation between fixed tile box and moving tile box
+
+		final double[] movingTileBoxMiddlePoint = SplitTileOperations.getTileBoxMiddlePoint( movingTileBox );
+		offsetTransform.add( new Translation( movingTileBoxMiddlePoint ).inverse() ); // new estimated offset between fixed tile box and moving tile box
+
+		return offsetTransform;
+	}
+
+
 
 	/**
 	 * Tries to load flatfield components for all channels.
@@ -743,144 +946,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		return searchRadiusEstimator;
 	}
 
-	/**
-	 * Returns estimated search radius. Shift vectors of the moving tile with respect to the fixed tile will be accepted within this radius.
-	 * The returned search radius is a combination of individual error ellipses for the fixed tile and the moving tile.
-	 *
-	 * @param searchRadiusEstimator
-	 * @param tileBoxPair
-	 * @return
-	 * @throws PipelineExecutionException
-	 */
-	private SearchRadius estimateSearchRadius( final TileSearchRadiusEstimator searchRadiusEstimator, final TilePair tileBoxPair ) throws PipelineExecutionException
-	{
-		final SearchRadius[] tilePairSearchRadiusArr = new SearchRadius[ 2 ];
-		for ( int i = 0; i < 2; ++i )
-		{
-			final TileInfo originalTile = new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ).toArray()[ i ];
-			tilePairSearchRadiusArr[ i ] = searchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( originalTile );
-			if ( tilePairSearchRadiusArr[ i ].getUsedPointsIndexes().size() < job.getArgs().minStatsNeighborhood() )
-			{
-//				notEnoughNeighborsWithinConfidenceIntervalPairsCount.add( 1 );
-
-//				System.out.println( "Found " + searchRadiusEstimationWindow.getUsedPointsIndexes().size() + " neighbors within the search window but we require " + numNearestNeighbors + " nearest neighbors, perform a K-nearest neighbor search instead..." );
-				System.out.println();
-				System.out.println( new TilePair( tileBoxPair.getA().getOriginalTile(), tileBoxPair.getB().getOriginalTile() ) + ": found " + tilePairSearchRadiusArr[ i ].getUsedPointsIndexes().size() + " neighbors within the search window of the " + ( i == 0 ? "fixed" : "moving" ) + " tile but we require at least " + job.getArgs().minStatsNeighborhood() + " nearest neighbors" );
-				System.out.println();
-
-				return null;
-				// create default search radius
-//				final double[][] unitSphereOffsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
-//				tilePairSearchRadiusArr[ i ] = new SearchRadius(
-//						job.getArgs().defaultSearchRadius(),
-//						meanOffset,
-//						unitSphereOffsetsCovarianceMatrix
-//					);
-			}
-		}
-
-		final SearchRadius combinedSearchRadius = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
-				tilePairSearchRadiusArr[ 0 ],
-				tilePairSearchRadiusArr[ 1 ]
-			);
-
-		return combinedSearchRadius;
-	}
-
-	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > ImagePlus[] prepareRoiImages(
-			final TilePair originalTilePair,
-			final Pair< Interval, Interval > overlapsInOriginalTileSpace,
-			final List< Map< String, TileInfo > > coordsToTilesChannels,
-			final List< RandomAccessiblePairNullable< U, U > > flatfieldCorrectionChannels ) throws Exception
-	{
-		final DataProvider dataProvider = job.getDataProvider();
-		final double[] voxelDimensions = originalTilePair.getA().getPixelResolution();
-		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( voxelDimensions );
-		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
-		final double blurSigma = job.getArgs().blurSigma();
-		final double[] blurSigmas = new  double[ normalizedVoxelDimensions.length ];
-		for ( int d = 0; d < blurSigmas.length; d++ )
-			blurSigmas[ d ] = blurSigma / normalizedVoxelDimensions[ d ];
-
-		final ImagePlus[] roiImps = new ImagePlus[ 2 ];
-		final TileInfo[] originalTilePairArr = originalTilePair.toArray();
-		final Interval[] overlapsInOriginalTileSpaceArr = new Interval[] { overlapsInOriginalTileSpace.getA(), overlapsInOriginalTileSpace.getB() };
-
-		final int numChannels = job.getChannels();
-		for ( int j = 0; j < 2; j++ )
-		{
-			System.out.println( "Averaging corresponding tile images for " + numChannels + " channels" );
-			final String coordsStr = Utils.getTileCoordinatesString( originalTilePairArr[ j ] );
-			int channelsUsed = 0;
-			final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( overlapsInOriginalTileSpaceArr[ j ] ) );
-			for ( int channel = 0; channel < numChannels; channel++ )
-			{
-				final TileInfo tileInfo = coordsToTilesChannels.get( channel ).get( coordsStr );
-
-				if ( tileInfo == null )
-					throw new PipelineExecutionException( originalTilePair + ": cannot find corresponding tile for this channel" );
-
-				if ( originalTilePairArr[ j ].getIndex().intValue() != tileInfo.getIndex().intValue() )
-					throw new PipelineExecutionException( originalTilePair + ": different indexes for the same stage position " + Utils.getTileCoordinatesString( tileInfo ) );
-
-				// open image
-				final RandomAccessibleInterval< T > img = TileLoader.loadTile( tileInfo, dataProvider );
-				if ( img == null )
-					throw new PipelineExecutionException( "Cannot load tile image: " + tileInfo.getFilePath() );
-
-				// warn if image type and/or size do not match metadata
-				final T type = Util.getTypeFromInterval( img );
-				if ( !type.getClass().equals( tileInfo.getType().getType().getClass() ) )
-					throw new PipelineExecutionException( String.format( "Image type %s does not match the value from metadata %s", type.getClass().getName(), tileInfo.getType() ) );
-				if ( !Arrays.equals( Intervals.dimensionsAsLongArray( img ), tileInfo.getSize() ) )
-					throw new PipelineExecutionException( String.format( "Image size %s does not match the value from metadata %s", Arrays.toString( Intervals.dimensionsAsLongArray( img ) ), Arrays.toString( tileInfo.getSize() ) ) );
-
-				// crop ROI
-				final RandomAccessibleInterval< T > imgCrop = Views.interval( img, overlapsInOriginalTileSpaceArr[ j ] );
-
-				// get flatfield-corrected source if the flatfields are provided
-				final RandomAccessibleInterval< FloatType > sourceInterval;
-				final RandomAccessiblePairNullable< U, U > flatfield = flatfieldCorrectionChannels.get( channel );
-				if ( flatfield != null )
-				{
-					System.out.println( "Flat-fielding image.." );
-					final FlatfieldCorrectedRandomAccessible< T, U > flatfieldCorrected = new FlatfieldCorrectedRandomAccessible<>( imgCrop, flatfield.toRandomAccessiblePair() );
-					final RandomAccessibleInterval< U > correctedImg = Views.interval( flatfieldCorrected, imgCrop );
-					sourceInterval = Converters.convert( correctedImg, new RealFloatConverter<>(), new FloatType() );
-				}
-				else
-				{
-					sourceInterval = Converters.convert( imgCrop, new RealFloatConverter<>(), new FloatType() );
-				}
-
-				// accumulate data in the output image
-				final Cursor< FloatType > srcCursor = Views.flatIterable( sourceInterval ).cursor();
-				final Cursor< FloatType > dstCursor = Views.flatIterable( dst ).cursor();
-				while ( dstCursor.hasNext() || srcCursor.hasNext() )
-					dstCursor.next().add( srcCursor.next() );
-
-				++channelsUsed;
-			}
-
-			if ( channelsUsed == 0 )
-				throw new PipelineExecutionException( originalTilePair + ": images are missing in all channels" );
-
-			// average output image over number of accumulated channels
-			final FloatType denom = new FloatType( channelsUsed );
-			final Cursor< FloatType > dstCursor = Views.iterable( dst ).cursor();
-			while ( dstCursor.hasNext() )
-				dstCursor.next().div( denom );
-
-			// blur with requested sigma
-			System.out.println( String.format( "Blurring the overlap area of size %s with sigmas=%s", Arrays.toString( Intervals.dimensionsAsLongArray( dst ) ), Arrays.toString( blurSigmas ) ) );
-			blur( dst, blurSigmas );
-
-			roiImps[ j ] = dst.getImagePlus();
-			Utils.workaroundImagePlusNSlices( roiImps[ j ] );
-		}
-		return roiImps;
-	}
-
 	private < T extends NumericType< T > > void blur( final RandomAccessibleInterval< T > image, final double[] sigmas ) throws IncompatibleTypeException
 	{
 		final RandomAccessible< T > extendedImage = Views.extendMirrorSingle( image );
@@ -908,10 +973,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	}
 
 	private SerializablePairWiseStitchingResult stitchPairwise(
-			final TilePair tileBoxPair,
+			final SubdividedTileBoxPair tileBoxPair,
 			final ImagePlus[] roiImps,
-			final PointValidator pointValidator,
-			final OffsetConverter offsetConverter )
+			final OffsetValidator pointValidator )
 	{
 		final int timepoint = 1;
 		final int numPeaks = 1;
@@ -920,7 +984,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final SerializablePairWiseStitchingResult[] results = PairwiseStitchingPerformer.stitchPairwise(
 				roiImps[ 0 ], roiImps[ 1 ], timepoint, timepoint,
 				stitchingParameters, numPeaks,
-				pointValidator, offsetConverter
+				pointValidator
 			);
 
 		final SerializablePairWiseStitchingResult result = results[ 0 ];
@@ -930,18 +994,13 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			// TODO: pass actions to update accumulators
 //			noPeaksWithinConfidenceIntervalPairsCount.add( 1 );
 			System.out.println( "no peaks found within the confidence interval" );
-			return null;
 		}
 		else
 		{
-			// compute new offset between tile boxes
-			final double[] originalTileOffset = offsetConverter.roiOffsetToTileOffset( Conversions.toDoubleArray( result.getOffset() ) );
-			for ( int d = 0; d < originalTileOffset.length; ++d )
-				result.getOffset()[ d ] = ( float ) originalTileOffset[ d ];
-
-			result.setTilePair( tileBoxPair );
-
-			return result;
+			// TODO: convert offset?
+			result.setTileBoxPair( tileBoxPair );
 		}
+
+		return result;
 	}
 }
