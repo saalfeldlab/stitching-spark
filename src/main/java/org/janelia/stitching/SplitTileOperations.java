@@ -6,7 +6,6 @@ import java.util.List;
 
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 
-import mpicbg.imglib.custom.OffsetConverter;
 import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
@@ -301,40 +300,6 @@ public class SplitTileOperations
 				IntervalsHelper.translate( overlaps.getA(), Intervals.minAsLongArray( tileBoxPair.getA().getBoundaries() ) ),
 				IntervalsHelper.translate( overlaps.getB(), Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) )
 			);
-	}
-
-	/**
-	 * Returns helper object containing required offset values for both tiles to be able to compute the shift vector.
-	 *
-	 * @param overlaps
-	 * @return
-	 */
-	public static OffsetConverter getOffsetConverter( final Pair< Interval, Interval > overlaps )
-	{
-		return getOffsetConverter( overlaps, null );
-	}
-
-	/**
-	 * Returns helper object containing required offset values for both tiles to be able to compute the shift vector.
-	 *
-	 * @param overlaps
-	 * @param globalOffset
-	 * @return
-	 */
-	public static OffsetConverter getOffsetConverter( final Pair< Interval, Interval > overlaps, final double[] globalOffset )
-	{
-		final Interval[] overlapsArr = new Interval[] { overlaps.getA(), overlaps.getB() };
-		final int dim = Math.max( overlaps.getA().numDimensions(), overlaps.getB().numDimensions() );
-
-		final long[][] roiToTileOffset = new long[ 2 ][];
-		for ( int i = 0; i < 2; ++i )
-		{
-			roiToTileOffset[ i ] = new long[ dim ];
-			for ( int d = 0; d < dim; ++d )
-				roiToTileOffset[ i ][ d ] = overlapsArr[ i ].min( d );
-		}
-
-		return new FinalOffsetConverter( roiToTileOffset, globalOffset != null ? globalOffset : new double[ dim ] );
 	}
 
 	/**

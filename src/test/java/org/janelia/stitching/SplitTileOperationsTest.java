@@ -6,11 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-import org.janelia.util.Conversions;
 import org.junit.Assert;
 import org.junit.Test;
 
-import mpicbg.imglib.custom.OffsetConverter;
 import net.imglib2.Interval;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
@@ -250,20 +248,5 @@ public class SplitTileOperationsTest
 
 		Assert.assertArrayEquals( new long[] { 12, 16 }, Intervals.minAsLongArray( adjustedOverlapsInFullTile.getB() ) );
 		Assert.assertArrayEquals( new long[] { 19, 19 }, Intervals.maxAsLongArray( adjustedOverlapsInFullTile.getB() ) );
-
-		final OffsetConverter offsetConverter = SplitTileOperations.getOffsetConverter( adjustedOverlaps );
-		final int[] testRoiOffset = new int[] { -1, -1 };
-
-		// find the offset between the tile boxes
-		final long[] tileBoxOffset = offsetConverter.roiOffsetToTileOffset( testRoiOffset );
-		Assert.assertArrayEquals( new long[] { -3, -7 }, tileBoxOffset );
-
-		// find the position of the moving tile box in the fixed box space so it is compatible with the search radius test
-		final double[] movingBoxPosition = offsetConverter.tileOffsetToGlobalPosition( tileBoxOffset );
-		Assert.assertArrayEquals( new double[] { -3, -7 }, movingBoxPosition, EPSILON );
-		Assert.assertTrue( searchRadius.testOffset( movingBoxPosition ) );
-
-		// test full tile offsets
-		Assert.assertArrayEquals( new double[] { -3, -17 }, SplitTileOperations.getFullTileOffset( tileBoxPair, Conversions.toDoubleArray( tileBoxOffset ) ), EPSILON );
 	}
 }

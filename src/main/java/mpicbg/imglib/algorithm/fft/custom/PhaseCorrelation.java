@@ -40,8 +40,7 @@ import mpicbg.imglib.cursor.Cursor;
 import mpicbg.imglib.cursor.LocalizableByDimCursor;
 import mpicbg.imglib.cursor.special.LocalNeighborhoodCursor;
 import mpicbg.imglib.cursor.special.RegionOfInterestCursor;
-import mpicbg.imglib.custom.OffsetConverter;
-import mpicbg.imglib.custom.PointValidator;
+import mpicbg.imglib.custom.OffsetValidator;
 import mpicbg.imglib.image.Image;
 import mpicbg.imglib.multithreading.SimpleMultiThreading;
 import mpicbg.imglib.outofbounds.OutOfBoundsStrategyPeriodicFactory;
@@ -69,8 +68,7 @@ public class PhaseCorrelation<T extends RealType<T>, S extends RealType<S>> impl
 	boolean verifyWithCrossCorrelation;
 	ArrayList<PhaseCorrelationPeak> phaseCorrelationPeaks;
 
-	PointValidator searchRadiusPointValidator;
-	OffsetConverter offsetConverter;
+	OffsetValidator offsetValidator;
 
 	String errorMessage = "";
 	int numThreads;
@@ -111,13 +109,9 @@ public class PhaseCorrelation<T extends RealType<T>, S extends RealType<S>> impl
 			this.minOverlapPx[ d ] = minOverlapPx;
 	}
 
-	public void setSearchRadiusPointValidator( final PointValidator searchRadiusPointValidator )
+	public void setSearchRadiusPointValidator( final OffsetValidator offsetValidator )
 	{
-		this.searchRadiusPointValidator = searchRadiusPointValidator;
-	}
-	public void setOffsetConverter( final OffsetConverter offsetConverter )
-	{
-		this.offsetConverter = offsetConverter;
+		this.offsetValidator = offsetValidator;
 	}
 
 	public boolean getComputeFFTinParalell() { return computeFFTinParalell; }
@@ -280,7 +274,7 @@ public class PhaseCorrelation<T extends RealType<T>, S extends RealType<S>> impl
 					}
 				}
 
-				if ( searchRadiusPointValidator != null )
+				if ( offsetValidator != null )
 				{
 					if ( !fallsIntoConfidenceInterval( peakPosition ) )
 						continue;
@@ -585,7 +579,7 @@ public class PhaseCorrelation<T extends RealType<T>, S extends RealType<S>> impl
 							position[ d ] = position[ d ] - imgSize[ d ];
 					}
 
-					if ( searchRadiusPointValidator != null )
+					if ( offsetValidator != null )
 					{
 						//
 						// get all the different possiblities
@@ -643,9 +637,10 @@ public class PhaseCorrelation<T extends RealType<T>, S extends RealType<S>> impl
 
 	private boolean fallsIntoConfidenceInterval( final int[] roiOffset )
 	{
-		final long[] tileOffset = offsetConverter.roiOffsetToTileOffset( roiOffset );
-		final double[] globalPosition = offsetConverter.tileOffsetToGlobalPosition( tileOffset );
-		return searchRadiusPointValidator.testPoint( globalPosition );
+		final double[] roiOffsetDouble = new double[ roiOffset.length ];
+		for ( int d = 0; d < roiOffsetDouble.length; ++d )
+			roiOffsetDouble[ d ] = roiOffset[ d ];
+		return offsetValidator.testOffset( roiOffsetDouble );
 	}
 
 	protected static int[] getMaxDim( final Image<?> image1, final Image<?> image2 )
