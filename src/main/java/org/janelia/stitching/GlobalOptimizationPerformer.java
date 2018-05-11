@@ -300,6 +300,13 @@ public class GlobalOptimizationPerformer
 		return imageInformationList;
 	}
 
+	/**
+	 * Shift the given points by the same random shift within the range of [-10, 10] px.
+	 * This helps to avoid the case when all point matches are located on the same plane. Without shifting,
+	 * the resulting affine model will be degenerate, and {@code IllDefinedDataPointsException} will be thrown when trying to fit.
+	 *
+	 * @param points
+	 */
 	private void shiftPoints( final Point... points )
 	{
 		final int dim = points[ 0 ].getL().length;

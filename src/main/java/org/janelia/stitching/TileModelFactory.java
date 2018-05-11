@@ -5,7 +5,6 @@ import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.Model;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
-import net.imglib2.realtransform.AffineTransform3D;
 
 /**
  * Convenience class for creating default {@link Model} which is required by stitching procedure.
@@ -22,50 +21,42 @@ public class TileModelFactory {
 	/**
 	 * @return default translational model initialized to origin
 	 */
-	public static < M extends Model< M > > M createDefaultModel( final int dim ) throws Exception {
+	public static < M extends Model< M > > M createDefaultModel( final int dim ) throws RuntimeException {
 		return createModel( dim, null );
 	}
 
 	/**
 	 * @return offset translational model set to position of the tile
 	 */
-	public static < M extends Model< M > > M createOffsetModel( final TileInfo tile ) throws Exception {
+	public static < M extends Model< M > > M createOffsetModel( final TileInfo tile ) throws RuntimeException {
 		return createModel( tile.numDimensions(), tile );
 	}
 
 	/**
 	 * @return offset translational model
 	 */
-	public static < M extends Model< M > > M createOffsetModel( final double[] offset ) throws Exception {
+	public static < M extends Model< M > > M createOffsetModel( final double[] offset ) throws RuntimeException {
 		final int dim = offset.length;
 		final TileInfo tile = new TileInfo( dim );
 		tile.setPosition( offset );
 		return createModel( dim, tile );
 	}
 
-	public static < M extends Model< M > > M createAffineModel( final TileInfo tile ) throws Exception
+	public static < M extends Model< M > > M createAffineModel( final TileInfo tile ) throws RuntimeException
 	{
 		if ( tile.numDimensions() != 3 )
-			throw new Exception( "3d only" );
+			throw new RuntimeException( "3d only" );
+
+		final AffineModel3D affineModel = new AffineModel3D();
 
 		// initialize the model with the known tile transform
-		final AffineTransform3D tileTransform = TileOperations.getTileTransform( tile );
-		final AffineModel3D affineModel = new AffineModel3D();
-		affineModel.set(
-				tileTransform.get(0, 0), tileTransform.get(0, 1), tileTransform.get(0, 2), tileTransform.get(0, 3),
-				tileTransform.get(1, 0), tileTransform.get(1, 1), tileTransform.get(1, 2), tileTransform.get(1, 3),
-				tileTransform.get(2, 0), tileTransform.get(2, 1), tileTransform.get(2, 2), tileTransform.get(2, 3)
-			);
+//		final InvertibleRealTransform tileTransform = TileOperations.getTileTransform( tile );
+//		affineModel.set(
+//				tileTransform.get(0, 0), tileTransform.get(0, 1), tileTransform.get(0, 2), tileTransform.get(0, 3),
+//				tileTransform.get(1, 0), tileTransform.get(1, 1), tileTransform.get(1, 2), tileTransform.get(1, 3),
+//				tileTransform.get(2, 0), tileTransform.get(2, 1), tileTransform.get(2, 2), tileTransform.get(2, 3)
+//			);
 
-		/*return ( M ) new InterpolatedAffineModel3D<>(
-				affineModel,
-				new InterpolatedAffineModel3D<>(
-						new SimilarityModel3D(),
-						new TranslationModel3D(),
-						REGULARIZER_TRANSLATION
-					),
-				REGULARIZER_SIMILARITY
-			);*/
 		return ( M ) new InterpolatedAffineModel3D<>(
 				affineModel,
 				new TranslationModel3D(),
@@ -73,7 +64,7 @@ public class TileModelFactory {
 			);
 	}
 
-	private static < M extends Model< M > > M createModel( final int dim, final TileInfo tile ) throws Exception {
+	private static < M extends Model< M > > M createModel( final int dim, final TileInfo tile ) throws RuntimeException {
 		switch ( dim ) {
 		case 2:
 			final TranslationModel2D m2d = new TranslationModel2D();
@@ -88,7 +79,7 @@ public class TileModelFactory {
 			return (M)m3d;
 
 		default:
-			throw new Exception( "Not supported" );
+			throw new RuntimeException( "Not supported" );
 		}
 	}
 }

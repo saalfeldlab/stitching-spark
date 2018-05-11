@@ -16,7 +16,8 @@ import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
-import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.InvertibleRealTransform;
+import net.imglib2.realtransform.Translation;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
 
@@ -330,18 +331,13 @@ public class TileOperations
 	/**
 	 * Returns tile transform, that is its affine transform if not null, or translation transform to the position of the tile otherwise.
 	 */
-	public static AffineTransform3D getTileTransform( final TileInfo tile )
+	public static InvertibleRealTransform getTileTransform( final TileInfo tile )
 	{
-		final AffineTransform3D ret;
+		final InvertibleRealTransform ret;
 		if ( tile.getTransform() != null )
-		{
 			ret = tile.getTransform();
-		}
 		else
-		{
-			ret = new AffineTransform3D();
-			ret.setTranslation( tile.getPosition() );
-		}
+			ret = new Translation( tile.getPosition() );
 		return ret;
 	}
 
@@ -401,10 +397,10 @@ public class TileOperations
 	}
 
 	/**
-	 * Cuts given region into a set of non-overlapping cubes with a side length of {@code subregionSize}.
-	 * @return a list of non-overlapping tiles that form a given region of space.
+	 * Cuts the given space interval into a set of non-overlapping subintervals
+	 * with a side length of {@code subregionSize}, where edge subintervals may be smaller.
 	 */
-	public static ArrayList< TileInfo > divideSpaceBySize( final Interval space, final int subregionSize )
+	public static ArrayList< Interval > divideSpaceBySize( final Interval space, final int subregionSize )
 	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
 		Arrays.fill( subregionDimsArr, subregionSize );
@@ -412,10 +408,11 @@ public class TileOperations
 	}
 
 	/**
-	 * Cuts given region into a set of non-overlapping tiles with exactly {@code subregionsCountPerDim} tiles for each dimension.
-	 * @return a list of non-overlapping tiles that form a given region of space.
+	 * Cuts the given space interval into a set of non-overlapping subintervals
+	 * with exactly {@code subregionsCountPerDim} subintervals for each dimension.
+	 * Some of the resulting subintervals may be extended by 1px to cover the entire space.
 	 */
-	public static ArrayList< TileInfo > divideSpaceByCount( final Interval space, final int subregionsCountPerDim )
+	public static ArrayList< Interval > divideSpaceByCount( final Interval space, final int subregionsCountPerDim )
 	{
 		final int[] subregionsCountPerDimArr = new int[ space.numDimensions() ];
 		Arrays.fill( subregionsCountPerDimArr, subregionsCountPerDim );
@@ -426,7 +423,7 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping tiles with exactly {@code subregionsCountPerDim} tiles specified for each dimension separately.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
-	public static ArrayList< TileInfo > divideSpaceByCount( final Interval space, final int[] subregionsCountPerDim )
+	public static ArrayList< Interval > divideSpaceByCount( final Interval space, final int[] subregionsCountPerDim )
 	{
 		final long[] subregionDimsArr = new long[ space.numDimensions() ];
 		final int[] sizePlusOneCount = new int[ space.numDimensions() ];
@@ -442,7 +439,7 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping tiles of specified size.
 	 * @return a list of non-overlapping tiles that form a given region of space.
 	 */
-	public static ArrayList< TileInfo > divideSpace( final Interval space, final Dimensions subregionDims )
+	public static ArrayList< Interval > divideSpace( final Interval space, final Dimensions subregionDims )
 	{
 		return divideSpace( space, subregionDims, new int[ space.numDimensions() ] );
 	}
@@ -451,12 +448,12 @@ public class TileOperations
 	 * Cuts given region into a set of non-overlapping tiles of specified size. Ignores tiles that are smaller than specified size.
 	 * @return
 	 */
-	public static ArrayList< TileInfo > divideSpaceIgnoreSmaller( final Interval space, final Dimensions subregionDims )
+	public static ArrayList< Interval > divideSpaceIgnoreSmaller( final Interval space, final Dimensions subregionDims )
 	{
 		return divideSpace( space, subregionDims, new int[ space.numDimensions() ], true );
 	}
 
-	private static ArrayList< TileInfo > divideSpace(
+	private static ArrayList< Interval > divideSpace(
 			final Interval space,
 			final Dimensions subregionDims,
 			final int[] sizePlusOneCount )
@@ -464,16 +461,23 @@ public class TileOperations
 		return divideSpace( space, subregionDims, sizePlusOneCount, false );
 	}
 
-	private static ArrayList< TileInfo > divideSpace(
+	private static ArrayList< Interval > divideSpace(
 			final Interval space,
 			final Dimensions subregionDims,
 			final int[] sizePlusOneCount,
 			final boolean ignoreSmaller )
 	{
-		final ArrayList< TileInfo > subregions = new ArrayList<>();
-		divideSpaceRecursive( space, subregionDims, sizePlusOneCount, ignoreSmaller, subregions, new TileInfo( space.numDimensions() ), 0 );
-		for ( int i = 0; i < subregions.size(); i++ )
-			subregions.get( i ).setIndex( i );
+		final ArrayList< Interval > subregions = new ArrayList<>();
+		divideSpaceRecursive(
+				space,
+				subregionDims,
+				sizePlusOneCount,
+				ignoreSmaller,
+				subregions,
+				new long[ space.numDimensions() ],
+				new long[ space.numDimensions() ],
+				0
+			);
 		return subregions;
 	}
 
@@ -482,33 +486,43 @@ public class TileOperations
 			final Dimensions subregionDims,
 			final int[] sizePlusOneCount,
 			final boolean ignoreSmaller,
-			final List< TileInfo > subregions,
-			final TileInfo currSubregion,
+			final List< Interval > subregions,
+			final long[] currMin,
+			final long[] currMax,
 			final int currDim )
 	{
 		if ( currDim == space.numDimensions() )
 		{
-			subregions.add( currSubregion );
+			subregions.add( new FinalInterval( currMin, currMax ) );
 			return;
 		}
 
 		int i = 0;
-		for ( long coord = space.min( currDim ); coord <= space.max( currDim ); coord += subregionDims.dimension( currDim ), i++ )
+		for ( long minCoord = space.min( currDim ); minCoord <= space.max( currDim ); minCoord += subregionDims.dimension( currDim ), i++ )
 		{
-			final TileInfo newSubregion = currSubregion.clone();
-			newSubregion.setPosition( currDim, coord );
-			newSubregion.setSize( currDim, Math.min( subregionDims.dimension( currDim ), space.max( currDim ) - coord + 1 ) );
-
+			long maxCoord = Math.min( minCoord + subregionDims.dimension( currDim ) - 1, space.max( currDim ) );
 			if ( i < sizePlusOneCount[ currDim ] )
 			{
-				coord++;
-				newSubregion.setSize( currDim, newSubregion.getSize( currDim ) + 1 );
+				++minCoord;
+				++maxCoord;
 			}
 
-			if ( ignoreSmaller && newSubregion.getSize( currDim ) < subregionDims.dimension( currDim ) )
-				continue;
-
-			divideSpaceRecursive( space, subregionDims, sizePlusOneCount, ignoreSmaller, subregions, newSubregion, currDim + 1 );
+			if ( !ignoreSmaller || maxCoord - minCoord + 1 >= subregionDims.dimension( currDim ) )
+			{
+				final long[] newMin = currMin.clone(), newMax = currMax.clone();
+				newMin[ currDim ] = minCoord;
+				newMax[ currDim ] = maxCoord;
+				divideSpaceRecursive(
+						space,
+						subregionDims,
+						sizePlusOneCount,
+						ignoreSmaller,
+						subregions,
+						newMin,
+						newMax,
+						currDim + 1
+					);
+			}
 		}
 	}
 }

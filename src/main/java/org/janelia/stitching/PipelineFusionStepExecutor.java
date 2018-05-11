@@ -268,18 +268,16 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		for ( int d = 0; d < biggerCellSize.length; ++d )
 			biggerCellSize[ d ] = cellSize[ d ] * ( int ) Math.ceil( ( double ) tiles[ 0 ].getSize( d ) / cellSize[ d ] );
 
-		final List< TileInfo > biggerCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );
+		final List< Interval > biggerCellBoxes = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );
 
 		// get cell grid coordinates to know the offset
-		final List< long[] > gridCoords = sparkContext.parallelize( biggerCells, Math.min( biggerCells.size(), MAX_PARTITIONS ) ).map( biggerCell ->
+		final List< long[] > gridCoords = sparkContext.parallelize( biggerCellBoxes, Math.min( biggerCellBoxes.size(), MAX_PARTITIONS ) ).map( biggerCellBox ->
 				{
-					final Boundaries biggerCellBox = biggerCell.getBoundaries();
-
 					final long[] biggerCellOffsetCoordinates = new long[ biggerCellBox.numDimensions() ];
 					for ( int d = 0; d < biggerCellOffsetCoordinates.length; d++ )
 						biggerCellOffsetCoordinates[ d ] = biggerCellBox.min( d ) - offset[ d ];
 
-					final long[] biggerCellGridPosition = new long[ biggerCell.numDimensions() ];
+					final long[] biggerCellGridPosition = new long[ biggerCellBox.numDimensions() ];
 					final CellGrid cellGrid = new CellGrid( dimensions, cellSize );
 					cellGrid.getCellPosition( biggerCellOffsetCoordinates, biggerCellGridPosition );
 
@@ -300,9 +298,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final Broadcast< Map< Integer, TileInfo > > broadcastedTilesMap = sparkContext.broadcast( tilesMap );
 		final Broadcast< Map< Integer, Interval > > broadcastedTransformedTilesBoundingBoxes = sparkContext.broadcast( transformedTilesBoundingBoxes );
 
-		sparkContext.parallelize( biggerCells, Math.min( biggerCells.size(), MAX_PARTITIONS ) ).foreach( biggerCell ->
+		sparkContext.parallelize( biggerCellBoxes, Math.min( biggerCellBoxes.size(), MAX_PARTITIONS ) ).foreach( biggerCellBox ->
 			{
-				final Boundaries biggerCellBox = biggerCell.getBoundaries();
 				final Set< Integer > tileIndexesWithinCell = TileOperations.findTilesWithinSubregion( broadcastedTransformedTilesBoundingBoxes.value(), biggerCellBox );
 				if ( tileIndexesWithinCell.isEmpty() )
 					return;
@@ -315,7 +312,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				for ( int d = 0; d < biggerCellOffsetCoordinates.length; d++ )
 					biggerCellOffsetCoordinates[ d ] = biggerCellBox.min( d ) - offset[ d ];
 
-				final long[] biggerCellGridPosition = new long[ biggerCell.numDimensions() ];
+				final long[] biggerCellGridPosition = new long[ biggerCellBox.numDimensions() ];
 				final CellGrid cellGrid = new CellGrid( dimensions, cellSize );
 				cellGrid.getCellPosition( biggerCellOffsetCoordinates, biggerCellGridPosition );
 
@@ -420,7 +417,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				final SerializablePairWiseStitchingResult pairwiseShift = pairwiseShiftMulti[ 0 ];
 				if ( pairwiseShift.getIsValidOverlap() )
 				{
-					final TileInfo[] pairArr = pairwiseShift.getTilePair().toArray();
+					final TileInfo[] pairArr = pairwiseShift.getTileBoxPair().getOriginalTilePair().toArray();
 					for ( int i = 0; i < 2; ++i )
 					{
 						if ( !pairwiseConnectionsMap.containsKey( pairArr[ i ].getIndex() ) )

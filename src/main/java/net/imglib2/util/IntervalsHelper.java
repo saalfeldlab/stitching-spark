@@ -2,6 +2,7 @@ package net.imglib2.util;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.RealInterval;
 
 public class IntervalsHelper
 {
@@ -31,5 +32,16 @@ public class IntervalsHelper
 	public static FinalInterval setPosition( final Interval interval, final long... position )
 	{
 		return translate( new FinalInterval( Intervals.dimensionsAsLongArray( interval ) ), position );
+	}
+
+	public static Interval roundRealInterval( final RealInterval realInterval )
+	{
+		final long[] min = new long[ realInterval.numDimensions() ], max = new long[ realInterval.numDimensions() ];
+		for ( int d = 0; d < realInterval.numDimensions(); ++d )
+		{
+			min[ d ] = Math.round( realInterval.realMin( d ) );
+			max[ d ] = Math.round( realInterval.realMax( d ) );
+		}
+		return new FinalInterval( min, max );
 	}
 }

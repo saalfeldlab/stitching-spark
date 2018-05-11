@@ -60,7 +60,7 @@ public class Utils {
 		return ret.toString();
 	}
 
-	public static ImageCollectionElement createElementTranslationModel( final TileInfo tile ) throws Exception
+	public static ImageCollectionElement createElementTranslationModel( final TileInfo tile ) throws RuntimeException
 	{
 		final File file = new File( tile.getFilePath() );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
@@ -70,7 +70,7 @@ public class Utils {
 		return e;
 	}
 
-	public static ImageCollectionElement createElementAffineModel( final TileInfo tile ) throws Exception
+	public static ImageCollectionElement createElementAffineModel( final TileInfo tile ) throws RuntimeException
 	{
 		final File file = new File( tile.getFilePath() );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
@@ -129,7 +129,7 @@ public class Utils {
 	{
 		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : shift.getTilePair().toArray() )
+			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
 				if ( !onlyValid || shift.getIsValidOverlap() )
 					tilesMap.put( tile.getIndex(), tile );
 		return tilesMap;
@@ -146,7 +146,7 @@ public class Utils {
 						isValidOverlap = false;
 
 			if ( isValidOverlap )
-				for ( final TileInfo tile : shiftMulti[ 0 ].getTilePair().toArray() )
+				for ( final TileInfo tile : shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray() )
 					tilesMap.put( tile.getIndex(), tile );
 		}
 		return tilesMap;
@@ -158,8 +158,9 @@ public class Utils {
 		{
 			if ( !onlyValid || shift.getIsValidOverlap() )
 			{
-				final int ind1 = Math.min( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
-				final int ind2 = Math.max( shift.getTilePair().getA().getIndex(), shift.getTilePair().getB().getIndex() );
+				final TilePair originalTilePair = shift.getTileBoxPair().getOriginalTilePair();
+				final int ind1 = Math.min( originalTilePair.getA().getIndex(), originalTilePair.getB().getIndex() );
+				final int ind2 = Math.max( originalTilePair.getA().getIndex(), originalTilePair.getB().getIndex() );
 
 				if ( !shiftsMap.containsKey( ind1 ) )
 					shiftsMap.put( ind1, new TreeMap<>() );
@@ -182,8 +183,9 @@ public class Utils {
 
 			if ( isValidOverlap )
 			{
-				final int ind1 = Math.min( shiftMulti[ 0 ].getTilePair().getA().getIndex(), shiftMulti[ 0 ].getTilePair().getB().getIndex() );
-				final int ind2 = Math.max( shiftMulti[ 0 ].getTilePair().getA().getIndex(), shiftMulti[ 0 ].getTilePair().getB().getIndex() );
+				final TilePair originalTilePair = shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair();
+				final int ind1 = Math.min( originalTilePair.getA().getIndex(), originalTilePair.getB().getIndex() );
+				final int ind2 = Math.max( originalTilePair.getA().getIndex(), originalTilePair.getB().getIndex() );
 
 				if ( !shiftsMultiMap.containsKey( ind1 ) )
 					shiftsMultiMap.put( ind1, new TreeMap<>() );
@@ -195,17 +197,17 @@ public class Utils {
 	}
 
 
-	public static int[] getTileCoordinates( final TileInfo tile ) throws Exception
+	public static int[] getTileCoordinates( final TileInfo tile ) throws RuntimeException
 	{
 		return getTileCoordinates( PathResolver.getFileName( tile.getFilePath() ) );
 	}
-	public static int[] getTileCoordinates( final String filename ) throws Exception
+	public static int[] getTileCoordinates( final String filename ) throws RuntimeException
 	{
 		final String coordsPatternStr = ".*(\\d{3})x_(\\d{3})y_(\\d{3})z.*";
 		final Pattern coordsPattern = Pattern.compile( coordsPatternStr );
 		final Matcher matcher = coordsPattern.matcher( filename );
 		if ( !matcher.find() )
-			throw new Exception( "Can't parse coordinates" );
+			throw new RuntimeException( "Can't parse coordinates" );
 
 		// don't forget to swap X and Y axes
 		final int[] coordinates = new int[]
@@ -216,27 +218,27 @@ public class Utils {
 				};
 		return coordinates;
 	}
-	public static String getTileCoordinatesString( final TileInfo tile ) throws Exception
+	public static String getTileCoordinatesString( final TileInfo tile ) throws RuntimeException
 	{
 		return getTileCoordinatesString( PathResolver.getFileName( tile.getFilePath() ) );
 	}
-	public static String getTileCoordinatesString( final String filename ) throws Exception
+	public static String getTileCoordinatesString( final String filename ) throws RuntimeException
 	{
 		final String coordsPatternStr = ".*(\\d{3}x_\\d{3}y_\\d{3}z).*";
 		final Pattern coordsPattern = Pattern.compile( coordsPatternStr );
 		final Matcher matcher = coordsPattern.matcher( filename );
 		if ( !matcher.find() )
-			throw new Exception( "Can't parse coordinates" );
+			throw new RuntimeException( "Can't parse coordinates" );
 		return matcher.group( 1 );
 	}
-	public static List< Pair< TileInfo, int[] > > getTilesCoordinates( final TileInfo[] tiles ) throws Exception
+	public static List< Pair< TileInfo, int[] > > getTilesCoordinates( final TileInfo[] tiles ) throws RuntimeException
 	{
 		final List< Pair< TileInfo, int[] > > tileCoordinates = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			tileCoordinates.add( new ValuePair<>( tile, getTileCoordinates( tile ) ) );
 		return tileCoordinates;
 	}
-	public static TreeMap< Integer, int[] > getTilesCoordinatesMap( final TileInfo[] tiles ) throws Exception
+	public static TreeMap< Integer, int[] > getTilesCoordinatesMap( final TileInfo[] tiles ) throws RuntimeException
 	{
 		final TreeMap< Integer, int[] > coordinatesMap = new TreeMap<>();
 		for ( final TileInfo tile : tiles )
@@ -244,29 +246,29 @@ public class Utils {
 		return coordinatesMap;
 	}
 
-	public static long getTileTimestamp( final TileInfo tile ) throws Exception
+	public static long getTileTimestamp( final TileInfo tile ) throws RuntimeException
 	{
 		return getTileTimestamp( PathResolver.getFileName( tile.getFilePath() ) );
 	}
-	public static long getTileTimestamp( final String filename ) throws Exception
+	public static long getTileTimestamp( final String filename ) throws RuntimeException
 	{
 		final String timePatternStr = ".*_(\\d*)msecAbs.*";
 		final Pattern timePattern = Pattern.compile( timePatternStr );
 		final Matcher matcher = timePattern.matcher( filename );
 		if ( !matcher.find() )
-			throw new Exception( "Can't parse timestamp" );
+			throw new RuntimeException( "Can't parse timestamp" );
 
 		final long timestamp = Long.parseLong( matcher.group( 1 ) );
 		return timestamp;
 	}
-	public static List< Pair< TileInfo, Long > > getTilesTimestamps( final TileInfo[] tiles ) throws Exception
+	public static List< Pair< TileInfo, Long > > getTilesTimestamps( final TileInfo[] tiles ) throws RuntimeException
 	{
 		final List< Pair< TileInfo, Long > > tileTimestamps = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			tileTimestamps.add( new ValuePair<>( tile, getTileTimestamp( tile ) ) );
 		return tileTimestamps;
 	}
-	public static TreeMap< Integer, Long > getTilesTimestampsMap( final TileInfo[] tiles ) throws Exception
+	public static TreeMap< Integer, Long > getTilesTimestampsMap( final TileInfo[] tiles ) throws RuntimeException
 	{
 		final TreeMap< Integer, Long > timestampsMap = new TreeMap<>();
 		for ( final TileInfo tile : tiles )
@@ -274,7 +276,7 @@ public class Utils {
 		return timestampsMap;
 	}
 
-	public static List< TileInfo > sortTilesByTimestamp( final TileInfo[] tiles ) throws Exception
+	public static List< TileInfo > sortTilesByTimestamp( final TileInfo[] tiles ) throws RuntimeException
 	{
 		final List< Pair< TileInfo, Long > > tileTimestamps = getTilesTimestamps( tiles );
 
@@ -292,7 +294,6 @@ public class Utils {
 
 		return tilesSortedByTimestamp;
 	}
-
 
 	public static double[] normalizeVoxelDimensions( final double[] voxelDimensions )
 	{
