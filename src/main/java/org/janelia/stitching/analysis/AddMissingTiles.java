@@ -10,6 +10,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
@@ -103,9 +104,14 @@ public class AddMissingTiles
 						e.setDimensionality( tileInfo.numDimensions() );
 
 						if ( tilesInfoFinal.containsKey( tileInfo.getIndex() ) )
-							e.setModel( TileModelFactory.createOffsetModel( tilesInfoFinal.get( tileInfo.getIndex() ) ) );
+						{
+//							e.setModel( TileModelFactory.createOffsetModel( tilesInfoFinal.get( tileInfo.getIndex() ) ) );
+							throw new NotImplementedException( "check if this really needs an offset model" );
+						}
 						else
-							e.setModel( TileModelFactory.createDefaultModel( tileInfo.numDimensions() ) );
+						{
+							e.setModel( TileModelFactory.createTranslationModel( tileInfo.numDimensions() ) );
+						}
 
 						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
 						final Tile< ? > tile = new ImagePlusTimePoint( fakeImage, e.getIndex(), 1, e.getModel(), e );
@@ -329,7 +335,8 @@ public class AddMissingTiles
 							tileToAdd.getConnectedTiles().clear();
 
 							// Reset the model for this tile
-							tileToAdd.getModel().set( TileModelFactory.createOffsetModel( tileInfoToAdd ) );
+//							tileToAdd.getModel().set( TileModelFactory.createOffsetModel( tileInfoToAdd ) );
+							throw new NotImplementedException( "check if this really needs an offset model" );
 						}
 					}
 
@@ -349,7 +356,8 @@ public class AddMissingTiles
 							tilesInfoFinal.put( tileInfoAdded.getIndex(), tileInfoAdded );
 							tilesInfoAdded.add( tileInfoAdded );
 
-							tileToAdd.getModel().set( TileModelFactory.createOffsetModel( tileInfoAdded ) );
+//							tileToAdd.getModel().set( TileModelFactory.createOffsetModel( tileInfoAdded ) );
+							throw new NotImplementedException( "check if this really needs an offset model" );
 						}
 
 						for ( final SerializablePairWiseStitchingResult[] shiftMulti : shiftsMultiPairToAdd )
@@ -497,7 +505,8 @@ public class AddMissingTiles
 					tileToAdd.getConnectedTiles().clear();
 
 					// Reset the model for this tile
-					tileToAdd.getModel().set( TileModelFactory.createOffsetModel( tileInfoToAdd ) );
+//					tileToAdd.getModel().set( TileModelFactory.createOffsetModel( tileInfoToAdd ) );
+					throw new NotImplementedException( "check if this really needs an offset model" );
 				}
 
 				System.out.println( lowestMeanDisplacement + " " + lowestMaxDisplacement );
@@ -525,7 +534,9 @@ public class AddMissingTiles
 				tilesInfoFinal.put( tileInfoAdded.getIndex(), tileInfoAdded );
 				tilesInfoAdded.add( tileInfoAdded );
 
-				tileToAdd.getModel().set( TileModelFactory.createOffsetModel( tileInfoAdded ) );
+//				tileToAdd.getModel().set( TileModelFactory.createOffsetModel( tileInfoAdded ) );
+				if ( tileToAdd != null )
+					throw new NotImplementedException( "check if this really needs an offset model" );
 
 				for ( final SerializablePairWiseStitchingResult[] shiftMulti : shiftsMultiToAdd )
 				{

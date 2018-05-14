@@ -13,6 +13,7 @@ import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
 import mpicbg.imglib.custom.OffsetValidator;
+import mpicbg.models.Affine2D;
 import mpicbg.models.Affine3D;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.Model;
@@ -32,6 +33,7 @@ import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.img.imageplus.FloatImagePlus;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.RealTransform;
@@ -176,7 +178,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			matches.add( match );
 		}
 
-		final Model< ? > model = TileModelFactory.createAffineModel( tile );
+		final Model< ? > model = TileModelFactory.createAffineModel( tile.numDimensions() );
 		try
 		{
 			model.fit( matches );
@@ -185,13 +187,31 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		{
 			throw new PipelineExecutionException( e );
 		}
-		final Affine3D< ? > affineModel = ( Affine3D< ? > ) model;
-		final double[][] matrix = new double[ 3 ][ 4 ];
-		affineModel.toMatrix( matrix );
 
-		final AffineTransform3D expectedTileTransform = new AffineTransform3D();
-		expectedTileTransform.set( matrix );
-		return expectedTileTransform;
+		if ( tile.numDimensions() == 2 )
+		{
+			final Affine2D< ? > affineModel = ( Affine2D< ? > ) model;
+			final double[][] matrix = new double[ tile.numDimensions() ][ tile.numDimensions() + 1 ];
+			affineModel.toMatrix( matrix );
+
+			final AffineTransform2D expectedTileTransform = new AffineTransform2D();
+			expectedTileTransform.set( matrix );
+			return expectedTileTransform;
+		}
+		else if ( tile.numDimensions() == 3 )
+		{
+			final Affine3D< ? > affineModel = ( Affine3D< ? > ) model;
+			final double[][] matrix = new double[ tile.numDimensions() ][ tile.numDimensions() + 1 ];
+			affineModel.toMatrix( matrix );
+
+			final AffineTransform3D expectedTileTransform = new AffineTransform3D();
+			expectedTileTransform.set( matrix );
+			return expectedTileTransform;
+		}
+		else
+		{
+			throw new RuntimeException( "2d/3d only" );
+		}
 	}
 
 	/**

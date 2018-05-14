@@ -66,7 +66,7 @@ public class Utils {
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
 		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.numDimensions() );
-		e.setModel( TileModelFactory.createOffsetModel( tile ) );
+		e.setModel( TileModelFactory.createTranslationModel( tile.numDimensions() ) );
 		return e;
 	}
 
@@ -76,7 +76,7 @@ public class Utils {
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
 		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 		e.setDimensionality( tile.numDimensions() );
-		e.setModel( TileModelFactory.createAffineModel( tile ) );
+		e.setModel( TileModelFactory.createAffineModel( tile.numDimensions() ) );
 		return e;
 	}
 

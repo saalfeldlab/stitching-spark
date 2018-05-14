@@ -62,7 +62,7 @@ public class CheckConnectedGraphs
 						final ImageCollectionElement e = new ImageCollectionElement( new File( tileInfo.getFilePath() ), tileInfo.getIndex() );
 						e.setOffset( Conversions.toFloatArray( tileInfo.getPosition() ) );
 						e.setDimensionality( tileInfo.numDimensions() );
-						e.setModel( TileModelFactory.createDefaultModel( tileInfo.numDimensions() ) );
+						e.setModel( TileModelFactory.createTranslationModel( tileInfo.numDimensions() ) );
 						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
 						final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, e.getIndex(), 1, e.getModel(), e );
 						fakeTileImagesMap.put( tileInfo.getIndex(), fakeTile );
@@ -161,7 +161,7 @@ public class CheckConnectedGraphs
 						final ImageCollectionElement e = new ImageCollectionElement( new File( tileInfo.getFilePath() ), tileInfo.getIndex() );
 						e.setOffset( Conversions.toFloatArray( tileInfo.getPosition() ) );
 						e.setDimensionality( tileInfo.numDimensions() );
-						e.setModel( TileModelFactory.createDefaultModel( tileInfo.numDimensions() ) );
+						e.setModel( TileModelFactory.createTranslationModel( tileInfo.numDimensions() ) );
 						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
 						final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, e.getIndex(), 1, e.getModel(), e );
 						fakeTileImagesMap.put( tileInfo.getIndex(), fakeTile );

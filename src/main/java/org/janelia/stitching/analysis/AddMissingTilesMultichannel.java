@@ -103,7 +103,7 @@ public class AddMissingTilesMultichannel
 							final ImageCollectionElement e = new ImageCollectionElement( new File( tile.getFilePath() ), tile.getIndex() );
 							e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
 							e.setDimensionality( tile.numDimensions() );
-							e.setModel( TileModelFactory.createDefaultModel( tile.numDimensions() ) );
+							e.setModel( TileModelFactory.createTranslationModel( tile.numDimensions() ) );
 							final ImagePlus fakeImage = new ImagePlus( tile.getIndex().toString(), (java.awt.Image)null );
 							final Tile< ? > fakeTileImage = new ImagePlusTimePoint( fakeImage, e.getIndex(), 1, e.getModel(), e );
 							fakeTileImages.put( tile.getIndex(), fakeTileImage );
