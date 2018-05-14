@@ -111,7 +111,14 @@ public class TileSearchRadiusEstimator implements Serializable
 
 	public SearchRadius getSearchRadiusTreeWithinEstimationWindow( final SubdividedTileBox tileBox ) throws PipelineExecutionException
 	{
-		return estimator.getSearchRadiusTreeWithinEstimationWindow( getTileBoxMiddlePointStagePosition( tileBox ) );
+		final double[] tileBoxMiddlePointStagePosition = getTileBoxMiddlePointStagePosition( tileBox );
+
+		final double[] adjustedStageWindowPosition = new double[ tileBox.numDimensions() ];
+		for ( int d = 0; d < tileBox.numDimensions(); ++d )
+			adjustedStageWindowPosition[ d ] = tileBox.getBoundaries().min( d ) == 0 ? tileBox.getFullTile().realMin( d ) : tileBox.getFullTile().realMax( d );
+
+		final Interval neighborhoodWindow = estimator.getEstimationWindow( adjustedStageWindowPosition );
+		return estimator.getSearchRadiusTreeWithinInterval( neighborhoodWindow, tileBoxMiddlePointStagePosition );
 	}
 	public SearchRadius getSearchRadiusTreeWithinEstimationWindow( final TileInfo tile ) throws PipelineExecutionException
 	{
