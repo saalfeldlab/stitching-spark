@@ -227,7 +227,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	 * @return pair: (rendered image; its world bounding box)
 	 * @throws PipelineExecutionException
 	 */
-	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > Pair< ImagePlus, Interval > renderTileBox(
+	private Pair< ImagePlus, Interval > renderTileBox(
 			final SubdividedTileBox tileBox,
 			final InvertibleRealTransform originalTileTransform,
 			final List< Map< String, TileInfo > > coordsToTilesChannels,
@@ -396,9 +396,9 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		return offsetTransform;
 	}
 
-	private < T extends NumericType< T > > void blur( final RandomAccessibleInterval< T > image, final double[] sigmas ) throws IncompatibleTypeException
+	private < F extends NumericType< F > > void blur( final RandomAccessibleInterval< F > image, final double[] sigmas ) throws IncompatibleTypeException
 	{
-		final RandomAccessible< T > extendedImage = Views.extendMirrorSingle( image );
+		final RandomAccessible< F > extendedImage = Views.extendMirrorSingle( image );
 		Gauss3.gauss( sigmas, extendedImage, image, new SameThreadExecutorService() );
 	}
 
