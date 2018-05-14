@@ -176,7 +176,7 @@ public class SearchRadiusEstimator implements Serializable
 		return new SearchRadius( searchRadiusMultiplier, meanValues, covarianceMatrix, pointIndexes, stagePosition );
 	}
 
-	private Interval getEstimationWindow( final double[] stagePosition )
+	Interval getEstimationWindow( final double[] stagePosition )
 	{
 		final long[] estimationWindowMin = new long[ estimationWindowSize.length ], estimationWindowMax = new long[ estimationWindowSize.length ];
 		for ( int d = 0; d < estimationWindowSize.length; ++d )

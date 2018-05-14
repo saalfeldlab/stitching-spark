@@ -214,7 +214,8 @@ public class TileSearchRadiusEstimator implements Serializable
 			catch ( final Exception e )
 			{
 				System.out.println( "Cannot get timestamp:" );
-				e.printStackTrace();
+//				e.printStackTrace();
+				return 0;
 			}
 		}
 

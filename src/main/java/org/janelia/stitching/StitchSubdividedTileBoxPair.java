@@ -159,7 +159,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	 * @return
 	 * @throws PipelineExecutionException
 	 */
-	private InvertibleRealTransform estimateAffineTransformation(
+	static InvertibleRealTransform estimateAffineTransformation(
 			final TileInfo tile,
 			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException
 	{
@@ -330,7 +330,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		return new ValuePair<>( roiImp, roiBoundingBox );
 	}
 
-	private SearchRadius getCombinedSearchRadiusForMovingBox(
+	static SearchRadius getCombinedSearchRadiusForMovingBox(
 			final TileSearchRadiusEstimator searchRadiusEstimator,
 			final SubdividedTileBox[] tileBoxes,
 			final InvertibleRealTransform[] estimatedTileTransforms,
@@ -359,7 +359,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		return combinedSearchRadiusForMovingBox;
 	}
 
-	private RealTransform buildOffsetTransform(
+	static RealTransform buildOffsetTransform(
 			final SubdividedTileBox[] tileBoxes,
 			final InvertibleRealTransform[] estimatedTileTransforms,
 			final Interval[] transformedBoxIntervals,
@@ -402,7 +402,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		Gauss3.gauss( sigmas, extendedImage, image, new SameThreadExecutorService() );
 	}
 
-	private double computeVariance( final ImagePlus[] roiPartImps )
+	static double computeVariance( final ImagePlus[] roiPartImps )
 	{
 		double pixelSum = 0, pixelSumSquares = 0;
 		long pixelCount = 0;
