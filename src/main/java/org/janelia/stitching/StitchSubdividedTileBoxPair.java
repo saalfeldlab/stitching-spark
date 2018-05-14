@@ -173,8 +173,10 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		for ( final SubdividedTileBox tileBox : tileBoxes )
 		{
 			final SearchRadius searchRadius = searchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( tileBox );
-			final double[] stagePosition = searchRadiusEstimator.getTileBoxMiddlePointStagePosition( tileBox );
-			final PointMatch match = new PointMatch( new Point( stagePosition ), new Point( searchRadius.getEllipseCenter() ) );
+			final double[] newStagePosition = new double[ tileBox.numDimensions() ];
+			for ( int d = 0; d < newStagePosition.length; ++d )
+				newStagePosition[ d ] = searchRadius.getStagePosition()[ d ] + searchRadius.getOffsetsMeanValues()[ d ];
+			final PointMatch match = new PointMatch( new Point( SplitTileOperations.getTileBoxMiddlePoint( tileBox ) ), new Point( newStagePosition ) );
 			matches.add( match );
 		}
 
