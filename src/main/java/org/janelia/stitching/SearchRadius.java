@@ -1,7 +1,6 @@
 package org.janelia.stitching;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 
 import org.ojalgo.matrix.BasicMatrix;
@@ -23,9 +22,6 @@ public class SearchRadius implements OffsetValidator
 	private final double[] offsetsMeanValues;
 	private final double[][] offsetsCovarianceMatrix;
 
-	private final List< Integer > usedPointsIndexes;
-	private final double[] stagePosition;
-
 	private final double[] eigenValues;
 	private final double[][] eigenVectors;
 
@@ -37,36 +33,16 @@ public class SearchRadius implements OffsetValidator
 	private final double[] ellipseRadius;
 	private final double[][] uncertaintyVectors;
 
-	private RealTransform offsetTransform;
+//	private RealTransform offsetTransform;
+	private RealTransform ellipseTransform;
 
 	public SearchRadius(
 			final double searchRadiusMultiplier,
 			final double[] offsetsMeanValues,
 			final double[][] offsetsCovarianceMatrix ) throws PipelineExecutionException
 	{
-		this( searchRadiusMultiplier, offsetsMeanValues, offsetsCovarianceMatrix, null );
-	}
-
-	public SearchRadius(
-			final double searchRadiusMultiplier,
-			final double[] offsetsMeanValues,
-			final double[][] offsetsCovarianceMatrix,
-			final List< Integer > usedPointsIndexes ) throws PipelineExecutionException
-	{
-		this( searchRadiusMultiplier, offsetsMeanValues, offsetsCovarianceMatrix, usedPointsIndexes, new double[ offsetsMeanValues.length ] );
-	}
-
-	public SearchRadius(
-			final double searchRadiusMultiplier,
-			final double[] offsetsMeanValues,
-			final double[][] offsetsCovarianceMatrix,
-			final List< Integer > usedPointsIndexes,
-			final double[] stagePosition ) throws PipelineExecutionException
-	{
 		this.offsetsMeanValues = offsetsMeanValues;
 		this.offsetsCovarianceMatrix = offsetsCovarianceMatrix;
-		this.usedPointsIndexes = usedPointsIndexes;
-		this.stagePosition = stagePosition;
 
 		final PhysicalStore.Factory< Double, PrimitiveDenseStore > storeFactory = PrimitiveDenseStore.FACTORY;
 		final PrimitiveDenseStore matrixStore = storeFactory.makeEye( offsetsCovarianceMatrix.length, offsetsCovarianceMatrix.length );
@@ -162,10 +138,17 @@ public class SearchRadius implements OffsetValidator
         	vectorBuilder.set( cornerPosition.length, 0, 1 );
 
 			final PrimitiveMatrix transformedVector = transformMatrix.multiply( vectorBuilder.get() );
-			for ( int dRow = 0; dRow < cornerPosition.length; ++dRow )
+			final double[] transformedPoint = new double[ numDimensions() ];
+			for ( int dRow = 0; dRow < transformedPoint.length; ++dRow )
+				transformedPoint[ dRow ] = transformedVector.get( dRow, 0 );
+
+			if ( ellipseTransform != null )
+				ellipseTransform.apply( transformedPoint, transformedPoint );
+
+			for ( int d = 0; d < cornerPosition.length; ++d )
 			{
-				boundingBoxMin[ dRow ] = Math.min( transformedVector.get( dRow, 0 ), boundingBoxMin[ dRow ] );
-				boundingBoxMax[ dRow ] = Math.max( transformedVector.get( dRow, 0 ), boundingBoxMax[ dRow ] );
+				boundingBoxMin[ d ] = Math.min( transformedPoint[ d ], boundingBoxMin[ d ] );
+				boundingBoxMax[ d ] = Math.max( transformedPoint[ d ], boundingBoxMax[ d ] );
 			}
 		}
         return new FinalRealInterval( boundingBoxMin, boundingBoxMax );
@@ -181,8 +164,8 @@ public class SearchRadius implements OffsetValidator
 	{
 		// if transformation is present, convert the offset to the user-specified coordinate space in which the error ellipse is defined
 		final double[] transformedOffset = offset.clone();
-		if ( offsetTransform != null )
-			offsetTransform.apply( transformedOffset, transformedOffset );
+//		if ( offsetTransform != null )
+//			offsetTransform.apply( transformedOffset, transformedOffset );
 
 		// build a vector with point coordinates
 		final BasicMatrix.Factory< PrimitiveMatrix > matrixFactory = PrimitiveMatrix.FACTORY;
@@ -203,30 +186,34 @@ public class SearchRadius implements OffsetValidator
         return Math.sqrt( coordsSumSquared );
 	}
 
-	public RealTransform getOffsetTransform()
+//	public RealTransform getOffsetTransform()
+//	{
+//		return offsetTransform;
+//	}
+//
+//	public void setOffsetTransform( final RealTransform offsetTransform )
+//	{
+//		this.offsetTransform = offsetTransform;
+//	}
+	public RealTransform getEllipseTransform()
 	{
-		return offsetTransform;
+		return ellipseTransform;
 	}
 
-	public void setOffsetTransform( final RealTransform offsetTransform )
+	public void setEllipseTransform( final RealTransform ellipseTransform )
 	{
-		this.offsetTransform = offsetTransform;
+		this.ellipseTransform = ellipseTransform;
+	}
+
+	public RealInterval estimateTransformedBoundingBox()
+	{
+		return estimateBoundingBox( transformMatrix );
 	}
 
 	@Override
 	public int numDimensions()
 	{
 		return offsetsMeanValues.length;
-	}
-
-	public double[] getStagePosition()
-	{
-		return stagePosition;
-	}
-
-	public List< Integer > getUsedPointsIndexes()
-	{
-		return usedPointsIndexes;
 	}
 
 	public double[] getOffsetsMeanValues()

@@ -26,7 +26,6 @@ import org.janelia.stitching.StitchSubdividedTileBoxPair.StitchingResult;
 
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
-import net.imglib2.util.Intervals;
 import net.imglib2.view.RandomAccessiblePairNullable;
 
 /**
@@ -575,12 +574,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				final TileInfo[] statsTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( statsTileConfigurationPath ) ) );
 				System.out.println( "-- Creating search radius estimator using " + job.getTiles( 0 ).length + " stage tiles and " + statsTiles.length + " stitched tiles --" );
 				searchRadiusEstimator = new TileSearchRadiusEstimator(
-						job.getTiles( 0 ),
 						statsTiles,
 						job.getArgs().searchRadiusMultiplier(),
 						job.getArgs().searchWindowSizeTiles()
 					);
-				System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( searchRadiusEstimator.getEstimationWindowSize() ) ) + " --" );
+				System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( searchRadiusEstimator.estimationWindowSize ) + " --" );
 			}
 			catch ( final IOException e )
 			{

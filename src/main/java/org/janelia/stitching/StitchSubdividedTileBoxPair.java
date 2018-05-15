@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.janelia.dataaccess.DataProvider;
+import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxSearchRadius;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
@@ -112,14 +113,13 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			transformedRoiIntervals[ i ] = roiAndWorldBoundingBox.getB();
 		}
 
-		final SearchRadius combinedSearchRadiusForMovingBox;
+		final EstimatedTileBoxSearchRadius combinedSearchRadiusForMovingBox;
 		if ( searchRadiusEstimator != null )
 		{
 			combinedSearchRadiusForMovingBox = getCombinedSearchRadiusForMovingBox(
 					searchRadiusEstimator,
 					tileBoxes,
-					estimatedAffines,
-					transformedRoiIntervals
+					estimatedAffines
 				);
 		}
 		else
@@ -132,7 +132,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise(
 				tileBoxPair,
 				roiImps,
-				combinedSearchRadiusForMovingBox
+				combinedSearchRadiusForMovingBox.searchRadius
 			);
 
 		// compute variance within ROI for both images
@@ -146,7 +146,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 		return new StitchingResult(
 				pairwiseResult,
-				combinedSearchRadiusForMovingBox != null ? combinedSearchRadiusForMovingBox.getEllipseRadius() : null
+				combinedSearchRadiusForMovingBox != null ? combinedSearchRadiusForMovingBox.searchRadius.getEllipseRadius() : null
 			);
 	}
 
@@ -172,12 +172,18 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		final List< PointMatch > matches = new ArrayList<>();
 		for ( final SubdividedTileBox tileBox : tileBoxes )
 		{
-			final SearchRadius searchRadius = searchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( tileBox );
-			final double[] newStagePosition = new double[ tileBox.numDimensions() ];
-			for ( int d = 0; d < newStagePosition.length; ++d )
-				newStagePosition[ d ] = searchRadius.getStagePosition()[ d ] + searchRadius.getOffsetsMeanValues()[ d ];
-			final PointMatch match = new PointMatch( new Point( SplitTileOperations.getTileBoxMiddlePoint( tileBox ) ), new Point( newStagePosition ) );
-			matches.add( match );
+			final EstimatedTileBoxSearchRadius estimatedTileBoxSearchRadius = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tileBox );
+			final double[] tileBoxMiddlePointPositionInsideTile = SplitTileOperations.getTileBoxMiddlePoint( tileBox );
+			final double[] tileBoxMiddlePointStagePosition = SplitTileOperations.getTileBoxMiddlePointStagePosition( tileBox );
+			final double[] estimatedTileBoxOffset = estimatedTileBoxSearchRadius.searchRadius.getOffsetsMeanValues();
+			final double[] tileBoxMiddlePointShiftedPosition = new double[ tileBox.numDimensions() ];
+			for ( int d = 0; d < tileBoxMiddlePointShiftedPosition.length; ++d )
+				tileBoxMiddlePointShiftedPosition[ d ] = tileBoxMiddlePointStagePosition[ d ] + estimatedTileBoxOffset[ d ];
+
+			matches.add( new PointMatch(
+					new Point( tileBoxMiddlePointPositionInsideTile ),
+					new Point( tileBoxMiddlePointShiftedPosition )
+				) );
 		}
 
 		final Model< ? > model = TileModelFactory.createAffineModel( tile.numDimensions() );
@@ -330,45 +336,68 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		return new ValuePair<>( roiImp, roiBoundingBox );
 	}
 
-	static SearchRadius getCombinedSearchRadiusForMovingBox(
+	static EstimatedTileBoxSearchRadius getCombinedSearchRadiusForMovingBox(
 			final TileSearchRadiusEstimator searchRadiusEstimator,
 			final SubdividedTileBox[] tileBoxes,
-			final InvertibleRealTransform[] estimatedTileTransforms,
-			final Interval[] transformedBoxIntervals ) throws PipelineExecutionException
+			final InvertibleRealTransform[] estimatedTileTransforms ) throws PipelineExecutionException
 	{
-		final SearchRadius[] searchRadiusStats = new SearchRadius[ tileBoxes.length ];
+		final EstimatedTileBoxSearchRadius[] searchRadiusStats = new EstimatedTileBoxSearchRadius[ tileBoxes.length ];
 		for ( int i = 0; i < tileBoxes.length; ++i )
-			searchRadiusStats[ i ] = searchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( tileBoxes[ i ] );
+			searchRadiusStats[ i ] = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tileBoxes[ i ] );
 
-		final RealTransform offsetTransform = buildOffsetTransform(
-				tileBoxes,
-				estimatedTileTransforms,
-				transformedBoxIntervals,
-				searchRadiusStats
+		final EstimatedTileBoxSearchRadius combinedSearchRadiusForMovingBox = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
+				searchRadiusStats[ 0 ],
+				searchRadiusStats[ 1 ]
 			);
 
-		final SearchRadius fixedTileBoxSearchRadius = searchRadiusStats[ 0 ], movingTileBoxSearchRadius = searchRadiusStats[ 1 ];
+		final RealTransformSequence ellipseTransform = new RealTransformSequence();
+		ellipseTransform.add( new Translation( SplitTileOperations.getTileBoxMiddlePoint( tileBoxes[ 1 ] ) ) );
+		ellipseTransform.add( estimatedTileTransforms[ 1 ] );
 
-		final SearchRadius combinedSearchRadiusForMovingBox = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
-				fixedTileBoxSearchRadius,
-				movingTileBoxSearchRadius
-			);
-
-		combinedSearchRadiusForMovingBox.setOffsetTransform( offsetTransform );
+//		combinedSearchRadiusForMovingBox.setEllipseTransform( ellipseTransform );
 
 		return combinedSearchRadiusForMovingBox;
 	}
+
+//	static SearchRadius getCombinedSearchRadiusForMovingBox(
+//			final TileSearchRadiusEstimator searchRadiusEstimator,
+//			final SubdividedTileBox[] tileBoxes,
+//			final InvertibleRealTransform[] estimatedTileTransforms,
+//			final Interval[] transformedBoxIntervals ) throws PipelineExecutionException
+//	{
+//		final SearchRadius[] searchRadiusStats = new SearchRadius[ tileBoxes.length ];
+//		for ( int i = 0; i < tileBoxes.length; ++i )
+//			searchRadiusStats[ i ] = searchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( tileBoxes[ i ] );
+//
+//		final RealTransform offsetTransform = buildOffsetTransform(
+//				tileBoxes,
+//				estimatedTileTransforms,
+//				transformedBoxIntervals,
+//				searchRadiusStats
+//			);
+//
+//		final SearchRadius fixedTileBoxSearchRadius = searchRadiusStats[ 0 ], movingTileBoxSearchRadius = searchRadiusStats[ 1 ];
+//
+//		final SearchRadius combinedSearchRadiusForMovingBox = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
+//				fixedTileBoxSearchRadius,
+//				movingTileBoxSearchRadius
+//			);
+//
+//		combinedSearchRadiusForMovingBox.setOffsetTransform( offsetTransform );
+//
+//		return combinedSearchRadiusForMovingBox;
+//	}
 
 	static RealTransform buildOffsetTransform(
 			final SubdividedTileBox[] tileBoxes,
 			final InvertibleRealTransform[] estimatedTileTransforms,
 			final Interval[] transformedBoxIntervals,
-			final SearchRadius[] searchRadiusStats )
+			final EstimatedTileBoxSearchRadius [] searchRadiusStats )
 	{
 		final SubdividedTileBox fixedTileBox = tileBoxes[ 0 ], movingTileBox = tileBoxes[ 1 ];
 		final InvertibleRealTransform fixedTileEstimatedTransform = estimatedTileTransforms[ 0 ], movingTileEstimatedTransform = estimatedTileTransforms[ 1 ];
 		final Interval fixedTileBoxTransformedWorldInterval = transformedBoxIntervals[ 0 ], movingTileBoxTransformedWorldInterval = transformedBoxIntervals[ 1 ];
-		final SearchRadius fixedTileBoxSearchRadius = searchRadiusStats[ 0 ], movingTileBoxSearchRadius = searchRadiusStats[ 1 ];
+		final EstimatedTileBoxSearchRadius fixedTileBoxSearchRadius = searchRadiusStats[ 0 ], movingTileBoxSearchRadius = searchRadiusStats[ 1 ];
 
 		final RealTransformSequence offsetTransform = new RealTransformSequence();
 
@@ -386,8 +415,8 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 		// initial (stage) offset between fixed tile box and moving tile box
 		final double[] stageTileBoxOffset = new double[ fixedTileBox.numDimensions() ];
-		for ( int d = 0; d < stageTileBoxOffset.length; ++d )
-			stageTileBoxOffset[ d ] = movingTileBoxSearchRadius.getStagePosition()[ d ] - fixedTileBoxSearchRadius.getStagePosition()[ d ];
+//		for ( int d = 0; d < stageTileBoxOffset.length; ++d )
+//			stageTileBoxOffset[ d ] = movingTileBoxSearchRadius.getStagePosition()[ d ] - fixedTileBoxSearchRadius.getStagePosition()[ d ];
 		offsetTransform.add( new Translation( stageTileBoxOffset ) ); // add relation between fixed tile box and moving tile box
 
 		final double[] movingTileBoxMiddlePoint = SplitTileOperations.getTileBoxMiddlePoint( movingTileBox );

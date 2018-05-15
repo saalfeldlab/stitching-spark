@@ -153,11 +153,39 @@ public class SplitTileOperations
 	 * @param tileBox
 	 * @return
 	 */
+	public static double[] transformTileBoxMiddlePoint( final SubdividedTileBox tileBox )
+	{
+		return transformTileBoxMiddlePoint( tileBox, TileOperations.getTileTransform( tileBox.getFullTile() ) );
+	}
+
+	/**
+	 * Transforms middle point of a given tile box.
+	 *
+	 * @param tileBox
+	 * @param originalTileTransform
+	 * @return
+	 */
 	public static double[] transformTileBoxMiddlePoint( final SubdividedTileBox tileBox, final RealTransform originalTileTransform )
 	{
 		final double[] transformedTileBoxMiddlePoint = new double[ tileBox.numDimensions() ];
 		originalTileTransform.apply( getTileBoxMiddlePoint( tileBox ), transformedTileBoxMiddlePoint );
 		return transformedTileBoxMiddlePoint;
+	}
+
+	/**
+	 * Returns stage position of the middle point of the given tile box.
+	 *
+	 * @param tileBox
+	 * @return
+	 */
+	public static double[] getTileBoxMiddlePointStagePosition( final SubdividedTileBox tileBox )
+	{
+		final double[] tileStagePosition = tileBox.getFullTile().getPosition();
+		final double[] tileBoxMiddlePoint = getTileBoxMiddlePoint( tileBox );
+		final double[] tileBoxMiddlePointStagePosition = new double[ tileBox.numDimensions() ];
+		for ( int d = 0; d < tileBoxMiddlePointStagePosition.length; ++d )
+			tileBoxMiddlePointStagePosition[ d ] = tileBoxMiddlePoint[ d ] + tileStagePosition[ d ];
+		return tileBoxMiddlePointStagePosition;
 	}
 
 	/**
