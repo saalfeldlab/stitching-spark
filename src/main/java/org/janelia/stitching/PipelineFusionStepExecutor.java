@@ -231,7 +231,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 		final Map< Integer, Interval > transformedTilesBoundingBoxes = new HashMap<>();
 		for ( final TileInfo tile : tiles )
-			transformedTilesBoundingBoxes.put( tile.getIndex(), TileOperations.estimateBoundingBox( tile ) );
+			transformedTilesBoundingBoxes.put( tile.getIndex(), TileOperations.getTransformedBoundingBox( tile ) );
 
 		final Interval fullBoundingBox = TileOperations.getCollectionBoundaries( transformedTilesBoundingBoxes.values() );
 		final long[] offset = Intervals.minAsLongArray( fullBoundingBox );

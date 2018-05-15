@@ -16,6 +16,8 @@ import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
+import net.imglib2.iterator.IntervalIterator;
+import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.Translation;
 import net.imglib2.util.IntervalIndexer;
@@ -197,7 +199,7 @@ public class TileOperations
 	{
 		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
-			if ( TileOperations.overlap( tile, subregion ) )
+			if ( overlap( tile, subregion ) )
 				tilesWithinSubregion.add( tile );
 		return tilesWithinSubregion;
 	}
@@ -206,7 +208,7 @@ public class TileOperations
 	{
 		final Set< Integer > tilesWithinSubregion = new HashSet<>();
 		for ( final Entry< Integer, ? extends Interval > entry : tiles.entrySet() )
-			if ( TileOperations.overlap( entry.getValue(), subregion ) )
+			if ( overlap( entry.getValue(), subregion ) )
 				tilesWithinSubregion.add( entry.getKey() );
 		return tilesWithinSubregion;
 	}
@@ -215,7 +217,7 @@ public class TileOperations
 	{
 		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
-			if ( TileOperations.overlap( tile, subregion ) )
+			if ( overlap( tile, subregion ) )
 				tilesWithinSubregion.add( tile );
 		return tilesWithinSubregion;
 	}
@@ -305,14 +307,14 @@ public class TileOperations
 	 */
 	public static void translateTilesToOrigin( final TileInfo[] tiles )
 	{
-		final Boundaries space = TileOperations.getCollectionBoundaries( tiles );
+		final Boundaries space = getCollectionBoundaries( tiles );
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
 				tile.setPosition( d, Math.round( tile.getPosition( d ) ) - space.min( d ) );
 	}
 	public static void translateTilesToOriginReal( final TileInfo[] tiles )
 	{
-		final RealInterval space = TileOperations.getRealCollectionBoundaries( tiles );
+		final RealInterval space = getRealCollectionBoundaries( tiles );
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
 				tile.setPosition( d, tile.getPosition( d ) - space.realMin( d ) );
@@ -331,9 +333,9 @@ public class TileOperations
 	/**
 	 * Returns tile transform, that is its affine transform if not null, or translation transform to the position of the tile otherwise.
 	 */
-	public static InvertibleRealTransform getTileTransform( final TileInfo tile )
+	public static AffineGet getTileTransform( final TileInfo tile )
 	{
-		final InvertibleRealTransform ret;
+		final AffineGet ret;
 		if ( tile.getTransform() != null )
 			ret = tile.getTransform();
 		else
@@ -344,20 +346,62 @@ public class TileOperations
 	/**
 	 * Estimates the bounding box of a transformed (or shifted) tile.
 	 *
-	 * FIXME: to be consistent with an affine transformation or a real shift vector, {@link TileInfo#getBoundaries()} should be changed from rounding to extending
-	 * to the smallest containing interval
+	 * @param tile
+	 * @param transform
+	 * @return
 	 */
-	public static Interval estimateBoundingBox( final TileInfo tile )
+	public static Interval getTransformedBoundingBox( final TileInfo tile )
 	{
-		if ( tile.getTransform() == null )
-			return tile.getBoundaries();
+		return getTransformedBoundingBox( new FinalInterval( tile.getSize() ), tile.getTransform() );
+	}
 
-		final double[] tileMax = new double[ tile.numDimensions() ];
-		for ( int d = 0; d < tileMax.length; ++d )
-			tileMax[ d ] = tile.getSize( d ) - 1;
-		final RealInterval tileRealBoundsAtZero = new FinalRealInterval( new double[ tile.numDimensions() ], tileMax );
-		final RealInterval estimatedRealBounds = tile.getTransform().estimateBounds( tileRealBoundsAtZero );
-		return Intervals.smallestContainingInterval( estimatedRealBounds );
+	/**
+	 * Estimates the bounding box of a transformed interval inside a tile.
+	 *
+	 * @param interval
+	 * @param transform
+	 * @return
+	 */
+	public static Interval getTransformedBoundingBox( final RealInterval interval, final InvertibleRealTransform transform )
+	{
+		return Intervals.smallestContainingInterval( getTransformedBoundingBoxReal( interval, transform ) );
+	}
+
+	/**
+	 * Estimates the bounding box of a transformed interval inside a tile.
+	 *
+	 * @param interval
+	 * @param transform
+	 * @return
+	 */
+	public static RealInterval getTransformedBoundingBoxReal( final RealInterval interval, final InvertibleRealTransform transform )
+	{
+		final double[] transformedMin = new double[ interval.numDimensions() ], transformedMax = new double[ interval.numDimensions() ];
+		Arrays.fill( transformedMin, Double.POSITIVE_INFINITY );
+		Arrays.fill( transformedMax, Double.NEGATIVE_INFINITY );
+
+		final double[] cornerPosition = new double[ interval.numDimensions() ], transformedCornerPosition = new double[ interval.numDimensions() ];
+
+		final int[] cornerDimensions = new int[ interval.numDimensions() ];
+		Arrays.fill( cornerDimensions, 2 );
+		final IntervalIterator cornerIterator = new IntervalIterator( cornerDimensions );
+
+		while ( cornerIterator.hasNext() )
+		{
+			cornerIterator.fwd();
+			for ( int d = 0; d < interval.numDimensions(); ++d )
+				cornerPosition[ d ] = cornerIterator.getIntPosition( d ) == 0 ? interval.realMin( d ) : interval.realMax( d );
+
+			transform.apply( cornerPosition, transformedCornerPosition );
+
+			for ( int d = 0; d < interval.numDimensions(); ++d )
+			{
+				transformedMin[ d ] = Math.min( transformedCornerPosition[ d ], transformedMin[ d ] );
+				transformedMax[ d ] = Math.max( transformedCornerPosition[ d ], transformedMax[ d ] );
+			}
+		}
+
+		return new FinalRealInterval( transformedMin, transformedMax );
 	}
 
 	/**

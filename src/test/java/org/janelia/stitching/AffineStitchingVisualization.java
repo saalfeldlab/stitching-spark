@@ -4,9 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 
 import ij.ImageJ;
 import ij.ImagePlus;
@@ -18,11 +16,10 @@ import net.imglib2.img.imageplus.IntImagePlus;
 import net.imglib2.iterator.IntervalIterator;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.InvertibleRealTransform;
+import net.imglib2.realtransform.Translation2D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
-import net.imglib2.util.Pair;
-import net.imglib2.util.ValuePair;
 
 public class AffineStitchingVisualization
 {
@@ -37,23 +34,21 @@ public class AffineStitchingVisualization
 
 	final int[] tilePairIndexes = new int[] { 5, 6 };
 
-	final int[] tileBoxPairIndexes = new int[] { 3, 2 };
+	final int[] tileBoxPairIndexes = new int[] { 3, 1 };
 
 	final double searchRadiusMultiplier = 3; // 3 * sigma
 
 	private AffineStitchingVisualization() throws ImgLibException, PipelineExecutionException
 	{
-		final Pair< TileInfo[], TileInfo[] > tilesStageStitchedPair = getTiles();
-		final TileInfo[] stageTiles = tilesStageStitchedPair.getA();
-		final TileInfo[] stitchedTiles = tilesStageStitchedPair.getB();
+		final TileInfo[] tiles = getTiles();
 
 		final IntImagePlus< ARGBType > img = ImagePlusImgs.argbs( displaySize[ 0 ], displaySize[ 1 ] );
 		final RandomAccess< ARGBType > imgRandomAccess = img.randomAccess();
 
-		drawTiles( stageTiles, imgRandomAccess, new ARGBType( ARGBType.rgba( 255, 0, 0, 32 ) ) );
-		drawTiles( stitchedTiles, imgRandomAccess, new ARGBType( ARGBType.rgba( 0, 255, 0, 32 ) ) );
+		drawStageTiles( tiles, imgRandomAccess, new ARGBType( ARGBType.rgba( 255, 0, 0, 32 ) ) );
+		drawStitchedTiles( tiles, imgRandomAccess, new ARGBType( ARGBType.rgba( 0, 255, 0, 32 ) ) );
 
-		final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( stageTiles, new int[] { 2, 2 } );
+		final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2 } );
 		@SuppressWarnings( "unchecked" )
 		final List< SubdividedTileBox >[] tilePairBoxes = new ArrayList[] { new ArrayList<>(), new ArrayList<>() };
 		for ( final SubdividedTileBox tileBox : tileBoxes )
@@ -61,37 +56,59 @@ public class AffineStitchingVisualization
 				if ( tileBox.getFullTile().getIndex().intValue() == tilePairIndexes[ i ] )
 					tilePairBoxes[ i ].add( tileBox );
 
-		drawTileBoxes( tilePairBoxes[ 0 ], imgRandomAccess, new ARGBType( ARGBType.rgba( 0, 64, 64, 32 ) ) );
-		drawTileBoxes( tilePairBoxes[ 1 ], imgRandomAccess, new ARGBType( ARGBType.rgba( 64, 0, 64, 32 ) ) );
+		drawTileBoxes( tilePairBoxes[ 0 ], imgRandomAccess, new ARGBType( ARGBType.rgba( 0, 96, 96, 32 ) ) );
+		drawTileBoxes( tilePairBoxes[ 1 ], imgRandomAccess, new ARGBType( ARGBType.rgba( 96, 0, 96, 32 ) ) );
 
-		final TileSearchRadiusEstimator searchRadiusEstimator = new TileSearchRadiusEstimator( stageTiles, stitchedTiles, 3, new int[] { 2, 2 } );
-		final InvertibleRealTransform[] estimatedTransform = new InvertibleRealTransform[] {
-				StitchSubdividedTileBoxPair.estimateAffineTransformation( stageTiles[ tilePairIndexes[ 0 ] ], searchRadiusEstimator ),
-				StitchSubdividedTileBoxPair.estimateAffineTransformation( stageTiles[ tilePairIndexes[ 1 ] ], searchRadiusEstimator )
+		final TileSearchRadiusEstimator searchRadiusEstimator = new TileSearchRadiusEstimator( tiles, 3, new int[] { 2, 2 } );
+		final InvertibleRealTransform[] estimatedTileTransforms = new InvertibleRealTransform[] {
+				StitchSubdividedTileBoxPair.estimateAffineTransformation( tiles[ tilePairIndexes[ 0 ] ], searchRadiusEstimator ),
+				StitchSubdividedTileBoxPair.estimateAffineTransformation( tiles[ tilePairIndexes[ 1 ] ], searchRadiusEstimator )
 			};
 
+		// draw transformed tiles
 		drawTransformedRectangle(
-				getLocalRealIntervalCorners( stageTiles[ tilePairIndexes[ 0 ] ] ),
-				estimatedTransform[ 0 ],
+				getLocalRealIntervalCorners( tiles[ tilePairIndexes[ 0 ] ] ),
+				estimatedTileTransforms[ 0 ],
 				displaySize,
 				imgRandomAccess,
-				new ARGBType( ARGBType.rgba( 192, 192, 192, 128 ) )
+				new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
+			);
+		drawTransformedRectangle(
+				getLocalRealIntervalCorners( tiles[ tilePairIndexes[ 1 ] ] ),
+				estimatedTileTransforms[ 1 ],
+				displaySize,
+				imgRandomAccess,
+				new ARGBType( ARGBType.rgba( 255, 255, 255, 64 ) )
 			);
 
+		// draw transformed tile boxes
 		drawTransformedRectangle(
-				getLocalRealIntervalCorners( stageTiles[ tilePairIndexes[ 1 ] ] ),
-				estimatedTransform[ 1 ],
+				getRealIntervalCorners( tilePairBoxes[ 0 ].get( tileBoxPairIndexes[ 0 ] ) ),
+				estimatedTileTransforms[ 0 ],
 				displaySize,
 				imgRandomAccess,
-				new ARGBType( ARGBType.rgba( 255, 255, 255, 128 ) )
+				new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
 			);
+		drawTransformedRectangle(
+				getRealIntervalCorners( tilePairBoxes[ 1 ].get( tileBoxPairIndexes[ 1 ] ) ),
+				estimatedTileTransforms[ 1 ],
+				displaySize,
+				imgRandomAccess,
+				new ARGBType( ARGBType.rgba( 255, 255, 255, 255 ) )
+			);
+
+//		final SearchRadius movingBoxWorldErrorEllispse = StitchSubdividedTileBoxPair.getCombinedSearchRadiusForMovingBox(
+//				searchRadiusEstimator,
+//				tileBoxes,
+//				estimatedTileTransform
+//			);
 
 		new ImageJ();
 		final ImagePlus imp = img.getImagePlus();
 		imp.show();
 	}
 
-	private Pair< TileInfo[], TileInfo[] > getTiles()
+	private TileInfo[] getTiles()
 	{
 		final double[][] stagePositions = new double[][] {
 				new double[] { 200, 100 },
@@ -127,36 +144,41 @@ public class AffineStitchingVisualization
 			new double[] { 1065, 408 },
 		};
 
-		final Map< Integer, TileInfo > stageTiles = new TreeMap<>();
+		final List< TileInfo > tiles = new ArrayList<>();
 		for ( int i = 0; i < stagePositions.length; ++i )
 		{
-			final TileInfo stageTile = new TileInfo( 2 );
-			stageTile.setIndex( i );
-			stageTile.setSize( tileSize );
-			stageTile.setPosition( stagePositions[ i ] );
-			stageTiles.put( stageTile.getIndex(), stageTile );
+			final TileInfo tile = new TileInfo( 2 );
+			tile.setIndex( i );
+			tile.setSize( tileSize );
+			tile.setPosition( stagePositions[ i ] );
+			tile.setTransform( new Translation2D( stitchedPositions[ i ] ) );
+			tiles.add( tile );
 		}
 
-		final Map< Integer, TileInfo > stitchedTiles = new TreeMap<>();
-		for ( int i = 0; i < stitchedPositions.length; ++i )
-		{
-			final TileInfo stitchedTile = new TileInfo( 2 );
-			stitchedTile.setIndex( i );
-			stitchedTile.setSize( tileSize );
-			stitchedTile.setPosition( stitchedPositions[ i ] );
-			stitchedTiles.put( stitchedTile.getIndex(), stitchedTile );
-		}
-
-		return new ValuePair<>( stageTiles.values().toArray( new TileInfo[ 0 ] ), stitchedTiles.values().toArray( new TileInfo[ 0 ] ) );
+		return tiles.toArray( new TileInfo[ 0 ] );
 	}
 
-	private void drawTiles( final TileInfo[] tiles, final RandomAccess< ARGBType > imgRandomAccess, final ARGBType color )
+	private void drawStageTiles( final TileInfo[] tiles, final RandomAccess< ARGBType > imgRandomAccess, final ARGBType color )
 	{
 		for ( final TileInfo tile : tiles )
 		{
 			drawRectangle(
 					getRealIntervalCorners( tile ),
 					null,
+					displaySize,
+					imgRandomAccess,
+					color
+				);
+		}
+	}
+
+	private void drawStitchedTiles( final TileInfo[] tiles, final RandomAccess< ARGBType > imgRandomAccess, final ARGBType color )
+	{
+		for ( final TileInfo tile : tiles )
+		{
+			drawTransformedRectangle(
+					getLocalRealIntervalCorners( tile ),
+					tile.getTransform(),
 					displaySize,
 					imgRandomAccess,
 					color

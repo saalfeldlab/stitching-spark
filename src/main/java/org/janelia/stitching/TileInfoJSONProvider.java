@@ -7,12 +7,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import org.janelia.saalfeldlab.n5.bdv.AffineTransform3DJsonAdapter;
-
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.AffineGet;
 
 /**
  * Provides convenience methods for loading tiles configuration and storing it on a disk in JSON format.
@@ -89,7 +87,7 @@ public class TileInfoJSONProvider
 	private static Gson createGson()
 	{
 		return new GsonBuilder()
-				.registerTypeAdapter( AffineTransform3D.class, new AffineTransform3DJsonAdapter() )
+				.registerTypeAdapter( AffineGet.class, new AffineGetJsonAdapter() )
 				.create();
 	}
 }

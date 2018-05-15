@@ -2,7 +2,7 @@ package org.janelia.stitching;
 
 import net.imglib2.RealInterval;
 import net.imglib2.RealPositionable;
-import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.AffineGet;
 
 /**
  * Represents tile image metadata.
@@ -19,7 +19,7 @@ public class TileInfo implements Cloneable, RealInterval {
 	private long[] size;
 	private double[] pixelResolution;
 
-	private AffineTransform3D transform;
+	private AffineGet transform;
 
 	public TileInfo( final int dim ) {
 		position = new double[ dim ];
@@ -112,11 +112,11 @@ public class TileInfo implements Cloneable, RealInterval {
 		this.index = index;
 	}
 
-	public AffineTransform3D getTransform() {
+	public AffineGet getTransform() {
 		return transform;
 	}
 
-	public void setTransform( final AffineTransform3D transform ) {
+	public void setTransform( final AffineGet transform ) {
 		this.transform = transform;
 	}
 
@@ -147,7 +147,8 @@ public class TileInfo implements Cloneable, RealInterval {
 		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );
 		newTile.setPixelResolution( pixelResolution == null ? null : pixelResolution.clone() );
-		newTile.setTransform( transform == null ? null : transform.copy() );
+//		newTile.setTransform( transform == null ? null : transform.copy() );
+		newTile.setTransform( transform );
 		return newTile;
 	}
 

@@ -7,15 +7,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.PipelineExecutionException;
-import org.janelia.stitching.SearchRadius;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 import org.janelia.stitching.TilePair;
-import org.janelia.stitching.TileSearchRadiusEstimator;
 import org.janelia.stitching.Utils;
 
 public class FindPairwiseChanges
@@ -82,7 +81,10 @@ public class FindPairwiseChanges
 			final int minNumNeighbors,
 			final boolean adjacentOnly ) throws PipelineExecutionException
 	{
-		final TileSearchRadiusEstimator predictor = new TileSearchRadiusEstimator(
+		throw new NotImplementedException();
+
+		// TODO: encode stitched tile position as the transform field in the stageTiles instances
+		/*final TileSearchRadiusEstimator predictor = new TileSearchRadiusEstimator(
 				stageTiles,
 				stitchedTiles,
 				searchRadiusMultiplier,
@@ -121,6 +123,6 @@ public class FindPairwiseChanges
 		for ( final TilePair predictedPair : predictedPairs )
 			newStageAdjacentPairs.add( new TilePair( stageTilesMap.get( predictedPair.getA().getIndex() ), stageTilesMap.get( predictedPair.getB().getIndex() ) ) );
 
-		return newStageAdjacentPairs;
+		return newStageAdjacentPairs;*/
 	}
 }
