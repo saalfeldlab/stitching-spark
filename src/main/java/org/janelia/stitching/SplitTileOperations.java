@@ -209,28 +209,28 @@ public class SplitTileOperations
 	 * Returns overlap intervals in relative coordinate space of each tile box, e.g. (overlap in fixed tile box, overlap in moving tile box).
 	 *
 	 * @param tileBoxPair
-	 * @param searchRadius
+	 * @param errorEllipse
 	 * @return
 	 */
-	public static Pair< Interval, Interval > getAdjustedOverlapIntervals( final Pair< Interval, Interval > tileBoxPair, final SearchRadius searchRadius )
+	public static Pair< Interval, Interval > getAdjustedOverlapIntervals( final Pair< Interval, Interval > tileBoxPair, final ErrorEllipse errorEllipse )
 	{
 		final Interval fixedIntervalInFixedSpace = tileBoxPair.getA(), movingIntervalInFixedSpace = tileBoxPair.getB();
 		if ( !Views.isZeroMin( fixedIntervalInFixedSpace ) )
 			throw new IllegalArgumentException( "not in the fixed tile box space" );
 
-		final Interval searchRadiusBoundingBox = Intervals.smallestContainingInterval( searchRadius.getBoundingBox() );
+		final Interval errorEllipseBoundingBox = Intervals.smallestContainingInterval( errorEllipse.getBoundingBox() );
 
-		// try all corners of the bounding box of the search radius and use the largest overlap
-		final int[] cornersPos = new int[ searchRadiusBoundingBox.numDimensions() ];
-		final int[] cornersDimensions = new int[ searchRadiusBoundingBox.numDimensions() ];
+		// try all corners of the bounding box of the error ellipse and use the largest overlap
+		final int[] cornersPos = new int[ errorEllipseBoundingBox.numDimensions() ];
+		final int[] cornersDimensions = new int[ errorEllipseBoundingBox.numDimensions() ];
 		Arrays.fill( cornersDimensions, 2 );
 		final IntervalIterator cornerIntervalIterator = new IntervalIterator( cornersDimensions );
 
-		final long[] overlapInFixedSpaceMin = new long[ searchRadiusBoundingBox.numDimensions() ], overlapInFixedSpaceMax = new long[ searchRadiusBoundingBox.numDimensions() ];
+		final long[] overlapInFixedSpaceMin = new long[ errorEllipseBoundingBox.numDimensions() ], overlapInFixedSpaceMax = new long[ errorEllipseBoundingBox.numDimensions() ];
 		Arrays.fill( overlapInFixedSpaceMin, Long.MAX_VALUE );
 		Arrays.fill( overlapInFixedSpaceMax, Long.MIN_VALUE );
 
-		final long[] overlapInMovingSpaceMin = new long[ searchRadiusBoundingBox.numDimensions() ], overlapInMovingSpaceMax = new long[ searchRadiusBoundingBox.numDimensions() ];
+		final long[] overlapInMovingSpaceMin = new long[ errorEllipseBoundingBox.numDimensions() ], overlapInMovingSpaceMax = new long[ errorEllipseBoundingBox.numDimensions() ];
 		Arrays.fill( overlapInMovingSpaceMin, Long.MAX_VALUE );
 		Arrays.fill( overlapInMovingSpaceMax, Long.MIN_VALUE );
 
@@ -240,9 +240,9 @@ public class SplitTileOperations
 			cornerIntervalIterator.localize( cornersPos );
 
 			// get test moving position in the fixed space
-			final long[] testMovingPositionInFixedSpace = new long[ searchRadiusBoundingBox.numDimensions() ];
+			final long[] testMovingPositionInFixedSpace = new long[ errorEllipseBoundingBox.numDimensions() ];
 			for ( int d = 0; d < testMovingPositionInFixedSpace.length; ++d )
-				testMovingPositionInFixedSpace[ d ] = ( cornersPos[ d ] == 0 ? searchRadiusBoundingBox.min( d ) : searchRadiusBoundingBox.max( d ) );
+				testMovingPositionInFixedSpace[ d ] = ( cornersPos[ d ] == 0 ? errorEllipseBoundingBox.min( d ) : errorEllipseBoundingBox.max( d ) );
 
 			// get test moving interval in the fixed space
 			final Interval testMovingIntervalInFixedSpace = IntervalsHelper.setPosition( movingIntervalInFixedSpace, testMovingPositionInFixedSpace );
@@ -253,7 +253,7 @@ public class SplitTileOperations
 			if ( testOverlapInFixedSpace != null )
 			{
 				// update ROI in the fixed space
-				for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
+				for ( int d = 0; d < errorEllipseBoundingBox.numDimensions(); ++d )
 				{
 					overlapInFixedSpaceMin[ d ] = Math.min( testOverlapInFixedSpace.min( d ), overlapInFixedSpaceMin[ d ] );
 					overlapInFixedSpaceMax[ d ] = Math.max( testOverlapInFixedSpace.max( d ), overlapInFixedSpaceMax[ d ] );
@@ -261,7 +261,7 @@ public class SplitTileOperations
 
 				// update ROI in the moving space
 				final Interval testOverlapInMovingSpace = IntervalsHelper.offset( testOverlapInFixedSpace, testMovingPositionInFixedSpace );
-				for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
+				for ( int d = 0; d < errorEllipseBoundingBox.numDimensions(); ++d )
 				{
 					overlapInMovingSpaceMin[ d ] = Math.min( testOverlapInMovingSpace.min( d ), overlapInMovingSpaceMin[ d ] );
 					overlapInMovingSpaceMax[ d ] = Math.max( testOverlapInMovingSpace.max( d ), overlapInMovingSpaceMax[ d ] );
@@ -269,7 +269,7 @@ public class SplitTileOperations
 			}
 		}
 
-		for ( int d = 0; d < searchRadiusBoundingBox.numDimensions(); ++d )
+		for ( int d = 0; d < errorEllipseBoundingBox.numDimensions(); ++d )
 			if ( ( overlapInFixedSpaceMin[ d ] == Long.MAX_VALUE || overlapInFixedSpaceMax[ d ] == Long.MIN_VALUE ) || ( overlapInMovingSpaceMin[ d ] == Long.MAX_VALUE || overlapInMovingSpaceMax[ d ] == Long.MIN_VALUE ) )
 				return null;
 

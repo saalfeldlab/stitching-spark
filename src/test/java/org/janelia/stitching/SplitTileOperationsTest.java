@@ -231,9 +231,9 @@ public class SplitTileOperationsTest
 		final double ellipseRadius = 2;
 		final double[] offsetsMeanValues = Intervals.minAsDoubleArray( intervalsInFixedBoxSpace.getB() );
 		final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
-		final SearchRadius searchRadius = new SearchRadius( ellipseRadius, offsetsMeanValues, offsetsCovarianceMatrix );
+		final ErrorEllipse errorEllipse = new ErrorEllipse( ellipseRadius, offsetsMeanValues, offsetsCovarianceMatrix );
 
-		final Pair< Interval, Interval > adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( intervalsInFixedBoxSpace, searchRadius );
+		final Pair< Interval, Interval > adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( intervalsInFixedBoxSpace, errorEllipse );
 
 		Assert.assertArrayEquals( new long[] { 0, 0 }, Intervals.minAsLongArray( adjustedOverlaps.getA() ) );
 		Assert.assertArrayEquals( new long[] { 7, 3 }, Intervals.maxAsLongArray( adjustedOverlaps.getA() ) );

@@ -27,16 +27,16 @@ public class TileSearchRadiusEstimator implements Serializable
 {
 	public static class EstimatedTileBoxSearchRadius
 	{
-		public final SearchRadius searchRadius;
+		public final ErrorEllipse errorEllipse;
 		public final SubdividedTileBox tileBox;
 		public final Set< TileInfo > neighboringTiles;
 
 		public EstimatedTileBoxSearchRadius(
-				final SearchRadius searchRadius,
+				final ErrorEllipse errorEllipse,
 				final SubdividedTileBox tileBox,
 				final Set< TileInfo > neighboringTiles )
 		{
-			this.searchRadius = searchRadius;
+			this.errorEllipse = errorEllipse;
 			this.tileBox = tileBox;
 			this.neighboringTiles = neighboringTiles;
 		}
@@ -137,7 +137,7 @@ public class TileSearchRadiusEstimator implements Serializable
 			}
 		}
 
-		final SearchRadius searchRadius = new SearchRadius( searchRadiusMultiplier, meanValues, covarianceMatrix );
+		final ErrorEllipse searchRadius = new ErrorEllipse( searchRadiusMultiplier, meanValues, covarianceMatrix );
 		return new EstimatedTileBoxSearchRadius( searchRadius, tileBox, neighboringTiles );
 	}
 
@@ -192,7 +192,7 @@ public class TileSearchRadiusEstimator implements Serializable
 			final EstimatedTileBoxSearchRadius movingSearchRadius ) throws PipelineExecutionException
 	{
 		return new EstimatedTileBoxSearchRadius(
-				new SearchRadius(
+				new ErrorEllipse(
 						searchRadiusMultiplier,
 						getCombinedMeanOffset( fixedSearchRadius, movingSearchRadius ),
 						getCombinedCovariances( fixedSearchRadius, movingSearchRadius )
@@ -204,20 +204,20 @@ public class TileSearchRadiusEstimator implements Serializable
 
 	static double[][] getCombinedCovariances( final EstimatedTileBoxSearchRadius fixedSearchRadius, final EstimatedTileBoxSearchRadius movingSearchRadius )
 	{
-		final int dim = Math.max( fixedSearchRadius.searchRadius.numDimensions(), movingSearchRadius.searchRadius.numDimensions() );
+		final int dim = Math.max( fixedSearchRadius.errorEllipse.numDimensions(), movingSearchRadius.errorEllipse.numDimensions() );
 		final double[][] combinedOffsetsCovarianceMatrix = new double[ dim ][ dim ];
 		for ( int dRow = 0; dRow < dim; ++dRow )
 			for ( int dCol = 0; dCol < dim; ++dCol )
-				combinedOffsetsCovarianceMatrix[ dRow ][ dCol ] = fixedSearchRadius.searchRadius.getOffsetsCovarianceMatrix()[ dRow ][ dCol ] + movingSearchRadius.searchRadius.getOffsetsCovarianceMatrix()[ dRow ][ dCol ];
+				combinedOffsetsCovarianceMatrix[ dRow ][ dCol ] = fixedSearchRadius.errorEllipse.getOffsetsCovarianceMatrix()[ dRow ][ dCol ] + movingSearchRadius.errorEllipse.getOffsetsCovarianceMatrix()[ dRow ][ dCol ];
 		return combinedOffsetsCovarianceMatrix;
 	}
 
 	static double[] getCombinedMeanOffset( final EstimatedTileBoxSearchRadius fixedSearchRadius, final EstimatedTileBoxSearchRadius movingSearchRadius )
 	{
-		final int dim = Math.max( fixedSearchRadius.searchRadius.numDimensions(), movingSearchRadius.searchRadius.numDimensions() );
+		final int dim = Math.max( fixedSearchRadius.errorEllipse.numDimensions(), movingSearchRadius.errorEllipse.numDimensions() );
 		final double[] combinedOffsetsMeanValues = new double[ dim ];
 		for ( int d = 0; d < dim; ++d )
-			combinedOffsetsMeanValues[ d ] = movingSearchRadius.searchRadius.getOffsetsMeanValues()[ d ] - fixedSearchRadius.searchRadius.getOffsetsMeanValues()[ d ];
+			combinedOffsetsMeanValues[ d ] = movingSearchRadius.errorEllipse.getOffsetsMeanValues()[ d ] - fixedSearchRadius.errorEllipse.getOffsetsMeanValues()[ d ];
 		return combinedOffsetsMeanValues;
 	}
 

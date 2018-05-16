@@ -17,7 +17,7 @@ import net.imglib2.RealInterval;
 import net.imglib2.iterator.IntervalIterator;
 import net.imglib2.realtransform.RealTransform;
 
-public class SearchRadius implements OffsetValidator
+public class ErrorEllipse implements OffsetValidator
 {
 	private final double[] offsetsMeanValues;
 	private final double[][] offsetsCovarianceMatrix;
@@ -36,7 +36,7 @@ public class SearchRadius implements OffsetValidator
 //	private RealTransform offsetTransform;
 	private RealTransform ellipseTransform;
 
-	public SearchRadius(
+	public ErrorEllipse(
 			final double searchRadiusMultiplier,
 			final double[] offsetsMeanValues,
 			final double[][] offsetsCovarianceMatrix ) throws PipelineExecutionException

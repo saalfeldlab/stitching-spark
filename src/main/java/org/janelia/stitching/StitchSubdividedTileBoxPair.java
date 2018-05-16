@@ -132,7 +132,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise(
 				tileBoxPair,
 				roiImps,
-				combinedSearchRadiusForMovingBox.searchRadius
+				combinedSearchRadiusForMovingBox.errorEllipse
 			);
 
 		// compute variance within ROI for both images
@@ -146,7 +146,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 		return new StitchingResult(
 				pairwiseResult,
-				combinedSearchRadiusForMovingBox != null ? combinedSearchRadiusForMovingBox.searchRadius.getEllipseRadius() : null
+				combinedSearchRadiusForMovingBox != null ? combinedSearchRadiusForMovingBox.errorEllipse.getEllipseRadius() : null
 			);
 	}
 
@@ -175,7 +175,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			final EstimatedTileBoxSearchRadius estimatedTileBoxSearchRadius = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tileBox );
 			final double[] tileBoxMiddlePointPositionInsideTile = SplitTileOperations.getTileBoxMiddlePoint( tileBox );
 			final double[] tileBoxMiddlePointStagePosition = SplitTileOperations.getTileBoxMiddlePointStagePosition( tileBox );
-			final double[] estimatedTileBoxOffset = estimatedTileBoxSearchRadius.searchRadius.getOffsetsMeanValues();
+			final double[] estimatedTileBoxOffset = estimatedTileBoxSearchRadius.errorEllipse.getOffsetsMeanValues();
 			final double[] tileBoxMiddlePointShiftedPosition = new double[ tileBox.numDimensions() ];
 			for ( int d = 0; d < tileBoxMiddlePointShiftedPosition.length; ++d )
 				tileBoxMiddlePointShiftedPosition[ d ] = tileBoxMiddlePointStagePosition[ d ] + estimatedTileBoxOffset[ d ];
