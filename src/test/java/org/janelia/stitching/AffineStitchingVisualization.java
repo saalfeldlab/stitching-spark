@@ -6,20 +6,32 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxSearchRadius;
+
 import ij.ImageJ;
 import ij.ImagePlus;
+import net.imglib2.Cursor;
+import net.imglib2.Interval;
 import net.imglib2.RandomAccess;
+import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
+import net.imglib2.algorithm.neighborhood.DiamondShape;
+import net.imglib2.algorithm.neighborhood.DiamondShape.NeighborhoodsIterableInterval;
+import net.imglib2.algorithm.neighborhood.Neighborhood;
 import net.imglib2.exception.ImgLibException;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.img.imageplus.IntImagePlus;
 import net.imglib2.iterator.IntervalIterator;
+import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.Translation2D;
+import net.imglib2.type.logic.BitType;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
+import net.imglib2.view.Views;
 
 public class AffineStitchingVisualization
 {
@@ -65,43 +77,58 @@ public class AffineStitchingVisualization
 				StitchSubdividedTileBoxPair.estimateAffineTransformation( tiles[ tilePairIndexes[ 1 ] ], searchRadiusEstimator )
 			};
 
+		final TilePair tilePair = new TilePair( tiles[ tilePairIndexes[ 0 ] ], tiles[ tilePairIndexes[ 1 ] ] );
+
 		// draw transformed tiles
 		drawTransformedRectangle(
-				getLocalRealIntervalCorners( tiles[ tilePairIndexes[ 0 ] ] ),
+				getLocalRealIntervalCorners( tilePair.getA() ),
 				estimatedTileTransforms[ 0 ],
 				displaySize,
 				imgRandomAccess,
 				new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
 			);
 		drawTransformedRectangle(
-				getLocalRealIntervalCorners( tiles[ tilePairIndexes[ 1 ] ] ),
+				getLocalRealIntervalCorners( tilePair.getB() ),
 				estimatedTileTransforms[ 1 ],
 				displaySize,
 				imgRandomAccess,
 				new ARGBType( ARGBType.rgba( 255, 255, 255, 64 ) )
 			);
 
+		final SubdividedTileBoxPair tileBoxPair = new SubdividedTileBoxPair(
+				tilePairBoxes[ 0 ].get( tileBoxPairIndexes[ 0 ] ),
+				tilePairBoxes[ 1 ].get( tileBoxPairIndexes[ 1 ] )
+			);
+
 		// draw transformed tile boxes
 		drawTransformedRectangle(
-				getRealIntervalCorners( tilePairBoxes[ 0 ].get( tileBoxPairIndexes[ 0 ] ) ),
+				getRealIntervalCorners( tileBoxPair.getA() ),
 				estimatedTileTransforms[ 0 ],
 				displaySize,
 				imgRandomAccess,
 				new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
 			);
 		drawTransformedRectangle(
-				getRealIntervalCorners( tilePairBoxes[ 1 ].get( tileBoxPairIndexes[ 1 ] ) ),
+				getRealIntervalCorners( tileBoxPair.getB() ),
 				estimatedTileTransforms[ 1 ],
 				displaySize,
 				imgRandomAccess,
 				new ARGBType( ARGBType.rgba( 255, 255, 255, 255 ) )
 			);
 
-//		final SearchRadius movingBoxWorldErrorEllispse = StitchSubdividedTileBoxPair.getCombinedSearchRadiusForMovingBox(
-//				searchRadiusEstimator,
-//				tileBoxes,
-//				estimatedTileTransform
-//			);
+		final EstimatedTileBoxSearchRadius movingBoxWorldSearchRadius = StitchSubdividedTileBoxPair.getCombinedSearchRadiusForMovingBox(
+				searchRadiusEstimator,
+				tileBoxPair.toArray(),
+				estimatedTileTransforms
+			);
+
+		drawErrorEllipse(
+				movingBoxWorldSearchRadius.errorEllipse,
+				new Translation2D( Intervals.minAsDoubleArray( SplitTileOperations.transformTileBox( tileBoxPair.getB() ) ) ),
+				displaySize,
+				imgRandomAccess,
+				new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) )
+			);
 
 		new ImageJ();
 		final ImagePlus imp = img.getImagePlus();
@@ -206,7 +233,7 @@ public class AffineStitchingVisualization
 
 	private void drawRectangle(
 			final double[][] rectCorners,
-			final AffineTransform2D displayTransform,
+			final AffineGet displayTransform,
 			final int[] displaySize,
 			final RandomAccess< ARGBType > imgRandomAccess,
 			final ARGBType color )
@@ -264,6 +291,76 @@ public class AffineStitchingVisualization
 
 					if ( pointTransform != null )
 						pointTransform.apply( pos, pos );
+
+					for ( int d = 0; d < dim; ++d )
+						posDisplay[ d ] = ( int ) Math.round( pos[ d ] );
+
+					boolean insideView = true;
+					for ( int d = 0; d < dim; ++d )
+						insideView &= ( posDisplay[ d ] >= 0 && posDisplay[ d ] < displaySize[ d ] );
+
+					if ( insideView )
+					{
+						final int pixelIndex = IntervalIndexer.positionToIndex( posDisplay, displaySize );
+						if ( !visitedPixels.contains( pixelIndex ) )
+						{
+							imgRandomAccess.setPosition( posDisplay );
+							imgRandomAccess.get().add( color );
+							visitedPixels.add( pixelIndex );
+						}
+					}
+				}
+			}
+		}
+	}
+
+	private void drawErrorEllipse(
+			final ErrorEllipse errorEllipse,
+			final AffineGet displayTransform,
+			final int[] displaySize,
+			final RandomAccess< ARGBType > imgRandomAccess,
+			final ARGBType color )
+	{
+		final int dim = displaySize.length;
+		final double[] pos = new double[ dim ];
+		final int[] posDisplay = new int[ dim ];
+
+		final Set< Integer > visitedPixels = new HashSet<>();
+
+		final Interval errorEllipseBoundingBox = Intervals.smallestContainingInterval( errorEllipse.getBoundingBox() );
+		final RandomAccessibleInterval< BitType > errorEllipseTestImg = Views.translate(
+				ArrayImgs.bits( Intervals.dimensionsAsLongArray( errorEllipseBoundingBox ) ),
+				Intervals.minAsLongArray( errorEllipseBoundingBox )
+			);
+		final Cursor< BitType > errorEllipseTestImgCursor = Views.iterable( errorEllipseTestImg ).localizingCursor();
+		while ( errorEllipseTestImgCursor.hasNext() )
+		{
+			errorEllipseTestImgCursor.fwd();
+			errorEllipseTestImgCursor.localize( pos );
+			if ( errorEllipse.testOffset( pos ) )
+				errorEllipseTestImgCursor.get().setOne();
+		}
+
+		final NeighborhoodsIterableInterval< BitType > neighborhoods = new DiamondShape( 1 ).neighborhoodsSafe( errorEllipseTestImg );
+		final Cursor< Neighborhood< BitType > > neighborhoodsCursor = neighborhoods.localizingCursor();
+		final RandomAccess< BitType > errorEllipseTestImgRandomAccess = errorEllipseTestImg.randomAccess();
+		while ( neighborhoodsCursor.hasNext() )
+		{
+			final Neighborhood< BitType > neighborhood = neighborhoodsCursor.next();
+			errorEllipseTestImgRandomAccess.setPosition( neighborhoodsCursor );
+			if ( errorEllipseTestImgRandomAccess.get().get() )
+			{
+				boolean isInnerPoint = true;
+				for ( final BitType pt : neighborhood )
+					isInnerPoint &= pt.get();
+
+				// it is a contour point if it is inside the ellipse but at least one of the neighbors is outside the ellipse
+				if ( !isInnerPoint )
+				{
+					neighborhoodsCursor.localize( pos );
+
+					if ( displayTransform != null )
+						displayTransform.apply( pos, pos );
 
 					for ( int d = 0; d < dim; ++d )
 						posDisplay[ d ] = ( int ) Math.round( pos[ d ] );
