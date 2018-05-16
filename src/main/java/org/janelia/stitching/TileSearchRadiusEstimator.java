@@ -47,6 +47,8 @@ public class TileSearchRadiusEstimator implements Serializable
 	final double[] estimationWindowSize;
 	final double searchRadiusMultiplier;
 
+	final double[] worldOffset;
+
 	private final KDTree< TileInfo > kdTree;
 
 	public TileSearchRadiusEstimator(
@@ -78,6 +80,9 @@ public class TileSearchRadiusEstimator implements Serializable
 		for ( final TileInfo tileWithStitchedTransform : tilesWithStitchedTransform )
 			stageSubsetPositions.add( new RealPoint( tileWithStitchedTransform.getPosition() ) );
 
+		// calculate world offset as an average difference between world and stage coordinates
+		worldOffset = getWorldOffset( tilesWithStitchedTransform );
+
 		// build a search tree to be able to look up stage positions and corresponding stitched positions
 		// in the neighborhood for any given stage position
 		kdTree = new KDTree<>( tilesWithStitchedTransform, stageSubsetPositions );
@@ -108,7 +113,7 @@ public class TileSearchRadiusEstimator implements Serializable
 
 	private EstimatedTileBoxSearchRadius estimateSearchRadius( final SubdividedTileBox tileBox, final Set< TileInfo > neighboringTiles ) throws PipelineExecutionException
 	{
-		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = getStageAndWorldCoordinates( tileBox, neighboringTiles );
+		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = getStageAndWorldCoordinates( tileBox, neighboringTiles, worldOffset );
 
 		final double[] meanValues = new double[ tileBox.numDimensions() ];
 		for ( int d = 0; d < meanValues.length; ++d )
@@ -141,6 +146,30 @@ public class TileSearchRadiusEstimator implements Serializable
 		return new EstimatedTileBoxSearchRadius( searchRadius, tileBox, neighboringTiles );
 	}
 
+	static double[] getWorldOffset( final Collection< TileInfo > tilesWithStitchedTransform )
+	{
+		final int dim = tilesWithStitchedTransform.iterator().next().numDimensions();
+		final double[] worldOffset = new double[ dim ];
+
+		// helper for transforming the middle point of the tile instead of the min point
+		final int[] noSplitParts = new int[ dim ];
+		Arrays.fill( noSplitParts, 1 );
+		final List< SubdividedTileBox > fullTileBoxes = SplitTileOperations.splitTilesIntoBoxes( tilesWithStitchedTransform.toArray( new TileInfo[ 0 ] ), noSplitParts );
+
+		for ( final SubdividedTileBox fullTileBox : fullTileBoxes )
+		{
+			final double[] tileMiddlePointStagePosition = SplitTileOperations.getTileBoxMiddlePointStagePosition( fullTileBox );
+			final double[] tileMiddlePointWorldPosition = SplitTileOperations.transformTileBoxMiddlePoint( fullTileBox );
+			for ( int d = 0; d < dim; ++d )
+				worldOffset[ d ] += tileMiddlePointWorldPosition[ d ] - tileMiddlePointStagePosition[ d ];
+		}
+
+		for ( int d = 0; d < dim; ++d )
+			worldOffset[ d ] /= tilesWithStitchedTransform.size();
+
+		return worldOffset;
+	}
+
 	static double[] getEstimationWindowSize( final long[] tileSize, final int[] statsWindowTileSize )
 	{
 		final double[] estimationWindowSize = new double[ tileSize.length ];
@@ -149,7 +178,10 @@ public class TileSearchRadiusEstimator implements Serializable
 		return estimationWindowSize;
 	}
 
-	private static List< Pair< RealPoint, RealPoint > > getStageAndWorldCoordinates( final SubdividedTileBox tileBox, final Set< TileInfo > neighboringTiles )
+	private static List< Pair< RealPoint, RealPoint > > getStageAndWorldCoordinates(
+			final SubdividedTileBox tileBox,
+			final Set< TileInfo > neighboringTiles,
+			final double[] worldOffset )
 	{
 		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = new ArrayList<>();
 		for ( final TileInfo neighboringTile : neighboringTiles )
@@ -163,6 +195,9 @@ public class TileSearchRadiusEstimator implements Serializable
 				{
 					final double[] neighboringTileBoxMiddlePointStagePosition = SplitTileOperations.getTileBoxMiddlePointStagePosition( neighboringTileBox );
 					final double[] neighboringTileBoxMiddlePointWorldPosition = SplitTileOperations.transformTileBoxMiddlePoint( neighboringTileBox );
+
+					for ( int d = 0; d < worldOffset.length; ++d )
+						neighboringTileBoxMiddlePointWorldPosition[ d ] -= worldOffset[ d ];
 
 					stageAndWorldCoordinates.add( new ValuePair<>(
 							new RealPoint( neighboringTileBoxMiddlePointStagePosition ),
