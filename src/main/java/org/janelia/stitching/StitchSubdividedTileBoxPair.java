@@ -37,6 +37,7 @@ import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.InvertibleRealTransform;
+import net.imglib2.realtransform.InvertibleRealTransformSequence;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.Translation;
@@ -96,21 +97,27 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	{
 		final SubdividedTileBox[] tileBoxes = tileBoxPair.toArray();
 
-		final InvertibleRealTransform[] estimatedAffines = new AffineTransform3D[ tileBoxes.length ];
+		final InvertibleRealTransform[] estimatedAffines = new InvertibleRealTransform[ tileBoxes.length ];
 		final ImagePlus[] roiImps = new ImagePlus[ tileBoxes.length ];
 		final Interval[] transformedRoiIntervals = new Interval[ tileBoxes.length ];
 
+		// Render both ROIs in the fixed space (the moving tile box is transform by forward moving transform followed by inverse fixed transform)
+		final InvertibleRealTransformSequence dummyFixedBoxTransform = new InvertibleRealTransformSequence();
+		final InvertibleRealTransformSequence movingBoxToFixedBoxTransform = new InvertibleRealTransformSequence();
+		movingBoxToFixedBoxTransform.add( estimatedAffines[ 1 ] ); 				// moving -> world
+		movingBoxToFixedBoxTransform.add( estimatedAffines[ 0 ].inverse() );	// world -> fixed
+		final InvertibleRealTransform[] fixedBoxSpaceAffines = new InvertibleRealTransform[] { dummyFixedBoxTransform, movingBoxToFixedBoxTransform };
 		for ( int i = 0; i < tileBoxes.length; ++i )
 		{
 			estimatedAffines[ i ] = estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
-			final Pair< ImagePlus, Interval > roiAndWorldBoundingBox = renderTileBox(
+			final Pair< ImagePlus, Interval > roiAndFixedSpaceBoundingBox = renderTileBox(
 					tileBoxes[ i ],
-					estimatedAffines[ i ],
+					fixedBoxSpaceAffines[ i ],
 					coordsToTilesChannels,
 					flatfieldForChannels
 				);
-			roiImps[ i ] = roiAndWorldBoundingBox.getA();
-			transformedRoiIntervals[ i ] = roiAndWorldBoundingBox.getB();
+			roiImps[ i ] = roiAndFixedSpaceBoundingBox.getA();
+			transformedRoiIntervals[ i ] = roiAndFixedSpaceBoundingBox.getB();
 		}
 
 		final EstimatedTileBoxSearchRadius combinedSearchRadiusForMovingBox;
