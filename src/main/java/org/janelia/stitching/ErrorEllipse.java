@@ -3,9 +3,6 @@ package org.janelia.stitching;
 import java.util.Arrays;
 import java.util.Optional;
 
-import org.ojalgo.matrix.BasicMatrix;
-import org.ojalgo.matrix.BasicMatrix.Builder;
-import org.ojalgo.matrix.PrimitiveMatrix;
 import org.ojalgo.matrix.decomposition.Eigenvalue;
 import org.ojalgo.matrix.store.MatrixStore;
 import org.ojalgo.matrix.store.PhysicalStore;
@@ -14,8 +11,11 @@ import org.ojalgo.matrix.store.PrimitiveDenseStore;
 import mpicbg.imglib.custom.OffsetValidator;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.RealInterval;
-import net.imglib2.iterator.IntervalIterator;
-import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.AffineGet;
+import net.imglib2.realtransform.AffineSet;
+import net.imglib2.realtransform.AffineTransform;
+import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
 
 public class ErrorEllipse implements OffsetValidator
 {
@@ -25,16 +25,11 @@ public class ErrorEllipse implements OffsetValidator
 	private final double[] eigenValues;
 	private final double[][] eigenVectors;
 
-	private final PrimitiveMatrix transformMatrix;
-	private final PrimitiveMatrix inverseTransformMatrix;
+	private final AffineGet transform;
 
-	private final RealInterval boundingBox;
 	private final double[] ellipseCenter;
 	private final double[] ellipseRadius;
 	private final double[][] uncertaintyVectors;
-
-//	private RealTransform offsetTransform;
-	private RealTransform ellipseTransform;
 
 	public ErrorEllipse(
 			final double searchRadiusMultiplier,
@@ -87,71 +82,54 @@ public class ErrorEllipse implements OffsetValidator
         for ( int d = 0; d < ellipseCenter.length; ++d )
         	ellipseCenter[ d ] = offsetsMeanValues[ d ];
 
-        // build a transformation matrix for this ellipse
-		final int dim = ellipseCenter.length;
-        final BasicMatrix.Factory< PrimitiveMatrix > matrixFactory = PrimitiveMatrix.FACTORY;
-        final Builder< PrimitiveMatrix > transformMatrixBuilder = matrixFactory.getBuilder( dim + 1, dim + 1 );
-        for ( int dRow = 0; dRow < dim; ++dRow )
-        	for ( int dCol = 0; dCol < dim; ++dCol )
-        		transformMatrixBuilder.set( dRow, dCol, uncertaintyVectors[ dCol ][ dRow ] );
-        for ( int dRow = 0; dRow < dim; ++dRow )
-        {
-        	transformMatrixBuilder.set( dRow, dim, ellipseCenter[ dRow ] );
-        	transformMatrixBuilder.set( dim, dRow, 0 );
-        }
-        transformMatrixBuilder.set( dim, dim, 1 );
-
-        this.transformMatrix = transformMatrixBuilder.get();
-        this.inverseTransformMatrix = transformMatrix.invert();
-
-        this.boundingBox = estimateBoundingBox( transformMatrix );
+        this.transform = buildTransform();
 	}
+
+    @SuppressWarnings( "unchecked" )
+	private < A extends AffineGet & AffineSet > A buildTransform()
+    {
+    	final int dim = numDimensions();
+
+    	final A transform;
+    	switch ( dim )
+        {
+    	case 2:
+    		transform = ( A ) new AffineTransform2D();
+        	break;
+    	case 3:
+    		transform = ( A ) new AffineTransform3D();
+        	break;
+    	default:
+    		transform = ( A ) new AffineTransform( dim );
+        	break;
+        }
+
+    	// affine part
+    	for ( int dRow = 0; dRow < dim; ++dRow )
+        	for ( int dCol = 0; dCol < dim; ++dCol )
+        		transform.set( uncertaintyVectors[ dCol ][ dRow ], dRow, dCol );
+
+    	// translation part
+        for ( int dRow = 0; dRow < dim; ++dRow )
+        	transform.set( ellipseCenter[ dRow ], dRow, dim );
+
+    	return transform;
+    }
 
 	/**
 	 * Estimates bounding box using corner points of the unit sphere bounding box:
 	 * 1. Get a rotated bounding box of the ellipse
 	 * 2. Get a bounding box (parallel to XYZ) of the rotated bounding box so the ellipse is fully contained inside the new box
 	 *
-	 * @param transformMatrix
 	 * @return
 	 */
-	private RealInterval estimateBoundingBox( final PrimitiveMatrix transformMatrix )
+	public RealInterval estimateBoundingBox()
 	{
-		final double[] boundingBoxMin = new double[ numDimensions() ], boundingBoxMax = new double[ numDimensions() ];
-		Arrays.fill( boundingBoxMin, Double.MAX_VALUE );
-        Arrays.fill( boundingBoxMax, -Double.MAX_VALUE );
-
-		final int[] cornerIntervalDimensions = new int[ numDimensions() ];
-		Arrays.fill( cornerIntervalDimensions, 2 );
-		final IntervalIterator cornerIntervalIterator = new IntervalIterator( cornerIntervalDimensions );
-		final int[] cornerIntervalIteratorPosition = new int[ numDimensions() ], cornerPosition = new int[ numDimensions() ];
-		while ( cornerIntervalIterator.hasNext() )
-		{
-			cornerIntervalIterator.fwd();
-			cornerIntervalIterator.localize( cornerIntervalIteratorPosition );
-			for ( int d = 0; d < cornerPosition.length; ++d )
-				cornerPosition[ d ] = ( cornerIntervalIteratorPosition[ d ] == 0 ? -1 : 1 );
-
-			final Builder< PrimitiveMatrix > vectorBuilder = PrimitiveMatrix.FACTORY.getBuilder( cornerPosition.length + 1, 1 );
-        	for ( int dRow = 0; dRow < cornerPosition.length; ++dRow )
-        		vectorBuilder.set( dRow, 0, cornerPosition[ dRow ] );
-        	vectorBuilder.set( cornerPosition.length, 0, 1 );
-
-			final PrimitiveMatrix transformedVector = transformMatrix.multiply( vectorBuilder.get() );
-			final double[] transformedPoint = new double[ numDimensions() ];
-			for ( int dRow = 0; dRow < transformedPoint.length; ++dRow )
-				transformedPoint[ dRow ] = transformedVector.get( dRow, 0 );
-
-			if ( ellipseTransform != null )
-				ellipseTransform.apply( transformedPoint, transformedPoint );
-
-			for ( int d = 0; d < cornerPosition.length; ++d )
-			{
-				boundingBoxMin[ d ] = Math.min( transformedPoint[ d ], boundingBoxMin[ d ] );
-				boundingBoxMax[ d ] = Math.max( transformedPoint[ d ], boundingBoxMax[ d ] );
-			}
-		}
-        return new FinalRealInterval( boundingBoxMin, boundingBoxMax );
+        final double[] unitMin = new double[ numDimensions() ], unitMax = new double[ numDimensions() ];
+        Arrays.fill( unitMin, -1 );
+        Arrays.fill( unitMax, 1 );
+        final RealInterval unitInterval = new FinalRealInterval( unitMin, unitMax );
+        return TileOperations.getTransformedBoundingBoxReal( unitInterval, transform );
 	}
 
 	@Override
@@ -162,52 +140,15 @@ public class ErrorEllipse implements OffsetValidator
 
 	double getUnitSphereCoordinates( final double... offset )
 	{
-		// if transformation is present, convert the offset to the user-specified coordinate space in which the error ellipse is defined
 		final double[] transformedOffset = offset.clone();
-//		if ( offsetTransform != null )
-//			offsetTransform.apply( transformedOffset, transformedOffset );
-
-		// build a vector with point coordinates
-		final BasicMatrix.Factory< PrimitiveMatrix > matrixFactory = PrimitiveMatrix.FACTORY;
-        final Builder< PrimitiveMatrix > coordsVectorBuilder = matrixFactory.getBuilder( transformedOffset.length + 1, 1 );
-        for ( int dRow = 0; dRow < transformedOffset.length; ++dRow )
-        	coordsVectorBuilder.set( dRow, 0, transformedOffset[ dRow ] );
-        coordsVectorBuilder.set( transformedOffset.length, 0, 1 );
-        final PrimitiveMatrix coordsVector = coordsVectorBuilder.get();
-
-        // get the inverse transform to map the the point to the unit sphere
-        final PrimitiveMatrix transformedCoordsVector = inverseTransformMatrix.multiply( coordsVector );
+		transform.applyInverse( transformedOffset, transformedOffset );
 
         // calculate unit sphere coordinates
         double coordsSumSquared = 0;
-        for ( int dRow = 0; dRow < transformedOffset.length; ++dRow )
-        	coordsSumSquared += Math.pow( transformedCoordsVector.get( dRow, 0 ), 2 );
+        for ( int d = 0; d < transformedOffset.length; ++d )
+        	coordsSumSquared += Math.pow( transformedOffset[ d ], 2 );
 
         return Math.sqrt( coordsSumSquared );
-	}
-
-//	public RealTransform getOffsetTransform()
-//	{
-//		return offsetTransform;
-//	}
-//
-//	public void setOffsetTransform( final RealTransform offsetTransform )
-//	{
-//		this.offsetTransform = offsetTransform;
-//	}
-	public RealTransform getEllipseTransform()
-	{
-		return ellipseTransform;
-	}
-
-	public void setEllipseTransform( final RealTransform ellipseTransform )
-	{
-		this.ellipseTransform = ellipseTransform;
-	}
-
-	public RealInterval estimateTransformedBoundingBox()
-	{
-		return estimateBoundingBox( transformMatrix );
 	}
 
 	@Override
@@ -236,11 +177,6 @@ public class ErrorEllipse implements OffsetValidator
 		return eigenVectors;
 	}
 
-	public RealInterval getBoundingBox()
-	{
-		return boundingBox;
-	}
-
 	public double[] getEllipseCenter()
 	{
 		return ellipseCenter;
@@ -254,15 +190,5 @@ public class ErrorEllipse implements OffsetValidator
 	public double[][] getUncertaintyVectors()
 	{
 		return uncertaintyVectors;
-	}
-
-	public PrimitiveMatrix getTransformMatrix()
-	{
-		return transformMatrix;
-	}
-
-	public PrimitiveMatrix getInverseTransformMatrix()
-	{
-		return inverseTransformMatrix;
 	}
 }
