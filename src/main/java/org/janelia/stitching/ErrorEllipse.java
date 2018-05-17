@@ -16,6 +16,8 @@ import net.imglib2.realtransform.AffineSet;
 import net.imglib2.realtransform.AffineTransform;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.InvertibleRealTransform;
+import net.imglib2.realtransform.InvertibleRealTransformSequence;
 
 public class ErrorEllipse implements OffsetValidator
 {
@@ -26,6 +28,8 @@ public class ErrorEllipse implements OffsetValidator
 	private final double[][] eigenVectors;
 
 	private final AffineGet transform;
+
+	private InvertibleRealTransform preTransform, postTransform;
 
 	private final double[] ellipseCenter;
 	private final double[] ellipseRadius;
@@ -129,7 +133,7 @@ public class ErrorEllipse implements OffsetValidator
         Arrays.fill( unitMin, -1 );
         Arrays.fill( unitMax, 1 );
         final RealInterval unitInterval = new FinalRealInterval( unitMin, unitMax );
-        return TileOperations.getTransformedBoundingBoxReal( unitInterval, transform );
+        return TileOperations.getTransformedBoundingBoxReal( unitInterval, getDecoratedTransform() );
 	}
 
 	@Override
@@ -141,7 +145,7 @@ public class ErrorEllipse implements OffsetValidator
 	double getUnitSphereCoordinates( final double... offset )
 	{
 		final double[] transformedOffset = offset.clone();
-		transform.applyInverse( transformedOffset, transformedOffset );
+		getDecoratedTransform().applyInverse( transformedOffset, transformedOffset );
 
         // calculate unit sphere coordinates
         double coordsSumSquared = 0;
@@ -190,5 +194,34 @@ public class ErrorEllipse implements OffsetValidator
 	public double[][] getUncertaintyVectors()
 	{
 		return uncertaintyVectors;
+	}
+
+	public void setPreTransform( final InvertibleRealTransform preTransform )
+	{
+		this.preTransform = preTransform;
+	}
+
+	public InvertibleRealTransform getPreTransform()
+	{
+		return preTransform;
+	}
+
+	public void setPostTransform( final InvertibleRealTransform postTransform )
+	{
+		this.postTransform = postTransform;
+	}
+
+	public InvertibleRealTransform getPostTransform()
+	{
+		return postTransform;
+	}
+
+	private InvertibleRealTransform getDecoratedTransform()
+	{
+		final InvertibleRealTransformSequence decoratedTransform = new InvertibleRealTransformSequence();
+		if ( preTransform != null ) decoratedTransform.add( preTransform );
+		decoratedTransform.add( transform );
+		if ( postTransform != null ) decoratedTransform.add( postTransform );
+        return decoratedTransform;
 	}
 }
