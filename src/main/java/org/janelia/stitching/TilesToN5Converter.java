@@ -31,10 +31,12 @@ import com.google.auth.oauth2.AccessToken;
 import com.google.cloud.storage.Storage;
 
 import ij.ImagePlus;
+import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
+import net.imglib2.util.Intervals;
 
 abstract class TilesToN5Converter
 {
@@ -211,6 +213,17 @@ abstract class TilesToN5Converter
 		final String tileDatasetPath = PathResolver.get( outputGroupPath, PathResolver.getFileName( inputTile.getFilePath() ) );
 		final ImagePlus imp = ImageImporter.openImage( inputTile.getFilePath() );
 		final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
+
+		if ( !Intervals.equalDimensions( img, new FinalInterval( inputTile.getSize() ) ) )
+		{
+			throw new RuntimeException( String.format(
+					"Image size %s does not match the value from metadata %s, filepath: %s",
+					Arrays.toString( Intervals.dimensionsAsLongArray( img ) ),
+					Arrays.toString( inputTile.getSize() ),
+					inputTile.getFilePath()
+				) );
+		}
+
 		N5Utils.save( img, n5, tileDatasetPath, blockSizeArr, n5Compression );
 
 		return tileDatasetPath;
