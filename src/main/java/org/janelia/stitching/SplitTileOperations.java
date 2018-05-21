@@ -218,7 +218,7 @@ public class SplitTileOperations
 		if ( !Views.isZeroMin( fixedIntervalInFixedSpace ) )
 			throw new IllegalArgumentException( "not in the fixed tile box space" );
 
-		final Interval errorEllipseBoundingBox = Intervals.smallestContainingInterval( errorEllipse.getBoundingBox() );
+		final Interval errorEllipseBoundingBox = Intervals.smallestContainingInterval( errorEllipse.estimateBoundingBox() );
 
 		// try all corners of the bounding box of the error ellipse and use the largest overlap
 		final int[] cornersPos = new int[ errorEllipseBoundingBox.numDimensions() ];
@@ -304,12 +304,12 @@ public class SplitTileOperations
 
 		final Interval paddedOverlapInFixedSpace = TileOperations.padInterval(
 				overlapInFixedSpace,
-				new FinalDimensions( Intervals.dimensionsAsLongArray( fixedIntervalInFixedSpace ) ),
+				new FinalInterval( Intervals.dimensionsAsLongArray( fixedIntervalInFixedSpace ) ),
 				padding
 			);
 		final Interval paddedOverlapInMovingSpace = TileOperations.padInterval(
 				overlapInMovingSpace,
-				new FinalDimensions( Intervals.dimensionsAsLongArray( movingIntervalInFixedSpace ) ),
+				new FinalInterval( Intervals.dimensionsAsLongArray( movingIntervalInFixedSpace ) ),
 				padding
 			);
 

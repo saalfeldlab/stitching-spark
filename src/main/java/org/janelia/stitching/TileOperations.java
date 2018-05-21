@@ -38,21 +38,21 @@ public class TileOperations
 	 * The padded interval cannot exceed the outer space boundaries (e.g., 0 and {@code outerDimensions}-1), so in this case the remainder is applied towards the other side.
 	 * If the resulting interval has reached the outer space size (0, {@code outerDimensions}-1), the rest of the remaining padding is ignored.
 	 */
-	public static Interval padInterval( final Interval interval, final Dimensions outerDimensions, final long[] padding )
+	public static Interval padInterval( final Interval interval, final Interval outerSpace, final long[] padding )
 	{
 		final long[] paddedMin = new long[ interval.numDimensions() ], paddedMax = new long[ interval.numDimensions() ];
 		for ( int d = 0; d < interval.numDimensions(); d++ )
 		{
-			paddedMin[ d ] = Math.max( interval.min( d ) - padding[ d ] / 2, 0 );
-			paddedMax[ d ] = Math.min( interval.max( d ) + padding[ d ] / 2, outerDimensions.dimension( d ) - 1 );
+			paddedMin[ d ] = Math.max( interval.min( d ) - padding[ d ] / 2, outerSpace.min( d ) );
+			paddedMax[ d ] = Math.min( interval.max( d ) + padding[ d ] / 2, outerSpace.max( d ) );
 
 			final long remainder = padding[ d ] - ( interval.min( d ) - paddedMin[ d ] ) - ( paddedMax[ d ] - interval.max( d ) );
 			if ( remainder > 0 )
 			{
-				if ( paddedMin[ d ] == 0 )
-					paddedMax[ d ] = Math.min( paddedMax[ d ] + remainder, outerDimensions.dimension( d ) - 1 );
+				if ( paddedMin[ d ] == outerSpace.min( d ) )
+					paddedMax[ d ] = Math.min( paddedMax[ d ] + remainder, outerSpace.max( d ) );
 				else
-					paddedMin[ d ] = Math.max( paddedMin[ d ] - remainder, 0 );
+					paddedMin[ d ] = Math.max( paddedMin[ d ] - remainder, outerSpace.min( d ) );
 			}
 		}
 		return new FinalInterval( paddedMin, paddedMax );
@@ -347,7 +347,6 @@ public class TileOperations
 	 * Estimates the bounding box of a transformed (or shifted) tile.
 	 *
 	 * @param tile
-	 * @param transform
 	 * @return
 	 */
 	public static Interval getTransformedBoundingBox( final TileInfo tile )
