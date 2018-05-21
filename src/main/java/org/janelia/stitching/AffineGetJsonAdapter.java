@@ -11,10 +11,6 @@ import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
 
 import net.imglib2.realtransform.AffineGet;
-import net.imglib2.realtransform.AffineSet;
-import net.imglib2.realtransform.AffineTransform;
-import net.imglib2.realtransform.AffineTransform2D;
-import net.imglib2.realtransform.AffineTransform3D;
 
 public class AffineGetJsonAdapter implements JsonSerializer< AffineGet >, JsonDeserializer< AffineGet >
 {
@@ -35,36 +31,15 @@ public class AffineGetJsonAdapter implements JsonSerializer< AffineGet >, JsonDe
 	@Override
 	public AffineGet deserialize( final JsonElement json, final Type typeOfT, final JsonDeserializationContext context ) throws JsonParseException
 	{
-		return deserializeImpl( json, typeOfT, context );
-	}
-
-	@SuppressWarnings( "unchecked" )
-	private < A extends AffineGet & AffineSet > A deserializeImpl( final JsonElement json, final Type typeOfT, final JsonDeserializationContext context ) throws JsonParseException
-	{
 		final JsonArray jsonMatrixArray = json.getAsJsonArray();
-
-		final A affineTransform;
-		final int dim = jsonMatrixArray.size();
-		switch ( dim )
-		{
-		case 2:
-			affineTransform = ( A ) new AffineTransform2D();
-			break;
-		case 3:
-			affineTransform = ( A ) new AffineTransform3D();
-			break;
-		default:
-			affineTransform = ( A ) new AffineTransform( dim );
-			break;
-		}
-
+		final double[][] affineMatrix = new double[ jsonMatrixArray.size() ][];
 		for ( int row = 0; row < jsonMatrixArray.size(); ++row )
 		{
 			final JsonArray jsonRowArray = jsonMatrixArray.get( row ).getAsJsonArray();
+			affineMatrix[ row ] = new double[ jsonRowArray.size() ];
 			for ( int col = 0; col < jsonRowArray.size(); ++col )
-				affineTransform.set( jsonRowArray.get( col ).getAsDouble(), row, col );
+				affineMatrix[ row ][ col ] = jsonRowArray.get( col ).getAsDouble();
 		}
-
-		return affineTransform;
+		return Utils.createTransform( affineMatrix );
 	}
 }

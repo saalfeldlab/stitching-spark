@@ -15,10 +15,17 @@ import org.janelia.util.Conversions;
 import ij.IJ;
 import ij.ImagePlus;
 import mpicbg.stitching.ImageCollectionElement;
+import net.imglib2.concatenate.Concatenable;
+import net.imglib2.concatenate.PreConcatenable;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.img.Img;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.imageplus.ImagePlusImg;
+import net.imglib2.realtransform.AffineGet;
+import net.imglib2.realtransform.AffineSet;
+import net.imglib2.realtransform.AffineTransform;
+import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
@@ -78,6 +85,27 @@ public class Utils {
 		e.setDimensionality( tile.numDimensions() );
 		e.setModel( TileModelFactory.createAffineModel( tile.numDimensions() ) );
 		return e;
+	}
+
+	public static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > A createTransform( final double[][] affine )
+	{
+		final A transform = createTransform( affine.length );
+		transform.set( affine );
+		return transform;
+	}
+
+	@SuppressWarnings( "unchecked" )
+	public static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > A createTransform( final int dim )
+	{
+		switch ( dim )
+		{
+		case 2:
+			return ( A ) new AffineTransform2D();
+		case 3:
+			return ( A ) new AffineTransform3D();
+		default:
+			return ( A ) new AffineTransform( dim );
+		}
 	}
 
 	public static void workaroundImagePlusNSlices( final ImagePlus imp )
