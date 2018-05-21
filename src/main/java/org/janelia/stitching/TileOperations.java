@@ -32,6 +32,19 @@ import net.imglib2.util.Intervals;
 public class TileOperations
 {
 	/**
+	 * Pads the {@code interval} with {@code padding}.
+	 * Tries to equally pad the {@code interval} from both sides (which means to expand it by {@code padding}/2 on each side).
+	 * If the {@code padding} is odd, it adds the remaining 1 towards the min side.
+	 */
+	public static Interval padInterval( final Interval interval, final long[] padding )
+	{
+		final long[] spaceMin = new long[ interval.numDimensions() ], spaceMax = new long[ interval.numDimensions() ];
+		Arrays.fill( spaceMin, Long.MIN_VALUE );
+		Arrays.fill( spaceMax, Long.MAX_VALUE );
+		return padInterval( interval, new FinalInterval( spaceMin, spaceMax ), padding );
+	}
+
+	/**
 	 * Pads the {@code interval} defined within the outer space of size {@code outerDimensions} with {@code padding}.
 	 * Tries to equally pad the {@code interval} from both sides (which means to expand it by {@code padding}/2 on each side).
 	 * If the {@code padding} is odd, it adds the remaining 1 towards the min side.
