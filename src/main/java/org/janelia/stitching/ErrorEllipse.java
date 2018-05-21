@@ -108,14 +108,30 @@ public class ErrorEllipse implements OffsetValidator
         	break;
         }
 
-    	// affine part
+    	final double[][] affineMatrix = new double[ dim ][ dim + 1 ];
     	for ( int dRow = 0; dRow < dim; ++dRow )
-        	for ( int dCol = 0; dCol < dim; ++dCol )
-        		transform.set( uncertaintyVectors[ dCol ][ dRow ], dRow, dCol );
+    	{
+    		affineMatrix[ dRow ][ dim ] = ellipseCenter[ dRow ];
 
-    	// translation part
-        for ( int dRow = 0; dRow < dim; ++dRow )
-        	transform.set( ellipseCenter[ dRow ], dRow, dim );
+        	for ( int dCol = 0; dCol < dim; ++dCol )
+        		affineMatrix[ dRow ][ dCol ] = uncertaintyVectors[ dCol ][ dRow ];
+        	/*
+        	 * We wanted the uncertainty vectors to be arranged like this:
+        	 *
+        	 * [ v1_x, v1_y, v1_z ]
+        	 * [ v2_x, v2_y, v2_z ]
+        	 * [ v3_x, v3_y, v3_z ]
+        	 *
+        	 * while the transformation matrix is supposed to be arranged like this:
+        	 *
+        	 * | v1_x  v2_x  v3_x | tx |
+        	 * | v1_y  v2_y  v3_y | ty |
+        	 * | v1_z  v2_z  v3_z | tz |
+        	 *
+        	 * hence the transpose operation.
+        	 */
+    	}
+    	transform.set( affineMatrix );
 
     	return transform;
     }
