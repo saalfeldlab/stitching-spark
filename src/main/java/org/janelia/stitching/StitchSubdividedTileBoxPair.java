@@ -2,31 +2,30 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.IntStream;
 
 import org.janelia.dataaccess.DataProvider;
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxRelativeSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxWorldSearchRadius;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
 import mpicbg.imglib.custom.OffsetValidator;
-import mpicbg.models.Affine2D;
-import mpicbg.models.Affine3D;
-import mpicbg.models.IllDefinedDataPointsException;
-import mpicbg.models.Model;
-import mpicbg.models.NotEnoughDataPointsException;
-import mpicbg.models.Point;
-import mpicbg.models.PointMatch;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealInterval;
+import net.imglib2.RealPoint;
 import net.imglib2.algorithm.gauss3.Gauss3;
+import net.imglib2.concatenate.Concatenable;
+import net.imglib2.concatenate.PreConcatenable;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealFloatConverter;
 import net.imglib2.exception.ImgLibException;
@@ -34,13 +33,12 @@ import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.img.imageplus.FloatImagePlus;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
-import net.imglib2.realtransform.AffineTransform2D;
-import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.AffineGet;
+import net.imglib2.realtransform.AffineSet;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.InvertibleRealTransformSequence;
-import net.imglib2.realtransform.RealTransform;
-import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.Translation;
+import net.imglib2.realtransform.TranslationGet;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
@@ -102,11 +100,10 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		final Interval[] transformedRoiIntervals = new Interval[ tileBoxes.length ];
 
 		// Render both ROIs in the fixed space (the moving tile box is transform by forward moving transform followed by inverse fixed transform)
-		final InvertibleRealTransformSequence dummyFixedBoxTransform = new InvertibleRealTransformSequence();
-		final InvertibleRealTransformSequence movingBoxToFixedBoxTransform = new InvertibleRealTransformSequence();
-		movingBoxToFixedBoxTransform.add( estimatedAffines[ 1 ] ); 				// moving -> world
-		movingBoxToFixedBoxTransform.add( estimatedAffines[ 0 ].inverse() );	// world -> fixed
-		final InvertibleRealTransform[] fixedBoxSpaceAffines = new InvertibleRealTransform[] { dummyFixedBoxTransform, movingBoxToFixedBoxTransform };
+		final InvertibleRealTransform[] fixedBoxSpaceAffines = new InvertibleRealTransform[] {
+				new InvertibleRealTransformSequence(), // dummy identity fixed transform
+				getMovingTileToFixedTileTransform( estimatedAffines ) // moving to fixed
+			};
 		for ( int i = 0; i < tileBoxes.length; ++i )
 		{
 			estimatedAffines[ i ] = estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
@@ -120,13 +117,12 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			transformedRoiIntervals[ i ] = roiAndFixedSpaceBoundingBox.getB();
 		}
 
-		final EstimatedTileBoxSearchRadius combinedSearchRadiusForMovingBox;
+		final EstimatedTileBoxRelativeSearchRadius combinedSearchRadiusForMovingBox;
 		if ( searchRadiusEstimator != null )
 		{
 			combinedSearchRadiusForMovingBox = getCombinedSearchRadiusForMovingBox(
 					searchRadiusEstimator,
-					tileBoxes,
-					estimatedAffines
+					tileBoxes
 				);
 		}
 		else
@@ -139,7 +135,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise(
 				tileBoxPair,
 				roiImps,
-				combinedSearchRadiusForMovingBox.errorEllipse
+				combinedSearchRadiusForMovingBox.combinedErrorEllipse
 			);
 
 		// compute variance within ROI for both images
@@ -153,80 +149,94 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 		return new StitchingResult(
 				pairwiseResult,
-				combinedSearchRadiusForMovingBox != null ? combinedSearchRadiusForMovingBox.errorEllipse.getEllipseRadius() : null
+				combinedSearchRadiusForMovingBox != null ? combinedSearchRadiusForMovingBox.combinedErrorEllipse.getEllipseRadius() : null
 			);
 	}
 
 	/**
 	 * Estimates an expected affine transformation for a given tile based on offset statistics selected from local neighborhood.
-	 * The estimated transformation does the following mapping: local tile coordinates -> expected world coordinates.
+	 * The estimated transformation performs the following mapping: local tile coordinates -> expected world coordinates.
 	 *
 	 * @param tile
 	 * @param searchRadiusEstimator
 	 * @return
 	 * @throws PipelineExecutionException
 	 */
-	static InvertibleRealTransform estimateAffineTransformation(
+	static AffineGet estimateAffineTransformation(
 			final TileInfo tile,
 			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException
 	{
-		if ( searchRadiusEstimator == null )
-			return TileOperations.getTileTransform( tile );
+		return estimateAffineTransformation(
+				estimateLinearAndTranslationAffineComponents( tile, searchRadiusEstimator )
+			);
+	}
 
-		final int[] tileBoxesGridSize = new int[ tile.numDimensions() ];
-		Arrays.fill( tileBoxesGridSize, 2 );
-		final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( new TileInfo[] { tile }, tileBoxesGridSize );
-		final List< PointMatch > matches = new ArrayList<>();
-		for ( final SubdividedTileBox tileBox : tileBoxes )
-		{
-			final EstimatedTileBoxSearchRadius estimatedTileBoxSearchRadius = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tileBox );
-			final double[] tileBoxMiddlePointPositionInsideTile = SplitTileOperations.getTileBoxMiddlePoint( tileBox );
-			final double[] tileBoxMiddlePointStagePosition = SplitTileOperations.getTileBoxMiddlePointStagePosition( tileBox );
-			final double[] estimatedTileBoxOffset = estimatedTileBoxSearchRadius.errorEllipse.getOffsetsMeanValues();
-			final double[] tileBoxMiddlePointShiftedPosition = new double[ tileBox.numDimensions() ];
-			for ( int d = 0; d < tileBoxMiddlePointShiftedPosition.length; ++d )
-				tileBoxMiddlePointShiftedPosition[ d ] = tileBoxMiddlePointStagePosition[ d ] + estimatedTileBoxOffset[ d ];
+	/**
+	 * Estimates an expected affine transformation for a given tile based on offset statistics selected from local neighborhood.
+	 * The estimated transformation performs the following mapping: local tile coordinates -> expected world coordinates.
+	 *
+	 * @param estimatedAffineLinearComponent
+	 * @param estimatedAffineTranslationComponent
+	 * @return
+	 * @throws PipelineExecutionException
+	 */
+	static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > AffineGet estimateAffineTransformation(
+			final Pair< AffineGet, TranslationGet > estimatedAffineLinearAndTranslationComponents ) throws PipelineExecutionException
+	{
+		final int dim = estimatedAffineLinearAndTranslationComponents.getA().numDimensions();
+		final A estimatedAffine = TransformUtils.createTransform( dim );
+		estimatedAffine.concatenate( estimatedAffineLinearAndTranslationComponents.getA() );
+		estimatedAffine.concatenate( estimatedAffineLinearAndTranslationComponents.getB() );
+		return estimatedAffine;
+	}
 
-			matches.add( new PointMatch(
-					new Point( tileBoxMiddlePointPositionInsideTile ),
-					new Point( tileBoxMiddlePointShiftedPosition )
-				) );
-		}
+	/**
+	 * Estimates linear and translation components of the expected affine transformation for a given tile
+	 * based on offset statistics selected from local neighborhood.
+	 *
+	 * @param tile
+	 * @param searchRadiusEstimator
+	 * @return
+	 * @throws PipelineExecutionException
+	 */
+	static Pair< AffineGet, TranslationGet > estimateLinearAndTranslationAffineComponents(
+			final TileInfo tile,
+			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException
+	{
+		final SubdividedTileBox fullTileBox = SplitTileOperations.splitTilesIntoBoxes(
+				new TileInfo[] { tile },
+				IntStream.generate( () -> 1 ).limit( tile.numDimensions() ).toArray()
+			).iterator().next();
 
-		final Model< ? > model = TileModelFactory.createAffineModel( tile.numDimensions() );
-		try
-		{
-			model.fit( matches );
-		}
-		catch ( final NotEnoughDataPointsException | IllDefinedDataPointsException e )
-		{
-			throw new PipelineExecutionException( e );
-		}
+		final EstimatedTileBoxWorldSearchRadius estimatedSearchRadius = searchRadiusEstimator.estimateSearchRadiusWithinWindow(
+				fullTileBox,
+				searchRadiusEstimator.getEstimationWindow(
+						new RealPoint( SplitTileOperations.getTileBoxMiddlePointStagePosition( fullTileBox ) )
+					)
+			);
 
-		if ( tile.numDimensions() == 2 )
-		{
-			final Affine2D< ? > affineModel = ( Affine2D< ? > ) model;
-			final double[][] matrix = new double[ tile.numDimensions() ][ tile.numDimensions() + 1 ];
-			affineModel.toMatrix( matrix );
+		final Set< TileInfo > neighboringTiles = estimatedSearchRadius.neighboringTiles;
 
-			final AffineTransform2D expectedTileTransform = new AffineTransform2D();
-			expectedTileTransform.set( matrix );
-			return expectedTileTransform;
-		}
-		else if ( tile.numDimensions() == 3 )
+		final double[][] expectedLinearAffineMatrix = new double[ tile.numDimensions() ][ tile.numDimensions() + 1 ];
+		for ( final TileInfo neighboringTile : neighboringTiles )
 		{
-			final Affine3D< ? > affineModel = ( Affine3D< ? > ) model;
-			final double[][] matrix = new double[ tile.numDimensions() ][ tile.numDimensions() + 1 ];
-			affineModel.toMatrix( matrix );
+			final AffineGet neighboringTileTransform = TileOperations.getTileTransform( neighboringTile );
+			for ( int dRow = 0; dRow < tile.numDimensions(); ++dRow )
+				for ( int dCol = 0; dCol < tile.numDimensions(); ++dCol )
+					expectedLinearAffineMatrix[ dRow ][ dCol ] += neighboringTileTransform.get( dRow, dCol );
+		}
+		for ( int dRow = 0; dRow < tile.numDimensions(); ++dRow )
+			for ( int dCol = 0; dCol < tile.numDimensions(); ++dCol )
+				expectedLinearAffineMatrix[ dRow ][ dCol ] /= neighboringTiles.size();
 
-			final AffineTransform3D expectedTileTransform = new AffineTransform3D();
-			expectedTileTransform.set( matrix );
-			return expectedTileTransform;
-		}
-		else
-		{
-			throw new RuntimeException( "2d/3d only" );
-		}
+		final double[] expectedTranslationComponentVector = new double[ tile.numDimensions() ];
+		for ( int d = 0; d < tile.numDimensions(); ++d )
+			expectedTranslationComponentVector[ d ] = tile.getPosition( d ) + estimatedSearchRadius.errorEllipse.getOffsetsMeanValues()[ d ];
+
+		return new ValuePair<>(
+				TransformUtils.createTransform( expectedLinearAffineMatrix ),
+				new Translation( expectedTranslationComponentVector )
+			);
 	}
 
 	/**
@@ -343,93 +353,117 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		return new ValuePair<>( roiImp, roiBoundingBox );
 	}
 
-	static EstimatedTileBoxSearchRadius getCombinedSearchRadiusForMovingBox(
+	static EstimatedTileBoxRelativeSearchRadius getCombinedSearchRadiusForMovingBox(
 			final TileSearchRadiusEstimator searchRadiusEstimator,
-			final SubdividedTileBox[] tileBoxes,
-			final InvertibleRealTransform[] estimatedTileTransforms ) throws PipelineExecutionException
+			final SubdividedTileBox[] tileBoxes ) throws PipelineExecutionException
 	{
-		final EstimatedTileBoxSearchRadius[] searchRadiusStats = new EstimatedTileBoxSearchRadius[ tileBoxes.length ];
+		final EstimatedTileBoxWorldSearchRadius[] searchRadiusStats = new EstimatedTileBoxWorldSearchRadius[ tileBoxes.length ];
 		for ( int i = 0; i < tileBoxes.length; ++i )
 			searchRadiusStats[ i ] = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tileBoxes[ i ] );
 
-		final EstimatedTileBoxSearchRadius combinedSearchRadiusForMovingBox = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
+		final EstimatedTileBoxRelativeSearchRadius combinedSearchRadiusForMovingBox = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
 				searchRadiusStats[ 0 ],
 				searchRadiusStats[ 1 ]
 			);
 
-		final RealTransformSequence ellipseTransform = new RealTransformSequence();
-		ellipseTransform.add( new Translation( SplitTileOperations.getTileBoxMiddlePoint( tileBoxes[ 1 ] ) ) );
-		ellipseTransform.add( estimatedTileTransforms[ 1 ] );
-
-//		combinedSearchRadiusForMovingBox.setEllipseTransform( ellipseTransform );
-
 		return combinedSearchRadiusForMovingBox;
 	}
 
-//	static SearchRadius getCombinedSearchRadiusForMovingBox(
-//			final TileSearchRadiusEstimator searchRadiusEstimator,
-//			final SubdividedTileBox[] tileBoxes,
-//			final InvertibleRealTransform[] estimatedTileTransforms,
-//			final Interval[] transformedBoxIntervals ) throws PipelineExecutionException
-//	{
-//		final SearchRadius[] searchRadiusStats = new SearchRadius[ tileBoxes.length ];
-//		for ( int i = 0; i < tileBoxes.length; ++i )
-//			searchRadiusStats[ i ] = searchRadiusEstimator.getSearchRadiusTreeWithinEstimationWindow( tileBoxes[ i ] );
-//
-//		final RealTransform offsetTransform = buildOffsetTransform(
-//				tileBoxes,
-//				estimatedTileTransforms,
-//				transformedBoxIntervals,
-//				searchRadiusStats
-//			);
-//
-//		final SearchRadius fixedTileBoxSearchRadius = searchRadiusStats[ 0 ], movingTileBoxSearchRadius = searchRadiusStats[ 1 ];
-//
-//		final SearchRadius combinedSearchRadiusForMovingBox = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
-//				fixedTileBoxSearchRadius,
-//				movingTileBoxSearchRadius
-//			);
-//
-//		combinedSearchRadiusForMovingBox.setOffsetTransform( offsetTransform );
-//
-//		return combinedSearchRadiusForMovingBox;
-//	}
-
-	static RealTransform buildOffsetTransform(
-			final SubdividedTileBox[] tileBoxes,
-			final InvertibleRealTransform[] estimatedTileTransforms,
-			final Interval[] transformedBoxIntervals,
-			final EstimatedTileBoxSearchRadius [] searchRadiusStats )
+	/**
+	 * Returns the transformation to map the moving tile into the coordinate space of the fixed tile.
+	 *
+	 * @param tileTransforms
+	 * @return
+	 */
+	static InvertibleRealTransform getMovingTileToFixedTileTransform( final InvertibleRealTransform[] tileTransforms )
 	{
-		final SubdividedTileBox fixedTileBox = tileBoxes[ 0 ], movingTileBox = tileBoxes[ 1 ];
-		final InvertibleRealTransform fixedTileEstimatedTransform = estimatedTileTransforms[ 0 ], movingTileEstimatedTransform = estimatedTileTransforms[ 1 ];
-		final Interval fixedTileBoxTransformedWorldInterval = transformedBoxIntervals[ 0 ], movingTileBoxTransformedWorldInterval = transformedBoxIntervals[ 1 ];
-		final EstimatedTileBoxSearchRadius fixedTileBoxSearchRadius = searchRadiusStats[ 0 ], movingTileBoxSearchRadius = searchRadiusStats[ 1 ];
+		final InvertibleRealTransformSequence movingTileToFixedTileTransform = new InvertibleRealTransformSequence();
+		movingTileToFixedTileTransform.add( tileTransforms[ 1 ] );           // moving tile -> world
+		movingTileToFixedTileTransform.add( tileTransforms[ 0 ].inverse() ); // world -> fixed tile
+		return movingTileToFixedTileTransform;
 
-		final RealTransformSequence offsetTransform = new RealTransformSequence();
+	}
 
-		// expected offset between ROIs (bounding boxes of transformed fixed tile box and moving tile box)
-		final double[] estimatedWorldRoiOffset = new double[ fixedTileBox.numDimensions() ];
-		for ( int d = 0; d < estimatedWorldRoiOffset.length; ++d )
-			estimatedWorldRoiOffset[ d ] = movingTileBoxTransformedWorldInterval.realMin( d ) - fixedTileBoxTransformedWorldInterval.realMin( d );
-		offsetTransform.add( new Translation( estimatedWorldRoiOffset ).inverse() ); // shift between newly estimated position and expected position
+	/**
+	 * Returns the transformation to map the moving tile into the coordinate space of the fixed box.
+	 *
+	 * @param tileBoxPair
+	 * @param tileTransforms
+	 * @return
+	 */
+	static InvertibleRealTransform getMovingTileToFixedBoxTransform(
+			final SubdividedTileBoxPair tileBoxPair,
+			final InvertibleRealTransform[] tileTransforms )
+	{
+		final InvertibleRealTransformSequence movingTileToFixedBoxTransform = new InvertibleRealTransformSequence();
+		movingTileToFixedBoxTransform.add( getMovingTileToFixedTileTransform( tileTransforms ) ); // moving tile -> fixed tile
+		movingTileToFixedBoxTransform.add( new Translation( Intervals.minAsDoubleArray( tileBoxPair.getA() ) ).inverse() ); // fixed tile -> fixed box
+		return movingTileToFixedBoxTransform;
+	}
 
-		// expected world coordinate of the middle point in the transformed moving tile box
-		final double[] transformedMovingBoxMiddlePoint = SplitTileOperations.transformTileBoxMiddlePoint( movingTileBox, movingTileEstimatedTransform );
-		offsetTransform.add( new Translation( transformedMovingBoxMiddlePoint ) ); // new world position of the middle point in the transformed moving tile box
+	/**
+	 * Returns the offset between zero-min of the transformed moving box and its bounding box.
+	 *
+	 * @param tileBoxPair
+	 * @param tileTransforms
+	 * @return
+	 */
+	static double[] getTransformedMovingBoxToBoundingBoxOffset(
+			final SubdividedTileBoxPair tileBoxPair,
+			final InvertibleRealTransform[] tileTransforms )
+	{
+		return getTransformedMovingBoxToBoundingBoxOffset(
+				tileBoxPair,
+				getMovingTileToFixedBoxTransform( tileBoxPair, tileTransforms )
+			);
+	}
 
-		offsetTransform.add( movingTileEstimatedTransform.inverse() ); // new local coordinate of the middle point in the local moving tile box
+	/**
+	 * Returns the offset between zero-min of the transformed moving box and its bounding box.
+	 *
+	 * @param tileBoxPair
+	 * @param movingTileToFixedBoxTransform
+	 * @return
+	 */
+	static double[] getTransformedMovingBoxToBoundingBoxOffset(
+			final SubdividedTileBoxPair tileBoxPair,
+			final InvertibleRealTransform movingTileToFixedBoxTransform )
+	{
+		final double[] transformedMovingTileBoxPosition = new double[ tileBoxPair.getB().numDimensions() ];
+		movingTileToFixedBoxTransform.apply( tileBoxPair.getB().getPosition(), transformedMovingTileBoxPosition );
 
-		// initial (stage) offset between fixed tile box and moving tile box
-		final double[] stageTileBoxOffset = new double[ fixedTileBox.numDimensions() ];
-//		for ( int d = 0; d < stageTileBoxOffset.length; ++d )
-//			stageTileBoxOffset[ d ] = movingTileBoxSearchRadius.getStagePosition()[ d ] - fixedTileBoxSearchRadius.getStagePosition()[ d ];
-		offsetTransform.add( new Translation( stageTileBoxOffset ) ); // add relation between fixed tile box and moving tile box
+		final RealInterval transformedMovingBoxInterval = TileOperations.getTransformedBoundingBoxReal(
+				tileBoxPair.getB(),
+				movingTileToFixedBoxTransform
+			);
 
-		final double[] movingTileBoxMiddlePoint = SplitTileOperations.getTileBoxMiddlePoint( movingTileBox );
-		offsetTransform.add( new Translation( movingTileBoxMiddlePoint ).inverse() ); // new estimated offset between fixed tile box and moving tile box
+		final double[] transformedMovingTileBoxToBoundingBoxOffset = new double[ tileBoxPair.getB().numDimensions() ];
+		for ( int d = 0; d < transformedMovingTileBoxToBoundingBoxOffset.length; ++d )
+			transformedMovingTileBoxToBoundingBoxOffset[ d ] = transformedMovingTileBoxPosition[ d ] - transformedMovingBoxInterval.realMin( d );
 
-		return offsetTransform;
+		return transformedMovingTileBoxToBoundingBoxOffset;
+	}
+
+	/**
+	 * Builds and sets the transformation for the error ellipse to map it to the coordinate space of the fixed box.
+	 *
+	 * @param tileBoxPair
+	 * @param tileTransforms
+	 * @param combinedErrorEllipse
+	 * @return
+	 */
+	static InvertibleRealTransform getErrorEllipseTransform(
+			final SubdividedTileBoxPair tileBoxPair,
+			final InvertibleRealTransform[] tileTransforms )
+	{
+		final InvertibleRealTransform movingTileToFixedBoxTransform = getMovingTileToFixedBoxTransform( tileBoxPair, tileTransforms );
+		final double[] transformedMovingTileBoxToBoundingBoxOffset = getTransformedMovingBoxToBoundingBoxOffset( tileBoxPair, movingTileToFixedBoxTransform );
+
+		final InvertibleRealTransformSequence errorEllipseTransform = new InvertibleRealTransformSequence();
+		errorEllipseTransform.add( movingTileToFixedBoxTransform ); // moving tile -> fixed box
+		errorEllipseTransform.add( new Translation( transformedMovingTileBoxToBoundingBoxOffset ).inverse() ); // transformed box top-left -> bounding box top-left
+
+		return errorEllipseTransform;
 	}
 
 	private < F extends NumericType< F > > void blur( final RandomAccessibleInterval< F > image, final double[] sigmas ) throws IncompatibleTypeException

@@ -27,9 +27,8 @@ public class ErrorEllipse implements OffsetValidator
 	private final double[] eigenValues;
 	private final double[][] eigenVectors;
 
-	private final AffineGet transform;
-
-	private InvertibleRealTransform preTransform, postTransform;
+	private final AffineGet unitSphereTransform;
+	private InvertibleRealTransform errorEllipseTransform;
 
 	private final double[] ellipseCenter;
 	private final double[] ellipseRadius;
@@ -86,35 +85,35 @@ public class ErrorEllipse implements OffsetValidator
         for ( int d = 0; d < ellipseCenter.length; ++d )
         	ellipseCenter[ d ] = offsetsMeanValues[ d ];
 
-        this.transform = buildTransform();
+        this.unitSphereTransform = getUnitSphereTransform();
 	}
 
     @SuppressWarnings( "unchecked" )
-	private < A extends AffineGet & AffineSet > A buildTransform()
+	private < A extends AffineGet & AffineSet > A getUnitSphereTransform()
     {
     	final int dim = numDimensions();
 
-    	final A transform;
+    	final A unitSphereTransform;
     	switch ( dim )
         {
     	case 2:
-    		transform = ( A ) new AffineTransform2D();
+    		unitSphereTransform = ( A ) new AffineTransform2D();
         	break;
     	case 3:
-    		transform = ( A ) new AffineTransform3D();
+    		unitSphereTransform = ( A ) new AffineTransform3D();
         	break;
     	default:
-    		transform = ( A ) new AffineTransform( dim );
+    		unitSphereTransform = ( A ) new AffineTransform( dim );
         	break;
         }
 
-    	final double[][] affineMatrix = new double[ dim ][ dim + 1 ];
+    	final double[][] unitSphereTransformAffineMatrix = new double[ dim ][ dim + 1 ];
     	for ( int dRow = 0; dRow < dim; ++dRow )
     	{
-    		affineMatrix[ dRow ][ dim ] = ellipseCenter[ dRow ];
+    		unitSphereTransformAffineMatrix[ dRow ][ dim ] = ellipseCenter[ dRow ];
 
         	for ( int dCol = 0; dCol < dim; ++dCol )
-        		affineMatrix[ dRow ][ dCol ] = uncertaintyVectors[ dCol ][ dRow ];
+        		unitSphereTransformAffineMatrix[ dRow ][ dCol ] = uncertaintyVectors[ dCol ][ dRow ];
         	/*
         	 * We wanted the uncertainty vectors to be arranged like this:
         	 *
@@ -131,9 +130,9 @@ public class ErrorEllipse implements OffsetValidator
         	 * hence the transpose operation.
         	 */
     	}
-    	transform.set( affineMatrix );
+    	unitSphereTransform.set( unitSphereTransformAffineMatrix );
 
-    	return transform;
+    	return unitSphereTransform;
     }
 
 	/**
@@ -149,7 +148,7 @@ public class ErrorEllipse implements OffsetValidator
         Arrays.fill( unitMin, -1 );
         Arrays.fill( unitMax, 1 );
         final RealInterval unitInterval = new FinalRealInterval( unitMin, unitMax );
-        return TileOperations.getTransformedBoundingBoxReal( unitInterval, getDecoratedTransform() );
+        return TileOperations.getTransformedBoundingBoxReal( unitInterval, buildFullTransform() );
 	}
 
 	@Override
@@ -161,7 +160,7 @@ public class ErrorEllipse implements OffsetValidator
 	double getUnitSphereCoordinates( final double... offset )
 	{
 		final double[] transformedOffset = offset.clone();
-		getDecoratedTransform().applyInverse( transformedOffset, transformedOffset );
+		buildFullTransform().applyInverse( transformedOffset, transformedOffset );
 
         // calculate unit sphere coordinates
         double coordsSumSquared = 0;
@@ -212,32 +211,22 @@ public class ErrorEllipse implements OffsetValidator
 		return uncertaintyVectors;
 	}
 
-	public void setPreTransform( final InvertibleRealTransform preTransform )
+	public void setErrorEllipseTransform( final InvertibleRealTransform errorEllipseTransform )
 	{
-		this.preTransform = preTransform;
+		this.errorEllipseTransform = errorEllipseTransform;
 	}
 
-	public InvertibleRealTransform getPreTransform()
+	public InvertibleRealTransform getErrorEllipseTransform()
 	{
-		return preTransform;
+		return errorEllipseTransform;
 	}
 
-	public void setPostTransform( final InvertibleRealTransform postTransform )
-	{
-		this.postTransform = postTransform;
-	}
-
-	public InvertibleRealTransform getPostTransform()
-	{
-		return postTransform;
-	}
-
-	private InvertibleRealTransform getDecoratedTransform()
+	private InvertibleRealTransform buildFullTransform()
 	{
 		final InvertibleRealTransformSequence decoratedTransform = new InvertibleRealTransformSequence();
-		if ( preTransform != null ) decoratedTransform.add( preTransform );
-		decoratedTransform.add( transform );
-		if ( postTransform != null ) decoratedTransform.add( postTransform );
+		decoratedTransform.add( unitSphereTransform );
+		if ( errorEllipseTransform != null )
+			decoratedTransform.add( errorEllipseTransform );
         return decoratedTransform;
 	}
 }
