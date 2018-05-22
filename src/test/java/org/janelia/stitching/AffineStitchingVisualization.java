@@ -48,7 +48,8 @@ public class AffineStitchingVisualization
 {
 	public static void main( final String[] args ) throws Exception
 	{
-		new AffineStitchingVisualization();
+		final String logDirectory = args.length > 0 ? args[ 0 ] : null;
+		new AffineStitchingVisualization( logDirectory );
 	}
 
 	final long[] tileSize = new long[] { 100, 150 };
@@ -63,7 +64,7 @@ public class AffineStitchingVisualization
 
 	final double[] simulatedMovingTileBoxOffset = new double[] { 3, -15 };
 
-	private AffineStitchingVisualization() throws Exception
+	private AffineStitchingVisualization( final String logDirectory ) throws Exception
 	{
 		new ImageJ();
 
@@ -119,8 +120,11 @@ public class AffineStitchingVisualization
 			);
 
 		// write out offset stats
-		writeOutOffsetStats( movingBoxRelativeSearchRadius );
-		System.out.println( "offset stats have been written to file" );
+		if  ( logDirectory != null )
+		{
+			writeOutOffsetStats( movingBoxRelativeSearchRadius, logDirectory );
+			System.out.println( "offset stats have been written to file" );
+		}
 
 		// draw configuration
 		{
@@ -388,9 +392,8 @@ public class AffineStitchingVisualization
 		return tiles.toArray( new TileInfo[ 0 ] );
 	}
 
-	private void writeOutOffsetStats( final EstimatedTileBoxRelativeSearchRadius combinedSearchRadius ) throws IOException
+	private void writeOutOffsetStats( final EstimatedTileBoxRelativeSearchRadius combinedSearchRadius, final String logDirectory ) throws IOException
 	{
-		final String basePath = "/groups/saalfeld/home/pisarevi/affine-stitching-test-stats";
 		final String baseFileName = "offset-stats.csv";
 		final String[] fileNameSuffixes = new String[] { "fixed", "moving" };
 		final EstimatedTileBoxWorldSearchRadius[] searchRadiusStats = new EstimatedTileBoxWorldSearchRadius[] {
@@ -403,7 +406,7 @@ public class AffineStitchingVisualization
 
 		for ( int i = 0; i < 2; ++i )
 		{
-			final String fileName = Paths.get( basePath, Utils.addFilenameSuffix( baseFileName, "_" + fileNameSuffixes[ i ] ) ).toString();
+			final String fileName = Paths.get( logDirectory, Utils.addFilenameSuffix( baseFileName, "_" + fileNameSuffixes[ i ] ) ).toString();
 			try ( final PrintWriter writer = new PrintWriter(fileName ) )
 			{
 				for ( int d = 0; d < searchRadiusStats[ i ].errorEllipse.numDimensions(); ++d )
