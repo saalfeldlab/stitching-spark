@@ -40,6 +40,6 @@ public class AffineGetJsonAdapter implements JsonSerializer< AffineGet >, JsonDe
 			for ( int col = 0; col < jsonRowArray.size(); ++col )
 				affineMatrix[ row ][ col ] = jsonRowArray.get( col ).getAsDouble();
 		}
-		return Utils.createTransform( affineMatrix );
+		return TransformUtils.createTransform( affineMatrix );
 	}
 }
