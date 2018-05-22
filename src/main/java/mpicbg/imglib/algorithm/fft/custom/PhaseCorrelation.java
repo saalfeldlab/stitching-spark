@@ -109,7 +109,7 @@ public class PhaseCorrelation<T extends RealType<T>, S extends RealType<S>> impl
 			this.minOverlapPx[ d ] = minOverlapPx;
 	}
 
-	public void setSearchRadiusPointValidator( final OffsetValidator offsetValidator )
+	public void setOffsetValidator( final OffsetValidator offsetValidator )
 	{
 		this.offsetValidator = offsetValidator;
 	}

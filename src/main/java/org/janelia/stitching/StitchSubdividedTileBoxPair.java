@@ -495,7 +495,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	private SerializablePairWiseStitchingResult stitchPairwise(
 			final SubdividedTileBoxPair tileBoxPair,
 			final ImagePlus[] roiImps,
-			final OffsetValidator pointValidator )
+			final OffsetValidator offsetValidator )
 	{
 		final int timepoint = 1;
 		final int numPeaks = 1;
@@ -504,7 +504,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		final SerializablePairWiseStitchingResult[] results = PairwiseStitchingPerformer.stitchPairwise(
 				roiImps[ 0 ], roiImps[ 1 ], timepoint, timepoint,
 				job.getParams(), numPeaks,
-				pointValidator
+				offsetValidator
 			);
 
 		final SerializablePairWiseStitchingResult result = results[ 0 ];
