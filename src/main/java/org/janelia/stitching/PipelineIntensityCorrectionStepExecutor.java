@@ -425,7 +425,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 			throw new PipelineExecutionException( "Tiles " + tilePair.getA().getIndex() + " and " + tilePair.getB().getIndex() + " do not intersect" );
 
 		// create integer interval from a real intersection interval
-		final Interval intersectionInterval = TileOperations.floorCeilRealInterval( intersectionRealInterval );
+		final Interval intersectionInterval = Intervals.smallestContainingInterval( intersectionRealInterval );
 
 		final Cursor< FloatType >[] imgCursors = new Cursor[ 2 ];
 		final Cursor< IntType >[] coeffCursors = new Cursor[ 2 ];
@@ -435,7 +435,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 			final RandomAccessibleInterval< FloatType > cropped = Views.interval( Views.raster( translatedInterpolatedDownsampledImages[ i ] ), intersectionInterval );
 
 			// translate it to the relative coordinate space of that tile
-			final Interval rasterizedInterval = TileOperations.floorCeilRealInterval( translatedDownsampledIntervals[ i ] );
+			final Interval rasterizedInterval = Intervals.smallestContainingInterval( translatedDownsampledIntervals[ i ] );
 			final RandomAccessibleInterval< FloatType > croppedOffset = Views.offset( cropped, Intervals.minAsLongArray( rasterizedInterval ) );
 
 			// create coefficients map and crop it to the desired interval

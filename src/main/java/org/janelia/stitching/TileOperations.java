@@ -71,18 +71,6 @@ public class TileOperations
 		return new FinalInterval( paddedMin, paddedMax );
 	}
 
-	// TODO: remove as it duplicates Intervals.smallestContainingInterval() functionality
-	public static Interval floorCeilRealInterval( final RealInterval realInterval )
-	{
-		final long[] min = new long[ realInterval.numDimensions() ], max = new long[ realInterval.numDimensions() ];
-		for ( int d = 0; d < realInterval.numDimensions(); ++d )
-		{
-			min[ d ] = ( long ) Math.floor( realInterval.realMin( d ) );
-			max[ d ] = ( long ) Math.ceil( realInterval.realMax( d ) );
-		}
-		return new FinalInterval( min, max );
-	}
-
 	public static Interval roundRealInterval( final RealInterval realInterval )
 	{
 		final long[] min = new long[ realInterval.numDimensions() ], max = new long[ realInterval.numDimensions() ];
