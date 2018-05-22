@@ -96,33 +96,48 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		final SubdividedTileBox[] tileBoxes = tileBoxPair.toArray();
 
 		final InvertibleRealTransform[] estimatedAffines = new InvertibleRealTransform[ tileBoxes.length ];
+		for ( int i = 0; i < tileBoxes.length; ++i )
+			estimatedAffines[ i ] = estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
+
+		// Render both ROIs in the fixed space
+		final InvertibleRealTransform[] affinesToFixedTileSpace = new InvertibleRealTransform[] {
+				TransformUtils.createTransform( tileBoxPair.getA().numDimensions() ), // identity transform for fixed tile
+				getMovingTileToFixedTileTransform( estimatedAffines ) // moving tile to fixed tile
+			};
+
+		final InvertibleRealTransform[] affinesToFixedBoxSpace = new InvertibleRealTransform[ tileBoxes.length ];
+		for ( int i = 0; i < tileBoxes.length; ++i )
+			affinesToFixedBoxSpace[ i ] = getFixedBoxTransform( tileBoxPair, affinesToFixedTileSpace[ i ] ); // to fixed box space
+
 		final ImagePlus[] roiImps = new ImagePlus[ tileBoxes.length ];
 		final Interval[] transformedRoiIntervals = new Interval[ tileBoxes.length ];
-
-		// Render both ROIs in the fixed space (the moving tile box is transform by forward moving transform followed by inverse fixed transform)
-		final InvertibleRealTransform[] fixedBoxSpaceAffines = new InvertibleRealTransform[] {
-				new InvertibleRealTransformSequence(), // dummy identity fixed transform
-				getMovingTileToFixedTileTransform( estimatedAffines ) // moving to fixed
-			};
 		for ( int i = 0; i < tileBoxes.length; ++i )
 		{
-			estimatedAffines[ i ] = estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
-			final Pair< ImagePlus, Interval > roiAndFixedSpaceBoundingBox = renderTileBox(
+			final Pair< ImagePlus, Interval > roiAndBoundingBox = renderTileBox(
 					tileBoxes[ i ],
-					fixedBoxSpaceAffines[ i ],
+					affinesToFixedBoxSpace[ i ],
 					coordsToTilesChannels,
 					flatfieldForChannels
 				);
-			roiImps[ i ] = roiAndFixedSpaceBoundingBox.getA();
-			transformedRoiIntervals[ i ] = roiAndFixedSpaceBoundingBox.getB();
+			roiImps[ i ] = roiAndBoundingBox.getA();
+			transformedRoiIntervals[ i ] = roiAndBoundingBox.getB();
 		}
 
+		// ROIs are rendered in the fixed box space, validate that the fixed box has zero-min
+		if ( !Views.isZeroMin( transformedRoiIntervals[ 0 ] ) )
+			throw new PipelineExecutionException( "fixed box is expected to be zero-min" );
+
+		// get search radius for new moving box position in the fixed box space
 		final EstimatedTileBoxRelativeSearchRadius combinedSearchRadiusForMovingBox;
 		if ( searchRadiusEstimator != null )
 		{
 			combinedSearchRadiusForMovingBox = getCombinedSearchRadiusForMovingBox(
 					searchRadiusEstimator,
 					tileBoxes
+				);
+
+			combinedSearchRadiusForMovingBox.combinedErrorEllipse.setErrorEllipseTransform(
+					getErrorEllipseTransform( tileBoxPair, estimatedAffines )
 				);
 		}
 		else
@@ -240,11 +255,11 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	}
 
 	/**
-	 * Renders the given tile box in the transformed space averaging and optionally flat-fielding all channels.
+	 * Renders the given tile box in the transformed space averaging over all channels and optionally flat-fielding them.
 	 * The resulting image is wrapped as {@link ImagePlus}.
 	 *
 	 * @param tileBox
-	 * @param originalTileTransform
+	 * @param fullTileTransform
 	 * @param coordsToTilesChannels
 	 * @param flatfieldForChannels
 	 * @return pair: (rendered image; its world bounding box)
@@ -252,7 +267,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	 */
 	private Pair< ImagePlus, Interval > renderTileBox(
 			final SubdividedTileBox tileBox,
-			final InvertibleRealTransform originalTileTransform,
+			final InvertibleRealTransform fullTileTransform,
 			final List< Map< String, TileInfo > > coordsToTilesChannels,
 			final List< RandomAccessiblePairNullable< U, U > > flatfieldForChannels ) throws PipelineExecutionException
 	{
@@ -288,7 +303,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 						dataProvider,
 						Optional.ofNullable( flatfieldForChannels.get( channel ) ),
 						tileBox.getBoundaries(),
-						originalTileTransform
+						fullTileTransform
 					);
 			}
 			catch ( final IOException e )
@@ -395,10 +410,24 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			final SubdividedTileBoxPair tileBoxPair,
 			final InvertibleRealTransform[] tileTransforms )
 	{
-		final InvertibleRealTransformSequence movingTileToFixedBoxTransform = new InvertibleRealTransformSequence();
-		movingTileToFixedBoxTransform.add( getMovingTileToFixedTileTransform( tileTransforms ) ); // moving tile -> fixed tile
-		movingTileToFixedBoxTransform.add( new Translation( Intervals.minAsDoubleArray( tileBoxPair.getA() ) ).inverse() ); // fixed tile -> fixed box
-		return movingTileToFixedBoxTransform;
+		return getFixedBoxTransform( tileBoxPair, getMovingTileToFixedTileTransform( tileTransforms ) );
+	}
+
+	/**
+	 * Maps the given transformation in the fixed tile space into the fixed box space.
+	 *
+	 * @param tileBoxPair
+	 * @param transformToFixedTileSpace
+	 * @return
+	 */
+	static InvertibleRealTransform getFixedBoxTransform(
+			final SubdividedTileBoxPair tileBoxPair,
+			final InvertibleRealTransform transformToFixedTileSpace )
+	{
+		final InvertibleRealTransformSequence fixedTileToFixedBoxTransform = new InvertibleRealTransformSequence();
+		fixedTileToFixedBoxTransform.add( transformToFixedTileSpace ); // ... -> fixed tile
+		fixedTileToFixedBoxTransform.add( new Translation( Intervals.minAsDoubleArray( tileBoxPair.getA() ) ).inverse() ); // fixed tile -> fixed box
+		return fixedTileToFixedBoxTransform;
 	}
 
 	/**
