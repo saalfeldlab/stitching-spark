@@ -56,4 +56,15 @@ public class TransformUtils
 		}
 		return createTransform( translationalComponentAffineMatrix );
 	}
+
+	/**
+	 * Returns a new transformation where the linear component of the given transformation has been undone.
+	 */
+	public static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > A undoLinearComponent( final AffineGet transform )
+	{
+		final A undoLinearComponentTransform = createTransform( transform.numDimensions() );
+		undoLinearComponentTransform.preConcatenate( transform );
+		undoLinearComponentTransform.preConcatenate( getLinearComponent( transform ).inverse() );
+		return undoLinearComponentTransform;
+	}
 }

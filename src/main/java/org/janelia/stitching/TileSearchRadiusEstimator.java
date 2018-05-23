@@ -23,7 +23,7 @@ import net.imglib2.neighborsearch.IntervalNeighborSearchOnKDTree;
 import net.imglib2.neighborsearch.KNearestNeighborSearchOnKDTree;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineSet;
-import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.realtransform.RealTransform;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
@@ -218,13 +218,9 @@ public class TileSearchRadiusEstimator implements Serializable
 		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = new ArrayList<>();
 		for ( final TileInfo neighboringTile : neighboringTiles )
 		{
-			final AffineGet neighboringTileTransform = TileOperations.getTileTransform( neighboringTile );
-			final A neighboringTileLinearComponentTransform = TransformUtils.getLinearComponent( neighboringTileTransform );
-
 			// invert the linear part of the affine transformation
-			final RealTransformSequence neighboringTileLocalToOffsetTransform = new RealTransformSequence();
-			neighboringTileLocalToOffsetTransform.add( neighboringTileTransform );
-			neighboringTileLocalToOffsetTransform.add( neighboringTileLinearComponentTransform.inverse() );
+			final AffineGet neighboringTileTransform = TileOperations.getTileTransform( neighboringTile );
+			final RealTransform neighboringTileLocalToOffsetTransform = TransformUtils.undoLinearComponent( neighboringTileTransform );
 
 			final double[] stagePosition = neighboringTile.getPosition();
 			final double[] transformedPosition = new double[ neighboringTile.numDimensions() ];

@@ -34,8 +34,17 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 	protected SerializablePairWiseStitchingResult() { }
 
 	public int getNumDimensions() { return offset.length; }
+
 	public float[] getOffset() { return offset; }
+	public void setOffset( final float[] offset )
+	{
+		for ( int d = 0; d < Math.max( this.offset.length, offset.length ); ++d )
+			this.offset[ d ] = offset[ d ];
+	}
+
 	public float getOffset( final int dim ) { return offset[ dim ]; }
+	public void setOffset( final float val, final int dim ) { offset[ dim ] = val; }
+
 	public float getCrossCorrelation() { return crossCorrelation; }
 	public Float getPhaseCorrelation() { return phaseCorrelation; }
 
