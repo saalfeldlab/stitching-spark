@@ -33,7 +33,6 @@ import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.InvertibleRealTransformSequence;
 import net.imglib2.realtransform.RealTransform;
-import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.Translation2D;
 import net.imglib2.realtransform.TranslationGet;
 import net.imglib2.type.logic.BitType;
@@ -127,207 +126,236 @@ public class AffineStitchingVisualization
 		}
 
 		// draw configuration
+		final int[] worldDisplaySize = new int[] { 1600, 1200 };
+		final IntImagePlus< ARGBType > imgWorld = ImagePlusImgs.argbs( worldDisplaySize[ 0 ], worldDisplaySize[ 1 ] );
+		final RandomAccess< ARGBType > imgWorldRandomAccess = imgWorld.randomAccess();
+
+		drawStageTiles( tiles, worldDisplaySize, imgWorldRandomAccess, new ARGBType( ARGBType.rgba( 255, 0, 0, 32 ) ) );
+		drawStitchedTiles( tiles, worldDisplaySize, imgWorldRandomAccess, new ARGBType( ARGBType.rgba( 0, 255, 0, 32 ) ) );
+
+		drawTileBoxes( tilePairBoxes[ 0 ], worldDisplaySize, imgWorldRandomAccess, new ARGBType( ARGBType.rgba( 0, 96, 96, 32 ) ) );
+		drawTileBoxes( tilePairBoxes[ 1 ], worldDisplaySize, imgWorldRandomAccess, new ARGBType( ARGBType.rgba( 96, 0, 96, 32 ) ) );
+
+		// draw transformed tiles
+		drawTransformedRectangle(
+				getLocalRealIntervalCorners( tilePair.getA() ),
+				estimatedTileTransforms[ 0 ],
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
+			);
+		drawTransformedRectangle(
+				getLocalRealIntervalCorners( tilePair.getB() ),
+				estimatedTileTransforms[ 1 ],
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 255, 255, 255, 64 ) )
+			);
+
+		// draw transformed tile boxes
+		drawTransformedRectangle(
+				getRealIntervalCorners( tileBoxPair.getA() ),
+				estimatedTileTransforms[ 0 ],
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
+			);
+		drawTransformedRectangle(
+				getRealIntervalCorners( tileBoxPair.getB() ),
+				estimatedTileTransforms[ 1 ],
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 192, 192, 192, 255 ) )
+			);
+
+
+		// draw offset tiles (where the linear part of the transformation has been undone)
+		for ( final TileInfo tile : tiles )
 		{
-			final int[] displaySize = new int[] { 1600, 1200 };
-			final IntImagePlus< ARGBType > img = ImagePlusImgs.argbs( displaySize[ 0 ], displaySize[ 1 ] );
-			final RandomAccess< ARGBType > imgRandomAccess = img.randomAccess();
-
-			drawStageTiles( tiles, displaySize, imgRandomAccess, new ARGBType( ARGBType.rgba( 255, 0, 0, 32 ) ) );
-			drawStitchedTiles( tiles, displaySize, imgRandomAccess, new ARGBType( ARGBType.rgba( 0, 255, 0, 32 ) ) );
-
-			drawTileBoxes( tilePairBoxes[ 0 ], displaySize, imgRandomAccess, new ARGBType( ARGBType.rgba( 0, 96, 96, 32 ) ) );
-			drawTileBoxes( tilePairBoxes[ 1 ], displaySize, imgRandomAccess, new ARGBType( ARGBType.rgba( 96, 0, 96, 32 ) ) );
-
-			// draw transformed tiles
-			drawTransformedRectangle(
-					getLocalRealIntervalCorners( tilePair.getA() ),
-					estimatedTileTransforms[ 0 ],
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
-				);
-			drawTransformedRectangle(
-					getLocalRealIntervalCorners( tilePair.getB() ),
-					estimatedTileTransforms[ 1 ],
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 255, 255, 255, 64 ) )
-				);
-
-			// draw transformed tile boxes
-			drawTransformedRectangle(
-					getRealIntervalCorners( tileBoxPair.getA() ),
-					estimatedTileTransforms[ 0 ],
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
-				);
-			drawTransformedRectangle(
-					getRealIntervalCorners( tileBoxPair.getB() ),
-					estimatedTileTransforms[ 1 ],
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 192, 192, 192, 255 ) )
-				);
-
-
-			// draw offset tiles (where the linear part of the transformation has been undone)
-			for ( final TileInfo tile : tiles )
+			if ( tile.getTransform() != null )
 			{
-				if ( tile.getTransform() != null )
-				{
-					final InvertibleRealTransform linearComponent = TransformUtils.getLinearComponent( tile.getTransform() );
-					final RealTransformSequence seq = new RealTransformSequence();
-					seq.add( tile.getTransform() );
-					seq.add( linearComponent.inverse() );
-
-					drawTransformedRectangle(
-							getLocalRealIntervalCorners( tile ),
-							seq,
-							displaySize,
-							imgRandomAccess,
-							new ARGBType( ARGBType.rgba( 0, 0, 255, 255 ) )
-						);
-				}
+				drawTransformedRectangle(
+						getLocalRealIntervalCorners( tile ),
+						TransformUtils.undoLinearComponent( tile.getTransform() ),
+						worldDisplaySize,
+						imgWorldRandomAccess,
+						new ARGBType( ARGBType.rgba( 0, 0, 255, 255 ) )
+					);
 			}
-
-
-			final RealTransformSequence searchRadiusDisplayTransform = new RealTransformSequence();
-			searchRadiusDisplayTransform.add( estimatedTileTransforms[ 1 ] );
-			searchRadiusDisplayTransform.add( TransformUtils.getLinearComponent( estimatedTileTransforms[ 1 ] ).inverse() );
-
-			// draw combined error ellipse (moving+fixed)
-			drawErrorEllipse(
-					movingBoxRelativeSearchRadius.combinedErrorEllipse,
-					searchRadiusDisplayTransform,
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) )
-				);
-
-
-
-			final ImagePlus imp = img.getImagePlus();
-			imp.show();
 		}
 
-		{
-			final int[] displaySize = new int[] { 800, 400 };
-			final Translation2D displayOffsetTransform = new Translation2D( displaySize[ 0 ] / 2, displaySize[ 1 ] / 2 );
+		// draw moving tile at its estimated offset position
+		drawTransformedRectangle(
+				getLocalRealIntervalCorners( tilePair.getB() ),
+				TransformUtils.undoLinearComponent( estimatedTileTransforms[ 1 ] ),
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 255, 255, 255, 255 ) )
+			);
 
-			final InvertibleRealTransform movingTileToFixedBoxTransform = StitchSubdividedTileBoxPair.getMovingTileToFixedBoxTransform(
-					tileBoxPair,
-					estimatedTileTransforms
-				);
+		// draw combined error ellipse (moving+fixed)
+		drawErrorEllipse(
+				movingBoxRelativeSearchRadius.combinedErrorEllipse,
+				TransformUtils.undoLinearComponent( estimatedTileTransforms[ 1 ] ),
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) )
+			);
 
-			final InvertibleRealTransformSequence movingTileToDisplayTransform = new InvertibleRealTransformSequence();
-			movingTileToDisplayTransform.add( movingTileToFixedBoxTransform );
-			movingTileToDisplayTransform.add( displayOffsetTransform );
-
-			final IntImagePlus< ARGBType > img = ImagePlusImgs.argbs( displaySize[ 0 ], displaySize[ 1 ] );
-			final RandomAccess< ARGBType > imgRandomAccess = img.randomAccess();
-
-			drawAxes( displaySize, imgRandomAccess );
-
-			// draw bounding box of the moving tile box
-			final RealInterval transformedMovingBoxInterval = TileOperations.getTransformedBoundingBoxReal(
-					tileBoxPair.getB(),
-					movingTileToFixedBoxTransform
-				);
-			drawRectangle(
-					getRealIntervalCorners( transformedMovingBoxInterval ),
-					displayOffsetTransform,
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 64, 64, 64, 64 ) )
-				);
-
-			// draw zero-min fixed tile box
-			drawRectangle(
-					getLocalRealIntervalCorners( tileBoxPair.getA() ),
-					displayOffsetTransform,
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
-				);
-
-			// draw transformed moving tile box
-			drawTransformedRectangle(
-					getRealIntervalCorners( tileBoxPair.getB() ),
-					movingTileToDisplayTransform,
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 192, 192, 192, 255 ) )
-				);
-
-
-			// account for the offset between zero-min of the transformed tile and the ROI
-			final double[] transformedMovingTileBoxToBoundingBoxOffset = StitchSubdividedTileBoxPair.getTransformedMovingBoxToBoundingBoxOffset(
-					tileBoxPair,
-					estimatedTileTransforms
-				);
-			printDoubleArray(
-					System.lineSeparator() + "Offset between transformed top-left point and bounding box: %s",
-					transformedMovingTileBoxToBoundingBoxOffset,
-					2
-				);
-
-			movingBoxRelativeSearchRadius.combinedErrorEllipse.setErrorEllipseTransform(
-					StitchSubdividedTileBoxPair.getErrorEllipseTransform( tileBoxPair, estimatedTileTransforms )
-				);
-
-			// draw transformed search radius in the fixed box space
-			System.out.println( System.lineSeparator() + "Drawing world->local transformed error ellipse..." );
-			drawErrorEllipse(
-					movingBoxRelativeSearchRadius.combinedErrorEllipse,
-					displayOffsetTransform,
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) )
-				);
-
-			final ImagePlus imp = img.getImagePlus();
-			imp.show();
-
-			Thread.sleep( 3000 );
-
-
-			// validate ellipse test by drawing boundaries after testing all display points
-			System.out.println( System.lineSeparator() + "Drawing result of testing display points against the transformed error ellipse..." );
-			drawErrorEllipseByInverseTest(
-					movingBoxRelativeSearchRadius.combinedErrorEllipse,
-					displayOffsetTransform,
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 0, 255, 255, 255 ) )
-				);
-			imp.updateAndDraw();
-			System.out.println( "Done" );
-
-			Thread.sleep( 3000 );
-
-
-			// draw new offset position of moving tile box
-			drawRectangle(
-					getLocalRealIntervalCorners( transformedMovingBoxInterval ),
-					new Translation2D( simulatedMovingTileBoxOffset[ 0 ] + displayOffsetTransform.getTranslation( 0 ), simulatedMovingTileBoxOffset[ 1 ] + displayOffsetTransform.getTranslation( 1 ) ),
-					displaySize,
-					imgRandomAccess,
-					new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
-				);
-			imp.updateAndDraw();
+		final ImagePlus impWorld = imgWorld.getImagePlus();
+		impWorld.show();
 
 
 
-			// test that simulated offset is within the error ellipse
-			System.out.println();
-			if ( movingBoxRelativeSearchRadius.combinedErrorEllipse.testOffset( simulatedMovingTileBoxOffset ) )
-				System.out.println( "New offset is inside the accepted error range" );
-			else
-				System.out.println( "New offset is outside the accepted error range" );
-		}
+		final int[] localDisplaySize = new int[] { 800, 400 };
+		final Translation2D displayOffsetTransform = new Translation2D( localDisplaySize[ 0 ] / 2, localDisplaySize[ 1 ] / 2 );
 
-		System.out.println( "OK" );
+		final InvertibleRealTransform movingTileToFixedBoxTransform = StitchSubdividedTileBoxPair.getMovingTileToFixedBoxTransform(
+				tileBoxPair,
+				estimatedTileTransforms
+			);
+
+		final InvertibleRealTransformSequence movingTileToDisplayTransform = new InvertibleRealTransformSequence();
+		movingTileToDisplayTransform.add( movingTileToFixedBoxTransform );
+		movingTileToDisplayTransform.add( displayOffsetTransform );
+
+		final IntImagePlus< ARGBType > imgLocal = ImagePlusImgs.argbs( localDisplaySize[ 0 ], localDisplaySize[ 1 ] );
+		final RandomAccess< ARGBType > imgLocalRandomAccess = imgLocal.randomAccess();
+
+		drawAxes( localDisplaySize, imgLocalRandomAccess );
+
+		// draw bounding box of the moving tile box
+		final RealInterval transformedMovingBoxInterval = TileOperations.getTransformedBoundingBoxReal(
+				tileBoxPair.getB(),
+				movingTileToFixedBoxTransform
+			);
+		drawTransformedRectangle(
+				getRealIntervalCorners( transformedMovingBoxInterval ),
+				displayOffsetTransform,
+				localDisplaySize,
+				imgLocalRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 64, 64, 64 ) )
+			);
+
+		// draw zero-min fixed tile box
+		drawTransformedRectangle(
+				getLocalRealIntervalCorners( tileBoxPair.getA() ),
+				displayOffsetTransform,
+				localDisplaySize,
+				imgLocalRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
+			);
+
+		// draw transformed moving tile box
+		drawTransformedRectangle(
+				getRealIntervalCorners( tileBoxPair.getB() ),
+				movingTileToDisplayTransform,
+				localDisplaySize,
+				imgLocalRandomAccess,
+				new ARGBType( ARGBType.rgba( 192, 192, 192, 255 ) )
+			);
+
+
+		// account for the offset between zero-min of the transformed tile and the ROI
+		final double[] transformedMovingTileBoxToBoundingBoxOffset = StitchSubdividedTileBoxPair.getTransformedMovingBoxToBoundingBoxOffset(
+				tileBoxPair,
+				estimatedTileTransforms
+			);
+		printDoubleArray(
+				System.lineSeparator() + "Offset between transformed top-left point and bounding box: %s",
+				transformedMovingTileBoxToBoundingBoxOffset,
+				2
+			);
+
+		movingBoxRelativeSearchRadius.combinedErrorEllipse.setErrorEllipseTransform(
+				StitchSubdividedTileBoxPair.getErrorEllipseTransform( tileBoxPair, estimatedTileTransforms )
+			);
+
+		// draw transformed search radius in the fixed box space
+		System.out.println( System.lineSeparator() + "Drawing world->local transformed error ellipse..." );
+		drawErrorEllipse(
+				movingBoxRelativeSearchRadius.combinedErrorEllipse,
+				displayOffsetTransform,
+				localDisplaySize,
+				imgLocalRandomAccess,
+				new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) )
+			);
+
+		final ImagePlus impLocal = imgLocal.getImagePlus();
+		impLocal.show();
+
+		Thread.sleep( 3000 );
+
+
+		// validate ellipse test by drawing boundaries after testing all display points
+		System.out.println( System.lineSeparator() + "Drawing result of testing display points against the transformed error ellipse..." );
+		drawErrorEllipseByInverseTest(
+				movingBoxRelativeSearchRadius.combinedErrorEllipse,
+				displayOffsetTransform,
+				localDisplaySize,
+				imgLocalRandomAccess,
+				new ARGBType( ARGBType.rgba( 0, 255, 255, 255 ) )
+			);
+		impLocal.updateAndDraw();
+		System.out.println( "Done" );
+
+		Thread.sleep( 3000 );
+
+
+		// draw new offset position of moving tile box
+		drawTransformedRectangle(
+				getLocalRealIntervalCorners( transformedMovingBoxInterval ),
+				new Translation2D( simulatedMovingBoundingBoxOffset ).concatenate( displayOffsetTransform ),
+				localDisplaySize,
+				imgLocalRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
+			);
+		impLocal.updateAndDraw();
+
+
+
+		// test that simulated offset is within the error ellipse
+		System.out.println();
+		if ( movingBoxRelativeSearchRadius.combinedErrorEllipse.testOffset( simulatedMovingBoundingBoxOffset ) )
+			System.out.println( "New offset is inside the accepted error range" );
+		else
+			System.out.println( "New offset is outside the accepted error range" );
+
+
+		// map the new offset back to the global space
+		final AffineGet newMovingTileTransform = StitchSubdividedTileBoxPair.getNewMovingTileTransform(
+				tileBoxPair,
+				estimatedTileTransforms,
+				simulatedMovingBoundingBoxOffset
+			);
+
+		// draw moving tile at its estimated world and offset positions
+		drawTransformedRectangle(
+				getLocalRealIntervalCorners( tilePair.getB() ),
+				newMovingTileTransform,
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
+			);
+		drawTransformedRectangle(
+				getLocalRealIntervalCorners( tilePair.getB() ),
+				TransformUtils.undoLinearComponent( newMovingTileTransform ),
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
+			);
+		impWorld.updateAndDraw();
+
+
+		// find offset between the fixed and moving tiles in the offset space
+		final double[] newTranslatedOffset = StitchSubdividedTileBoxPair.getNewStitchedOffset(
+				tileBoxPair,
+				estimatedTileTransforms,
+				simulatedMovingBoundingBoxOffset
+			);
+		System.out.println( System.lineSeparator() + "New offset in translated space: " + Arrays.toString( newTranslatedOffset ) );
+
+		System.out.println( System.lineSeparator() + "OK" );
 	}
 
 	private TileInfo[] getTiles()
@@ -363,12 +391,10 @@ public class AffineStitchingVisualization
 			new double[] { 798, 380 },
 			new double[] { 885, 388 },
 			new double[] { 970, 400 },
-			null // new double[] { 1065, 408 },
+			null // to be stitched
 		};
 
 		final double rotationAngle = 30;
-//		final double[] postTranslation = new double[] { 400, -400 };
-
 		final List< TileInfo > tiles = new ArrayList<>();
 		for ( int i = 0; i < stagePositions.length; ++i )
 		{
@@ -382,7 +408,6 @@ public class AffineStitchingVisualization
 				final AffineTransform2D stitchedTransform = new AffineTransform2D();
 				stitchedTransform.translate( stitchedPositions[ i ] );
 				stitchedTransform.rotate( Math.toRadians( rotationAngle ) );
-//				stitchedTransform.translate( postTranslation );
 				tile.setTransform( stitchedTransform );
 			}
 
@@ -447,11 +472,15 @@ public class AffineStitchingVisualization
 		}
 	}
 
-	private void drawStageTiles( final TileInfo[] tiles, final int[] displaySize, final RandomAccess< ARGBType > imgRandomAccess, final ARGBType color )
+	private void drawStageTiles(
+			final TileInfo[] tiles,
+			final int[] displaySize,
+			final RandomAccess< ARGBType > imgRandomAccess,
+			final ARGBType color )
 	{
 		for ( final TileInfo tile : tiles )
 		{
-			drawRectangle(
+			drawTransformedRectangle(
 					getRealIntervalCorners( tile ),
 					null,
 					displaySize,
@@ -461,7 +490,11 @@ public class AffineStitchingVisualization
 		}
 	}
 
-	private void drawStitchedTiles( final TileInfo[] tiles, final int[] displaySize, final RandomAccess< ARGBType > imgRandomAccess, final ARGBType color )
+	private void drawStitchedTiles(
+			final TileInfo[] tiles,
+			final int[] displaySize,
+			final RandomAccess< ARGBType > imgRandomAccess,
+			final ARGBType color )
 	{
 		for ( final TileInfo tile : tiles )
 		{
@@ -478,7 +511,11 @@ public class AffineStitchingVisualization
 		}
 	}
 
-	private void drawTileBoxes( final List< SubdividedTileBox > tileBoxes, final int[] displaySize, final RandomAccess< ARGBType > imgRandomAccess, final ARGBType color )
+	private void drawTileBoxes(
+			final List< SubdividedTileBox > tileBoxes,
+			final int[] displaySize,
+			final RandomAccess< ARGBType > imgRandomAccess,
+			final ARGBType color )
 	{
 		for ( final SubdividedTileBox tileBox : tileBoxes )
 		{
@@ -486,7 +523,7 @@ public class AffineStitchingVisualization
 			for ( int d = 0; d < tileBox.getFullTile().numDimensions(); ++d )
 				tileTransform.set( tileBox.getFullTile().getPosition( d ), d, 2 );
 
-			drawRectangle(
+			drawTransformedRectangle(
 					getRealIntervalCorners( tileBox ),
 					tileTransform,
 					displaySize,
@@ -494,26 +531,6 @@ public class AffineStitchingVisualization
 					color
 				);
 		}
-	}
-
-	private void drawRectangle(
-			final double[][] rectCorners,
-			final AffineGet displayTransform,
-			final int[] displaySize,
-			final RandomAccess< ARGBType > imgRandomAccess,
-			final ARGBType color )
-	{
-		final int dim = displaySize.length;
-		final double[][] rectDisplayCorners = new double[ 2 ][ dim ];
-
-		for ( int i = 0; i < 2; ++i )
-		{
-			rectDisplayCorners[ i ] = rectCorners[ i ].clone();
-			if ( displayTransform != null )
-				displayTransform.apply( rectDisplayCorners[ i ], rectDisplayCorners[ i ] );
-		}
-
-		drawTransformedRectangle( rectDisplayCorners, null, displaySize, imgRandomAccess, color );
 	}
 
 	private Set< Integer > drawTransformedRectangle(
@@ -727,9 +744,7 @@ public class AffineStitchingVisualization
 		return transformedBoundaryPoints;
 	}
 
-	private void drawAxes(
-			final int[] displaySize,
-			final RandomAccess< ARGBType > imgRandomAccess )
+	private void drawAxes( final int[] displaySize, final RandomAccess< ARGBType > imgRandomAccess )
 	{
 		final ARGBType axesColor = new ARGBType( ARGBType.rgba( 32, 32, 32, 32 ) );
 		for ( int d = 0; d < displaySize.length; ++d )
