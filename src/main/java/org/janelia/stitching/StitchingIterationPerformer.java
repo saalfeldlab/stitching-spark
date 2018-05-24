@@ -63,8 +63,8 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 
 		final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
 		Arrays.fill( tileBoxesGridSize, 2 );
-		final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( tiles, tileBoxesGridSize );
-		final List< SubdividedTileBoxPair > overlappingBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( tiles, tileBoxesGridSize );
+		final List< SubdividedTileBoxPair > overlappingBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
 		preparePairwiseShifts( overlappingBoxes, iteration );
 
 		final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );

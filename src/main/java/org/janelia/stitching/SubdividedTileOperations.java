@@ -12,7 +12,6 @@ import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
 import net.imglib2.iterator.IntervalIterator;
-import net.imglib2.realtransform.RealTransform;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.IntervalsNullable;
@@ -20,7 +19,7 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 
-public class SplitTileOperations
+public class SubdividedTileOperations
 {
 	/**
 	 * Splits each tile into grid of smaller boxes, and for each box stores index mapping to the original tile.
@@ -91,7 +90,7 @@ public class SplitTileOperations
 	{
 		if ( tileBoxPair.getA().getFullTile().getIndex().intValue() != tileBoxPair.getB().getFullTile().getIndex().intValue() )
 		{
-			final Pair< Interval, Interval > transformedTileBoxPair = transformTileBoxPair( tileBoxPair );
+			final Pair< Interval, Interval > transformedTileBoxPair = TransformedTileOperations.transformTileBoxPair( tileBoxPair );
 			final Interval tileBoxesOverlap = IntervalsNullable.intersect( transformedTileBoxPair.getA(), transformedTileBoxPair.getB() );
 			if ( tileBoxesOverlap != null )
 			{
@@ -104,72 +103,6 @@ public class SplitTileOperations
 			}
 		}
 		return false;
-	}
-
-	/**
-	 * Returns transformed tile box intervals for a pair of tile boxes.
-	 *
-	 * @param tileBoxPair
-	 * @return
-	 */
-	public static Pair< Interval, Interval > transformTileBoxPair( final SubdividedTileBoxPair tileBoxPair )
-	{
-		return new ValuePair<>(
-				transformTileBox( tileBoxPair.getA() ),
-				transformTileBox( tileBoxPair.getB() )
-			);
-	}
-
-	/**
-	 * Returns a tile box interval in the global space.
-	 * The center coordinate of the resulting interval is defined by transforming the middle point of the tile box.
-	 *
-	 * @param tileBox
-	 * @return
-	 */
-	public static Interval transformTileBox( final SubdividedTileBox tileBox )
-	{
-		return transformTileBox( tileBox, TileOperations.getTileTransform( tileBox.getFullTile() ) );
-	}
-
-	/**
-	 * Returns a tile box interval in the global space.
-	 * The center coordinate of the resulting interval is defined by transforming the middle point of the tile box.
-	 *
-	 * @param tileBox
-	 * @param originalTileTransform
-	 * @return
-	 */
-	public static Interval transformTileBox( final SubdividedTileBox tileBox, final RealTransform originalTileTransform )
-	{
-		final double[] transformedTileBoxMiddlePoint = transformTileBoxMiddlePoint( tileBox, originalTileTransform );
-		final RealInterval transformedTileBoxInterval = getTileBoxInterval( transformedTileBoxMiddlePoint, tileBox.getSize() );
-		return TileOperations.roundRealInterval( transformedTileBoxInterval );
-	}
-
-	/**
-	 * Transforms middle point of a given tile box.
-	 *
-	 * @param tileBox
-	 * @return
-	 */
-	public static double[] transformTileBoxMiddlePoint( final SubdividedTileBox tileBox )
-	{
-		return transformTileBoxMiddlePoint( tileBox, TileOperations.getTileTransform( tileBox.getFullTile() ) );
-	}
-
-	/**
-	 * Transforms middle point of a given tile box.
-	 *
-	 * @param tileBox
-	 * @param originalTileTransform
-	 * @return
-	 */
-	public static double[] transformTileBoxMiddlePoint( final SubdividedTileBox tileBox, final RealTransform originalTileTransform )
-	{
-		final double[] transformedTileBoxMiddlePoint = new double[ tileBox.numDimensions() ];
-		originalTileTransform.apply( getTileBoxMiddlePoint( tileBox ), transformedTileBoxMiddlePoint );
-		return transformedTileBoxMiddlePoint;
 	}
 
 	/**
@@ -372,11 +305,8 @@ public class SplitTileOperations
 	 */
 	public static double[] getFullTileOffset( final SubdividedTileBoxPair tileBoxPair, final double[] tileBoxOffset )
 	{
-		final SubdividedTileBox fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
-		if ( fixedTileBox.getFullTile() == null || movingTileBox.getFullTile() == null )
-			throw new IllegalArgumentException( "was given full tiles instead of tile boxes" );
-
 		final double[] fullTileOffset = new double[ tileBoxOffset.length ];
+		final SubdividedTileBox fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
 		for ( int d = 0; d < fullTileOffset.length; ++d )
 			fullTileOffset[ d ] = tileBoxOffset[ d ] + fixedTileBox.getPosition( d ) - movingTileBox.getPosition( d );
 		return fullTileOffset;

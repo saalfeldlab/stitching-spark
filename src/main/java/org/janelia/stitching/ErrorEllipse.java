@@ -148,7 +148,7 @@ public class ErrorEllipse implements OffsetValidator
         Arrays.fill( unitMin, -1 );
         Arrays.fill( unitMax, 1 );
         final RealInterval unitInterval = new FinalRealInterval( unitMin, unitMax );
-        return TileOperations.getTransformedBoundingBoxReal( unitInterval, buildFullTransform() );
+        return TransformedTileOperations.getTransformedBoundingBoxReal( unitInterval, buildFullTransform() );
 	}
 
 	@Override

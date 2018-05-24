@@ -637,6 +637,7 @@ public class PhaseCorrelation<T extends RealType<T>, S extends RealType<S>> impl
 
 	private boolean fallsIntoConfidenceInterval( final int[] roiOffset )
 	{
+		// TODO: verify that ROIs actually overlap with the new offset
 		final double[] roiOffsetDouble = new double[ roiOffset.length ];
 		for ( int d = 0; d < roiOffsetDouble.length; ++d )
 			roiOffsetDouble[ d ] = roiOffset[ d ];

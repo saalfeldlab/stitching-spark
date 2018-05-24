@@ -48,7 +48,7 @@ public class TransformedTileImageLoader
 				dataProvider,
 				flatfield,
 				tileInterval,
-				TileOperations.getTileTransform( tile )
+				TransformedTileOperations.getTileTransform( tile )
 			);
 	}
 
@@ -90,7 +90,7 @@ public class TransformedTileImageLoader
 		final RandomAccessible< T > extendedSource = Views.extendZero( source );
 		final RealRandomAccessible< T > interpolatedSource = Views.interpolate( extendedSource, new ClampingNLinearInterpolatorFactory<>() );
 		final RandomAccessible< T > transformedSource = RealViews.transform( interpolatedSource, tileTransform );
-		final Interval boundingBox = TileOperations.getTransformedBoundingBox( source, tileTransform );
+		final Interval boundingBox = TransformedTileOperations.getTransformedBoundingBox( source, tileTransform );
 		final RandomAccessibleInterval< T > transformedImg = Views.interval( transformedSource, boundingBox );
 
 		return transformedImg;

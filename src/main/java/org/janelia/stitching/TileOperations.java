@@ -16,18 +16,8 @@ import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
-import net.imglib2.iterator.IntervalIterator;
-import net.imglib2.realtransform.AffineGet;
-import net.imglib2.realtransform.InvertibleRealTransform;
-import net.imglib2.realtransform.Translation;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
-
-/**
- * Contains a number of useful operations on a set of tiles.
- *
- * @author Igor Pisarev
- */
 
 public class TileOperations
 {
@@ -329,79 +319,6 @@ public class TileOperations
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
 				tile.setPosition( d, tile.getPosition( d ) + offset[ d ] );
-	}
-
-	/**
-	 * Returns tile transform, that is its affine transform if not null, or translation transform to the position of the tile otherwise.
-	 */
-	public static AffineGet getTileTransform( final TileInfo tile )
-	{
-		final AffineGet ret;
-		if ( tile.getTransform() != null )
-			ret = tile.getTransform();
-		else
-			ret = new Translation( tile.getPosition() );
-		return ret;
-	}
-
-	/**
-	 * Estimates the bounding box of a transformed (or shifted) tile.
-	 *
-	 * @param tile
-	 * @return
-	 */
-	public static Interval getTransformedBoundingBox( final TileInfo tile )
-	{
-		return getTransformedBoundingBox( new FinalInterval( tile.getSize() ), tile.getTransform() );
-	}
-
-	/**
-	 * Estimates the bounding box of a transformed interval inside a tile.
-	 *
-	 * @param interval
-	 * @param transform
-	 * @return
-	 */
-	public static Interval getTransformedBoundingBox( final RealInterval interval, final InvertibleRealTransform transform )
-	{
-		return Intervals.smallestContainingInterval( getTransformedBoundingBoxReal( interval, transform ) );
-	}
-
-	/**
-	 * Estimates the bounding box of a transformed interval inside a tile.
-	 *
-	 * @param interval
-	 * @param transform
-	 * @return
-	 */
-	public static RealInterval getTransformedBoundingBoxReal( final RealInterval interval, final InvertibleRealTransform transform )
-	{
-		final double[] transformedMin = new double[ interval.numDimensions() ], transformedMax = new double[ interval.numDimensions() ];
-		Arrays.fill( transformedMin, Double.POSITIVE_INFINITY );
-		Arrays.fill( transformedMax, Double.NEGATIVE_INFINITY );
-
-		final double[] cornerPosition = new double[ interval.numDimensions() ], transformedCornerPosition = new double[ interval.numDimensions() ];
-
-		final int[] cornerDimensions = new int[ interval.numDimensions() ];
-		Arrays.fill( cornerDimensions, 2 );
-		final IntervalIterator cornerIterator = new IntervalIterator( cornerDimensions );
-
-		while ( cornerIterator.hasNext() )
-		{
-			cornerIterator.fwd();
-			for ( int d = 0; d < interval.numDimensions(); ++d )
-				cornerPosition[ d ] = cornerIterator.getIntPosition( d ) == 0 ? interval.realMin( d ) : interval.realMax( d );
-
-			transform.apply( cornerPosition, transformedCornerPosition );
-
-			for ( int d = 0; d < interval.numDimensions(); ++d )
-			{
-				transformedMin[ d ] = Math.min( transformedCornerPosition[ d ], transformedMin[ d ] );
-				transformedMax[ d ] = Math.max( transformedCornerPosition[ d ], transformedMax[ d ] );
-			}
-		}
-
-		return new FinalRealInterval( transformedMin, transformedMax );
 	}
 
 	/**

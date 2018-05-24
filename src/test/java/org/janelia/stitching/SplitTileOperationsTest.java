@@ -28,7 +28,7 @@ public class SplitTileOperationsTest
 		tile.setPosition( new double[] { 100, 200, 300 } );
 		tile.setSize( new long[] { 50, 60, 70 } );
 
-		final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( new TileInfo[] { tile }, new int[] { 2, 2, 2 } );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( new TileInfo[] { tile }, new int[] { 2, 2, 2 } );
 		Assert.assertEquals( 8, tileBoxes.size() );
 
 		// test mins
@@ -78,15 +78,15 @@ public class SplitTileOperationsTest
 		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
 		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
 
-		final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
 		Assert.assertEquals( 16, tileBoxes.size() );
 
 		// test left-top-front tile box of the second tile
 		{
 			final SubdividedTileBox movingTileBox = tileBoxes.get( 8 );
-			Assert.assertArrayEquals( new double[] { 22.5, 20, 17.5 }, SplitTileOperations.getTileBoxMiddlePoint( movingTileBox ), EPSILON );
-			final Pair< Interval, Interval > transformedInGlobalSpace = SplitTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), movingTileBox ) );
-			final Interval transformedSecondTileBox = SplitTileOperations.globalToFixedBoxSpace( transformedInGlobalSpace ).getB();
+			Assert.assertArrayEquals( new double[] { 22.5, 20, 17.5 }, SubdividedTileOperations.getTileBoxMiddlePoint( movingTileBox ), EPSILON );
+			final Pair< Interval, Interval > transformedInGlobalSpace = TransformedTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), movingTileBox ) );
+			final Interval transformedSecondTileBox = SubdividedTileOperations.globalToFixedBoxSpace( transformedInGlobalSpace ).getB();
 			Assert.assertArrayEquals( new long[] { 40, 10, -10 }, Intervals.minAsLongArray( transformedSecondTileBox ) );
 			Assert.assertArrayEquals( movingTileBox.getSize(), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
 		}
@@ -94,9 +94,9 @@ public class SplitTileOperationsTest
 		// test right-bottom-back tile box of the second tile
 		{
 			final SubdividedTileBox movingTileBox = tileBoxes.get( 15 );
-			Assert.assertArrayEquals( new double[] { 67.5, 60, 52.5 }, SplitTileOperations.getTileBoxMiddlePoint( movingTileBox ), EPSILON );
-			final Pair< Interval, Interval > transformedInGlobalSpace = SplitTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), movingTileBox ) );
-			final Interval transformedSecondTileBox = SplitTileOperations.globalToFixedBoxSpace( transformedInGlobalSpace ).getB();
+			Assert.assertArrayEquals( new double[] { 67.5, 60, 52.5 }, SubdividedTileOperations.getTileBoxMiddlePoint( movingTileBox ), EPSILON );
+			final Pair< Interval, Interval > transformedInGlobalSpace = TransformedTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), movingTileBox ) );
+			final Interval transformedSecondTileBox = SubdividedTileOperations.globalToFixedBoxSpace( transformedInGlobalSpace ).getB();
 			Assert.assertArrayEquals( new long[] { 85, 50, 25 }, Intervals.minAsLongArray( transformedSecondTileBox ) );
 			Assert.assertArrayEquals( movingTileBox.getSize(), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
 		}
@@ -116,10 +116,10 @@ public class SplitTileOperationsTest
 		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
 		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
 
-		final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
 		Assert.assertEquals( 16, tileBoxes.size() );
 
-		final List< SubdividedTileBoxPair > overlappingTileBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes, true );
+		final List< SubdividedTileBoxPair > overlappingTileBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, true );
 		Assert.assertEquals( 4, overlappingTileBoxes.size() );
 
 		// test references to the original tiles and their order
@@ -171,7 +171,7 @@ public class SplitTileOperationsTest
 		movingTile.setPosition( new double[] { 46, 32 } );
 		movingTile.setSize( new long[] { 20, 20 } );
 
-		final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( new TileInfo[] { fixedTile,  movingTile }, new int[] { 2, 2 } );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( new TileInfo[] { fixedTile,  movingTile }, new int[] { 2, 2 } );
 		Assert.assertEquals( 8, tileBoxes.size() );
 
 		final SubdividedTileBoxPair tileBoxPair;
@@ -217,7 +217,7 @@ public class SplitTileOperationsTest
 				IntervalsHelper.translate( tileBoxPair.getB().getBoundaries(), Intervals.minAsLongArray( tileBoxPair.getB().getFullTile().getBoundaries() ) )
 			);
 
-		final Pair< Interval, Interval > intervalsInFixedBoxSpace = SplitTileOperations.globalToFixedBoxSpace( intervalsInGlobalSpace );
+		final Pair< Interval, Interval > intervalsInFixedBoxSpace = SubdividedTileOperations.globalToFixedBoxSpace( intervalsInGlobalSpace );
 
 		Assert.assertArrayEquals( new long[] { 60, 50 }, Intervals.minAsLongArray( IntervalsNullable.intersect( intervalsInGlobalSpace.getA(), intervalsInGlobalSpace.getB() ) ) );
 		Assert.assertArrayEquals( new long[] { 65, 51 }, Intervals.maxAsLongArray( IntervalsNullable.intersect( intervalsInGlobalSpace.getA(), intervalsInGlobalSpace.getB() ) ) );
@@ -233,7 +233,7 @@ public class SplitTileOperationsTest
 		final double[][] offsetsCovarianceMatrix = new double[][] { new double[] { 1, 0, 0 }, new double[] { 0, 1, 0 }, new double[] { 0, 0, 1 } };
 		final ErrorEllipse errorEllipse = new ErrorEllipse( ellipseRadius, offsetsMeanValues, offsetsCovarianceMatrix );
 
-		final Pair< Interval, Interval > adjustedOverlaps = SplitTileOperations.getAdjustedOverlapIntervals( intervalsInFixedBoxSpace, errorEllipse );
+		final Pair< Interval, Interval > adjustedOverlaps = SubdividedTileOperations.getAdjustedOverlapIntervals( intervalsInFixedBoxSpace, errorEllipse );
 
 		Assert.assertArrayEquals( new long[] { 0, 0 }, Intervals.minAsLongArray( adjustedOverlaps.getA() ) );
 		Assert.assertArrayEquals( new long[] { 7, 3 }, Intervals.maxAsLongArray( adjustedOverlaps.getA() ) );
@@ -241,7 +241,7 @@ public class SplitTileOperationsTest
 		Assert.assertArrayEquals( new long[] { 2, 6 }, Intervals.minAsLongArray( adjustedOverlaps.getB() ) );
 		Assert.assertArrayEquals( new long[] { 9, 9 }, Intervals.maxAsLongArray( adjustedOverlaps.getB() ) );
 
-		final Pair< Interval, Interval > adjustedOverlapsInFullTile = SplitTileOperations.getOverlapsInFullTile( tileBoxPair, adjustedOverlaps );
+		final Pair< Interval, Interval > adjustedOverlapsInFullTile = SubdividedTileOperations.getOverlapsInFullTile( tileBoxPair, adjustedOverlaps );
 
 		Assert.assertArrayEquals( new long[] { 10, 0 }, Intervals.minAsLongArray( adjustedOverlapsInFullTile.getA() ) );
 		Assert.assertArrayEquals( new long[] { 17, 3 }, Intervals.maxAsLongArray( adjustedOverlapsInFullTile.getA() ) );

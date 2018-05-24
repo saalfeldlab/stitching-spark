@@ -69,8 +69,8 @@ public class TileSearchRadiusEstimator implements Serializable
 
 		public double[] getStageOffsetBetweenTileBoxes()
 		{
-			final double[] fixedStagePosition  = SplitTileOperations.getTileBoxMiddlePointStagePosition( fixedAndMovingSearchRadiusStats.getA().tileBox );
-			final double[] movingStagePosition = SplitTileOperations.getTileBoxMiddlePointStagePosition( fixedAndMovingSearchRadiusStats.getB().tileBox );
+			final double[] fixedStagePosition  = SubdividedTileOperations.getTileBoxMiddlePointStagePosition( fixedAndMovingSearchRadiusStats.getA().tileBox );
+			final double[] movingStagePosition = SubdividedTileOperations.getTileBoxMiddlePointStagePosition( fixedAndMovingSearchRadiusStats.getB().tileBox );
 
 			final double[] stageOffsetBetweenTileBoxes = new double[ combinedErrorEllipse.numDimensions() ];
 			for ( int d = 0; d < stageOffsetBetweenTileBoxes.length; ++d )
@@ -153,7 +153,7 @@ public class TileSearchRadiusEstimator implements Serializable
 		return estimateSearchRadius(
 				tileBox,
 				findNearestTiles(
-						new RealPoint( SplitTileOperations.getTileBoxMiddlePointStagePosition( tileBox ) ),
+						new RealPoint( SubdividedTileOperations.getTileBoxMiddlePointStagePosition( tileBox ) ),
 						numNearestNeighbors
 					)
 			);
@@ -219,7 +219,7 @@ public class TileSearchRadiusEstimator implements Serializable
 		for ( final TileInfo neighboringTile : neighboringTiles )
 		{
 			// invert the linear part of the affine transformation
-			final AffineGet neighboringTileTransform = TileOperations.getTileTransform( neighboringTile );
+			final AffineGet neighboringTileTransform = TransformedTileOperations.getTileTransform( neighboringTile );
 			final RealTransform neighboringTileLocalToOffsetTransform = TransformUtils.undoLinearComponent( neighboringTileTransform );
 
 			final double[] stagePosition = neighboringTile.getPosition();
