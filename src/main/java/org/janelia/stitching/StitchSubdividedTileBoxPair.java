@@ -2,9 +2,9 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -69,20 +69,17 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 	private final StitchingJob job;
 	private final TileSearchRadiusEstimator searchRadiusEstimator;
-	private final List< Map< String, TileInfo > > coordsToTilesChannels;
-	private final List< RandomAccessiblePairNullable< U, U > > flatfieldForChannels;
+	private final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels;
 
 	public StitchSubdividedTileBoxPair(
 			final StitchingJob job,
 			final TileSearchRadiusEstimator searchRadiusEstimator,
-			final List< Map< String, TileInfo > > coordsToTilesChannels,
-			final List< RandomAccessiblePairNullable< U, U > > flatfieldForChannels
+			final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels
 		)
 	{
 		this.job = job;
 		this.searchRadiusEstimator = searchRadiusEstimator;
-		this.coordsToTilesChannels = coordsToTilesChannels;
-		this.flatfieldForChannels = flatfieldForChannels;
+		this.flatfieldsForChannels = flatfieldsForChannels;
 	}
 
 	/**
@@ -118,8 +115,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			final Pair< ImagePlus, Interval > roiAndBoundingBox = renderTileBox(
 					tileBoxes[ i ],
 					affinesToFixedBoxSpace[ i ],
-					coordsToTilesChannels,
-					flatfieldForChannels
+					flatfieldsForChannels
 				);
 			roiImps[ i ] = roiAndBoundingBox.getA();
 			transformedRoiIntervals[ i ] = roiAndBoundingBox.getB();
@@ -212,6 +208,9 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	{
 		final int dim = estimatedAffineLinearAndTranslationComponents.getA().numDimensions();
 		final A estimatedAffine = TransformUtils.createTransform( dim );
+		// Combine the transformations in an 'inverse' way: A=LT.
+		// This is because the translational component is estimated in the 'offset' space where the linear component has been undone,
+		// so the resulting transformation is built by applying the linear part to the translational part
 		estimatedAffine.concatenate( estimatedAffineLinearAndTranslationComponents.getA() );
 		estimatedAffine.concatenate( estimatedAffineLinearAndTranslationComponents.getB() );
 		return estimatedAffine;
@@ -272,16 +271,14 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	 *
 	 * @param tileBox
 	 * @param fullTileTransform
-	 * @param coordsToTilesChannels
-	 * @param flatfieldForChannels
+	 * @param flatfieldsForChannels
 	 * @return pair: (rendered image; its world bounding box)
 	 * @throws PipelineExecutionException
 	 */
 	private Pair< ImagePlus, Interval > renderTileBox(
 			final SubdividedTileBox tileBox,
 			final InvertibleRealTransform fullTileTransform,
-			final List< Map< String, TileInfo > > coordsToTilesChannels,
-			final List< RandomAccessiblePairNullable< U, U > > flatfieldForChannels ) throws PipelineExecutionException
+			final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels ) throws PipelineExecutionException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( tileBox.getFullTile().getPixelResolution() );
@@ -291,20 +288,19 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			blurSigmas[ d ] = job.getArgs().blurSigma() / normalizedVoxelDimensions[ d ];
 
 		System.out.println( "Averaging corresponding tile images for " + job.getChannels() + " channels" );
+		final Integer fullTileIndex = tileBox.getFullTile().getIndex();
 		final String coordsStr = Utils.getTileCoordinatesString( tileBox.getFullTile() );
 		int channelsUsed = 0;
+
+		// TODO: can optimize this by creating tiles map on the driver and broadcasting it
+		final List< TileInfo > tileChannels = getTileInAllChannels( tileBox.getFullTile().getIndex() );
 
 		FloatImagePlus< FloatType > avgChannelImg = null;
 		Interval roiBoundingBox = null;
 
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
-			final TileInfo tile = coordsToTilesChannels.get( channel ).get( coordsStr );
-			if ( tile == null )
-				throw new PipelineExecutionException( tileBox.getFullTile().getIndex() + ": cannot find corresponding tile for channel " + channel );
-
-			if ( tileBox.getFullTile().getIndex().intValue() != tile.getIndex().intValue() )
-				throw new PipelineExecutionException( tileBox.getFullTile().getIndex() + ": different indexes for the same grid position " + Utils.getTileCoordinatesString( tile ) );
+			final TileInfo tile = tileChannels.get( channel );
 
 			// get ROI image
 			final RandomAccessibleInterval< T > roiImg;
@@ -313,7 +309,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 				roiImg = TransformedTileImageLoader.loadTile(
 						tile,
 						dataProvider,
-						Optional.ofNullable( flatfieldForChannels.get( channel ) ),
+						Optional.ofNullable( flatfieldsForChannels.get( channel ) ),
 						tileBox.getBoundaries(),
 						fullTileTransform
 					);
@@ -643,5 +639,42 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		}
 
 		return result;
+	}
+
+	private List< TileInfo > getTileInAllChannels( final int tileIndex )
+	{
+		final List< TileInfo > tileInAllChannels = new ArrayList<>();
+		for ( int channel = 0; channel < job.getChannels(); ++channel )
+		{
+			final TileInfo[] tiles = job.getTiles( channel );
+			for ( final TileInfo tile : tiles )
+			{
+				if ( tile.getIndex().intValue() == tileIndex )
+				{
+					if ( tileInAllChannels.size() == channel )
+						tileInAllChannels.add( tile ); // found
+					else if ( tileInAllChannels.size() > channel )
+						throw new RuntimeException( "same tile index " + tileIndex + " is repeated twice in ch" + channel );
+				}
+			}
+
+			if ( tileInAllChannels.size() <= channel )
+				throw new RuntimeException( "tile with index " + tileIndex + " was not found in ch" + channel );
+		}
+
+		// validate that all grid coordinates are the same
+		final String referenceGridPositionString = Utils.getTileCoordinatesString( tileInAllChannels.get( 0 ) );
+		for ( final TileInfo tile : tileInAllChannels )
+		{
+			if ( !Utils.getTileCoordinatesString( tile ).equals( referenceGridPositionString ) )
+			{
+				throw new RuntimeException(
+						"tile with index " + tileIndex + " has different grid positions: " +
+								Utils.getTileCoordinatesString( tile ) + " vs " + referenceGridPositionString
+					);
+			}
+		}
+
+		return tileInAllChannels;
 	}
 }

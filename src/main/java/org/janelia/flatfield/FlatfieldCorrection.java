@@ -88,7 +88,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePairNullable< U, U > loadCorrectionImages(
+	public static < U extends NativeType< U > & RealType< U > > RandomAccessiblePairNullable< U, U > loadFlatfields(
 			final DataProvider dataProvider,
 			final String basePath,
 			final int dimensionality ) throws IOException

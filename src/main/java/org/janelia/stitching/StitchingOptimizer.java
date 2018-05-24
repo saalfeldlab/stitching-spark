@@ -36,7 +36,7 @@ public class StitchingOptimizer implements Serializable
 		return Math.min( INITIAL_MAX_ALLOWED_ERROR + iteration * MAX_ALLOWED_ERROR_STEP, MAX_ALLOWED_ERROR_LIMIT );
 	}
 
-	private static enum OptimizerMode
+	static enum OptimizerMode
 	{
 		Translation,
 		Affine
@@ -161,7 +161,7 @@ public class StitchingOptimizer implements Serializable
 		optimize( iteration, OptimizerMode.Affine );
 	}
 
-	private void optimize( final int iteration, final OptimizerMode mode ) throws IOException
+	void optimize( final int iteration, final OptimizerMode mode ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 

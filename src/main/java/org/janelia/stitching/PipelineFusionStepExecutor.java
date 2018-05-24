@@ -171,7 +171,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 			// prepare flatfield correction images
 			// use it as a folder with the input file's name
-			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
+			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadFlatfields(
 					dataProvider,
 					absoluteChannelPathNoFinalNoExt,
 					job.getDimensionality()
