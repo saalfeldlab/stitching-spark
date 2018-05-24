@@ -17,7 +17,7 @@ import net.imglib2.util.IntervalsNullable;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 
-public class SplitTileOperationsTest
+public class SubdividedTileOperationsTest
 {
 	private static final double EPSILON = 1e-9;
 
