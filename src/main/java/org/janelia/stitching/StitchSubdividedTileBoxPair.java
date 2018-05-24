@@ -2,9 +2,9 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.janelia.dataaccess.DataProvider;
@@ -58,16 +58,19 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	private final StitchingJob job;
 	private final TileSearchRadiusEstimator searchRadiusEstimator;
 	private final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels;
+	private final List< Map< Integer, TileInfo > > tileMapsForChannels;
 
 	public StitchSubdividedTileBoxPair(
 			final StitchingJob job,
 			final TileSearchRadiusEstimator searchRadiusEstimator,
-			final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels
+			final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels,
+			final List< Map< Integer, TileInfo > > tileMapsForChannels
 		)
 	{
 		this.job = job;
 		this.searchRadiusEstimator = searchRadiusEstimator;
 		this.flatfieldsForChannels = flatfieldsForChannels;
+		this.tileMapsForChannels = tileMapsForChannels;
 	}
 
 	/**
@@ -198,19 +201,23 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			blurSigmas[ d ] = job.getArgs().blurSigma() / normalizedVoxelDimensions[ d ];
 
 		System.out.println( "Averaging corresponding tile images for " + job.getChannels() + " channels" );
-		final Integer fullTileIndex = tileBox.getFullTile().getIndex();
-		final String coordsStr = Utils.getTileCoordinatesString( tileBox.getFullTile() );
-		int channelsUsed = 0;
-
-		// TODO: can optimize this by creating tiles map on the driver and broadcasting it
-		final List< TileInfo > tileChannels = getTileInAllChannels( tileBox.getFullTile().getIndex() );
 
 		FloatImagePlus< FloatType > avgChannelImg = null;
 		Interval roiBoundingBox = null;
+		int channelsUsed = 0;
 
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
-			final TileInfo tile = tileChannels.get( channel );
+			final TileInfo tile = tileMapsForChannels.get( channel ).get( tileBox.getFullTile().getIndex() );
+
+			// validate that all corresponding tiles have the same grid coordinates
+			if ( !Utils.getTileCoordinatesString( tile ).equals( Utils.getTileCoordinatesString( tileBox.getFullTile() ) ) )
+			{
+				throw new RuntimeException(
+						"tile with index " + tile.getIndex() + " has different grid positions: " +
+								Utils.getTileCoordinatesString( tile ) + " vs " + Utils.getTileCoordinatesString( tileBox.getFullTile() )
+					);
+			}
 
 			// get ROI image
 			final RandomAccessibleInterval< T > roiImg;
@@ -337,42 +344,5 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		}
 
 		return result;
-	}
-
-	private List< TileInfo > getTileInAllChannels( final int tileIndex )
-	{
-		final List< TileInfo > tileInAllChannels = new ArrayList<>();
-		for ( int channel = 0; channel < job.getChannels(); ++channel )
-		{
-			final TileInfo[] tiles = job.getTiles( channel );
-			for ( final TileInfo tile : tiles )
-			{
-				if ( tile.getIndex().intValue() == tileIndex )
-				{
-					if ( tileInAllChannels.size() == channel )
-						tileInAllChannels.add( tile ); // found
-					else if ( tileInAllChannels.size() > channel )
-						throw new RuntimeException( "same tile index " + tileIndex + " is repeated twice in ch" + channel );
-				}
-			}
-
-			if ( tileInAllChannels.size() <= channel )
-				throw new RuntimeException( "tile with index " + tileIndex + " was not found in ch" + channel );
-		}
-
-		// validate that all grid coordinates are the same
-		final String referenceGridPositionString = Utils.getTileCoordinatesString( tileInAllChannels.get( 0 ) );
-		for ( final TileInfo tile : tileInAllChannels )
-		{
-			if ( !Utils.getTileCoordinatesString( tile ).equals( referenceGridPositionString ) )
-			{
-				throw new RuntimeException(
-						"tile with index " + tileIndex + " has different grid positions: " +
-								Utils.getTileCoordinatesString( tile ) + " vs " + referenceGridPositionString
-					);
-			}
-		}
-
-		return tileInAllChannels;
 	}
 }

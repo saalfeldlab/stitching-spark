@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
@@ -54,6 +55,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		final DataProvider dataProvider = job.getDataProvider();
 		final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldsForChannels = sparkContext.broadcast( loadFlatfieldsForChannels() );
+		final Broadcast< List< Map< Integer, TileInfo > > > broadcastedTileMapsForChannels = sparkContext.broadcast( createTileMapsForChannels() );
 
 		for ( int iteration = 0; ; ++iteration )
 		{
@@ -66,7 +68,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 						job,
 						sparkContext,
 						iteration,
-						broadcastedFlatfieldsForChannels
+						broadcastedFlatfieldsForChannels,
+						broadcastedTileMapsForChannels
 					);
 				stitchingIterationPerformer.run( OptimizerMode.Affine );
 			}
@@ -175,5 +178,13 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			}
 		}
 		return flatfieldsForChannels;
+	}
+
+	private List< Map< Integer, TileInfo > > createTileMapsForChannels()
+	{
+		final List< Map< Integer, TileInfo > > tileMapsForChannels = new ArrayList<>();
+		for ( int channel = 0; channel < job.getChannels(); ++channel )
+			tileMapsForChannels.add( Utils.createTilesMap( job.getTiles( channel ) ) );
+		return tileMapsForChannels;
 	}
 }

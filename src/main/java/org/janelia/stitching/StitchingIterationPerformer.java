@@ -44,6 +44,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	private final transient JavaSparkContext sparkContext;
 	private final int iteration;
 	private final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldsForChannels;
+	private final Broadcast< List< Map< Integer, TileInfo > > > broadcastedTileMapsForChannels;
 
 	private Broadcast< TileSearchRadiusEstimator > broadcastedSearchRadiusEstimator;
 
@@ -51,12 +52,14 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			final StitchingJob job,
 			final JavaSparkContext sparkContext,
 			final int iteration,
-			final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldsForChannels )
+			final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldsForChannels,
+			final Broadcast< List< Map< Integer, TileInfo > > > broadcastedTileMapsForChannels )
 	{
 		this.job = job;
 		this.sparkContext = sparkContext;
 		this.iteration = iteration;
 		this.broadcastedFlatfieldsForChannels = broadcastedFlatfieldsForChannels;
+		this.broadcastedTileMapsForChannels = broadcastedTileMapsForChannels;
 	}
 
 	public void run( final OptimizerMode mode ) throws PipelineExecutionException, IOException
@@ -419,7 +422,8 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				new StitchSubdividedTileBoxPair<>(
 						job,
 						broadcastedSearchRadiusEstimator.value(),
-						broadcastedFlatfieldsForChannels.value()
+						broadcastedFlatfieldsForChannels.value(),
+						broadcastedTileMapsForChannels.value()
 					)
 				.stitchTileBoxPair( tileBoxPair )
 			);
