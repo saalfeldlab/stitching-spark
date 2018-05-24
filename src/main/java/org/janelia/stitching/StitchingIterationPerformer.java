@@ -45,6 +45,8 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	private final int iteration;
 	private final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldsForChannels;
 
+	private Broadcast< TileSearchRadiusEstimator > broadcastedSearchRadiusEstimator;
+
 	public StitchingIterationPerformer(
 			final StitchingJob job,
 			final JavaSparkContext sparkContext,
@@ -59,11 +61,12 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 
 	public void run( final OptimizerMode mode ) throws PipelineExecutionException, IOException
 	{
-		final TileInfo[] tiles = getTiles( iteration );
+		broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator() );
+		final TileInfo[] tiles = getTilesWithEstimatedTransformation();
 
 		final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
 		Arrays.fill( tileBoxesGridSize, 2 );
-		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( tiles, tileBoxesGridSize );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, tileBoxesGridSize );
 		final List< SubdividedTileBoxPair > overlappingBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
 		preparePairwiseShifts( overlappingBoxes, iteration );
 
@@ -71,34 +74,60 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		optimizer.optimize( iteration, mode );
 	}
 
-	private TileInfo[] getTiles( final int iteration ) throws IOException
+	/**
+	 * Tries to create a predictive model based on the previous stitching solution if exists.
+	 *
+	 * @param iteration
+	 * @return
+	 * @throws IOException
+	 */
+	private TileSearchRadiusEstimator createSearchRadiusEstimator() throws IOException
 	{
+		if ( iteration == 0 )
+			return null;
+
 		final TileInfo[] tiles = new TileInfo[ job.getTiles( 0 ).length ];
 		for ( int i = 0; i < tiles.length; ++i )
 			tiles[ i ] = job.getTiles( 0 )[ i ].clone();
 
 		// load stitched transformations from the previous iteration and assign them to the subset of tiles
-		if ( iteration > 0 )
+		final DataProvider dataProvider = job.getDataProvider();
+		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
+		final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
+
+		final String previousIterationDirname = "iter" + ( iteration - 1 );
+		final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
+		final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
+
+		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
+		for ( final TileInfo previousStitchedTile : previousStitchedTiles )
 		{
-			final DataProvider dataProvider = job.getDataProvider();
-			final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
-			final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
-
-			final String previousIterationDirname = "iter" + ( iteration - 1 );
-			final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
-			final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
-
-			final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
-			for ( final TileInfo previousStitchedTile : previousStitchedTiles )
-			{
-				final AffineGet stitchedTransform = previousStitchedTile.getTransform();
-				if ( stitchedTransform == null )
-					throw new RuntimeException( "stitchedTransform is null" );
-				tilesMap.get( previousStitchedTile.getIndex() ).setTransform( ( AffineGet ) stitchedTransform.copy() );
-			}
+			final AffineGet stitchedTransform = previousStitchedTile.getTransform();
+			if ( stitchedTransform == null )
+				throw new RuntimeException( "stitchedTransform is null" );
+			tilesMap.get( previousStitchedTile.getIndex() ).setTransform( ( AffineGet ) stitchedTransform.copy() );
 		}
 
-		return tiles;
+		return new TileSearchRadiusEstimator(
+				tiles,
+				job.getArgs().searchRadiusMultiplier(),
+				job.getArgs().searchWindowSizeTiles()
+			);
+	}
+
+	private TileInfo[] getTilesWithEstimatedTransformation() throws IOException
+	{
+		return sparkContext.parallelize(
+				Arrays.asList( job.getTiles( 0 ) ),
+				job.getTiles( 0 ).length
+			).map( tile ->
+				{
+					final TileInfo tileWithEstimatedTransformation = tile.clone();
+					final AffineGet estimatedTransformation = TransformedTileOperations.estimateAffineTransformation( tile, broadcastedSearchRadiusEstimator.value() );
+					tileWithEstimatedTransformation.setTransform( estimatedTransformation );
+					return tileWithEstimatedTransformation;
+				}
+			).collect().toArray( new TileInfo[ 0 ] );
 	}
 
 	/**
@@ -378,8 +407,6 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	private < T extends NativeType< T > & RealType< T > > List< StitchingResult > computePairwiseShifts(
 			final List< SubdividedTileBoxPair > overlappingBoxes ) throws PipelineExecutionException, IOException
 	{
-		final Broadcast< TileSearchRadiusEstimator > broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator() );
-
 		System.out.println( "Processing " + overlappingBoxes.size() + " pairs..." );
 
 		final LongAccumulator notEnoughNeighborsWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
@@ -417,24 +444,5 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		System.out.println();
 
 		return stitchingResults;
-	}
-
-	/**
-	 * Tries to create a predictive model based on the previous stitching solution if exists.
-	 *
-	 * @param iteration
-	 * @return
-	 * @throws IOException
-	 */
-	private TileSearchRadiusEstimator createSearchRadiusEstimator() throws IOException
-	{
-		if ( iteration == 0 )
-			return null;
-
-		return new TileSearchRadiusEstimator(
-				getTiles( iteration ),
-				job.getArgs().searchRadiusMultiplier(),
-				job.getArgs().searchWindowSizeTiles()
-			);
 	}
 }
