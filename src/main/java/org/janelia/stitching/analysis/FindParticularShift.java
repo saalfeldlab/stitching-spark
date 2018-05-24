@@ -66,7 +66,7 @@ public class FindParticularShift
 		TileInfoJSONProvider.saveTilesConfiguration( new TileInfo[] { t1, t2 }, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[0], "_ORIGINAL" ) ) ) );
 
 		for ( int d = 0; d < shift.getNumDimensions(); d++ )
-			t2.setPosition( d, t1.getPosition( d ) + shift.getOffset( d ) );
+			t2.setStagePosition( d, t1.getStagePosition( d ) + shift.getOffset( d ) );
 
 		overlap = TileOperations.getOverlappingRegionGlobal( t1, t2 );
 		if ( overlap != null)

@@ -25,7 +25,7 @@ public class SubdividedTileOperationsTest
 	public void splitTilesIntoBoxesTest()
 	{
 		final TileInfo tile = new TileInfo( 3 );
-		tile.setPosition( new double[] { 100, 200, 300 } );
+		tile.setStagePosition( new double[] { 100, 200, 300 } );
 		tile.setSize( new long[] { 50, 60, 70 } );
 
 		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( new TileInfo[] { tile }, new int[] { 2, 2, 2 } );
@@ -70,12 +70,12 @@ public class SubdividedTileOperationsTest
 		final TileInfo[] tiles = new TileInfo[ 2 ];
 		tiles[ 0 ] = new TileInfo( 3 );
 		tiles[ 0 ].setIndex( 0 );
-		tiles[ 0 ].setPosition( new double[] { 100, 200, 300 } );
+		tiles[ 0 ].setStagePosition( new double[] { 100, 200, 300 } );
 		tiles[ 0 ].setSize( new long[] { 50, 60, 70 } );
 
 		tiles[ 1 ] = new TileInfo( 3 );
 		tiles[ 1 ].setIndex( 1 );
-		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
+		tiles[ 1 ].setStagePosition( new double[] { 140, 210, 290 } );
 		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
 
 		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, new int[] { 2, 2, 2 } );
@@ -108,12 +108,12 @@ public class SubdividedTileOperationsTest
 		final TileInfo[] tiles = new TileInfo[ 2 ];
 		tiles[ 0 ] = new TileInfo( 3 );
 		tiles[ 0 ].setIndex( 0 );
-		tiles[ 0 ].setPosition( new double[] { 100, 200, 300 } );
+		tiles[ 0 ].setStagePosition( new double[] { 100, 200, 300 } );
 		tiles[ 0 ].setSize( new long[] { 50, 60, 70 } );
 
 		tiles[ 1 ] = new TileInfo( 3 );
 		tiles[ 1 ].setIndex( 1 );
-		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
+		tiles[ 1 ].setStagePosition( new double[] { 140, 210, 290 } );
 		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
 
 		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, new int[] { 2, 2, 2 } );
@@ -163,12 +163,12 @@ public class SubdividedTileOperationsTest
 	{
 		final TileInfo fixedTile = new TileInfo( 2 );
 		fixedTile.setIndex( 0 );
-		fixedTile.setPosition( new double[] { 50, 50 } );
+		fixedTile.setStagePosition( new double[] { 50, 50 } );
 		fixedTile.setSize( new long[] { 20, 20 } );
 
 		final TileInfo movingTile = new TileInfo( 2 );
 		movingTile.setIndex( 1 );
-		movingTile.setPosition( new double[] { 46, 32 } );
+		movingTile.setStagePosition( new double[] { 46, 32 } );
 		movingTile.setSize( new long[] { 20, 20 } );
 
 		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( new TileInfo[] { fixedTile,  movingTile }, new int[] { 2, 2 } );

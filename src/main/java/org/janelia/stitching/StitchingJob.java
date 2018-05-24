@@ -132,7 +132,7 @@ public class StitchingJob implements Serializable {
 				throw new IllegalArgumentException( "There must be at least 2 tiles in the dataset" );
 
 			for ( int i = 0; i < tiles.length; i++ )
-				if ( tiles[ i ].getPosition().length != tiles[ i ].getSize().length )
+				if ( tiles[ i ].getStagePosition().length != tiles[ i ].getSize().length )
 					throw new IllegalArgumentException( "Incorrect dimensionality" );
 
 			for ( int i = 1; i < tiles.length; i++ )
@@ -165,7 +165,7 @@ public class StitchingJob implements Serializable {
 				throw new NullPointerException( "Malformed input" );
 
 			for ( int i = 0; i < tiles.length; i++ ) {
-				if ( tiles[ i ].getFilePath() == null || tiles[ i ].getPosition() == null )
+				if ( tiles[ i ].getFilePath() == null || tiles[ i ].getStagePosition() == null )
 					throw new NullPointerException( "Some of required parameters are missing (file or position)" );
 
 				if ( tiles[ i ].getIndex() == null )

@@ -170,7 +170,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		final Map< String, double[] > coordinatesToPosition = new HashMap<>();
 		for ( final int channel : tileChannels.keySet() )
 			for ( final Entry< String, TileInfo > entry : channelCoordinatesToTiles.get( channel ).entrySet() )
-				coordinatesToPosition.put( entry.getKey(), entry.getValue().getPosition() );
+				coordinatesToPosition.put( entry.getKey(), entry.getValue().getStagePosition() );
 
 		final Map< Integer, TreeMap< Long, List< TileInfo > > > channelTimestampToTiles = new TreeMap<>();
 		for ( final int channel : tileChannels.keySet() )
@@ -232,8 +232,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 
 				if ( !channelCoordinatesToTiles.get( channel ).containsKey( coordinates ) && coordinatesToPosition.containsKey( coordinates ) )
 				{
-					final TileInfo newTile = new TileInfo();
-					newTile.setPosition( coordinatesToPosition.get( coordinates ).clone() );
+					final TileInfo newTile = new TileInfo( coordinatesToPosition.get( coordinates ).clone() );
 					newTile.setFilePath( imagesBaseDir.getAbsolutePath() + "/" + fileName );
 					newTile.setPixelResolution( tileChannels.get( channel ).get( 0 ).getPixelResolution().clone() );
 

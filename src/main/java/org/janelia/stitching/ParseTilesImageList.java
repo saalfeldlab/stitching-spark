@@ -75,7 +75,7 @@ public class ParseTilesImageList
 				final TileInfo tile = new TileInfo( 3 );
 				tile.setIndex( tiles.get( nm ).size() );
 				tile.setFilePath( filepath );
-				tile.setPosition( objCoords );
+				tile.setStagePosition( objCoords );
 				tile.setSize( null );
 				tile.setPixelResolution( pixelResolution.clone() );
 				tiles.get( nm ).add( tile );
@@ -109,7 +109,7 @@ public class ParseTilesImageList
 				double minOverlap = Double.POSITIVE_INFINITY, maxOverlap = Double.NEGATIVE_INFINITY, avgOverlap = 0;
 				for ( final TilePair pair : adjacentPairsDim )
 				{
-					final double overlap = tileSize[ d ] - Math.abs( pair.getB().getPosition( d ) - pair.getA().getPosition( d ) );
+					final double overlap = tileSize[ d ] - Math.abs( pair.getB().getStagePosition( d ) - pair.getA().getStagePosition( d ) );
 					minOverlap = Math.min( overlap, minOverlap );
 					maxOverlap = Math.max( overlap, maxOverlap );
 					avgOverlap += overlap;

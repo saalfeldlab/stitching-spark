@@ -93,7 +93,7 @@ public class TileOperations
 		final Boundaries r = new Boundaries( t1.numDimensions() );
 		for ( int d = 0; d < r.numDimensions(); d++ )
 		{
-			final long p1 = Math.round( t1.getPosition( d ) ), p2 = Math.round( t2.getPosition( d ) );
+			final long p1 = Math.round( t1.getStagePosition( d ) ), p2 = Math.round( t2.getStagePosition( d ) );
 			final long s1 = t1.getSize( d ), s2 = t2.getSize( d );
 
 			if ( !( ( p2 >= p1 && p2 < p1 + s1 ) || ( p1 >= p2 && p1 < p2 + s2 ) ) )
@@ -114,7 +114,7 @@ public class TileOperations
 		final double[] min = new double[ t1.numDimensions() ], max = new double[ t1.numDimensions() ];
 		for ( int d = 0; d < t1.numDimensions(); d++ )
 		{
-			final double p1 = t1.getPosition( d ), p2 = t2.getPosition( d );
+			final double p1 = t1.getStagePosition( d ), p2 = t2.getStagePosition( d );
 			final long s1 = t1.getSize( d ), s2 = t2.getSize( d );
 
 			if ( !( ( p2 >= p1 && p2 < p1 + s1 ) || ( p1 >= p2 && p1 < p2 + s2 ) ) )
@@ -133,7 +133,7 @@ public class TileOperations
 	{
 		for ( int d = 0; d < t1.numDimensions(); d++ )
 		{
-			final double min1 = t1.getPosition( d ), min2 = t2.getPosition( d ), max1 = t1.getMax( d ), max2 = t2.getMax( d );
+			final double min1 = t1.getStagePosition( d ), min2 = t2.getStagePosition( d ), max1 = t1.getMax( d ), max2 = t2.getMax( d );
 			if ( !( ( min2 >= min1 && min2 <= max1 ) || ( min1 >= min2 && min1 <= max2 ) ) )
 				return false;
 		}
@@ -167,20 +167,6 @@ public class TileOperations
 			}
 		}
 		return r;
-	}
-
-	/**
-	 * @return a list of tiles lying within specified subregion (overlapping with it)
-	 */
-	public static ArrayList< TileInfo > findTilesWithinSubregion( final TileInfo[] tiles, final long[] min, final int[] dimensions )
-	{
-		assert min.length == dimensions.length;
-		final TileInfo subregion = new TileInfo( min.length );
-		for ( int d = 0; d < min.length; d++ ) {
-			subregion.setPosition( d, min[ d ] );
-			subregion.setSize( d, dimensions[ d ] );
-		}
-		return findTilesWithinSubregion( tiles, subregion );
 	}
 
 	/**
@@ -285,8 +271,8 @@ public class TileOperations
 		{
 			for ( int d = 0; d < dim; d++ )
 			{
-				min[ d ] = Math.min( min[ d ], tile.getPosition( d ) );
-				max[ d ] = Math.max( max[ d ], tile.getPosition( d ) + tile.getSize( d ) - 1 );
+				min[ d ] = Math.min( min[ d ], tile.getStagePosition( d ) );
+				max[ d ] = Math.max( max[ d ], tile.getStagePosition( d ) + tile.getSize( d ) - 1 );
 			}
 		}
 
@@ -301,14 +287,14 @@ public class TileOperations
 		final Boundaries space = getCollectionBoundaries( tiles );
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
-				tile.setPosition( d, Math.round( tile.getPosition( d ) ) - space.min( d ) );
+				tile.setStagePosition( d, Math.round( tile.getStagePosition( d ) ) - space.min( d ) );
 	}
 	public static void translateTilesToOriginReal( final TileInfo[] tiles )
 	{
 		final RealInterval space = getRealCollectionBoundaries( tiles );
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
-				tile.setPosition( d, tile.getPosition( d ) - space.realMin( d ) );
+				tile.setStagePosition( d, tile.getStagePosition( d ) - space.realMin( d ) );
 	}
 
 	/**
@@ -318,7 +304,7 @@ public class TileOperations
 	{
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
-				tile.setPosition( d, tile.getPosition( d ) + offset[ d ] );
+				tile.setStagePosition( d, tile.getStagePosition( d ) + offset[ d ] );
 	}
 
 	/**

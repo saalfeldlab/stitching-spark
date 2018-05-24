@@ -42,7 +42,7 @@ public class ExtractSlice
 					final TileInfo sliceTile = new TileInfo( tile.numDimensions() - 1 );
 					sliceTile.setIndex( tile.getIndex() );
 					sliceTile.setType( tile.getType() );
-					sliceTile.setPosition( new double[] { tile.getPosition( 0 ), tile.getPosition( 1 ) } );
+					sliceTile.setStagePosition( new double[] { tile.getStagePosition( 0 ), tile.getStagePosition( 1 ) } );
 					sliceTile.setSize( new long[] { tile.getSize( 0 ), tile.getSize( 1 ) } );
 					sliceTile.setFilePath( outPath );
 					return sliceTile;

@@ -54,7 +54,7 @@ public class ChangeTileConfiguration
 			final TileInfo tileTo = tilesTo.get( ind );
 
 			if ( what.equals( "position" ) )
-				tileTo.setPosition( tileFrom.getPosition() );
+				tileTo.setStagePosition( tileFrom.getStagePosition() );
 			else if ( what.equals( "filepath" ) )
 				tileTo.setFilePath( tileFrom.getFilePath() );
 			else

@@ -51,7 +51,7 @@ public class AddMissingTilesAverageShift
 		final int pivotTile = tilesInfoFinal.firstKey();
 		final double[] offset = new double[ tilesInfoFinal.get( pivotTile ).numDimensions() ];
 		for ( int d = 0; d < offset.length; d++ )
-			offset[ d ] = tilesInfoFinal.get( pivotTile ).getPosition( d ) - tilesInfoOriginal.get( pivotTile ).getPosition( d );
+			offset[ d ] = tilesInfoFinal.get( pivotTile ).getStagePosition( d ) - tilesInfoOriginal.get( pivotTile ).getStagePosition( d );
 		TileOperations.translateTiles( tilesInfoOriginal.values().toArray( new TileInfo[0] ), offset );
 
 		// Find missing tiles
@@ -81,7 +81,7 @@ public class AddMissingTilesAverageShift
 			{
 				for ( final TileInfo tile : entry.getValue() )
 					for ( int d = 0; d < estimatedShift.length; d++ )
-						estimatedShift[ d ] += tilesInfoFinal.get( tile.getIndex() ).getPosition( d ) - tilesInfoOriginal.get( tile.getIndex() ).getPosition( d );
+						estimatedShift[ d ] += tilesInfoFinal.get( tile.getIndex() ).getStagePosition( d ) - tilesInfoOriginal.get( tile.getIndex() ).getStagePosition( d );
 
 				level = entry.getKey();
 				count += entry.getValue().size();
@@ -96,7 +96,7 @@ public class AddMissingTilesAverageShift
 			//System.out.println( "level: " + (level==tilesAround.firstKey().intValue() ? level+"     " : Arrays.toString(new int[] {tilesAround.firstKey().intValue(), level} ))  + "   " + count + " neighbors,  " + (count<10?" ":"") + Arrays.toString(estimatedShift) );
 
 			for ( int d = 0; d < estimatedShift.length; d++ )
-				tileToAdd.setPosition( d, tileToAdd.getPosition(d) + estimatedShift[ d ] );
+				tileToAdd.setStagePosition( d, tileToAdd.getStagePosition(d) + estimatedShift[ d ] );
 		}
 
 		tilesInfoFinal.putAll( missingTilesInfo );

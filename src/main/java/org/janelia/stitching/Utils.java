@@ -64,7 +64,7 @@ public class Utils {
 	{
 		final File file = new File( tile.getFilePath() );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
-		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
+		e.setOffset( Conversions.toFloatArray( tile.getStagePosition() ) );
 		e.setDimensionality( tile.numDimensions() );
 		e.setModel( TileModelFactory.createTranslationModel( tile.numDimensions() ) );
 		return e;
@@ -74,7 +74,7 @@ public class Utils {
 	{
 		final File file = new File( tile.getFilePath() );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
-		e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
+		e.setOffset( Conversions.toFloatArray( tile.getStagePosition() ) );
 		e.setDimensionality( tile.numDimensions() );
 		e.setModel( TileModelFactory.createAffineModel( tile.numDimensions() ) );
 		return e;

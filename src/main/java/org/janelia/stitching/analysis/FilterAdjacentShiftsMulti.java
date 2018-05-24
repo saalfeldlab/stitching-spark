@@ -142,7 +142,7 @@ public class FilterAdjacentShiftsMulti
 			{
 				if ( shortEdges[ d ] )
 				{
-					if ( shift[0].getTileBoxPair().getOriginalTilePair().getA().getPosition( d ) > shift[0].getTileBoxPair().getOriginalTilePair().getB().getPosition( d ) )
+					if ( shift[0].getTileBoxPair().getOriginalTilePair().getA().getStagePosition( d ) > shift[0].getTileBoxPair().getOriginalTilePair().getB().getStagePosition( d ) )
 					{
 						swappedCount++;
 						for (int peak=0; peak<shift.length; peak++ )

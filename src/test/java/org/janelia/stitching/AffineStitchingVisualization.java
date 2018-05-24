@@ -446,7 +446,7 @@ public class AffineStitchingVisualization
 			final TileInfo tile = new TileInfo( 2 );
 			tile.setIndex( i );
 			tile.setSize( tileSize );
-			tile.setPosition( stagePositions[ i ] );
+			tile.setStagePosition( stagePositions[ i ] );
 
 			if ( stitchedPositions[ i ] != null )
 			{
@@ -566,7 +566,7 @@ public class AffineStitchingVisualization
 		{
 			final AffineTransform2D tileTransform = new AffineTransform2D();
 			for ( int d = 0; d < tileBox.getFullTile().numDimensions(); ++d )
-				tileTransform.set( tileBox.getFullTile().getPosition( d ), d, 2 );
+				tileTransform.set( tileBox.getFullTile().getStagePosition( d ), d, 2 );
 
 			drawTransformedRectangle(
 					getRealIntervalCorners( tileBox ),

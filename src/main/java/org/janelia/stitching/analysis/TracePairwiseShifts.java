@@ -58,7 +58,7 @@ public class TracePairwiseShifts
 
 			final double dist[] = new double[ shift.getNumDimensions() ];
 			for ( int d = 0; d < shift.getNumDimensions(); d++ )
-				dist[d] = (tilePair[ 1 ].getPosition( d ) - tilePair[ 0 ].getPosition( d )) - shift.getOffset( d );
+				dist[d] = (tilePair[ 1 ].getStagePosition( d ) - tilePair[ 0 ].getStagePosition( d )) - shift.getOffset( d );
 
 			final long[] diffTime = new long[ channelsMap.length ];
 			for ( int i = 0; i < channelsMap.length; i++ )

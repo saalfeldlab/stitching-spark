@@ -67,7 +67,7 @@ public class DistanceFromOriginal
 			boolean isGoodTile = true, samePosition = true, sameSize = true;
 			for ( int d = 0; d < dim; d++ )
 			{
-				dist[ d ] = tilesOrig[ i ].getPosition( d ) - tilesMod[ i ].getPosition( d );
+				dist[ d ] = tilesOrig[ i ].getStagePosition( d ) - tilesMod[ i ].getStagePosition( d );
 				sizeDiff[ d ] = tilesOrig[ i ].getSize( d ) - tilesMod[ i ].getSize( d );
 
 				if ( dist[ d ] != 0 )

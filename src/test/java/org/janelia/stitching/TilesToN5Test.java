@@ -69,7 +69,7 @@ public class TilesToN5Test
 		final TileInfo tile = new TileInfo( dimensions.length );
 		tile.setIndex( 0 );
 		tile.setSize( dimensions );
-		tile.setPosition( new double[ dimensions.length ] );
+		tile.setStagePosition( new double[ dimensions.length ] );
 		tile.setFilePath( impPath );
 		tile.setType( ImageType.GRAY16 );
 		final TileInfo[] tiles = new TileInfo[] { tile };
@@ -148,7 +148,7 @@ public class TilesToN5Test
 		final TileInfo tile = new TileInfo( dimensions.length );
 		tile.setIndex( 0 );
 		tile.setSize( dimensions );
-		tile.setPosition( new double[ dimensions.length ] );
+		tile.setStagePosition( new double[ dimensions.length ] );
 		tile.setFilePath( impPath );
 		tile.setType( ImageType.GRAY16 );
 		final TileInfo[] tiles = new TileInfo[] { tile };
@@ -234,7 +234,7 @@ public class TilesToN5Test
 		final TileInfo tile = new TileInfo( dimensions.length );
 		tile.setIndex( 0 );
 		tile.setSize( dimensions );
-		tile.setPosition( new double[ dimensions.length ] );
+		tile.setStagePosition( new double[ dimensions.length ] );
 		tile.setFilePath( impPath );
 		tile.setType( ImageType.GRAY16 );
 		final TileInfo[] tiles = new TileInfo[] { tile };

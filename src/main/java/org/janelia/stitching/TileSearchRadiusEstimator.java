@@ -131,7 +131,7 @@ public class TileSearchRadiusEstimator implements Serializable
 
 		final List< RealLocalizable > stageSubsetPositions = new ArrayList<>();
 		for ( final TileInfo tileWithStitchedTransform : tilesWithStitchedTransform )
-			stageSubsetPositions.add( new RealPoint( tileWithStitchedTransform.getPosition() ) );
+			stageSubsetPositions.add( new RealPoint( tileWithStitchedTransform.getStagePosition() ) );
 
 		// build a search tree to be able to look up stage positions and corresponding stitched positions
 		// in the neighborhood for any given stage position
@@ -222,7 +222,7 @@ public class TileSearchRadiusEstimator implements Serializable
 			final AffineGet neighboringTileTransform = TransformedTileOperations.getTileTransform( neighboringTile );
 			final RealTransform neighboringTileLocalToOffsetTransform = TransformUtils.undoLinearComponent( neighboringTileTransform );
 
-			final double[] stagePosition = neighboringTile.getPosition();
+			final double[] stagePosition = neighboringTile.getStagePosition();
 			final double[] transformedPosition = new double[ neighboringTile.numDimensions() ];
 			neighboringTileLocalToOffsetTransform.apply( transformedPosition, transformedPosition );
 

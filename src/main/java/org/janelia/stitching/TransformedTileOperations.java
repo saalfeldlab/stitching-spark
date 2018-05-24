@@ -35,7 +35,7 @@ public class TransformedTileOperations
 		if ( tile.getTransform() != null )
 			ret = tile.getTransform();
 		else
-			ret = new Translation( tile.getPosition() );
+			ret = new Translation( tile.getStagePosition() );
 		return ret;
 	}
 
@@ -180,7 +180,7 @@ public class TransformedTileOperations
 
 		final double[] expectedTranslationComponentVector = new double[ tile.numDimensions() ];
 		for ( int d = 0; d < tile.numDimensions(); ++d )
-			expectedTranslationComponentVector[ d ] = tile.getPosition( d ) + estimatedSearchRadius.errorEllipse.getOffsetsMeanValues()[ d ];
+			expectedTranslationComponentVector[ d ] = tile.getStagePosition( d ) + estimatedSearchRadius.errorEllipse.getOffsetsMeanValues()[ d ];
 
 		return new ValuePair<>(
 				TransformUtils.createTransform( expectedLinearAffineMatrix ),

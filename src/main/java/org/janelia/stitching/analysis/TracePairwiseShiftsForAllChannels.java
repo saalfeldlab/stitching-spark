@@ -85,21 +85,21 @@ public class TracePairwiseShiftsForAllChannels
 			final TileInfo[] combinedTilePair = shiftsForCombinedChannels.get( ind ).getTileBoxPair().getOriginalTilePair().toArray();
 
 			String outputLine = "";
-			outputLine += combinedTilePair[ 0 ].getPosition(0)+" "+combinedTilePair[ 0 ].getPosition(1)+" "+combinedTilePair[ 0 ].getPosition(2)+" ";
-			outputLine += combinedTilePair[ 1 ].getPosition(0)+" "+combinedTilePair[ 1 ].getPosition(1)+" "+combinedTilePair[ 1 ].getPosition(2)+" ";
+			outputLine += combinedTilePair[ 0 ].getStagePosition(0)+" "+combinedTilePair[ 0 ].getStagePosition(1)+" "+combinedTilePair[ 0 ].getStagePosition(2)+" ";
+			outputLine += combinedTilePair[ 1 ].getStagePosition(0)+" "+combinedTilePair[ 1 ].getStagePosition(1)+" "+combinedTilePair[ 1 ].getStagePosition(2)+" ";
 
 
 			final double dist[] = new double[ 3 ];
 			for ( int d = 0; d < 3; d++ )
-				dist[d] = (ch0TilePair[ 1 ].getPosition( d ) - ch0TilePair[ 0 ].getPosition( d )) - shifts[ 0 ].get( ind ).getOffset( d );
+				dist[d] = (ch0TilePair[ 1 ].getStagePosition( d ) - ch0TilePair[ 0 ].getStagePosition( d )) - shifts[ 0 ].get( ind ).getOffset( d );
 			outputLine += dist[0] + " " + dist[1] + " " + dist[2] + " ";
 
 			for ( int d = 0; d < 3; d++ )
-				dist[d] = (ch1TilePair[ 1 ].getPosition( d ) - ch1TilePair[ 0 ].getPosition( d )) - shifts[ 1 ].get( ind ).getOffset( d );
+				dist[d] = (ch1TilePair[ 1 ].getStagePosition( d ) - ch1TilePair[ 0 ].getStagePosition( d )) - shifts[ 1 ].get( ind ).getOffset( d );
 			outputLine += dist[0] + " " + dist[1] + " " + dist[2] + " ";
 
 			for ( int d = 0; d < 3; d++ )
-				dist[d] = (combinedTilePair[ 1 ].getPosition( d ) - combinedTilePair[ 0 ].getPosition( d )) - shiftsForCombinedChannels.get( ind ).getOffset( d );
+				dist[d] = (combinedTilePair[ 1 ].getStagePosition( d ) - combinedTilePair[ 0 ].getStagePosition( d )) - shiftsForCombinedChannels.get( ind ).getOffset( d );
 			outputLine += dist[0] + " " + dist[1] + " " + dist[2] + " ";
 
 
@@ -126,8 +126,8 @@ public class TracePairwiseShiftsForAllChannels
 				finalPairs++;
 				final TileInfo t1 = channelsFinalMap[0].get( shiftsForCombinedChannels.get( ind ).getTileBoxPair().getOriginalTilePair().getA().getIndex() );
 				final TileInfo t2 = channelsFinalMap[0].get( shiftsForCombinedChannels.get( ind ).getTileBoxPair().getOriginalTilePair().getB().getIndex() );
-				outputLine += " " + t1.getPosition( 0 ) + " " + t1.getPosition( 1 ) + " " + t1.getPosition( 2 );
-				outputLine += " " + t2.getPosition( 0 ) + " " + t2.getPosition( 1 ) + " " + t2.getPosition( 2 );
+				outputLine += " " + t1.getStagePosition( 0 ) + " " + t1.getStagePosition( 1 ) + " " + t1.getStagePosition( 2 );
+				outputLine += " " + t2.getStagePosition( 0 ) + " " + t2.getStagePosition( 1 ) + " " + t2.getStagePosition( 2 );
 
 				writer.println( outputLine );
 			}

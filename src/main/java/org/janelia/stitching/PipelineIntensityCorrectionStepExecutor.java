@@ -395,7 +395,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 			// set position in downsampled space
 			final double[] downsampledImageMin = new double[ downsampledImage.numDimensions() ];
 			for ( int d = 0; d < downsampledImageMin.length; ++d )
-				downsampledImageMin[ d ] = tilePairArr[ i ].getPosition( d ) / DOWNSAMPLING_FACTOR;
+				downsampledImageMin[ d ] = tilePairArr[ i ].getStagePosition( d ) / DOWNSAMPLING_FACTOR;
 			final Translation translationTransform = new Translation( downsampledImageMin );
 			translatedInterpolatedDownsampledImages[ i ] = RealViews.transform( interpolatedDownsampledImage, translationTransform );
 

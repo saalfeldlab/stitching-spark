@@ -21,13 +21,28 @@ public class TileInfo implements Cloneable, RealInterval {
 
 	private AffineGet transform;
 
-	public TileInfo( final int dim ) {
+	public TileInfo( final int dim )
+	{
 		position = new double[ dim ];
 		size = new long[ dim ];
 		pixelResolution = new double[ dim ];
 	}
 
-	protected TileInfo() { }
+	public TileInfo( final double[] stagePosition )
+	{
+		this( stagePosition.length );
+		this.position = stagePosition;
+	}
+
+	public TileInfo( final double[] stagePosition, final long[] size )
+	{
+		this( stagePosition );
+		if ( stagePosition.length != size.length )
+			throw new IllegalArgumentException( "wrong dimensionality" );
+		setSize( size );
+	}
+
+	TileInfo() { }
 
 	public String getFilePath() {
 		return file;
@@ -37,15 +52,15 @@ public class TileInfo implements Cloneable, RealInterval {
 		this.file = filePath;
 	}
 
-	public double getPosition( final int d ) {
+	public double getStagePosition( final int d ) {
 		return position[ d ];
 	}
 
-	public void setPosition( final int d, final double val ) {
+	public void setStagePosition( final int d, final double val ) {
 		position[ d ] = val;
 	}
 
-	public double[] getPosition() {
+	public double[] getStagePosition() {
 		return position;
 	}
 
@@ -60,7 +75,7 @@ public class TileInfo implements Cloneable, RealInterval {
 		return position[ d ] + size[ d ] - 1;
 	}
 
-	public void setPosition( final double[] position ) {
+	public void setStagePosition( final double[] position ) {
 		this.position = position;
 	}
 
@@ -132,23 +147,22 @@ public class TileInfo implements Cloneable, RealInterval {
 	public Boundaries getBoundaries() {
 		final Boundaries b = new Boundaries( numDimensions() );
 		for ( int d = 0; d < numDimensions(); d++ ) {
-			b.setMin( d, Math.round( getPosition(d) ) );
-			b.setMax( d, Math.round( getPosition(d) ) + getSize(d) - 1 );
+			b.setMin( d, Math.round( getStagePosition(d) ) );
+			b.setMax( d, Math.round( getStagePosition(d) ) + getSize(d) - 1 );
 		}
 		return b;
 	}
 
 	@Override
-	public TileInfo clone() {
-		final TileInfo newTile = new TileInfo();
+	public TileInfo clone()
+	{
+		final TileInfo newTile = new TileInfo( position == null ? null : position.clone() );
 		newTile.setType( type );
 		newTile.setIndex( index == null ? null : new Integer( index.intValue() ) );
 		newTile.setFilePath( file );
-		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );
 		newTile.setPixelResolution( pixelResolution == null ? null : pixelResolution.clone() );
 		newTile.setTransform( transform == null ? null : ( AffineGet ) transform.copy() );
-		newTile.setTransform( transform );
 		return newTile;
 	}
 

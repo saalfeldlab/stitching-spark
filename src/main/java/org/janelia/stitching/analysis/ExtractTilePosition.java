@@ -22,6 +22,6 @@ public class ExtractTilePosition
 		TileOperations.translateTilesToOriginReal( tiles );
 		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 		for ( final int i : new int[] { 18299, 18300 } )
-			System.out.println( "Tile " + tilesMap.get(i).getIndex() + ":  position = " + Arrays.toString( tilesMap.get(i).getPosition() ) + ",  filename="+Paths.get(tilesMap.get(i).getFilePath()).getFileName());
+			System.out.println( "Tile " + tilesMap.get(i).getIndex() + ":  position = " + Arrays.toString( tilesMap.get(i).getStagePosition() ) + ",  filename="+Paths.get(tilesMap.get(i).getFilePath()).getFileName());
 	}
 }

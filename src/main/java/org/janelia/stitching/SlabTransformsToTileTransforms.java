@@ -95,7 +95,7 @@ public class SlabTransformsToTileTransforms
 			{
 				if ( !transformedTiles.containsKey( tile.getIndex() ) )
 				{
-					final Translation tileTranslation = new Translation( tile.getPosition() );
+					final Translation tileTranslation = new Translation( tile.getStagePosition() );
 					final AffineTransform3D tileTransform = new AffineTransform3D();
 					tileTransform.preConcatenate( tileTranslation ).preConcatenate( slabTranslation ).preConcatenate( slabTransform );
 					tile.setTransform( tileTransform );

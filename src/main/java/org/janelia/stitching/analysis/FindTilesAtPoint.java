@@ -13,6 +13,8 @@ import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 import org.janelia.util.Conversions;
 
+import net.imglib2.FinalRealInterval;
+
 /**
  * Finds tiles lying at the specified point.
  *
@@ -29,11 +31,7 @@ public class FindTilesAtPoint
 		TileOperations.translateTilesToOriginReal( tiles );
 
 		final double[] point = Conversions.parseDoubleArray( args[ 1 ].split( "," ) );
-
-		final TileInfo subregion = new TileInfo( point.length );
-		subregion.setPosition( point );
-		subregion.setSize( new long[] { 1, 1, 1 } );
-		final List< TileInfo > tilesAtPoint = TileOperations.findTilesWithinSubregion( tiles, subregion );
+		final List< TileInfo > tilesAtPoint = TileOperations.findTilesWithinSubregion( tiles, new FinalRealInterval( point, point ) );
 
 		System.out.println( "There are " + tilesAtPoint.size() + " tiles at the point " + Arrays.toString( point ) + ":" );
 		for ( final TileInfo tile : tilesAtPoint )

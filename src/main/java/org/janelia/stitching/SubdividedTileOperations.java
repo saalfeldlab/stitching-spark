@@ -114,7 +114,7 @@ public class SubdividedTileOperations
 	 */
 	public static double[] getTileBoxMiddlePointStagePosition( final SubdividedTileBox tileBox )
 	{
-		final double[] tileStagePosition = tileBox.getFullTile().getPosition();
+		final double[] tileStagePosition = tileBox.getFullTile().getStagePosition();
 		final double[] tileBoxMiddlePoint = getTileBoxMiddlePoint( tileBox );
 		final double[] tileBoxMiddlePointStagePosition = new double[ tileBox.numDimensions() ];
 		for ( int d = 0; d < tileBoxMiddlePointStagePosition.length; ++d )

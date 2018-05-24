@@ -26,7 +26,7 @@ public class FixTilePosition
 
 		for ( final TileInfo tile : tiles )
 			if ( tile.getIndex() == tileIndex )
-				tile.setPosition( dimToFix, newVal );
+				tile.setStagePosition( dimToFix, newVal );
 
 		final String outFilename = Utils.addFilenameSuffix( args[ 0 ], "_fixed_" + tileIndex + "_" + (dimToFix==0?"x":(dimToFix==1?"y":"z")) );
 		TileInfoJSONProvider.saveTilesConfiguration( tiles, dataProvider.getJsonWriter( URI.create( outFilename ) ) );

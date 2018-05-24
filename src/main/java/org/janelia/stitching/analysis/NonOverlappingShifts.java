@@ -48,7 +48,7 @@ public class NonOverlappingShifts
 				throw new Exception( "impossible" );
 
 			for ( int d = 0; d < shift.getNumDimensions(); d++ )
-				t2.setPosition( d, t1.getPosition( d ) + shift.getOffset( d ) );
+				t2.setStagePosition( d, t1.getStagePosition( d ) + shift.getOffset( d ) );
 
 			if ( !TileOperations.overlap( t1, t2 ) )
 			{

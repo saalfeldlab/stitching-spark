@@ -157,7 +157,7 @@ public class ExportOverlaps
 
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
-				tile.setPosition( d, tile.getPosition( d ) / voxelSize[ d ] );
+				tile.setStagePosition( d, tile.getStagePosition( d ) / voxelSize[ d ] );
 
 		final ArrayList< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( tiles );
 		System.out.println( "There are " + overlappingTiles.size() + " overlapping pairs" );

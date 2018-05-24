@@ -24,7 +24,7 @@ public class CopyTilesPositions
 		for ( final TileInfo tileCopyFrom : tilesCopyFrom )
 		{
 			final TileInfo tileTo = tilesMapCopyTo.get( tileCopyFrom.getIndex() );
-			tileTo.setPosition( tileCopyFrom.getPosition().clone() );
+			tileTo.setStagePosition( tileCopyFrom.getStagePosition().clone() );
 			tilesTo.add( tileTo );
 		}
 		System.out.println( "tilesCopyFrom size="+tilesCopyFrom.length);

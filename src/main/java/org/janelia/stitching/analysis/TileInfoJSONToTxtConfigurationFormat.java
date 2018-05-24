@@ -32,7 +32,7 @@ public class TileInfoJSONToTxtConfigurationFormat
 			writer.println( "# Define the image coordinates" );
 			for ( final TileInfo tile : tiles )
 			{
-				final String tilePositionStr = Arrays.toString( tile.getPosition() );
+				final String tilePositionStr = Arrays.toString( tile.getStagePosition() );
 				writer.println( String.format( "%s; ; (%s)", Paths.get( tile.getFilePath() ).getFileName().toString(), tilePositionStr.substring( 1, tilePositionStr.length() - 1 ) ) );
 			}
 		}

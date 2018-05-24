@@ -146,7 +146,7 @@ public class AddMissingTiles
 			points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ] );
 			final double[] offset = new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ];
 			for ( int d = 0; d < offset.length; d++ )
-				offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getPosition( d );
+				offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getStagePosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getStagePosition( d );
 			points[ 1 ] = new Point( offset );
 
 			for ( int j = 0; j < 2; j++ )
@@ -352,7 +352,7 @@ public class AddMissingTiles
 							final TileInfo tileInfoAdded = tilePairInfoToAdd[ j ].clone();
 							final Tile< ? > tileToAdd = tilePairToAdd[ j ];
 
-							tileInfoAdded.setPosition( bestPositions[ j ].clone() );
+							tileInfoAdded.setStagePosition( bestPositions[ j ].clone() );
 							tilesInfoFinal.put( tileInfoAdded.getIndex(), tileInfoAdded );
 							tilesInfoAdded.add( tileInfoAdded );
 
@@ -370,7 +370,7 @@ public class AddMissingTiles
 							points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ] );
 							final double[] offset = new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ];
 							for ( int d = 0; d < offset.length; d++ )
-								offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getPosition( d );
+								offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getStagePosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getStagePosition( d );
 							points[ 1 ] = new Point( offset );
 
 							for ( int j = 0; j < 2; j++ )
@@ -530,7 +530,7 @@ public class AddMissingTiles
 			if ( lowestMaxDisplacement <= 5.0 )
 			{
 				final TileInfo tileInfoAdded = tileInfoToAdd.clone();
-				tileInfoAdded.setPosition( bestPosition.clone() );
+				tileInfoAdded.setStagePosition( bestPosition.clone() );
 				tilesInfoFinal.put( tileInfoAdded.getIndex(), tileInfoAdded );
 				tilesInfoAdded.add( tileInfoAdded );
 
@@ -548,7 +548,7 @@ public class AddMissingTiles
 					points[ 0 ] = new Point( new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ] );
 					final double[] offset = new double[ shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().numDimensions() ];
 					for ( int d = 0; d < offset.length; d++ )
-						offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getPosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getPosition( d );
+						offset[ d ] = tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getStagePosition( d ) - tilesInfoFinal.get( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getStagePosition( d );
 					points[ 1 ] = new Point( offset );
 
 					for ( int j = 0; j < 2; j++ )

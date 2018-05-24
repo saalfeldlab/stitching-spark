@@ -101,7 +101,7 @@ public class AddMissingTilesMultichannel
 						try
 						{
 							final ImageCollectionElement e = new ImageCollectionElement( new File( tile.getFilePath() ), tile.getIndex() );
-							e.setOffset( Conversions.toFloatArray( tile.getPosition() ) );
+							e.setOffset( Conversions.toFloatArray( tile.getStagePosition() ) );
 							e.setDimensionality( tile.numDimensions() );
 							e.setModel( TileModelFactory.createTranslationModel( tile.numDimensions() ) );
 							final ImagePlus fakeImage = new ImagePlus( tile.getIndex().toString(), (java.awt.Image)null );
@@ -137,7 +137,7 @@ public class AddMissingTilesMultichannel
 				points[ 0 ] = new Point( new double[ shift.getTileBoxPair().getOriginalTilePair().getA().numDimensions() ] );
 				final double[] offset = new double[ shift.getTileBoxPair().getOriginalTilePair().getA().numDimensions() ];
 				for ( int d = 0; d < offset.length; d++ )
-					offset[ d ] = tilesFinal[ ch ].get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getPosition( d ) - tilesFinal[ ch ].get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getPosition( d );
+					offset[ d ] = tilesFinal[ ch ].get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getStagePosition( d ) - tilesFinal[ ch ].get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getStagePosition( d );
 				points[ 1 ] = new Point( offset );
 
 				for ( int j = 0; j < 2; j++ )

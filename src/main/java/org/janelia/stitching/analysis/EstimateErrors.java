@@ -55,11 +55,11 @@ public class EstimateErrors
 				final TilePair pair = new TilePair( resultingTiles[ i ], resultingTiles[ j ] );
 
 				String s = "";
-				s += originalTiles.get( pair.getA().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.getA().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.getA().getIndex() ).getPosition( 2 ) + " ";
-				s += originalTiles.get( pair.getB().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.getB().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.getB().getIndex() ).getPosition( 2 ) + " ";
+				s += originalTiles.get( pair.getA().getIndex() ).getStagePosition( 0 ) + " " + originalTiles.get( pair.getA().getIndex() ).getStagePosition( 1 ) + " " + originalTiles.get( pair.getA().getIndex() ).getStagePosition( 2 ) + " ";
+				s += originalTiles.get( pair.getB().getIndex() ).getStagePosition( 0 ) + " " + originalTiles.get( pair.getB().getIndex() ).getStagePosition( 1 ) + " " + originalTiles.get( pair.getB().getIndex() ).getStagePosition( 2 ) + " ";
 
-				s += pair.getA().getPosition( 0 ) + " " + pair.getA().getPosition( 1 ) + " " + pair.getA().getPosition( 2 ) + " ";
-				s += pair.getB().getPosition( 0 ) + " " + pair.getB().getPosition( 1 ) + " " + pair.getB().getPosition( 2 ) + " ";
+				s += pair.getA().getStagePosition( 0 ) + " " + pair.getA().getStagePosition( 1 ) + " " + pair.getA().getStagePosition( 2 ) + " ";
+				s += pair.getB().getStagePosition( 0 ) + " " + pair.getB().getStagePosition( 1 ) + " " + pair.getB().getStagePosition( 2 ) + " ";
 
 				s += timestamps.get( pair.getA().getIndex() ) + " " + timestamps.get( pair.getB().getIndex() );
 
@@ -96,11 +96,11 @@ public class EstimateErrors
 				continue;
 
 			String s = "";
-			s += originalTiles.get( pair.getA().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.getA().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.getA().getIndex() ).getPosition( 2 ) + " ";
-			s += originalTiles.get( pair.getB().getIndex() ).getPosition( 0 ) + " " + originalTiles.get( pair.getB().getIndex() ).getPosition( 1 ) + " " + originalTiles.get( pair.getB().getIndex() ).getPosition( 2 ) + " ";
+			s += originalTiles.get( pair.getA().getIndex() ).getStagePosition( 0 ) + " " + originalTiles.get( pair.getA().getIndex() ).getStagePosition( 1 ) + " " + originalTiles.get( pair.getA().getIndex() ).getStagePosition( 2 ) + " ";
+			s += originalTiles.get( pair.getB().getIndex() ).getStagePosition( 0 ) + " " + originalTiles.get( pair.getB().getIndex() ).getStagePosition( 1 ) + " " + originalTiles.get( pair.getB().getIndex() ).getStagePosition( 2 ) + " ";
 
-			s += pair.getA().getPosition( 0 ) + " " + pair.getA().getPosition( 1 ) + " " + pair.getA().getPosition( 2 ) + " ";
-			s += pair.getB().getPosition( 0 ) + " " + pair.getB().getPosition( 1 ) + " " + pair.getB().getPosition( 2 ) + " ";
+			s += pair.getA().getStagePosition( 0 ) + " " + pair.getA().getStagePosition( 1 ) + " " + pair.getA().getStagePosition( 2 ) + " ";
+			s += pair.getB().getStagePosition( 0 ) + " " + pair.getB().getStagePosition( 1 ) + " " + pair.getB().getStagePosition( 2 ) + " ";
 
 			processed++;
 			if ( coordinates.get( pair.getA().getIndex() ).z < coordinates.get( pair.getB().getIndex() ).z )

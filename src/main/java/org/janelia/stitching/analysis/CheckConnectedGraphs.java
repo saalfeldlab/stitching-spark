@@ -60,7 +60,7 @@ public class CheckConnectedGraphs
 					try
 					{
 						final ImageCollectionElement e = new ImageCollectionElement( new File( tileInfo.getFilePath() ), tileInfo.getIndex() );
-						e.setOffset( Conversions.toFloatArray( tileInfo.getPosition() ) );
+						e.setOffset( Conversions.toFloatArray( tileInfo.getStagePosition() ) );
 						e.setDimensionality( tileInfo.numDimensions() );
 						e.setModel( TileModelFactory.createTranslationModel( tileInfo.numDimensions() ) );
 						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
@@ -159,7 +159,7 @@ public class CheckConnectedGraphs
 					try
 					{
 						final ImageCollectionElement e = new ImageCollectionElement( new File( tileInfo.getFilePath() ), tileInfo.getIndex() );
-						e.setOffset( Conversions.toFloatArray( tileInfo.getPosition() ) );
+						e.setOffset( Conversions.toFloatArray( tileInfo.getStagePosition() ) );
 						e.setDimensionality( tileInfo.numDimensions() );
 						e.setModel( TileModelFactory.createTranslationModel( tileInfo.numDimensions() ) );
 						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );

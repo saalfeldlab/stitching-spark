@@ -23,7 +23,7 @@ public class ScaleTileConfiguration
 		final double scaleFactor = Double.parseDouble( args[ 2 ] );
 
 		for ( int i = 0; i < tiles.length; i++ )
-			tiles[ i ].setPosition( dimToScale, Math.floor( tiles[ i ].getPosition( dimToScale ) * scaleFactor ) );
+			tiles[ i ].setStagePosition( dimToScale, Math.floor( tiles[ i ].getStagePosition( dimToScale ) * scaleFactor ) );
 
 		TileInfoJSONProvider.saveTilesConfiguration( tiles, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 0 ], "_scaled_" + (dimToScale==0?"x":(dimToScale==1?"y":"z")) ) ) ) );
 	}

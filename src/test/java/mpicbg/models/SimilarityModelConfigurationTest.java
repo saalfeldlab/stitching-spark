@@ -126,13 +126,13 @@ public class SimilarityModelConfigurationTest
 				{
 					stageOffset = new double[ shift.getNumDimensions() ];
 					for ( int d = 0; d < stageOffset.length; ++d )
-						stageOffset[ d ] = shift.getTileBoxPair().getOriginalTilePair().getB().getPosition( d ) - shift.getTileBoxPair().getOriginalTilePair().getA().getPosition( d );
+						stageOffset[ d ] = shift.getTileBoxPair().getOriginalTilePair().getB().getStagePosition( d ) - shift.getTileBoxPair().getOriginalTilePair().getA().getStagePosition( d );
 					System.out.println( shift.getTileBoxPair() );
 				}
 				else
 				{
 					for ( int d = 0; d < stageOffset.length; ++d )
-						if ( Math.abs( stageOffset[ d ] - shift.getTileBoxPair().getOriginalTilePair().getB().getPosition( d ) - shift.getTileBoxPair().getOriginalTilePair().getA().getPosition( d ) ) > 1e10 )
+						if ( Math.abs( stageOffset[ d ] - shift.getTileBoxPair().getOriginalTilePair().getB().getStagePosition( d ) - shift.getTileBoxPair().getOriginalTilePair().getA().getStagePosition( d ) ) > 1e10 )
 							throw new RuntimeException( "inconsistent tile configuration" );
 				}
 
@@ -185,7 +185,7 @@ public class SimilarityModelConfigurationTest
 
 			final double[] stageOffset = new double[ 3 ];
 			for ( int d = 0; d < stageOffset.length; ++d )
-				stageOffset[ d ] = tilesMap.get( ind2 ).getPosition( d ) - tilesMap.get( ind1 ).getPosition( d );
+				stageOffset[ d ] = tilesMap.get( ind2 ).getStagePosition( d ) - tilesMap.get( ind1 ).getStagePosition( d );
 
 			final double[][] matrix1 = new double[ 3 ][ 4 ], matrix2 = new double[ 3 ][ 4 ];
 			( ( Affine3D< ? > ) tiles.get( ind1 ).getModel() ).toMatrix( matrix1 );

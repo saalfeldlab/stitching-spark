@@ -43,7 +43,7 @@ public class CompareOverlap
 
 		final double resultingOffset[] = new double[ tilesArr[ 0 ].numDimensions() ];
 		for ( int d = 0; d < resultingOffset.length; d++ )
-			resultingOffset[ d ] = tilesArr[ 1 ].getPosition( d ) - tilesArr[ 0 ].getPosition( d );
+			resultingOffset[ d ] = tilesArr[ 1 ].getStagePosition( d ) - tilesArr[ 0 ].getStagePosition( d );
 
 
 
@@ -65,7 +65,7 @@ public class CompareOverlap
 
 
 		for ( int d = 0; d < resultingOffset.length; d++ )
-			resultingOffset[ d ] -= (tilesArr[ 1 ].getPosition( d ) - tilesArr[ 0 ].getPosition( d ));
+			resultingOffset[ d ] -= (tilesArr[ 1 ].getStagePosition( d ) - tilesArr[ 0 ].getStagePosition( d ));
 		System.out.println( "------------" );
 		System.out.println( "Resulting offset: " + Arrays.toString( resultingOffset ) );
 	}

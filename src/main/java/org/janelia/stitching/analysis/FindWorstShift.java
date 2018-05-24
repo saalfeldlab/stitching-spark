@@ -43,7 +43,7 @@ public class FindWorstShift
 			final double dist[] = new double[ shift.getNumDimensions() ];
 
 			for ( int d = 0; d < shift.getNumDimensions(); d++ )
-				dist[d] = (pair.getB().getPosition( d ) - pair.getA().getPosition( d )) - shift.getOffset( d );
+				dist[d] = (pair.getB().getStagePosition( d ) - pair.getA().getStagePosition( d )) - shift.getOffset( d );
 
 			//if ( Math.abs( dist[ 0 ] ) >= 38 || Math.abs( dist[ 1 ] ) >= 36 || Math.abs( dist[ 2 ] ) >= 44 ) // Yoshi
 			if ( Math.abs( dist[ 0 ] ) >= 25 || Math.abs( dist[ 1 ] ) >= 20 || Math.abs( dist[ 2 ] ) >= 57 ) // Sample9
