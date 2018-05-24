@@ -61,7 +61,9 @@ public class AffineStitchingVisualization
 
 	final int[] tileEstimationWindow = new int[] { 4, 4 }; // 3x size of a tile
 
-	final double[] simulatedMovingTileBoxOffset = new double[] { 3, -15 };
+	final double[] simulatedMovingBoundingBoxOffset = new double[] { 3, -15 };
+//	final double[] simulatedMovingBoundingBoxOffset = new double[] { -31, -33 }; // center of the error ellipse
+//	final double[] simulatedMovingBoundingBoxOffset = new double[] { 12, -17 }; // without changing estimated affine transform of the moving tile
 
 	private AffineStitchingVisualization( final String logDirectory ) throws Exception
 	{
@@ -90,15 +92,16 @@ public class AffineStitchingVisualization
 			);
 		final AffineGet estimatedMovingTileLinearComponent = estimatedMovingTileLinearAndTranslationComponents.getA();
 		final TranslationGet estimatedMovingTileTranslationComponent = estimatedMovingTileLinearAndTranslationComponents.getB();
-		// add some noise to it so it is slightly different from the transformation of the fixed tile
+		// add some noise to estimated affine transform of the moving tile so it is slightly different from the transformation of the fixed tile
 		final double[][] estimatedMovingTileLinearComponentWithNoiseAffineMatrix = new double[ estimatedMovingTileLinearComponent.numDimensions() ][ estimatedMovingTileLinearComponent.numDimensions() + 1 ];
+//		final double[][] noise = null;
 		final double[][] noise = new double[][] {
 			new double[] { 0.0004, -0.1, 0 },
 			new double[] { -0.06, 0.0009, 0 },
 		};
 		for ( int dRow = 0; dRow < estimatedMovingTileLinearComponent.numDimensions(); ++dRow )
 			for ( int dCol = 0; dCol < estimatedMovingTileLinearComponent.numDimensions(); ++dCol )
-				estimatedMovingTileLinearComponentWithNoiseAffineMatrix[ dRow ][ dCol ] = estimatedMovingTileLinearComponent.get( dRow, dCol )  + noise[ dRow ][ dCol ];
+				estimatedMovingTileLinearComponentWithNoiseAffineMatrix[ dRow ][ dCol ] = estimatedMovingTileLinearComponent.get( dRow, dCol ) + ( noise != null ? noise[ dRow ][ dCol ] : 0 );
 		final AffineGet estimatedMovingTileLinearComponentWithNoise = TransformUtils.createTransform( estimatedMovingTileLinearComponentWithNoiseAffineMatrix );
 		// build the estimated moving tile transform by adding offsets
 		estimatedTileTransforms[ 1 ] = StitchSubdividedTileBoxPair.estimateAffineTransformation(
@@ -184,6 +187,15 @@ public class AffineStitchingVisualization
 			}
 		}
 
+		// draw fixed tile box in offset space
+		drawTransformedRectangle(
+				getRealIntervalCorners( tileBoxPair.getA() ),
+				TransformUtils.undoLinearComponent( estimatedTileTransforms[ 0 ] ),
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
+			);
+
 		// draw moving tile at its estimated offset position
 		drawTransformedRectangle(
 				getLocalRealIntervalCorners( tilePair.getB() ),
@@ -193,7 +205,23 @@ public class AffineStitchingVisualization
 				new ARGBType( ARGBType.rgba( 255, 255, 255, 255 ) )
 			);
 
+		// draw moving tile box at its estimated offset position
+		drawTransformedRectangle(
+				getRealIntervalCorners( tileBoxPair.getB() ),
+				TransformUtils.undoLinearComponent( estimatedTileTransforms[ 1 ] ),
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 192, 192, 192, 255 ) )
+			);
+
 		// draw combined error ellipse (moving+fixed)
+		drawErrorEllipse(
+				movingBoxRelativeSearchRadius.combinedErrorEllipse,
+				estimatedTileTransforms[ 1 ],
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) )
+			);
 		drawErrorEllipse(
 				movingBoxRelativeSearchRadius.combinedErrorEllipse,
 				TransformUtils.undoLinearComponent( estimatedTileTransforms[ 1 ] ),
@@ -329,7 +357,7 @@ public class AffineStitchingVisualization
 				simulatedMovingBoundingBoxOffset
 			);
 
-		// draw moving tile at its estimated world and offset positions
+		// draw moving tile at its new world and offset positions
 		drawTransformedRectangle(
 				getLocalRealIntervalCorners( tilePair.getB() ),
 				newMovingTileTransform,
@@ -344,6 +372,23 @@ public class AffineStitchingVisualization
 				imgWorldRandomAccess,
 				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
 			);
+
+		// draw moving tile box at its new world and offset position
+		drawTransformedRectangle(
+				getRealIntervalCorners( tileBoxPair.getB() ),
+				newMovingTileTransform,
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
+			);
+		drawTransformedRectangle(
+				getRealIntervalCorners( tileBoxPair.getB() ),
+				TransformUtils.undoLinearComponent( newMovingTileTransform ),
+				worldDisplaySize,
+				imgWorldRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
+			);
+
 		impWorld.updateAndDraw();
 
 
