@@ -1,7 +1,7 @@
 package org.janelia.stitching;
 
+import net.imglib2.FinalRealInterval;
 import net.imglib2.RealInterval;
-import net.imglib2.RealPositionable;
 import net.imglib2.realtransform.AffineGet;
 
 /**
@@ -10,7 +10,7 @@ import net.imglib2.realtransform.AffineGet;
  * @author Igor Pisarev
  */
 
-public class TileInfo implements Cloneable, RealInterval {
+public class TileInfo implements Cloneable {
 
 	private ImageType type;
 	private Integer index;
@@ -62,17 +62,6 @@ public class TileInfo implements Cloneable, RealInterval {
 
 	public double[] getStagePosition() {
 		return position;
-	}
-
-	public double[] getMax() {
-		final double[] max = new double[ numDimensions() ];
-		for ( int d = 0; d < max.length; d++ )
-			max[ d ] = getMax( d );
-		return max;
-	}
-
-	public double getMax( final int d ) {
-		return position[ d ] + size[ d ] - 1;
 	}
 
 	public void setStagePosition( final double[] position ) {
@@ -139,18 +128,18 @@ public class TileInfo implements Cloneable, RealInterval {
 		return file == null;
 	}
 
-	@Override
 	public int numDimensions() {
 		return position.length;
 	}
 
-	public Boundaries getBoundaries() {
-		final Boundaries b = new Boundaries( numDimensions() );
-		for ( int d = 0; d < numDimensions(); d++ ) {
-			b.setMin( d, Math.round( getStagePosition(d) ) );
-			b.setMax( d, Math.round( getStagePosition(d) ) + getSize(d) - 1 );
+	public RealInterval getStageInterval() {
+		final double[] min = new double[ position.length ], max = new double[ position.length ];
+		for ( int d = 0; d < min.length; ++d )
+		{
+			min[ d ] = position[ d ];
+			max[ d ] = position[ d ] + size[ d ] - 1;
 		}
-		return b;
+		return new FinalRealInterval( min, max );
 	}
 
 	@Override
@@ -164,45 +153,5 @@ public class TileInfo implements Cloneable, RealInterval {
 		newTile.setPixelResolution( pixelResolution == null ? null : pixelResolution.clone() );
 		newTile.setTransform( transform == null ? null : ( AffineGet ) transform.copy() );
 		return newTile;
-	}
-
-	@Override
-	public double realMin( final int d )
-	{
-		return position[ d ];
-	}
-
-	@Override
-	public void realMin( final double[] min )
-	{
-		for ( int d = 0; d < min.length; ++d )
-			min[ d ] = realMin( d );
-	}
-
-	@Override
-	public void realMin( final RealPositionable min )
-	{
-		for ( int d = 0; d < min.numDimensions(); ++d )
-			min.setPosition( realMin( d ), d );
-	}
-
-	@Override
-	public double realMax( final int d )
-	{
-		return position[ d ] + size[ d ] - 1;
-	}
-
-	@Override
-	public void realMax( final double[] max )
-	{
-		for ( int d = 0; d < max.length; ++d )
-			max[ d ] = realMax( d );
-	}
-
-	@Override
-	public void realMax( final RealPositionable max )
-	{
-		for ( int d = 0; d < max.numDimensions(); ++d )
-			max.setPosition( realMax( d ), d );
 	}
 }

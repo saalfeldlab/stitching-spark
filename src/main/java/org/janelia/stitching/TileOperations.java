@@ -18,6 +18,7 @@ import net.imglib2.Interval;
 import net.imglib2.RealInterval;
 import net.imglib2.util.IntervalIndexer;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.IntervalsHelper;
 
 public class TileOperations
 {
@@ -88,10 +89,10 @@ public class TileOperations
 	/**
 	 * @return an overlap with relative coordinates of the first tile
 	 */
-	public static Boundaries getOverlappingRegion( final TileInfo t1, final TileInfo t2 )
+	public static Interval getOverlappingRegion( final TileInfo t1, final TileInfo t2 )
 	{
-		final Boundaries r = new Boundaries( t1.numDimensions() );
-		for ( int d = 0; d < r.numDimensions(); d++ )
+		final long[] min = new long[ t1.numDimensions() ], max = new long[ t1.numDimensions() ];
+		for ( int d = 0; d < t1.numDimensions(); d++ )
 		{
 			final long p1 = Math.round( t1.getStagePosition( d ) ), p2 = Math.round( t2.getStagePosition( d ) );
 			final long s1 = t1.getSize( d ), s2 = t2.getSize( d );
@@ -99,11 +100,10 @@ public class TileOperations
 			if ( !( ( p2 >= p1 && p2 < p1 + s1 ) || ( p1 >= p2 && p1 < p2 + s2 ) ) )
 				return null;
 
-			r.setMin( d, Math.max( 0, p2 - p1 ) );
-			r.setMax( d, Math.min( s1 - 1, p2 + s2 - p1 - 1 ) );
+			min[ d ] = Math.max( 0, p2 - p1 );
+			max[ d ] = Math.min( s1 - 1, p2 + s2 - p1 - 1 );
 		}
-		assert r.validate();
-		return r;
+		return new FinalInterval( min, max );
 	}
 
 	/**
@@ -131,13 +131,7 @@ public class TileOperations
 	 */
 	public static boolean overlap( final TileInfo t1, final TileInfo t2 )
 	{
-		for ( int d = 0; d < t1.numDimensions(); d++ )
-		{
-			final double min1 = t1.getStagePosition( d ), min2 = t2.getStagePosition( d ), max1 = t1.getMax( d ), max2 = t2.getMax( d );
-			if ( !( ( min2 >= min1 && min2 <= max1 ) || ( min1 >= min2 && min1 <= max2 ) ) )
-				return false;
-		}
-		return true;
+		return overlap( t1.getStageInterval(), t2.getStageInterval() );
 	}
 
 	public static boolean overlap( final RealInterval t1, final RealInterval t2 )
@@ -154,19 +148,20 @@ public class TileOperations
 	/**
 	 * @return an overlap with global coordinates
 	 */
-	public static Boundaries getOverlappingRegionGlobal( final TileInfo t1, final TileInfo t2 )
+	public static Interval getOverlappingRegionGlobal( final TileInfo t1, final TileInfo t2 )
 	{
-		final Boundaries r = getOverlappingRegion( t1, t2 );
-		final Boundaries offset = t1.getBoundaries();
-		if (r != null )
+		final Interval r = getOverlappingRegion( t1, t2 );
+		if ( r == null )
+			return null;
+
+		final long[] globalMin = new long[ r.numDimensions() ], globalMax = new long[ r.numDimensions() ];
+		final long[] offset = Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( t1.getStageInterval() ) );
+		for ( int d = 0; d < r.numDimensions(); d++ )
 		{
-			for ( int d = 0; d < r.numDimensions(); d++ )
-			{
-				r.setMin( d, r.min( d ) + offset.min( d ) );
-				r.setMax( d, r.max( d ) + offset.min( d ) );
-			}
+			globalMin[ d ] = r.min( d ) + offset[ d ];
+			globalMax[ d ] = r.max( d ) + offset[ d ];
 		}
-		return r;
+		return new FinalInterval( globalMin, globalMax );
 	}
 
 	/**
@@ -194,7 +189,7 @@ public class TileOperations
 	{
 		final ArrayList< TileInfo > tilesWithinSubregion = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
-			if ( overlap( tile, subregion ) )
+			if ( overlap( tile.getStageInterval(), subregion ) )
 				tilesWithinSubregion.add( tile );
 		return tilesWithinSubregion;
 	}
@@ -202,31 +197,28 @@ public class TileOperations
 	/**
 	 * @return an integer bounding box of a collection of tiles
 	 */
-	public static Boundaries getCollectionBoundaries( final TileInfo[] tiles )
+	public static Interval getCollectionBoundaries( final TileInfo[] tiles )
 	{
 		if ( tiles.length == 0 )
 			return null;
 
 		final int dim = tiles[ 0 ].numDimensions();
 
-		final Boundaries boundaries = new Boundaries( dim );
-		for ( int d = 0; d < dim; d++ )
-		{
-			boundaries.setMin( d, Integer.MAX_VALUE );
-			boundaries.setMax( d, Integer.MIN_VALUE );
-		}
+		final long[] min = new long[ dim ], max = new long[ dim ];
+		Arrays.fill( min, Long.MAX_VALUE );
+		Arrays.fill( max, Long.MIN_VALUE );
 
 		for ( final TileInfo tile : tiles )
 		{
-			final Boundaries tileBoundaries = tile.getBoundaries();
+			final Interval tileBoundaries = IntervalsHelper.roundRealInterval( tile.getStageInterval() );
 			for ( int d = 0; d < dim; d++ )
 			{
-				boundaries.setMin( d, Math.min( boundaries.min( d ), tileBoundaries.min( d ) ) );
-				boundaries.setMax( d, Math.max( boundaries.max( d ), tileBoundaries.max( d ) ) );
+				min[ d ] = Math.min( min[ d ], tileBoundaries.min( d ) );
+				max[ d ] = Math.max( max[ d ], tileBoundaries.max( d ) );
 			}
 		}
 
-		return boundaries;
+		return new FinalInterval( min, max );
 	}
 	/**
 	 * @return an integer bounding box of a collection of tiles
@@ -284,7 +276,7 @@ public class TileOperations
 	 */
 	public static void translateTilesToOrigin( final TileInfo[] tiles )
 	{
-		final Boundaries space = getCollectionBoundaries( tiles );
+		final Interval space = getCollectionBoundaries( tiles );
 		for ( final TileInfo tile : tiles )
 			for ( int d = 0; d < tile.numDimensions(); d++ )
 				tile.setStagePosition( d, Math.round( tile.getStagePosition( d ) ) - space.min( d ) );

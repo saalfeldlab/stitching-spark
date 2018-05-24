@@ -15,6 +15,7 @@ import org.apache.commons.math3.stat.correlation.Covariance;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.KDTree;
+import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.concatenate.Concatenable;
@@ -24,6 +25,7 @@ import net.imglib2.neighborsearch.KNearestNeighborSearchOnKDTree;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineSet;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
@@ -266,9 +268,12 @@ public class TileSearchRadiusEstimator implements Serializable
 
 	Interval getEstimationWindow( final SubdividedTileBox tileBox )
 	{
+		final Interval tileBoxInterval = IntervalsHelper.roundRealInterval( tileBox );
+		final RealInterval fullTileStageInterval = tileBox.getFullTile().getStageInterval();
+
 		final double[] adjustedStageWindowPosition = new double[ tileBox.numDimensions() ];
 		for ( int d = 0; d < tileBox.numDimensions(); ++d )
-			adjustedStageWindowPosition[ d ] = tileBox.getBoundaries().min( d ) == 0 ? tileBox.getFullTile().realMin( d ) : tileBox.getFullTile().realMax( d );
+			adjustedStageWindowPosition[ d ] = tileBoxInterval.min( d ) == 0 ? fullTileStageInterval.realMin( d ) : fullTileStageInterval.realMax( d );
 		return getEstimationWindow( new RealPoint( adjustedStageWindowPosition ) );
 	}
 

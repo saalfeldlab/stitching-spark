@@ -67,19 +67,6 @@ public class SubdividedTileBox implements RealInterval {
 		return position;
 	}
 
-	public double[] getMax()
-	{
-		final double[] max = new double[ numDimensions() ];
-		for ( int d = 0; d < max.length; d++ )
-			max[ d ] = getMax( d );
-		return max;
-	}
-
-	public double getMax( final int d )
-	{
-		return position[ d ] + size[ d ] - 1;
-	}
-
 	public void setPosition( final double[] position )
 	{
 		this.position = position;
@@ -133,16 +120,6 @@ public class SubdividedTileBox implements RealInterval {
 	public int numDimensions()
 	{
 		return fullTile.numDimensions();
-	}
-
-	public Boundaries getBoundaries()
-	{
-		final Boundaries b = new Boundaries( numDimensions() );
-		for ( int d = 0; d < numDimensions(); d++ ) {
-			b.setMin( d, Math.round( getPosition(d) ) );
-			b.setMax( d, Math.round( getPosition(d) ) + getSize(d) - 1 );
-		}
-		return b;
 	}
 
 	@Override

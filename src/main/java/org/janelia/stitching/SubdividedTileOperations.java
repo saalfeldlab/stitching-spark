@@ -260,8 +260,8 @@ public class SubdividedTileOperations
 	public static Pair< Interval, Interval > getOverlapsInFullTile( final SubdividedTileBoxPair tileBoxPair, final Pair< Interval, Interval > overlaps )
 	{
 		return new ValuePair<>(
-				IntervalsHelper.translate( overlaps.getA(), Intervals.minAsLongArray( tileBoxPair.getA().getBoundaries() ) ),
-				IntervalsHelper.translate( overlaps.getB(), Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) )
+				IntervalsHelper.translate( overlaps.getA(), Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( tileBoxPair.getA() ) ) ),
+				IntervalsHelper.translate( overlaps.getB(), Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( tileBoxPair.getB() ) ) )
 			);
 	}
 

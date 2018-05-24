@@ -34,6 +34,7 @@ import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
@@ -227,7 +228,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 						tile,
 						dataProvider,
 						Optional.ofNullable( flatfieldsForChannels.get( channel ) ),
-						tileBox.getBoundaries(),
+						IntervalsHelper.roundRealInterval( tileBox ),
 						fullTileTransform
 					);
 			}

@@ -35,7 +35,7 @@ public class SubdividedTileOperationsTest
 		final Map< Long, long[] > actualMins = new TreeMap<>();
 		for ( final SubdividedTileBox tileBox : tileBoxes )
 		{
-			final long[] mins = Intervals.minAsLongArray( tileBox.getBoundaries() );
+			final long[] mins = Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( tileBox ) );
 			final long key = IntervalIndexer.positionToIndex( mins, tile.getSize() );
 			Assert.assertNull( actualMins.put( key, mins ) );
 		}
@@ -57,7 +57,7 @@ public class SubdividedTileOperationsTest
 
 		// test dimensions
 		for ( final SubdividedTileBox tileBox : tileBoxes )
-			Assert.assertArrayEquals( new long[] { 25, 30, 35 }, Intervals.dimensionsAsLongArray( tileBox.getBoundaries() ) );
+			Assert.assertArrayEquals( new long[] { 25, 30, 35 }, Intervals.dimensionsAsLongArray( IntervalsHelper.roundRealInterval( tileBox ) ) );
 
 		// check that reference to the original tile is preserved
 		for ( final SubdividedTileBox tileBox : tileBoxes )
@@ -133,7 +133,7 @@ public class SubdividedTileOperationsTest
 		final Map< Long, SubdividedTileBoxPair > actualMinsFirstTile = new TreeMap<>();
 		for ( final SubdividedTileBoxPair tileBoxPair : overlappingTileBoxes )
 		{
-			final long[] minsFirstTile = Intervals.minAsLongArray( tileBoxPair.getA().getBoundaries() );
+			final long[] minsFirstTile = Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( tileBoxPair.getA() ) );
 			final long key = IntervalIndexer.positionToIndex( minsFirstTile, tiles[ 0 ].getSize() );
 			Assert.assertNull( actualMinsFirstTile.put( key, tileBoxPair ) );
 		}
@@ -153,8 +153,8 @@ public class SubdividedTileOperationsTest
 		{
 			final long key = IntervalIndexer.positionToIndex( expectedMinsFirstTileArray[ i ], tiles[ 0 ].getSize() );
 			final SubdividedTileBoxPair tileBoxPair = actualMinsFirstTile.get( key );
-			Assert.assertArrayEquals( expectedMinsFirstTileArray[ i ], Intervals.minAsLongArray( tileBoxPair.getA().getBoundaries() ) );
-			Assert.assertArrayEquals( expectedMinsSecondTileArray[ i ], Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) );
+			Assert.assertArrayEquals( expectedMinsFirstTileArray[ i ], Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( tileBoxPair.getA() ) ) );
+			Assert.assertArrayEquals( expectedMinsSecondTileArray[ i ], Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( tileBoxPair.getB() ) ) );
 		}
 	}
 
@@ -209,12 +209,18 @@ public class SubdividedTileOperationsTest
 				fail();
 			tileBoxPair = new SubdividedTileBoxPair( fixedTileBox, movingTileBox );
 		}
-		Assert.assertArrayEquals( new long[] { 10, 0 }, Intervals.minAsLongArray( tileBoxPair.getA().getBoundaries() ) );
-		Assert.assertArrayEquals( new long[] { 10, 10 }, Intervals.minAsLongArray( tileBoxPair.getB().getBoundaries() ) );
+		Assert.assertArrayEquals( new long[] { 10, 0 }, Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( tileBoxPair.getA() ) ) );
+		Assert.assertArrayEquals( new long[] { 10, 10 }, Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( tileBoxPair.getB() ) ) );
 
 		final Pair< Interval, Interval > intervalsInGlobalSpace = new ValuePair<>(
-				IntervalsHelper.translate( tileBoxPair.getA().getBoundaries(), Intervals.minAsLongArray( tileBoxPair.getA().getFullTile().getBoundaries() ) ),
-				IntervalsHelper.translate( tileBoxPair.getB().getBoundaries(), Intervals.minAsLongArray( tileBoxPair.getB().getFullTile().getBoundaries() ) )
+				IntervalsHelper.translate(
+						IntervalsHelper.roundRealInterval( tileBoxPair.getA() ),
+						Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( tileBoxPair.getA().getFullTile().getStageInterval() ) )
+					),
+				IntervalsHelper.translate(
+						IntervalsHelper.roundRealInterval( tileBoxPair.getB() ),
+						Intervals.minAsLongArray( IntervalsHelper.roundRealInterval( tileBoxPair.getB().getFullTile().getStageInterval() ) )
+					)
 			);
 
 		final Pair< Interval, Interval > intervalsInFixedBoxSpace = SubdividedTileOperations.globalToFixedBoxSpace( intervalsInGlobalSpace );

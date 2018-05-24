@@ -7,6 +7,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import net.imglib2.FinalDimensions;
+import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 
 /**
@@ -17,8 +18,7 @@ public class DivideSpaceTest {
 
 	@Test
 	public void test() {
-		final Boundaries space = new Boundaries( 1 );
-		space.setMin( 0, 10 );	space.setMax( 0, 40 );
+		final Interval space = new FinalInterval( new long[] { 10 }, new long[] { 40 } );
 		final ArrayList< Interval > res = TileOperations.divideSpaceBySize( space, 14 );
 		Assert.assertEquals( 3, res.size() );
 
@@ -29,8 +29,7 @@ public class DivideSpaceTest {
 
 	@Test
 	public void testIgnoreSmaller() {
-		final Boundaries space = new Boundaries( 1 );
-		space.setMin( 0, 10 );	space.setMax( 0, 40 );
+		final Interval space = new FinalInterval( new long[] { 10 }, new long[] { 40 } );
 		final ArrayList< Interval > res = TileOperations.divideSpaceIgnoreSmaller( space, new FinalDimensions( 14 ) );
 		Assert.assertEquals( 2, res.size() );
 
@@ -43,12 +42,14 @@ public class DivideSpaceTest {
 	{
 		final Random rnd = new Random();
 
-		final Boundaries space = new Boundaries( rnd.nextInt(5) + 1 );
-		for ( int d = 0; d < space.numDimensions(); d++ ) {
-			space.setMin( d, rnd.nextInt( 1000 ) - 500 );
-			space.setMax( d, rnd.nextInt( 1000 ) + space.min( d ) );
+		final int dim = rnd.nextInt(5) + 1;
+		final long[] min = new long[ dim ], max = new long[ dim ];
+		for ( int d = 0; d < dim; d++ )
+		{
+			min[ d ] = rnd.nextInt( 1000 ) - 500;
+			max[ d ] = rnd.nextInt( 1000 ) + min[ d ];
 		}
-		Assert.assertTrue( space.validate() );
+		final Interval space = new FinalInterval( min, max );
 
 		final int subregionSize = rnd.nextInt( 100 ) + 50;
 		int expectedCount = 1;
@@ -71,12 +72,14 @@ public class DivideSpaceTest {
 	{
 		final Random rnd = new Random();
 
-		final Boundaries space = new Boundaries( rnd.nextInt(5) + 1 );
-		for ( int d = 0; d < space.numDimensions(); d++ ) {
-			space.setMin( d, rnd.nextInt( 1000 ) - 500 );
-			space.setMax( d, rnd.nextInt( 1000 ) + space.min( d ) );
+		final int dim = rnd.nextInt(5) + 1;
+		final long[] min = new long[ dim ], max = new long[ dim ];
+		for ( int d = 0; d < dim; d++ )
+		{
+			min[ d ] = rnd.nextInt( 1000 ) - 500;
+			max[ d ] = rnd.nextInt( 1000 ) + min[ d ];
 		}
-		Assert.assertTrue( space.validate() );
+		final Interval space = new FinalInterval( min, max );
 
 		int subregionCountPerDim = rnd.nextInt( 15 ) + 1;
 		for ( int d = 0; d < space.numDimensions(); d++ )

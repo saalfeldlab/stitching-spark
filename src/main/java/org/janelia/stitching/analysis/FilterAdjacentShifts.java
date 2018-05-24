@@ -12,7 +12,6 @@ import java.util.regex.Pattern;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.stitching.Boundaries;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
@@ -22,6 +21,7 @@ import org.janelia.stitching.Utils;
 import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.Interval;
+import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 
@@ -115,7 +115,7 @@ public class FilterAdjacentShifts
 			validShifts++;
 			shift.setIsValidOverlap( false );
 
-			final Boundaries overlap = TileOperations.getOverlappingRegionGlobal( shift.getTileBoxPair().getOriginalTilePair().getA(), shift.getTileBoxPair().getOriginalTilePair().getB() );
+			final Interval overlap = TileOperations.getOverlappingRegionGlobal( shift.getTileBoxPair().getOriginalTilePair().getA(), shift.getTileBoxPair().getOriginalTilePair().getB() );
 
 			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
@@ -224,7 +224,10 @@ public class FilterAdjacentShifts
 		final List< TilePair > adjacentPairs = new ArrayList<>();
 		for ( final TilePair pair : overlappingPairs )
 		{
-			final Dimensions maxPossibleOverlap = getMaxPossibleOverlap( new ValuePair<>( pair.getA().getBoundaries(), pair.getB().getBoundaries() ) );
+			final Dimensions maxPossibleOverlap = getMaxPossibleOverlap( new ValuePair<>(
+					IntervalsHelper.roundRealInterval( pair.getA().getStageInterval() ),
+					IntervalsHelper.roundRealInterval( pair.getB().getStageInterval() )
+				) );
 			final Interval overlap = TileOperations.getOverlappingRegionGlobal( pair.getA(), pair.getB() );
 			if ( isAdjacent( maxPossibleOverlap, overlap, dim ) )
 				adjacentPairs.add( pair );

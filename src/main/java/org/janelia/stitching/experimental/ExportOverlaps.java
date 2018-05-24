@@ -9,7 +9,6 @@ import java.util.TreeMap;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.stitching.Boundaries;
 import org.janelia.stitching.ImageType;
 import org.janelia.stitching.PipelineExecutionException;
 import org.janelia.stitching.TileInfo;
@@ -25,6 +24,7 @@ import ij.IJ;
 import ij.ImagePlus;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.display.imagej.ImageJFunctions;
@@ -187,7 +187,7 @@ public class ExportOverlaps
 		final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
 		Utils.workaroundImagePlusNSlices( imp );
 
-		final Boundaries[] overlappingRegions = new Boundaries[ tileToOverlaps.get( tileIndex ).size() ];
+		final Interval[] overlappingRegions = new Interval[ tileToOverlaps.get( tileIndex ).size() ];
 		for ( int i = 0; i < overlappingRegions.length; i++ )
 			overlappingRegions[ i ] = TileOperations.getOverlappingRegion( tile, tilesMap.get( tileToOverlaps.get( tileIndex ).get( i ) ) );
 

@@ -6,12 +6,14 @@ import java.util.List;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.stitching.Boundaries;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileOperations;
 import org.janelia.stitching.Utils;
+
+import net.imglib2.Interval;
+import net.imglib2.util.Intervals;
 
 /**
  * Finds particular pairwise shift between specified tile indices.
@@ -60,8 +62,8 @@ public class FindParticularShift
 		final TileInfo t1 = shift.getTileBoxPair().getOriginalTilePair().getA();
 		final TileInfo t2 = shift.getTileBoxPair().getOriginalTilePair().getB();
 
-		Boundaries overlap = TileOperations.getOverlappingRegionGlobal( t1, t2 );
-		System.out.println( "Initial overlap at " + Arrays.toString( overlap.getMin() ) + " with dimensions " + Arrays.toString( overlap.getDimensions() ) );
+		Interval overlap = TileOperations.getOverlappingRegionGlobal( t1, t2 );
+		System.out.println( "Initial overlap at " + Arrays.toString( Intervals.minAsLongArray( overlap ) ) + " with dimensions " + Arrays.toString( Intervals.dimensionsAsLongArray( overlap ) ) );
 
 		TileInfoJSONProvider.saveTilesConfiguration( new TileInfo[] { t1, t2 }, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[0], "_ORIGINAL" ) ) ) );
 
@@ -70,7 +72,7 @@ public class FindParticularShift
 
 		overlap = TileOperations.getOverlappingRegionGlobal( t1, t2 );
 		if ( overlap != null)
-			System.out.println( "Overlap after applying the offset at " + Arrays.toString( overlap.getMin() ) + " with dimensions " + Arrays.toString( overlap.getDimensions() ) );
+			System.out.println( "Overlap after applying the offset at " + Arrays.toString( Intervals.minAsLongArray( overlap )  ) + " with dimensions " + Arrays.toString( Intervals.dimensionsAsLongArray( overlap ) ) );
 		else
 			System.out.println( "*** No overlap after applying the offset! ***" );
 

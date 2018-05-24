@@ -141,14 +141,14 @@ public class AffineStitchingVisualization
 
 		// draw transformed tiles
 		drawTransformedRectangle(
-				getLocalRealIntervalCorners( tilePair.getA() ),
+				getLocalRealIntervalCorners( tilePair.getA().getStageInterval() ),
 				estimatedTileTransforms[ 0 ],
 				worldDisplaySize,
 				imgWorldRandomAccess,
 				new ARGBType( ARGBType.rgba( 64, 64, 255, 255 ) )
 			);
 		drawTransformedRectangle(
-				getLocalRealIntervalCorners( tilePair.getB() ),
+				getLocalRealIntervalCorners( tilePair.getB().getStageInterval() ),
 				estimatedTileTransforms[ 1 ],
 				worldDisplaySize,
 				imgWorldRandomAccess,
@@ -178,7 +178,7 @@ public class AffineStitchingVisualization
 			if ( tile.getTransform() != null )
 			{
 				drawTransformedRectangle(
-						getLocalRealIntervalCorners( tile ),
+						getLocalRealIntervalCorners( tile.getStageInterval() ),
 						TransformUtils.undoLinearComponent( tile.getTransform() ),
 						worldDisplaySize,
 						imgWorldRandomAccess,
@@ -198,7 +198,7 @@ public class AffineStitchingVisualization
 
 		// draw moving tile at its estimated offset position
 		drawTransformedRectangle(
-				getLocalRealIntervalCorners( tilePair.getB() ),
+				getLocalRealIntervalCorners( tilePair.getB().getStageInterval() ),
 				TransformUtils.undoLinearComponent( estimatedTileTransforms[ 1 ] ),
 				worldDisplaySize,
 				imgWorldRandomAccess,
@@ -359,14 +359,14 @@ public class AffineStitchingVisualization
 
 		// draw moving tile at its new world and offset positions
 		drawTransformedRectangle(
-				getLocalRealIntervalCorners( tilePair.getB() ),
+				getLocalRealIntervalCorners( tilePair.getB().getStageInterval() ),
 				newMovingTileTransform,
 				worldDisplaySize,
 				imgWorldRandomAccess,
 				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
 			);
 		drawTransformedRectangle(
-				getLocalRealIntervalCorners( tilePair.getB() ),
+				getLocalRealIntervalCorners( tilePair.getB().getStageInterval() ),
 				TransformUtils.undoLinearComponent( newMovingTileTransform ),
 				worldDisplaySize,
 				imgWorldRandomAccess,
@@ -526,7 +526,7 @@ public class AffineStitchingVisualization
 		for ( final TileInfo tile : tiles )
 		{
 			drawTransformedRectangle(
-					getRealIntervalCorners( tile ),
+					getRealIntervalCorners( tile.getStageInterval() ),
 					null,
 					displaySize,
 					imgRandomAccess,
@@ -546,7 +546,7 @@ public class AffineStitchingVisualization
 			if ( tile.getTransform() != null )
 			{
 				drawTransformedRectangle(
-						getLocalRealIntervalCorners( tile ),
+						getLocalRealIntervalCorners( tile.getStageInterval() ),
 						tile.getTransform(),
 						displaySize,
 						imgRandomAccess,
