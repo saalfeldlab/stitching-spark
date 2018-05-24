@@ -149,7 +149,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise(
 				roiImps,
-				combinedSearchRadiusForMovingBox.combinedErrorEllipse
+				combinedSearchRadiusForMovingBox != null ? combinedSearchRadiusForMovingBox.combinedErrorEllipse : null
 			);
 
 		if ( pairwiseResult != null )
