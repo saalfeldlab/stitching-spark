@@ -123,8 +123,10 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			).map( tile ->
 				{
 					final TileInfo tileWithEstimatedTransformation = tile.clone();
-					final AffineGet estimatedTransformation = TransformedTileOperations.estimateAffineTransformation( tile, broadcastedSearchRadiusEstimator.value() );
-					tileWithEstimatedTransformation.setTransform( estimatedTransformation );
+					if ( broadcastedSearchRadiusEstimator.value() != null )
+						tileWithEstimatedTransformation.setTransform(
+								TransformedTileOperations.estimateAffineTransformation( tile, broadcastedSearchRadiusEstimator.value() )
+							);
 					return tileWithEstimatedTransformation;
 				}
 			).collect().toArray( new TileInfo[ 0 ] );

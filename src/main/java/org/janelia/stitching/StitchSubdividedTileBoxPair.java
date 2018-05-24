@@ -84,7 +84,12 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 		final AffineGet[] estimatedTileTransforms = new AffineGet[ tileBoxes.length ];
 		for ( int i = 0; i < tileBoxes.length; ++i )
-			estimatedTileTransforms[ i ] = TransformedTileOperations.estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
+		{
+			if ( searchRadiusEstimator != null )
+				estimatedTileTransforms[ i ] = TransformedTileOperations.estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
+			else
+				estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( tileBoxes[ i ].getFullTile() );
+		}
 
 		// Render both ROIs in the fixed space
 		final InvertibleRealTransform[] affinesToFixedTileSpace = new InvertibleRealTransform[] {
