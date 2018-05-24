@@ -41,7 +41,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	private static final long serialVersionUID = -7152174064553332061L;
 
 	private final StitchingJob job;
-	private final JavaSparkContext sparkContext;
+	private final transient JavaSparkContext sparkContext;
 	private final int iteration;
 	private final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldsForChannels;
 
