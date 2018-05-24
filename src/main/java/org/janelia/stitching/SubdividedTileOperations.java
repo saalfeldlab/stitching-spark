@@ -27,9 +27,9 @@ public class SubdividedTileOperations
 	 * @param tiles
 	 * @return
 	 */
-	public static List< SubdividedTileBox > splitTilesIntoBoxes( final TileInfo[] tiles, final int[] gridSize )
+	public static List< SubdividedTileBox > subdivideTiles( final TileInfo[] tiles, final int[] gridSize )
 	{
-		final List< SubdividedTileBox > tileSplitBoxes = new ArrayList<>();
+		final List< SubdividedTileBox > tileBoxes = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 		{
 			// make sure that all tile boxes are of same size
@@ -48,11 +48,11 @@ public class SubdividedTileOperations
 				final SubdividedTileBox tileBox = new SubdividedTileBox( tile, new SubdividedTileBox.Tag( i ) );
 				tileBox.setPosition( Intervals.minAsDoubleArray( interval ) );
 				tileBox.setSize( Intervals.dimensionsAsLongArray( interval ) );
-				tileBox.setIndex( tileSplitBoxes.size() );
-				tileSplitBoxes.add( tileBox );
+				tileBox.setIndex( tileBoxes.size() );
+				tileBoxes.add( tileBox );
 			}
 		}
-		return tileSplitBoxes;
+		return tileBoxes;
 	}
 
 	/**
@@ -65,6 +65,7 @@ public class SubdividedTileOperations
 	 */
 	public static List< SubdividedTileBoxPair > findOverlappingTileBoxes( final List< SubdividedTileBox > tileBoxes, final boolean adjacentOnly )
 	{
+		// TODO: optimize
 		final List< SubdividedTileBoxPair > overlappingBoxes = new ArrayList<>();
 		for ( int i = 0; i < tileBoxes.size(); i++ )
 		{

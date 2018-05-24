@@ -94,7 +94,13 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 		final InvertibleRealTransform[] affinesToFixedBoxSpace = new InvertibleRealTransform[ tileBoxes.length ];
 		for ( int i = 0; i < tileBoxes.length; ++i )
-			affinesToFixedBoxSpace[ i ] = PairwiseTileOperations.getFixedBoxTransform( tileBoxPair, affinesToFixedTileSpace[ i ] ); // to fixed box space
+		{
+			// convert to fixed box space
+			affinesToFixedBoxSpace[ i ] = PairwiseTileOperations.getFixedBoxTransform(
+					tileBoxes,
+					affinesToFixedTileSpace[ i ]
+				);
+		}
 
 		final ImagePlus[] roiImps = new ImagePlus[ tileBoxes.length ];
 		final Interval[] transformedRoiIntervals = new Interval[ tileBoxes.length ];
@@ -123,7 +129,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 				);
 
 			combinedSearchRadiusForMovingBox.combinedErrorEllipse.setErrorEllipseTransform(
-					PairwiseTileOperations.getErrorEllipseTransform( tileBoxPair, estimatedTileTransforms )
+					PairwiseTileOperations.getErrorEllipseTransform( tileBoxes, estimatedTileTransforms )
 				);
 		}
 		else
@@ -134,24 +140,24 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		// TODO: use smaller ROI instead of the entire subdivided box?
 
 		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise(
-				tileBoxPair,
 				roiImps,
 				combinedSearchRadiusForMovingBox.combinedErrorEllipse
 			);
 
-		// Resulting offset is between the moving bounding box in the fixed box space.
-		// Convert it to the offset between the moving and fixed boxes in the global translated space (where the linear affine component of each tile has been undone).
-		final double[] newStitchedOffset = PairwiseTileOperations.getNewStitchedOffset(
-				tileBoxPair,
-				estimatedTileTransforms,
-				Conversions.toDoubleArray( pairwiseResult.getOffset() )
-			);
-		pairwiseResult.setOffset( Conversions.toFloatArray( newStitchedOffset ) );
-
-
-		// compute variance within ROI for both images
 		if ( pairwiseResult != null )
+		{
+			// Resulting offset is between the moving bounding box in the fixed box space.
+			// Convert it to the offset between the moving and fixed boxes in the global translated space (where the linear affine component of each tile has been undone).
+			final double[] newStitchedOffset = PairwiseTileOperations.getNewStitchedOffset(
+					tileBoxes,
+					estimatedTileTransforms,
+					Conversions.toDoubleArray( pairwiseResult.getOffset() )
+				);
+
+			pairwiseResult.setOffset( Conversions.toFloatArray( newStitchedOffset ) );
 			pairwiseResult.setVariance( computeVariance( roiImps ) );
+			pairwiseResult.setTileBoxPair( tileBoxPair );
+		}
 
 		for ( int i = 0; i < 2; i++ )
 			roiImps[ i ].close();
@@ -303,7 +309,6 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	}
 
 	private SerializablePairWiseStitchingResult stitchPairwise(
-			final SubdividedTileBoxPair tileBoxPair,
 			final ImagePlus[] roiImps,
 			final OffsetValidator offsetValidator )
 	{
@@ -324,10 +329,6 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			// TODO: pass actions to update accumulators
 //			noPeaksWithinConfidenceIntervalPairsCount.add( 1 );
 			System.out.println( "no peaks found within the confidence interval" );
-		}
-		else
-		{
-			result.setTileBoxPair( tileBoxPair );
 		}
 
 		return result;

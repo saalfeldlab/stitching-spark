@@ -28,7 +28,7 @@ public class SplitTileOperationsTest
 		tile.setPosition( new double[] { 100, 200, 300 } );
 		tile.setSize( new long[] { 50, 60, 70 } );
 
-		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( new TileInfo[] { tile }, new int[] { 2, 2, 2 } );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( new TileInfo[] { tile }, new int[] { 2, 2, 2 } );
 		Assert.assertEquals( 8, tileBoxes.size() );
 
 		// test mins
@@ -78,7 +78,7 @@ public class SplitTileOperationsTest
 		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
 		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
 
-		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, new int[] { 2, 2, 2 } );
 		Assert.assertEquals( 16, tileBoxes.size() );
 
 		// test left-top-front tile box of the second tile
@@ -116,7 +116,7 @@ public class SplitTileOperationsTest
 		tiles[ 1 ].setPosition( new double[] { 140, 210, 290 } );
 		tiles[ 1 ].setSize( new long[] { 90, 80, 70 } );
 
-		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2, 2 } );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, new int[] { 2, 2, 2 } );
 		Assert.assertEquals( 16, tileBoxes.size() );
 
 		final List< SubdividedTileBoxPair > overlappingTileBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, true );
@@ -171,7 +171,7 @@ public class SplitTileOperationsTest
 		movingTile.setPosition( new double[] { 46, 32 } );
 		movingTile.setSize( new long[] { 20, 20 } );
 
-		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( new TileInfo[] { fixedTile,  movingTile }, new int[] { 2, 2 } );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( new TileInfo[] { fixedTile,  movingTile }, new int[] { 2, 2 } );
 		Assert.assertEquals( 8, tileBoxes.size() );
 
 		final SubdividedTileBoxPair tileBoxPair;

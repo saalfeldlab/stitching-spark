@@ -152,7 +152,7 @@ public class TransformedTileOperations
 			final TileInfo tile,
 			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException
 	{
-		final SubdividedTileBox fullTileBox = SubdividedTileOperations.splitTilesIntoBoxes(
+		final SubdividedTileBox fullTileBox = SubdividedTileOperations.subdivideTiles(
 				new TileInfo[] { tile },
 				IntStream.generate( () -> 1 ).limit( tile.numDimensions() ).toArray()
 			).iterator().next();

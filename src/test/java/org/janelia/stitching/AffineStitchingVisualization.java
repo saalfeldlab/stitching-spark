@@ -71,7 +71,7 @@ public class AffineStitchingVisualization
 
 		final TileInfo[] tiles = getTiles();
 
-		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.splitTilesIntoBoxes( tiles, new int[] { 2, 2 } );
+		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, new int[] { 2, 2 } );
 		@SuppressWarnings( "unchecked" )
 		final List< SubdividedTileBox >[] tilePairBoxes = new ArrayList[] { new ArrayList<>(), new ArrayList<>() };
 		for ( final SubdividedTileBox tileBox : tileBoxes )
@@ -239,7 +239,7 @@ public class AffineStitchingVisualization
 		final Translation2D displayOffsetTransform = new Translation2D( localDisplaySize[ 0 ] / 2, localDisplaySize[ 1 ] / 2 );
 
 		final InvertibleRealTransform movingTileToFixedBoxTransform = PairwiseTileOperations.getMovingTileToFixedBoxTransform(
-				tileBoxPair,
+				tileBoxPair.toArray(),
 				estimatedTileTransforms
 			);
 
@@ -286,7 +286,7 @@ public class AffineStitchingVisualization
 
 		// account for the offset between zero-min of the transformed tile and the ROI
 		final double[] transformedMovingTileBoxToBoundingBoxOffset = PairwiseTileOperations.getTransformedMovingBoxToBoundingBoxOffset(
-				tileBoxPair,
+				tileBoxPair.toArray(),
 				estimatedTileTransforms
 			);
 		printDoubleArray(
@@ -296,7 +296,7 @@ public class AffineStitchingVisualization
 			);
 
 		movingBoxRelativeSearchRadius.combinedErrorEllipse.setErrorEllipseTransform(
-				PairwiseTileOperations.getErrorEllipseTransform( tileBoxPair, estimatedTileTransforms )
+				PairwiseTileOperations.getErrorEllipseTransform( tileBoxPair.toArray(), estimatedTileTransforms )
 			);
 
 		// draw transformed search radius in the fixed box space
@@ -352,7 +352,7 @@ public class AffineStitchingVisualization
 
 		// map the new offset back to the global space
 		final AffineGet newMovingTileTransform = PairwiseTileOperations.getNewMovingTileTransform(
-				tileBoxPair,
+				tileBoxPair.toArray(),
 				estimatedTileTransforms,
 				simulatedMovingBoundingBoxOffset
 			);
@@ -394,7 +394,7 @@ public class AffineStitchingVisualization
 
 		// find offset between the fixed and moving tiles in the offset space
 		final double[] newTranslatedOffset = PairwiseTileOperations.getNewStitchedOffset(
-				tileBoxPair,
+				tileBoxPair.toArray(),
 				estimatedTileTransforms,
 				simulatedMovingBoundingBoxOffset
 			);

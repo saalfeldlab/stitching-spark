@@ -12,6 +12,16 @@ import net.imglib2.realtransform.Translation;
 
 public class PairwiseTileOperations
 {
+	private static final int fixedIndex = 0;
+	private static final int movingIndex = 1;
+
+	private static void validateInputParametersLength( final Object[]... args )
+	{
+		for ( final Object[] arg : args )
+			if ( arg.length != 2 )
+				throw new IllegalArgumentException( "Incorrect number of input parameters" );
+	}
+
 	/**
 	 * Returns new error ellipse that is a combination of error ellipses for the fixed box and the moving box.
 	 *
@@ -24,13 +34,15 @@ public class PairwiseTileOperations
 			final TileSearchRadiusEstimator searchRadiusEstimator,
 			final SubdividedTileBox[] tileBoxes ) throws PipelineExecutionException
 	{
+		validateInputParametersLength( tileBoxes );
+
 		final EstimatedTileBoxWorldSearchRadius[] searchRadiusStats = new EstimatedTileBoxWorldSearchRadius[ tileBoxes.length ];
 		for ( int i = 0; i < tileBoxes.length; ++i )
 			searchRadiusStats[ i ] = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tileBoxes[ i ] );
 
 		final EstimatedTileBoxRelativeSearchRadius combinedSearchRadiusForMovingBox = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
-				searchRadiusStats[ 0 ],
-				searchRadiusStats[ 1 ]
+				searchRadiusStats[ fixedIndex ],
+				searchRadiusStats[ movingIndex ]
 			);
 
 		return combinedSearchRadiusForMovingBox;
@@ -44,9 +56,11 @@ public class PairwiseTileOperations
 	 */
 	public static InvertibleRealTransform getMovingTileToFixedTileTransform( final AffineGet[] tileTransforms )
 	{
+		validateInputParametersLength( tileTransforms );
+
 		final InvertibleRealTransformSequence movingTileToFixedTileTransform = new InvertibleRealTransformSequence();
-		movingTileToFixedTileTransform.add( tileTransforms[ 1 ] );           // moving tile -> world
-		movingTileToFixedTileTransform.add( tileTransforms[ 0 ].inverse() ); // world -> fixed tile
+		movingTileToFixedTileTransform.add( tileTransforms[ movingIndex ] );           // moving tile -> world
+		movingTileToFixedTileTransform.add( tileTransforms[ fixedIndex ].inverse() ); // world -> fixed tile
 		return movingTileToFixedTileTransform;
 
 	}
@@ -54,71 +68,82 @@ public class PairwiseTileOperations
 	/**
 	 * Returns the transformation to map the moving tile into the coordinate space of the fixed box.
 	 *
-	 * @param tileBoxPair
+	 * @param tileBoxes
 	 * @param tileTransforms
 	 * @return
 	 */
 	public static InvertibleRealTransform getMovingTileToFixedBoxTransform(
-			final SubdividedTileBoxPair tileBoxPair,
+			final SubdividedTileBox[] tileBoxes,
 			final AffineGet[] tileTransforms )
 	{
-		return getFixedBoxTransform( tileBoxPair, getMovingTileToFixedTileTransform( tileTransforms ) );
+		validateInputParametersLength( tileBoxes, tileTransforms );
+
+		return getFixedBoxTransform(
+				tileBoxes,
+				getMovingTileToFixedTileTransform( tileTransforms )
+			);
 	}
 
 	/**
 	 * Maps the given transformation in the fixed tile space into the fixed box space.
 	 *
-	 * @param tileBoxPair
+	 * @param tileBoxes
 	 * @param transformToFixedTileSpace
 	 * @return
 	 */
 	public static InvertibleRealTransform getFixedBoxTransform(
-			final SubdividedTileBoxPair tileBoxPair,
+			final SubdividedTileBox[] tileBoxes,
 			final InvertibleRealTransform transformToFixedTileSpace )
 	{
+		validateInputParametersLength( tileBoxes );
+
 		final InvertibleRealTransformSequence fixedTileToFixedBoxTransform = new InvertibleRealTransformSequence();
 		fixedTileToFixedBoxTransform.add( transformToFixedTileSpace ); // ... -> fixed tile
-		fixedTileToFixedBoxTransform.add( new Translation( tileBoxPair.getA().getPosition() ).inverse() ); // fixed tile -> fixed box
+		fixedTileToFixedBoxTransform.add( new Translation( tileBoxes[ fixedIndex ].getPosition() ).inverse() ); // fixed tile -> fixed box
 		return fixedTileToFixedBoxTransform;
 	}
 
 	/**
 	 * Returns the offset between zero-min of the transformed moving box and its bounding box.
 	 *
-	 * @param tileBoxPair
+	 * @param tileBoxes
 	 * @param tileTransforms
 	 * @return
 	 */
 	public static double[] getTransformedMovingBoxToBoundingBoxOffset(
-			final SubdividedTileBoxPair tileBoxPair,
+			final SubdividedTileBox[] tileBoxes,
 			final AffineGet[] tileTransforms )
 	{
+		validateInputParametersLength( tileBoxes, tileTransforms );
+
 		return getTransformedMovingBoxToBoundingBoxOffset(
-				tileBoxPair,
-				getMovingTileToFixedBoxTransform( tileBoxPair, tileTransforms )
+				tileBoxes,
+				getMovingTileToFixedBoxTransform( tileBoxes, tileTransforms )
 			);
 	}
 
 	/**
 	 * Returns the offset between zero-min of the transformed moving box and its bounding box.
 	 *
-	 * @param tileBoxPair
+	 * @param tileBoxes
 	 * @param movingTileToFixedBoxTransform
 	 * @return
 	 */
 	public static double[] getTransformedMovingBoxToBoundingBoxOffset(
-			final SubdividedTileBoxPair tileBoxPair,
+			final SubdividedTileBox[] tileBoxes,
 			final InvertibleRealTransform movingTileToFixedBoxTransform )
 	{
-		final double[] transformedMovingTileBoxPosition = new double[ tileBoxPair.getB().numDimensions() ];
-		movingTileToFixedBoxTransform.apply( tileBoxPair.getB().getPosition(), transformedMovingTileBoxPosition );
+		validateInputParametersLength( tileBoxes );
+
+		final double[] transformedMovingTileBoxPosition = new double[ tileBoxes[ movingIndex ].numDimensions() ];
+		movingTileToFixedBoxTransform.apply( tileBoxes[ movingIndex ].getPosition(), transformedMovingTileBoxPosition );
 
 		final RealInterval transformedMovingBoxInterval = TransformedTileOperations.getTransformedBoundingBoxReal(
-				tileBoxPair.getB(),
+				tileBoxes[ movingIndex ],
 				movingTileToFixedBoxTransform
 			);
 
-		final double[] transformedMovingTileBoxToBoundingBoxOffset = new double[ tileBoxPair.getB().numDimensions() ];
+		final double[] transformedMovingTileBoxToBoundingBoxOffset = new double[ tileBoxes[ movingIndex ].numDimensions() ];
 		for ( int d = 0; d < transformedMovingTileBoxToBoundingBoxOffset.length; ++d )
 			transformedMovingTileBoxToBoundingBoxOffset[ d ] = transformedMovingTileBoxPosition[ d ] - transformedMovingBoxInterval.realMin( d );
 
@@ -128,16 +153,18 @@ public class PairwiseTileOperations
 	/**
 	 * Builds the transformation for the error ellipse to map it into the coordinate space of the fixed box.
 	 *
-	 * @param tileBoxPair
+	 * @param tileBoxes
 	 * @param tileTransforms
 	 * @return
 	 */
 	public static InvertibleRealTransform getErrorEllipseTransform(
-			final SubdividedTileBoxPair tileBoxPair,
+			final SubdividedTileBox[] tileBoxes,
 			final AffineGet[] tileTransforms )
 	{
-		final InvertibleRealTransform movingTileToFixedBoxTransform = getMovingTileToFixedBoxTransform( tileBoxPair, tileTransforms );
-		final double[] transformedMovingTileBoxToBoundingBoxOffset = getTransformedMovingBoxToBoundingBoxOffset( tileBoxPair, movingTileToFixedBoxTransform );
+		validateInputParametersLength( tileBoxes, tileTransforms );
+
+		final InvertibleRealTransform movingTileToFixedBoxTransform = getMovingTileToFixedBoxTransform( tileBoxes, tileTransforms );
+		final double[] transformedMovingTileBoxToBoundingBoxOffset = getTransformedMovingBoxToBoundingBoxOffset( tileBoxes, movingTileToFixedBoxTransform );
 
 		final InvertibleRealTransformSequence errorEllipseTransform = new InvertibleRealTransformSequence();
 		errorEllipseTransform.add( movingTileToFixedBoxTransform ); // moving tile -> fixed box
@@ -149,43 +176,45 @@ public class PairwiseTileOperations
 	/**
 	 * Builds the new transformation for the moving tile based on the new offset of its tile box.
 	 *
-	 * @param tileBoxPair
+	 * @param tileBoxes
 	 * @param tileTransforms
 	 * @param movingBoundingBoxOffset
 	 * @return
 	 */
 	public static AffineGet getNewMovingTileTransform(
-			final SubdividedTileBoxPair tileBoxPair,
+			final SubdividedTileBox[] tileBoxes,
 			final AffineGet[] tileTransforms,
 			final double[] movingBoundingBoxOffset )
 	{
+		validateInputParametersLength( tileBoxes, tileTransforms );
+
 		final int dim = movingBoundingBoxOffset.length;
 
 		// Resulting offset is between the moving bounding box in the fixed box space.
 		// Convert it to the offset between the moving and fixed boxes in the global translated space (where the linear affine component of each tile has been undone).
 		final RealTransformSequence offsetToWorldTransform = new RealTransformSequence();
-		offsetToWorldTransform.add( new Translation( getTransformedMovingBoxToBoundingBoxOffset( tileBoxPair, tileTransforms ) ) ); // bounding box top-left in fixed box space -> transformed top-left in fixed box space
-		offsetToWorldTransform.add( new Translation( tileBoxPair.getA().getPosition() ) ); // fixed box -> tixed tile
-		offsetToWorldTransform.add( tileTransforms[ 0 ] ); // fixed tile -> world
+		offsetToWorldTransform.add( new Translation( getTransformedMovingBoxToBoundingBoxOffset( tileBoxes, tileTransforms ) ) ); // bounding box top-left in fixed box space -> transformed top-left in fixed box space
+		offsetToWorldTransform.add( new Translation( tileBoxes[ fixedIndex ].getPosition() ) ); // fixed box -> tixed tile
+		offsetToWorldTransform.add( tileTransforms[ fixedIndex ] ); // fixed tile -> world
 
 		final double[] newMovingBoxWorldPosition = new double[ dim ];
 		offsetToWorldTransform.apply( movingBoundingBoxOffset, newMovingBoxWorldPosition );
 
 		final double[] movingBoxWorldPosition = new double[ dim ];
-		tileTransforms[ 1 ].apply( tileBoxPair.getB().getPosition(), movingBoxWorldPosition );
+		tileTransforms[ movingIndex ].apply( tileBoxes[ movingIndex ].getPosition(), movingBoxWorldPosition );
 
 		final double[] newMovingBoxWorldOffset = new double[ dim ];
 		for ( int d = 0; d < dim; ++d )
 			newMovingBoxWorldOffset[ d ] = newMovingBoxWorldPosition[ d ] - movingBoxWorldPosition[ d ];
 
 		// new translation component
-		final AffineGet movingTileTransformTranslationComponent = TransformUtils.getTranslationalComponent( tileTransforms[ 1 ] );
+		final AffineGet movingTileTransformTranslationComponent = TransformUtils.getTranslationalComponent( tileTransforms[ movingIndex ] );
 		final double[] newMovingTileTransformTranslationComponent = new double[ dim ];
 		for ( int d = 0; d < dim; ++d )
 			newMovingTileTransformTranslationComponent[ d ] = newMovingBoxWorldOffset[ d ] + movingTileTransformTranslationComponent.get( d, dim );
 
 		// linear component stays the same
-		final AffineGet movingTileTransformLinearComponent = TransformUtils.getLinearComponent( tileTransforms[ 1 ] );
+		final AffineGet movingTileTransformLinearComponent = TransformUtils.getLinearComponent( tileTransforms[ movingIndex ] );
 
 		// new affine matrix
 		final double[][] newMovingTileTransformAffineMatrix = new double[ dim ][ dim + 1 ];
@@ -202,24 +231,26 @@ public class PairwiseTileOperations
 	/**
 	 * Returns transformed offset between the fixed box and the moving box at its new position.
 	 *
-	 * @param tileBoxPair
+	 * @param tileBoxes
 	 * @param tileTransforms
 	 * @param movingBoundingBoxOffset
 	 * @return
 	 */
 	public static double[] getNewStitchedOffset(
-			final SubdividedTileBoxPair tileBoxPair,
+			final SubdividedTileBox[] tileBoxes,
 			final AffineGet[] tileTransforms,
 			final double[] movingBoundingBoxOffset )
 	{
+		validateInputParametersLength( tileBoxes, tileTransforms );
+
 		final int dim = movingBoundingBoxOffset.length;
 
 		final double[] fixedBoxTranslatedPosition = new double[ dim ];
-		TransformUtils.undoLinearComponent( tileTransforms[ 0 ] ).apply( tileBoxPair.getA().getPosition(), fixedBoxTranslatedPosition );
+		TransformUtils.undoLinearComponent( tileTransforms[ fixedIndex ] ).apply( tileBoxes[ fixedIndex ].getPosition(), fixedBoxTranslatedPosition );
 
 		final double[] newMovingBoxTranslatedPosition = new double[ dim ];
-		final AffineGet newMovingTileTransform = getNewMovingTileTransform( tileBoxPair, tileTransforms, movingBoundingBoxOffset );
-		TransformUtils.undoLinearComponent( newMovingTileTransform ).apply( tileBoxPair.getB().getPosition(), newMovingBoxTranslatedPosition );
+		final AffineGet newMovingTileTransform = getNewMovingTileTransform( tileBoxes, tileTransforms, movingBoundingBoxOffset );
+		TransformUtils.undoLinearComponent( newMovingTileTransform ).apply( tileBoxes[ movingIndex ].getPosition(), newMovingBoxTranslatedPosition );
 
 		final double[] stitchedOffset = new double[ dim ];
 		for ( int d = 0; d < dim; ++d )
