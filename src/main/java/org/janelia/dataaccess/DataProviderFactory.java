@@ -3,6 +3,7 @@ package org.janelia.dataaccess;
 import java.net.URI;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.janelia.dataaccess.fs.FSDataProvider;
 import org.janelia.dataaccess.googlecloud.GoogleCloudDataProvider;
 import org.janelia.dataaccess.s3.AmazonS3DataProvider;
 import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
