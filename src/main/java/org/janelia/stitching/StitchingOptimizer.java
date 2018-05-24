@@ -36,6 +36,12 @@ public class StitchingOptimizer implements Serializable
 		return Math.min( INITIAL_MAX_ALLOWED_ERROR + iteration * MAX_ALLOWED_ERROR_STEP, MAX_ALLOWED_ERROR_LIMIT );
 	}
 
+	private static enum OptimizerMode
+	{
+		Translation,
+		Affine
+	}
+
 	private static final class OptimizationParameters
 	{
 		public final double minCrossCorrelation;
@@ -147,15 +153,15 @@ public class StitchingOptimizer implements Serializable
 
 	public void optimizeTranslation( final int iteration ) throws IOException
 	{
-		optimize( iteration, false );
+		optimize( iteration, OptimizerMode.Translation );
 	}
 
 	public void optimizeAffine( final int iteration ) throws IOException
 	{
-		optimize( iteration, true );
+		optimize( iteration, OptimizerMode.Affine );
 	}
 
-	private void optimize( final int iteration, final boolean higherOrderStitching ) throws IOException
+	private void optimize( final int iteration, final OptimizerMode mode ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 
@@ -171,10 +177,10 @@ public class StitchingOptimizer implements Serializable
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
 				logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
-				logWriter.println( "Stitching mode: " + ( higherOrderStitching ? "affine" : "translation" ) );
+				logWriter.println( "Stitching mode: " + mode );
 				logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 
-				final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter, higherOrderStitching );
+				final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter, mode );
 
 				// Update tile transforms
 				for ( int channel = 0; channel < job.getChannels(); channel++ )
@@ -265,7 +271,7 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
 			final double maxAllowedError,
 			final PrintWriter logWriter,
-			final boolean higherOrderStitching )
+			final OptimizerMode mode )
 	{
 		final List< OptimizationParameters > optimizationParametersList = new ArrayList<>();
 		for ( double testMinCrossCorrelation = 0.1; testMinCrossCorrelation <= 1; testMinCrossCorrelation += 0.05 )
@@ -281,7 +287,7 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 
 		final List< OptimizationResult > optimizationResultList = new ArrayList<>( sparkContext.parallelize( optimizationParametersList, optimizationParametersList.size() ).map( optimizationParameters ->
 			{
-				final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters, higherOrderStitching );
+				final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters, mode );
 
 				final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
 				GlobalOptimizationPerformer.suppressOutput();
@@ -321,7 +327,7 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 	private Vector< ComparePointPair > createComparePointPairs(
 			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
 			final OptimizationParameters optimizationParameters,
-			final boolean higherOrderStitching )
+			final OptimizerMode mode )
 	{
 		// create tile models
 		final TreeMap< Integer, ImagePlusTimePoint > fakeTileImagesMap = new TreeMap<>();
@@ -334,10 +340,17 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 					try
 					{
 						final ImageCollectionElement el;
-						if ( higherOrderStitching )
-							el = Utils.createElementAffineModel( originalTileInfo );
-						else
+						switch ( mode )
+						{
+						case Translation:
 							el = Utils.createElementTranslationModel( originalTileInfo );
+							break;
+						case Affine:
+							el = Utils.createElementAffineModel( originalTileInfo );
+							break;
+						default:
+							throw new UnsupportedOperationException( "stitching mode is not supported: " + mode );
+						}
 
 						final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), ( java.awt.Image ) null );
 						final ImagePlusTimePoint fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
