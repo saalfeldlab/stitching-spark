@@ -147,7 +147,7 @@ public class TileInfo implements Cloneable, RealInterval {
 		newTile.setPosition( position == null ? null : position.clone() );
 		newTile.setSize( size == null ? null : size.clone() );
 		newTile.setPixelResolution( pixelResolution == null ? null : pixelResolution.clone() );
-//		newTile.setTransform( transform == null ? null : transform.copy() );
+		newTile.setTransform( transform == null ? null : ( AffineGet ) transform.copy() );
 		newTile.setTransform( transform );
 		return newTile;
 	}

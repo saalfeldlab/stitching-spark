@@ -24,6 +24,7 @@ import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.stitching.StitchSubdividedTileBoxPair.StitchingResult;
 
+import net.imglib2.realtransform.AffineGet;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.view.RandomAccessiblePairNullable;
@@ -52,16 +53,19 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	{
 		try
 		{
+			final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
+			final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
+
 			final DataProvider dataProvider = job.getDataProvider();
 			for ( int iteration = 0; ; ++iteration )
 			{
+				final TileInfo[] tiles = getTilesForIteration( iteration );
+
 				final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
 				Arrays.fill( tileBoxesGridSize, 2 );
-				final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( job.getTiles( 0 ), tileBoxesGridSize );
+				final List< SubdividedTileBox > tileBoxes = SplitTileOperations.splitTilesIntoBoxes( tiles, tileBoxesGridSize );
 				final List< SubdividedTileBoxPair > overlappingBoxes = SplitTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
 
-				final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
-				final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
 				final String iterationDirname = "iter" + iteration;
 				final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 
@@ -81,12 +85,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				// check if number of stitched tiles has increased compared to the previous iteration
 				final TileInfo[] stageTiles = job.getTiles( 0 );
 				final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( stitchedTilesFilepath ) ) );
-
-				// TODO: test and keep if works or remove (currently generates worse solutions)
-				// find new pairs using new solution for predicting positions of the excluded (missing) tiles
-//				final List< TilePair > newPairs = FindPairwiseChanges.getPairsWithPrediction( stageTiles, stitchedTiles, job.getArgs().minStatsNeighborhood(), !job.getArgs().useAllPairs() );
-//				overlappingTiles.clear();
-//				overlappingTiles.addAll( newPairs );
 
 				// stop if all input tiles are included in the stitched set
 				if ( stageTiles.length == stitchedTiles.length )
@@ -137,6 +135,36 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 	}
 
+	private TileInfo[] getTilesForIteration( final int iteration ) throws IOException
+	{
+		final TileInfo[] tiles = new TileInfo[ job.getTiles( 0 ).length ];
+		for ( int i = 0; i < tiles.length; ++i )
+			tiles[ i ] = job.getTiles( 0 )[ i ].clone();
+
+		// load stitched transformations from the previous iteration and assign them to the subset of tiles
+		if ( iteration > 0 )
+		{
+			final DataProvider dataProvider = job.getDataProvider();
+			final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
+			final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
+
+			final String previousIterationDirname = "iter" + ( iteration - 1 );
+			final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
+			final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
+
+			final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
+			for ( final TileInfo previousStitchedTile : previousStitchedTiles )
+			{
+				final AffineGet stitchedTransform = previousStitchedTile.getTransform();
+				if ( stitchedTransform == null )
+					throw new RuntimeException( "stitchedTransform is null" );
+				tilesMap.get( previousStitchedTile.getIndex() ).setTransform( stitchedTransform );
+			}
+		}
+
+		return tiles;
+	}
+
 	/**
 	 * Stores the final solution in the main folder when further iterations don't yield better results
 	 *
@@ -171,7 +199,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	 * @throws PipelineExecutionException
 	 * @throws IOException
 	 */
-	private void preparePairwiseShifts( final List< SubdividedTileBoxPair > overlappingBoxes, final int iteration ) throws PipelineExecutionException, IOException
+	private void preparePairwiseShifts(
+			final List< SubdividedTileBoxPair > overlappingBoxes,
+			final int iteration ) throws PipelineExecutionException, IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
@@ -182,11 +212,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final String pairwisePath = PathResolver.get( basePath, iterationDirname, pairwiseFilename );
 
 		// FIXME: replaces checking contents of the pairwise file by simply checking its existence
-		if ( dataProvider.fileExists( URI.create( pairwisePath ) ) )
-		{
-			System.out.println( "pairwise.json file exists, don't recompute shifts" );
-			return;
-		}
+//		if ( dataProvider.fileExists( URI.create( pairwisePath ) ) )
+//		{
+//			System.out.println( "pairwise.json file exists, don't recompute shifts" );
+//			return;
+//		}
 
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = tryLoadPrecomputedShifts( basePath, iteration );
 		final List< SubdividedTileBoxPair > pendingOverlappingBoxes = removePrecomputedPendingPairs( pairwisePath, overlappingBoxes, pairwiseShifts );
@@ -198,17 +228,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 		else
 		{
-			final String statsTileConfigurationPath = iteration == 0 ? null : PathResolver.get(
-					basePath,
-					previousIterationDirname,
-					Utils.addFilenameSuffix(
-							PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) ),
-							"-stitched"
-						)
-				);
-
 			// Initiate the computation
-			final List< StitchingResult > stitchingResults = computePairwiseShifts( pendingOverlappingBoxes, statsTileConfigurationPath );
+			final List< StitchingResult > stitchingResults = computePairwiseShifts( pendingOverlappingBoxes, iteration );
 
 			// merge results with preloaded pairwise shifts
 			for ( final StitchingResult result : stitchingResults )
@@ -440,12 +461,17 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	/**
 	 * Computes the best possible pairwise shifts between every pair of tiles on a Spark cluster.
 	 * It uses phase correlation for measuring similarity between two images.
+	 * @param overlappingBoxes
+	 * @param iteration
+	 * @return
+	 * @throws PipelineExecutionException
+	 * @throws IOException
 	 */
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< StitchingResult > computePairwiseShifts(
 			final List< SubdividedTileBoxPair > overlappingBoxes,
-			final String statsTileConfigurationPath ) throws PipelineExecutionException
+			final int iteration ) throws PipelineExecutionException, IOException
 	{
-		final Broadcast< TileSearchRadiusEstimator > broadcastedSearchRadiusEstimator = sparkContext.broadcast( loadSearchRadiusEstimator( statsTileConfigurationPath ) );
+		final Broadcast< TileSearchRadiusEstimator > broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator( iteration ) );
 		final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( loadFlatfieldChannels() );
 		final Broadcast< List< Map< String, TileInfo > > > broadcastedCoordsToTilesChannels = sparkContext.broadcast( getCoordsToTilesChannels() );
 
@@ -558,38 +584,19 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	/**
 	 * Tries to create a predictive model based on the previous stitching solution if exists.
 	 *
-	 * @param statsTileConfigurationPath
+	 * @param iteration
 	 * @return
-	 * @throws PipelineExecutionException
+	 * @throws IOException
 	 */
-	private TileSearchRadiusEstimator loadSearchRadiusEstimator( final String statsTileConfigurationPath ) throws PipelineExecutionException
+	private TileSearchRadiusEstimator createSearchRadiusEstimator( final int iteration ) throws IOException
 	{
-		final DataProvider dataProvider = job.getDataProvider();
-		final TileSearchRadiusEstimator searchRadiusEstimator;
-		if ( statsTileConfigurationPath != null )
-		{
-			System.out.println( "=== Building prediction model based on previous stitching solution ===" );
-			try
-			{
-				final TileInfo[] statsTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( statsTileConfigurationPath ) ) );
-				System.out.println( "-- Creating search radius estimator using " + job.getTiles( 0 ).length + " stage tiles and " + statsTiles.length + " stitched tiles --" );
-				searchRadiusEstimator = new TileSearchRadiusEstimator(
-						statsTiles,
-						job.getArgs().searchRadiusMultiplier(),
-						job.getArgs().searchWindowSizeTiles()
-					);
-				System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( searchRadiusEstimator.estimationWindowSize ) + " --" );
-			}
-			catch ( final IOException e )
-			{
-				e.printStackTrace();
-				throw new PipelineExecutionException( "Cannot load previous solution for stats:" + statsTileConfigurationPath, e );
-			}
-		}
-		else
-		{
-			searchRadiusEstimator = null;
-		}
-		return searchRadiusEstimator;
+		if ( iteration == 0 )
+			return null;
+
+		return new TileSearchRadiusEstimator(
+				getTilesForIteration( iteration ),
+				job.getArgs().searchRadiusMultiplier(),
+				job.getArgs().searchWindowSizeTiles()
+			);
 	}
 }
