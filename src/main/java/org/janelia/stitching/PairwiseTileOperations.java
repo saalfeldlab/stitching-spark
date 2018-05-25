@@ -1,7 +1,7 @@
 package org.janelia.stitching;
 
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxRelativeSearchRadius;
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxWorldSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedRelativeSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedWorldSearchRadius;
 
 import net.imglib2.RealInterval;
 import net.imglib2.realtransform.AffineGet;
@@ -9,6 +9,7 @@ import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.InvertibleRealTransformSequence;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.Translation;
+import net.imglib2.realtransform.Translation2D;
 
 public class PairwiseTileOperations
 {
@@ -30,22 +31,17 @@ public class PairwiseTileOperations
 	 * @return
 	 * @throws PipelineExecutionException
 	 */
-	public static EstimatedTileBoxRelativeSearchRadius getCombinedSearchRadiusForMovingBox(
-			final TileSearchRadiusEstimator searchRadiusEstimator,
-			final SubdividedTileBox[] tileBoxes ) throws PipelineExecutionException
+	public static EstimatedRelativeSearchRadius getCombinedSearchRadiusForMovingBox(
+			final SubdividedTileBox[] tileBoxes,
+			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException
 	{
 		validateInputParametersLength( tileBoxes );
 
-		final EstimatedTileBoxWorldSearchRadius[] searchRadiusStats = new EstimatedTileBoxWorldSearchRadius[ tileBoxes.length ];
+		final EstimatedWorldSearchRadius[] searchRadiusStats = new EstimatedWorldSearchRadius[ tileBoxes.length ];
 		for ( int i = 0; i < tileBoxes.length; ++i )
-			searchRadiusStats[ i ] = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tileBoxes[ i ] );
+			searchRadiusStats[ i ] = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tileBoxes[ i ].getFullTile() );
 
-		final EstimatedTileBoxRelativeSearchRadius combinedSearchRadiusForMovingBox = searchRadiusEstimator.getCombinedCovariancesSearchRadius(
-				searchRadiusStats[ fixedIndex ],
-				searchRadiusStats[ movingIndex ]
-			);
-
-		return combinedSearchRadiusForMovingBox;
+		return searchRadiusEstimator.getCombinedCovariancesSearchRadius( searchRadiusStats );
 	}
 
 	/**
@@ -167,6 +163,7 @@ public class PairwiseTileOperations
 		final double[] transformedMovingTileBoxToBoundingBoxOffset = getTransformedMovingBoxToBoundingBoxOffset( tileBoxes, movingTileToFixedBoxTransform );
 
 		final InvertibleRealTransformSequence errorEllipseTransform = new InvertibleRealTransformSequence();
+		errorEllipseTransform.add( new Translation2D( tileBoxes[ 1 ].getPosition() ) ); // moving box -> moving tile
 		errorEllipseTransform.add( movingTileToFixedBoxTransform ); // moving tile -> fixed box
 		errorEllipseTransform.add( new Translation( transformedMovingTileBoxToBoundingBoxOffset ).inverse() ); // transformed box top-left -> bounding box top-left
 

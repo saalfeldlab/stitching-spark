@@ -9,8 +9,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxRelativeSearchRadius;
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxWorldSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedRelativeSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedWorldSearchRadius;
 import org.janelia.util.Conversions;
 
 import ij.ImageJ;
@@ -59,9 +59,9 @@ public class AffineStitchingVisualization
 
 	final double searchRadiusMultiplier = 3; // 3 * sigma
 
-	final int[] tileEstimationWindow = new int[] { 4, 4 }; // 3x size of a tile
+	final int[] tileEstimationWindow = new int[] { 3, 3 }; // 3x size of a tile
 
-	final double[] simulatedMovingBoundingBoxOffset = new double[] { 3, -15 };
+	final double[] simulatedMovingBoundingBoxOffset = new double[] { 5, -20 };
 //	final double[] simulatedMovingBoundingBoxOffset = new double[] { -31, -33 }; // center of the error ellipse
 //	final double[] simulatedMovingBoundingBoxOffset = new double[] { 12, -17 }; // without changing estimated affine transform of the moving tile
 
@@ -116,9 +116,9 @@ public class AffineStitchingVisualization
 				tilePairBoxes[ 1 ].get( tileBoxPairIndexes[ 1 ] )
 			);
 
-		final EstimatedTileBoxRelativeSearchRadius movingBoxRelativeSearchRadius = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox(
-				searchRadiusEstimator,
-				tileBoxPair.toArray()
+		final EstimatedRelativeSearchRadius movingBoxRelativeSearchRadius = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox(
+				tileBoxPair.toArray(),
+				searchRadiusEstimator
 			);
 
 		// write out offset stats
@@ -215,6 +215,9 @@ public class AffineStitchingVisualization
 			);
 
 		// draw combined error ellipse (moving+fixed)
+		movingBoxRelativeSearchRadius.combinedErrorEllipse.setErrorEllipseTransform(
+				new Translation2D( tileBoxPair.getB().getPosition() )
+			);
 		drawErrorEllipse(
 				movingBoxRelativeSearchRadius.combinedErrorEllipse,
 				estimatedTileTransforms[ 1 ],
@@ -462,32 +465,28 @@ public class AffineStitchingVisualization
 		return tiles.toArray( new TileInfo[ 0 ] );
 	}
 
-	private void writeOutOffsetStats( final EstimatedTileBoxRelativeSearchRadius combinedSearchRadius, final String logDirectory ) throws IOException
+	private void writeOutOffsetStats( final EstimatedRelativeSearchRadius combinedSearchRadius, final String logDirectory ) throws IOException
 	{
 		final String baseFileName = "offset-stats.csv";
 		final String[] fileNameSuffixes = new String[] { "fixed", "moving" };
-		final EstimatedTileBoxWorldSearchRadius[] searchRadiusStats = new EstimatedTileBoxWorldSearchRadius[] {
-				combinedSearchRadius.fixedAndMovingSearchRadiusStats.getA(),
-				combinedSearchRadius.fixedAndMovingSearchRadiusStats.getB()
-			};
-
 		final String[] axesStr = new String[] { "x", "y", "z" };
 		final String delimiter = " ";
 
 		for ( int i = 0; i < 2; ++i )
 		{
 			final String fileName = Paths.get( logDirectory, Utils.addFilenameSuffix( baseFileName, "_" + fileNameSuffixes[ i ] ) ).toString();
+			final EstimatedWorldSearchRadius searchRadius = combinedSearchRadius.worldSearchRadiusStats[ i ];
 			try ( final PrintWriter writer = new PrintWriter(fileName ) )
 			{
-				for ( int d = 0; d < searchRadiusStats[ i ].errorEllipse.numDimensions(); ++d )
+				for ( int d = 0; d < searchRadius.errorEllipse.numDimensions(); ++d )
 					writer.print( "stage_" + axesStr[ d ] + delimiter );
 
-				for ( int d = 0; d < searchRadiusStats[ i ].errorEllipse.numDimensions(); ++d )
+				for ( int d = 0; d < searchRadius.errorEllipse.numDimensions(); ++d )
 					writer.print( ( d == 0 ? "" : delimiter ) + "world_" + axesStr[ d ] );
 
 				writer.println();
 
-				for ( final Pair< RealPoint, RealPoint > stageAndWorld : searchRadiusStats[ i ].stageAndWorldCoordinates )
+				for ( final Pair< RealPoint, RealPoint > stageAndWorld : searchRadius.stageAndWorldCoordinates )
 				{
 					for ( int d = 0; d < stageAndWorld.getA().numDimensions(); ++d )
 						writer.print( String.format( "%.2f", stageAndWorld.getA().getDoublePosition( d ) ) + delimiter );
@@ -500,13 +499,12 @@ public class AffineStitchingVisualization
 			}
 		}
 
-
-
 		System.out.println();
 		for ( int i = 0; i < 2; ++i )
 		{
+			final EstimatedWorldSearchRadius searchRadius = combinedSearchRadius.worldSearchRadiusStats[ i ];
 			System.out.println( fileNameSuffixes[ i ] + " search radius offsets:" );
-			for ( final Pair< RealPoint, RealPoint > stageAndWorld : searchRadiusStats[ i ].stageAndWorldCoordinates )
+			for ( final Pair< RealPoint, RealPoint > stageAndWorld : searchRadius.stageAndWorldCoordinates )
 			{
 				final double[] offset = new double[ Math.max( stageAndWorld.getA().numDimensions(), stageAndWorld.getB().numDimensions() ) ];
 				for ( int d = 0; d < offset.length; ++d )

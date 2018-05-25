@@ -2,15 +2,13 @@ package org.janelia.stitching;
 
 import java.util.Arrays;
 import java.util.Set;
-import java.util.stream.IntStream;
 
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxWorldSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedWorldSearchRadius;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
-import net.imglib2.RealPoint;
 import net.imglib2.concatenate.Concatenable;
 import net.imglib2.concatenate.PreConcatenable;
 import net.imglib2.iterator.IntervalIterator;
@@ -152,18 +150,7 @@ public class TransformedTileOperations
 			final TileInfo tile,
 			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException
 	{
-		final SubdividedTileBox fullTileBox = SubdividedTileOperations.subdivideTiles(
-				new TileInfo[] { tile },
-				IntStream.generate( () -> 1 ).limit( tile.numDimensions() ).toArray()
-			).iterator().next();
-
-		final EstimatedTileBoxWorldSearchRadius estimatedSearchRadius = searchRadiusEstimator.estimateSearchRadiusWithinWindow(
-				fullTileBox,
-				searchRadiusEstimator.getEstimationWindow(
-						new RealPoint( SubdividedTileOperations.getTileBoxMiddlePointStagePosition( fullTileBox ) )
-					)
-			);
-
+		final EstimatedWorldSearchRadius estimatedSearchRadius = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tile );
 		final Set< TileInfo > neighboringTiles = estimatedSearchRadius.neighboringTiles;
 
 		final double[][] expectedLinearAffineMatrix = new double[ tile.numDimensions() ][ tile.numDimensions() + 1 ];

@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.janelia.dataaccess.DataProvider;
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedTileBoxRelativeSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedRelativeSearchRadius;
 import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
@@ -101,16 +101,27 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 				PairwiseTileOperations.getMovingTileToFixedTileTransform( estimatedTileTransforms ) // moving tile to fixed tile
 			};
 
+		// convert to fixed box space
 		final InvertibleRealTransform[] affinesToFixedBoxSpace = new InvertibleRealTransform[ tileBoxes.length ];
 		for ( int i = 0; i < tileBoxes.length; ++i )
+			affinesToFixedBoxSpace[ i ] = PairwiseTileOperations.getFixedBoxTransform( tileBoxes, affinesToFixedTileSpace[ i ] );
+
+		// get search radius for new moving box position in the fixed box space
+		final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingBox;
+		if ( searchRadiusEstimator != null )
 		{
-			// convert to fixed box space
-			affinesToFixedBoxSpace[ i ] = PairwiseTileOperations.getFixedBoxTransform(
-					tileBoxes,
-					affinesToFixedTileSpace[ i ]
+			combinedSearchRadiusForMovingBox = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox( tileBoxes, searchRadiusEstimator );
+
+			combinedSearchRadiusForMovingBox.combinedErrorEllipse.setErrorEllipseTransform(
+					PairwiseTileOperations.getErrorEllipseTransform( tileBoxes, estimatedTileTransforms )
 				);
 		}
+		else
+		{
+			combinedSearchRadiusForMovingBox = null;
+		}
 
+		// TODO: use smaller ROI instead of the entire subdivided box?
 		final ImagePlus[] roiImps = new ImagePlus[ tileBoxes.length ];
 		final Interval[] transformedRoiIntervals = new Interval[ tileBoxes.length ];
 		for ( int i = 0; i < tileBoxes.length; ++i )
@@ -123,30 +134,9 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			roiImps[ i ] = roiAndBoundingBox.getA();
 			transformedRoiIntervals[ i ] = roiAndBoundingBox.getB();
 		}
-
 		// ROIs are rendered in the fixed box space, validate that the fixed box has zero-min
 		if ( !Views.isZeroMin( transformedRoiIntervals[ 0 ] ) )
 			throw new PipelineExecutionException( "fixed box is expected to be zero-min" );
-
-		// get search radius for new moving box position in the fixed box space
-		final EstimatedTileBoxRelativeSearchRadius combinedSearchRadiusForMovingBox;
-		if ( searchRadiusEstimator != null )
-		{
-			combinedSearchRadiusForMovingBox = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox(
-					searchRadiusEstimator,
-					tileBoxes
-				);
-
-			combinedSearchRadiusForMovingBox.combinedErrorEllipse.setErrorEllipseTransform(
-					PairwiseTileOperations.getErrorEllipseTransform( tileBoxes, estimatedTileTransforms )
-				);
-		}
-		else
-		{
-			combinedSearchRadiusForMovingBox = null;
-		}
-
-		// TODO: use smaller ROI instead of the entire subdivided box?
 
 		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise(
 				roiImps,

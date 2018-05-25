@@ -9,44 +9,17 @@ import net.imglib2.RealPositionable;
  * @author Igor Pisarev
  */
 
-public class SubdividedTileBox implements RealInterval {
-
-	public static class Tag
-	{
-		private final int value;
-
-		public Tag( final int value )
-		{
-			this.value = value;
-		}
-
-		@Override
-		public boolean equals( final Object other )
-		{
-			if ( other instanceof Tag )
-				return value == ( ( Tag ) other ).value;
-			else
-				return super.equals( other );
-		}
-
-		@Override
-		public int hashCode()
-		{
-			return Integer.hashCode( value );
-		}
-	}
+public class SubdividedTileBox implements RealInterval
+{
+	private final TileInfo fullTile;
 
 	private Integer index;
 	private double[] position;
 	private long[] size;
 
-	private final TileInfo fullTile;
-	private final Tag tag;
-
-	public SubdividedTileBox( final TileInfo fullTile, final Tag tag )
+	public SubdividedTileBox( final TileInfo fullTile )
 	{
 		this.fullTile = fullTile;
-		this.tag = tag;
 
 		position = new double[ fullTile.numDimensions() ];
 		size = new long[ fullTile.numDimensions() ];
@@ -109,11 +82,6 @@ public class SubdividedTileBox implements RealInterval {
 	public TileInfo getFullTile()
 	{
 		return fullTile;
-	}
-
-	public Tag getTag()
-	{
-		return tag;
 	}
 
 	@Override

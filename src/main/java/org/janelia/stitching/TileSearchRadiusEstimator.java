@@ -2,10 +2,8 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import org.apache.commons.math3.linear.MatrixUtils;
@@ -15,7 +13,6 @@ import org.apache.commons.math3.stat.correlation.Covariance;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.KDTree;
-import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.concatenate.Concatenable;
@@ -25,77 +22,47 @@ import net.imglib2.neighborsearch.KNearestNeighborSearchOnKDTree;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineSet;
 import net.imglib2.realtransform.RealTransform;
-import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 
 public class TileSearchRadiusEstimator implements Serializable
 {
-	public static class EstimatedTileBoxWorldSearchRadius
+	public static class EstimatedWorldSearchRadius
 	{
 		public final ErrorEllipse errorEllipse;
-		public final SubdividedTileBox tileBox;
+		public final TileInfo tile;
 		public final Set< TileInfo > neighboringTiles;
 		public final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates;
 
-		public EstimatedTileBoxWorldSearchRadius(
+		public EstimatedWorldSearchRadius(
 				final ErrorEllipse errorEllipse,
-				final SubdividedTileBox tileBox,
+				final TileInfo tile,
 				final Set< TileInfo > neighboringTiles,
 				final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates )
 		{
 			this.errorEllipse = errorEllipse;
-			this.tileBox = tileBox;
+			this.tile = tile;
 			this.neighboringTiles = neighboringTiles;
 			this.stageAndWorldCoordinates = stageAndWorldCoordinates;
 		}
 	}
 
-	public static class EstimatedTileBoxRelativeSearchRadius
+	public static class EstimatedRelativeSearchRadius
 	{
 		public final ErrorEllipse combinedErrorEllipse;
-		public final Pair< EstimatedTileBoxWorldSearchRadius, EstimatedTileBoxWorldSearchRadius > fixedAndMovingSearchRadiusStats;
+		public final EstimatedWorldSearchRadius[] worldSearchRadiusStats;
 
-		public EstimatedTileBoxRelativeSearchRadius(
+		public EstimatedRelativeSearchRadius(
 				final ErrorEllipse combinedErrorEllipse,
-				final Pair< EstimatedTileBoxWorldSearchRadius, EstimatedTileBoxWorldSearchRadius > fixedAndMovingSearchRadiusStats )
+				final EstimatedWorldSearchRadius[] worldSearchRadiusStats )
 		{
 			this.combinedErrorEllipse = combinedErrorEllipse;
-			this.fixedAndMovingSearchRadiusStats = fixedAndMovingSearchRadiusStats;
+			this.worldSearchRadiusStats = worldSearchRadiusStats;
 
 			for ( int d = 0; d < combinedErrorEllipse.numDimensions(); ++d )
-				if ( !Util.isApproxEqual( combinedErrorEllipse.getEllipseCenter()[ d ], fixedAndMovingSearchRadiusStats.getB().tileBox.getPosition( d ), 1e-10 ) )
-					throw new IllegalArgumentException( "error ellipse is expected to centered at the moving tile box position" );
-		}
-
-		public double[] getStageOffsetBetweenTileBoxes()
-		{
-			final double[] fixedStagePosition  = SubdividedTileOperations.getTileBoxMiddlePointStagePosition( fixedAndMovingSearchRadiusStats.getA().tileBox );
-			final double[] movingStagePosition = SubdividedTileOperations.getTileBoxMiddlePointStagePosition( fixedAndMovingSearchRadiusStats.getB().tileBox );
-
-			final double[] stageOffsetBetweenTileBoxes = new double[ combinedErrorEllipse.numDimensions() ];
-			for ( int d = 0; d < stageOffsetBetweenTileBoxes.length; ++d )
-				stageOffsetBetweenTileBoxes[ d ] = movingStagePosition[ d ] - fixedStagePosition[ d ];
-
-			return stageOffsetBetweenTileBoxes;
-		}
-
-		public double[] getExpectedOffsetBetweenTileBoxes()
-		{
-			final double[] stageOffsetBetweenTileBoxes = getStageOffsetBetweenTileBoxes();
-			final double[] expectedOffsetBetweenTileBoxes = new double[ combinedErrorEllipse.numDimensions() ];
-			for ( int d = 0; d < expectedOffsetBetweenTileBoxes.length; ++d )
-				expectedOffsetBetweenTileBoxes[ d ] = stageOffsetBetweenTileBoxes[ d ] + combinedErrorEllipse.getOffsetsMeanValues()[ d ];
-			return expectedOffsetBetweenTileBoxes;
-		}
-
-		public Set< TileInfo > getCombinedNeighboringTiles()
-		{
-			final Set< TileInfo > combinedNeighboringTilesSet = new HashSet<>();
-			combinedNeighboringTilesSet.addAll( Optional.ofNullable( fixedAndMovingSearchRadiusStats.getA().neighboringTiles ).orElse( Collections.emptySet() ) );
-			combinedNeighboringTilesSet.addAll( Optional.ofNullable( fixedAndMovingSearchRadiusStats.getB().neighboringTiles ).orElse( Collections.emptySet() ) );
-			return combinedNeighboringTilesSet;
+				if ( !Util.isApproxEqual( combinedErrorEllipse.getEllipseCenter()[ d ], 0, 1e-10 ) )
+					throw new IllegalArgumentException( "A combined error ellipse is expected to be defined in relative coordinate space and be zero-centered" );
 		}
 	}
 
@@ -140,22 +107,22 @@ public class TileSearchRadiusEstimator implements Serializable
 		kdTree = new KDTree<>( tilesWithStitchedTransform, stageSubsetPositions );
 	}
 
-	public EstimatedTileBoxWorldSearchRadius estimateSearchRadiusWithinWindow( final SubdividedTileBox tileBox ) throws PipelineExecutionException
+	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final TileInfo tile ) throws PipelineExecutionException
 	{
-		return estimateSearchRadiusWithinWindow( tileBox, getEstimationWindow( tileBox ) );
+		return estimateSearchRadiusWithinWindow( tile, getEstimationWindow( tile ) );
 	}
 
-	public EstimatedTileBoxWorldSearchRadius estimateSearchRadiusWithinWindow( final SubdividedTileBox tileBox, final Interval estimationWindow ) throws PipelineExecutionException
+	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final TileInfo tile, final Interval estimationWindow ) throws PipelineExecutionException
 	{
-		return estimateSearchRadius( tileBox, findTilesWithinWindow( estimationWindow ) );
+		return estimateSearchRadius( tile, findTilesWithinWindow( estimationWindow ) );
 	}
 
-	public EstimatedTileBoxWorldSearchRadius estimateSearchRadiusKNearestNeighbors( final SubdividedTileBox tileBox, final int numNearestNeighbors ) throws PipelineExecutionException
+	public EstimatedWorldSearchRadius estimateSearchRadiusKNearestNeighbors( final TileInfo tile, final int numNearestNeighbors ) throws PipelineExecutionException
 	{
 		return estimateSearchRadius(
-				tileBox,
+				tile,
 				findNearestTiles(
-						new RealPoint( SubdividedTileOperations.getTileBoxMiddlePointStagePosition( tileBox ) ),
+						new RealPoint( tile.getStagePosition() ),
 						numNearestNeighbors
 					)
 			);
@@ -178,20 +145,20 @@ public class TileSearchRadiusEstimator implements Serializable
 		return neighboringTiles;
 	}
 
-	private EstimatedTileBoxWorldSearchRadius estimateSearchRadius( final SubdividedTileBox tileBox, final Set< TileInfo > neighboringTiles ) throws PipelineExecutionException
+	private EstimatedWorldSearchRadius estimateSearchRadius( final TileInfo tile, final Set< TileInfo > neighboringTiles ) throws PipelineExecutionException
 	{
 		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = getStageAndWorldCoordinates( neighboringTiles );
 
 		final List< double[] > dimOffsets = new ArrayList<>();
 		for ( final Pair< RealPoint, RealPoint > stageAndWorld : stageAndWorldCoordinates )
 		{
-			final double[] dimOffset = new double[ tileBox.numDimensions() ];
+			final double[] dimOffset = new double[ tile.numDimensions() ];
 			for ( int d = 0; d < dimOffset.length; ++d )
 				dimOffset[ d ] = stageAndWorld.getB().getDoublePosition( d ) - stageAndWorld.getA().getDoublePosition( d );
 			dimOffsets.add( dimOffset );
 		}
 
-		final double[] dimOffsetsMeanValues = new double[ tileBox.numDimensions() ];
+		final double[] dimOffsetsMeanValues = new double[ tile.numDimensions() ];
 		for ( int d = 0; d < dimOffsetsMeanValues.length; ++d )
 		{
 			for ( final double[] dimOffset : dimOffsets )
@@ -203,7 +170,7 @@ public class TileSearchRadiusEstimator implements Serializable
 		final RealMatrix dimOffsetsCovarianceMatrix = new Covariance( dimOffsetsMatrix, false ).getCovarianceMatrix();
 
 		final ErrorEllipse searchRadius = new ErrorEllipse( searchRadiusMultiplier, dimOffsetsMeanValues, dimOffsetsCovarianceMatrix.getData() );
-		return new EstimatedTileBoxWorldSearchRadius( searchRadius, tileBox, neighboringTiles, stageAndWorldCoordinates );
+		return new EstimatedWorldSearchRadius( searchRadius, tile, neighboringTiles, stageAndWorldCoordinates );
 	}
 
 	static double[] getEstimationWindowSize( final long[] tileSize, final int[] statsWindowTileSize )
@@ -241,40 +208,32 @@ public class TileSearchRadiusEstimator implements Serializable
 	 * This function combines these confidence intervals of the two tiles to just one interval that represents
 	 * variability of the new offset between them vs. stage offset between them.
 	 *
-	 * @param fixedSearchRadius
-	 * @param movingSearchRadius
+	 * @param worldSearchRadiusStats
 	 * @return
 	 * @throws PipelineExecutionException
 	 */
-	public EstimatedTileBoxRelativeSearchRadius getCombinedCovariancesSearchRadius(
-			final EstimatedTileBoxWorldSearchRadius fixedSearchRadius,
-			final EstimatedTileBoxWorldSearchRadius movingSearchRadius ) throws PipelineExecutionException
+	public EstimatedRelativeSearchRadius getCombinedCovariancesSearchRadius( final EstimatedWorldSearchRadius[] worldSearchRadiusStats ) throws PipelineExecutionException
 	{
-		final int dim = Math.max( fixedSearchRadius.errorEllipse.numDimensions(), movingSearchRadius.errorEllipse.numDimensions() );
+		final int dim = worldSearchRadiusStats[ 0 ].errorEllipse.numDimensions();
 		final double[][] combinedOffsetsCovarianceMatrix = new double[ dim ][ dim ];
-		for ( int dRow = 0; dRow < dim; ++dRow )
-			for ( int dCol = 0; dCol < dim; ++dCol )
-				combinedOffsetsCovarianceMatrix[ dRow ][ dCol ] = fixedSearchRadius.errorEllipse.getOffsetsCovarianceMatrix()[ dRow ][ dCol ] + movingSearchRadius.errorEllipse.getOffsetsCovarianceMatrix()[ dRow ][ dCol ];
+		for ( final EstimatedWorldSearchRadius worldSearchRadius : worldSearchRadiusStats )
+			for ( int dRow = 0; dRow < dim; ++dRow )
+				for ( int dCol = 0; dCol < dim; ++dCol )
+					combinedOffsetsCovarianceMatrix[ dRow ][ dCol ] += worldSearchRadius.errorEllipse.getOffsetsCovarianceMatrix()[ dRow ][ dCol ];
 
-		return new EstimatedTileBoxRelativeSearchRadius(
+		return new EstimatedRelativeSearchRadius(
 				new ErrorEllipse(
 						searchRadiusMultiplier,
-						movingSearchRadius.tileBox.getPosition(),
+						new double[ dim ], // zero-centered
 						combinedOffsetsCovarianceMatrix
 					),
-				new ValuePair<>( fixedSearchRadius, movingSearchRadius )
+				worldSearchRadiusStats
 			);
 	}
 
-	Interval getEstimationWindow( final SubdividedTileBox tileBox )
+	Interval getEstimationWindow( final TileInfo tile )
 	{
-		final Interval tileBoxInterval = IntervalsHelper.roundRealInterval( tileBox );
-		final RealInterval fullTileStageInterval = tileBox.getFullTile().getStageInterval();
-
-		final double[] adjustedStageWindowPosition = new double[ tileBox.numDimensions() ];
-		for ( int d = 0; d < tileBox.numDimensions(); ++d )
-			adjustedStageWindowPosition[ d ] = tileBoxInterval.min( d ) == 0 ? fullTileStageInterval.realMin( d ) : fullTileStageInterval.realMax( d );
-		return getEstimationWindow( new RealPoint( adjustedStageWindowPosition ) );
+		return getEstimationWindow( new RealPoint( tile.getStagePosition() ) );
 	}
 
 	Interval getEstimationWindow( final RealPoint point )

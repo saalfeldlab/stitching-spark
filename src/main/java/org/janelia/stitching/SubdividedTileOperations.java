@@ -45,7 +45,7 @@ public class SubdividedTileOperations
 			for ( int i = 0; i < splitTileIntervals.size(); ++i )
 			{
 				final Interval interval = splitTileIntervals.get( i );
-				final SubdividedTileBox tileBox = new SubdividedTileBox( tile, new SubdividedTileBox.Tag( i ) );
+				final SubdividedTileBox tileBox = new SubdividedTileBox( tile );
 				tileBox.setPosition( Intervals.minAsDoubleArray( interval ) );
 				tileBox.setSize( Intervals.dimensionsAsLongArray( interval ) );
 				tileBox.setIndex( tileBoxes.size() );
