@@ -64,17 +64,33 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 
 	public void run( final OptimizerMode mode ) throws PipelineExecutionException, IOException
 	{
-		broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator() );
-		final TileInfo[] tiles = getTilesWithEstimatedTransformation();
+		final DataProvider dataProvider = job.getDataProvider();
+		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
+		final String iterationDirname = "iter" + iteration;
 
-		final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
-		Arrays.fill( tileBoxesGridSize, 2 );
-		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, tileBoxesGridSize );
-		final List< SubdividedTileBoxPair > overlappingBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
-		preparePairwiseShifts( overlappingBoxes, iteration );
+		try ( final OutputStream logOut = dataProvider.getOutputStream( URI.create( PathResolver.get( basePath, iterationDirname, "pairwise-matcher.txt" ) ) ) )
+		{
+			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
+			{
+				broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator() );
+				final TileInfo[] tiles = getTilesWithEstimatedTransformation();
 
-		final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );
-		optimizer.optimize( iteration, mode );
+				final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
+				Arrays.fill( tileBoxesGridSize, 2 );
+				final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, tileBoxesGridSize );
+				final List< SubdividedTileBoxPair > overlappingBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
+				preparePairwiseShifts( overlappingBoxes, iteration, logWriter );
+			}
+		}
+
+		try ( final OutputStream logOut = dataProvider.getOutputStream( URI.create( PathResolver.get( basePath, iterationDirname, "optimizer.txt" ) ) ) )
+		{
+			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
+			{
+				final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );
+				optimizer.optimize( iteration, mode, logWriter );
+			}
+		}
 	}
 
 	/**
@@ -148,7 +164,8 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	 */
 	private void preparePairwiseShifts(
 			final List< SubdividedTileBoxPair > overlappingBoxes,
-			final int iteration ) throws PipelineExecutionException, IOException
+			final int iteration,
+			final PrintWriter logWriter ) throws PipelineExecutionException, IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
@@ -176,7 +193,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		else
 		{
 			// Initiate the computation
-			final List< StitchingResult > stitchingResults = computePairwiseShifts( pendingOverlappingBoxes );
+			final List< StitchingResult > stitchingResults = computePairwiseShifts( pendingOverlappingBoxes, logWriter );
 
 			// merge results with preloaded pairwise shifts
 			for ( final StitchingResult result : stitchingResults )
@@ -413,7 +430,8 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	 * @throws IOException
 	 */
 	private < T extends NativeType< T > & RealType< T > > List< StitchingResult > computePairwiseShifts(
-			final List< SubdividedTileBoxPair > overlappingBoxes ) throws PipelineExecutionException, IOException
+			final List< SubdividedTileBoxPair > overlappingBoxes,
+			final PrintWriter logWriter ) throws PipelineExecutionException, IOException
 	{
 		System.out.println( "Processing " + overlappingBoxes.size() + " pairs..." );
 
@@ -442,15 +460,18 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			if ( shift != null && shift.getIsValidOverlap() )
 				++validPairs;
 		}
-		System.out.println();
-		System.out.println( "======== Pairwise stitching completed ========" );
-		System.out.println( "Total pairs: " + stitchingResults.size() );
-		System.out.println( "Valid pairs: " + validPairs );
-		System.out.println( "Invalid pairs:" );
-		System.out.println( "    not enough neighbors within estimation window: " + notEnoughNeighborsWithinConfidenceIntervalPairsCount.value() );
-		System.out.println( "    <= 1px overlap within search radius: " + noOverlapWithinConfidenceIntervalPairsCount.value() );
-		System.out.println( "    no peaks found within search radius: " + noPeaksWithinConfidenceIntervalPairsCount.value() );
-		System.out.println();
+
+		if ( logWriter != null )
+		{
+			logWriter.println();
+			logWriter.println( "======== Pairwise stitching completed ========" );
+			logWriter.println( "Total pairs: " + stitchingResults.size() );
+			logWriter.println( "Valid pairs: " + validPairs + ", invalid pairs: " + ( stitchingResults.size() - validPairs ) );
+			logWriter.println( "    not enough neighbors within estimation window: " + notEnoughNeighborsWithinConfidenceIntervalPairsCount.value() );
+			logWriter.println( "    <= 1px overlap within search radius: " + noOverlapWithinConfidenceIntervalPairsCount.value() );
+			logWriter.println( "    no peaks found within search radius: " + noPeaksWithinConfidenceIntervalPairsCount.value() );
+			logWriter.println();
+		}
 
 		return stitchingResults;
 	}

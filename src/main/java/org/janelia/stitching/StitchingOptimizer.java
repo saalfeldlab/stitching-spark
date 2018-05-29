@@ -1,7 +1,6 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.URI;
@@ -151,17 +150,12 @@ public class StitchingOptimizer implements Serializable
 		this.sparkContext = sparkContext;
 	}
 
-	public void optimizeTranslation( final int iteration ) throws IOException
-	{
-		optimize( iteration, OptimizerMode.Translation );
-	}
-
-	public void optimizeAffine( final int iteration ) throws IOException
-	{
-		optimize( iteration, OptimizerMode.Affine );
-	}
-
 	void optimize( final int iteration, final OptimizerMode mode ) throws IOException
+	{
+		optimize( iteration, mode, null );
+	}
+
+	void optimize( final int iteration, final OptimizerMode mode, final PrintWriter logWriter ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 
@@ -172,62 +166,59 @@ public class StitchingOptimizer implements Serializable
 		final List< SerializablePairWiseStitchingResult > tileBoxShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 		final double maxAllowedError = getMaxAllowedError( iteration );
 
-		try ( final OutputStream logOut = dataProvider.getOutputStream( URI.create( PathResolver.get( basePath, iterationDirname, "optimizer.txt" ) ) ) )
+		if ( logWriter != null )
 		{
-			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
-			{
-				logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
-				logWriter.println( "Stitching mode: " + mode );
-				logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
-
-				final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter, mode );
-
-				// Update tile transforms
-				for ( int channel = 0; channel < job.getChannels(); channel++ )
-				{
-					final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( job.getTiles( channel ) );
-
-					final List< TileInfo > newTiles = new ArrayList<>();
-					for ( final ImagePlusTimePoint optimizedTile : bestOptimization.optimized )
-					{
-						final Affine3D< ? > affineModel = ( Affine3D< ? > ) optimizedTile.getModel();
-						final double[][] matrix = new double[ 3 ][ 4 ];
-						affineModel.toMatrix( matrix );
-
-						final AffineTransform3D tileTransform = new AffineTransform3D();
-						tileTransform.set( matrix );
-
-						if ( tilesMap.containsKey( optimizedTile.getImpId() ) )
-						{
-							final TileInfo newTile = tilesMap.get( optimizedTile.getImpId() ).clone();
-							newTile.setTransform( tileTransform );
-							newTiles.add( newTile );
-						}
-						else
-						{
-							throw new RuntimeException("tile is not in input set");
-						}
-					}
-
-					// sort the tiles by their index
-					final TileInfo[] tilesToSave = Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
-
-					// save final tiles configuration
-					TileInfoJSONProvider.saveTilesConfiguration(
-							tilesToSave,
-							dataProvider.getJsonWriter( URI.create( PathResolver.get(
-									basePath,
-									iterationDirname,
-									Utils.addFilenameSuffix(
-											PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( channel ) ),
-											"-stitched" )
-								) ) )
-						);
-				}
-
-//				saveFinalPairwiseShifts();
-			}
+			logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
+			logWriter.println( "Stitching mode: " + mode );
+			logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 		}
+
+		final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter, mode );
+
+		// Update tile transforms
+		for ( int channel = 0; channel < job.getChannels(); channel++ )
+		{
+			final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( job.getTiles( channel ) );
+
+			final List< TileInfo > newTiles = new ArrayList<>();
+			for ( final ImagePlusTimePoint optimizedTile : bestOptimization.optimized )
+			{
+				final Affine3D< ? > affineModel = ( Affine3D< ? > ) optimizedTile.getModel();
+				final double[][] matrix = new double[ 3 ][ 4 ];
+				affineModel.toMatrix( matrix );
+
+				final AffineTransform3D tileTransform = new AffineTransform3D();
+				tileTransform.set( matrix );
+
+				if ( tilesMap.containsKey( optimizedTile.getImpId() ) )
+				{
+					final TileInfo newTile = tilesMap.get( optimizedTile.getImpId() ).clone();
+					newTile.setTransform( tileTransform );
+					newTiles.add( newTile );
+				}
+				else
+				{
+					throw new RuntimeException("tile is not in input set");
+				}
+			}
+
+			// sort the tiles by their index
+			final TileInfo[] tilesToSave = Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
+
+			// save final tiles configuration
+			TileInfoJSONProvider.saveTilesConfiguration(
+					tilesToSave,
+					dataProvider.getJsonWriter( URI.create( PathResolver.get(
+							basePath,
+							iterationDirname,
+							Utils.addFilenameSuffix(
+									PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( channel ) ),
+									"-stitched" )
+						) ) )
+				);
+		}
+
+//		saveFinalPairwiseShifts();
 	}
 
 	/*private void saveFinalPairwiseShifts()
