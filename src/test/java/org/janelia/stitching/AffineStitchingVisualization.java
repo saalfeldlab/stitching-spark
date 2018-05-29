@@ -223,7 +223,7 @@ public class AffineStitchingVisualization
 
 		// draw combined error ellipse (moving+fixed)
 		movingBoxRelativeSearchRadius.combinedErrorEllipse.setErrorEllipseTransform(
-				new Translation2D( tileBoxPair.getB().getPosition() )
+				new Translation2D( Intervals.minAsDoubleArray( tileBoxPair.getB() ) )
 			);
 		drawErrorEllipse(
 				movingBoxRelativeSearchRadius.combinedErrorEllipse,

@@ -214,8 +214,10 @@ public class TransformedTileOperations
 	 */
 	public static Interval transformTileBox( final SubdividedTileBox tileBox, final RealTransform originalTileTransform )
 	{
-		final double[] transformedTileBoxMiddlePoint = transformTileBoxMiddlePoint( tileBox, originalTileTransform );
-		final RealInterval transformedTileBoxInterval = SubdividedTileOperations.getTileBoxInterval( transformedTileBoxMiddlePoint, tileBox.getSize() );
+		final RealInterval transformedTileBoxInterval = SubdividedTileOperations.getTileBoxInterval(
+				transformTileBoxMiddlePoint( tileBox, originalTileTransform ),
+				Intervals.dimensionsAsLongArray( tileBox )
+			);
 		return TileOperations.roundRealInterval( transformedTileBoxInterval );
 	}
 

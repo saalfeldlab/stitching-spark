@@ -44,10 +44,7 @@ public class SubdividedTileOperations
 
 			for ( int i = 0; i < splitTileIntervals.size(); ++i )
 			{
-				final Interval interval = splitTileIntervals.get( i );
-				final SubdividedTileBox tileBox = new SubdividedTileBox( tile );
-				tileBox.setPosition( Intervals.minAsDoubleArray( interval ) );
-				tileBox.setSize( Intervals.dimensionsAsLongArray( interval ) );
+				final SubdividedTileBox tileBox = new SubdividedTileBox( tile, splitTileIntervals.get( i ) );
 				tileBox.setIndex( tileBoxes.size() );
 				tileBoxes.add( tileBox );
 			}
@@ -97,7 +94,7 @@ public class SubdividedTileOperations
 			{
 				final long[] minTileBoxSize = new long[ Math.max( tileBoxPair.getA().numDimensions(), tileBoxPair.getB().numDimensions() ) ];
 				for ( int d = 0; d < minTileBoxSize.length; ++d )
-					minTileBoxSize[ d ] = Math.min( tileBoxPair.getA().getSize( d ), tileBoxPair.getB().getSize( d ) );
+					minTileBoxSize[ d ] = Math.min( tileBoxPair.getA().dimension( d ), tileBoxPair.getB().dimension( d ) );
 
 				if ( !adjacentOnly || FilterAdjacentShifts.isAdjacent( new FinalDimensions( minTileBoxSize ), tileBoxesOverlap ) )
 					return true;
@@ -275,7 +272,7 @@ public class SubdividedTileOperations
 	{
 		final double[] middlePoint = new double[ tileBox.numDimensions() ];
 		for ( int d = 0; d < middlePoint.length; ++d )
-			middlePoint[ d ] = tileBox.getPosition( d ) + 0.5 * tileBox.getSize( d );
+			middlePoint[ d ] = ( tileBox.min( d ) + tileBox.max( d ) ) * 0.5;
 		return middlePoint;
 	}
 
@@ -309,7 +306,7 @@ public class SubdividedTileOperations
 		final double[] fullTileOffset = new double[ tileBoxOffset.length ];
 		final SubdividedTileBox fixedTileBox = tileBoxPair.getA(), movingTileBox = tileBoxPair.getB();
 		for ( int d = 0; d < fullTileOffset.length; ++d )
-			fullTileOffset[ d ] = tileBoxOffset[ d ] + fixedTileBox.getPosition( d ) - movingTileBox.getPosition( d );
+			fullTileOffset[ d ] = tileBoxOffset[ d ] + fixedTileBox.min( d ) - movingTileBox.min( d );
 		return fullTileOffset;
 	}
 }

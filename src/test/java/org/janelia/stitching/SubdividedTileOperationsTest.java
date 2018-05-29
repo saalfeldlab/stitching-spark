@@ -88,7 +88,7 @@ public class SubdividedTileOperationsTest
 			final Pair< Interval, Interval > transformedInGlobalSpace = TransformedTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), movingTileBox ) );
 			final Interval transformedSecondTileBox = SubdividedTileOperations.globalToFixedBoxSpace( transformedInGlobalSpace ).getB();
 			Assert.assertArrayEquals( new long[] { 40, 10, -10 }, Intervals.minAsLongArray( transformedSecondTileBox ) );
-			Assert.assertArrayEquals( movingTileBox.getSize(), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
+			Assert.assertArrayEquals( Intervals.dimensionsAsLongArray( movingTileBox ), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
 		}
 
 		// test right-bottom-back tile box of the second tile
@@ -98,7 +98,7 @@ public class SubdividedTileOperationsTest
 			final Pair< Interval, Interval > transformedInGlobalSpace = TransformedTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), movingTileBox ) );
 			final Interval transformedSecondTileBox = SubdividedTileOperations.globalToFixedBoxSpace( transformedInGlobalSpace ).getB();
 			Assert.assertArrayEquals( new long[] { 85, 50, 25 }, Intervals.minAsLongArray( transformedSecondTileBox ) );
-			Assert.assertArrayEquals( movingTileBox.getSize(), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
+			Assert.assertArrayEquals( Intervals.dimensionsAsLongArray( movingTileBox ), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
 		}
 	}
 
@@ -183,7 +183,7 @@ public class SubdividedTileOperationsTest
 				if ( tileBox.getFullTile().getIndex().intValue() == 0 )
 				{
 					// top-right box of the fixed tile
-					if ( Math.round( tileBox.getPosition( 0 ) ) == 10 && Math.round( tileBox.getPosition( 1 ) ) == 0 )
+					if ( Math.round( tileBox.min( 0 ) ) == 10 && Math.round( tileBox.min( 1 ) ) == 0 )
 					{
 						if ( fixedTileBox != null )
 							fail();
@@ -193,7 +193,7 @@ public class SubdividedTileOperationsTest
 				else if ( tileBox.getFullTile().getIndex().intValue() == 1 )
 				{
 					// bottom-right box of the moving tile
-					if ( Math.round( tileBox.getPosition( 0 ) ) == 10 && Math.round( tileBox.getPosition( 1 ) ) == 10 )
+					if ( Math.round( tileBox.min( 0 ) ) == 10 && Math.round( tileBox.min( 1 ) ) == 10 )
 					{
 						if ( movingTileBox != null )
 							fail();

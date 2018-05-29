@@ -1,7 +1,7 @@
 package org.janelia.stitching;
 
-import net.imglib2.RealInterval;
-import net.imglib2.RealPositionable;
+import net.imglib2.AbstractInterval;
+import net.imglib2.Interval;
 
 /**
  * Represents a box within a tile as a result of subdivision.
@@ -9,64 +9,30 @@ import net.imglib2.RealPositionable;
  * @author Igor Pisarev
  */
 
-public class SubdividedTileBox implements RealInterval
+public class SubdividedTileBox extends AbstractInterval
 {
 	private final TileInfo fullTile;
-
 	private Integer index;
-	private double[] position;
-	private long[] size;
 
 	public SubdividedTileBox( final TileInfo fullTile )
 	{
+		super( fullTile.numDimensions() );
 		this.fullTile = fullTile;
-
-		position = new double[ fullTile.numDimensions() ];
-		size = new long[ fullTile.numDimensions() ];
 	}
 
-	public double getPosition( final int d )
+	public SubdividedTileBox( final TileInfo fullTile, final Interval interval )
 	{
-		return position[ d ];
+		super( interval );
+		this.fullTile = fullTile;
 	}
 
-	public void setPosition( final int d, final double val )
+	public void set( final int[] min, final int[] max )
 	{
-		position[ d ] = val;
-	}
-
-	public double[] getPosition()
-	{
-		return position;
-	}
-
-	public void setPosition( final double[] position )
-	{
-		this.position = position;
-	}
-
-	public long getSize( final int d )
-	{
-		return size[ d ];
-	}
-
-	public void setSize( final int d, final long val )
-	{
-		assert val >= 0;
-		size[ d ] = val;
-	}
-
-	public long[] getSize()
-	{
-		return size;
-	}
-
-	public void setSize( final long[] size )
-	{
-		this.size = size;
-		if ( size != null )
-			for ( final long s : size )
-				assert s >= 0;
+		for ( int d = 0; d < numDimensions(); ++d )
+		{
+			this.min[ d ] = min[ d ];
+			this.max[ d ] = max[ d ];
+		}
 	}
 
 	public Integer getIndex()
@@ -82,51 +48,5 @@ public class SubdividedTileBox implements RealInterval
 	public TileInfo getFullTile()
 	{
 		return fullTile;
-	}
-
-	@Override
-	public int numDimensions()
-	{
-		return fullTile.numDimensions();
-	}
-
-	@Override
-	public double realMin( final int d )
-	{
-		return position[ d ];
-	}
-
-	@Override
-	public void realMin( final double[] min )
-	{
-		for ( int d = 0; d < min.length; ++d )
-			min[ d ] = realMin( d );
-	}
-
-	@Override
-	public void realMin( final RealPositionable min )
-	{
-		for ( int d = 0; d < min.numDimensions(); ++d )
-			min.setPosition( realMin( d ), d );
-	}
-
-	@Override
-	public double realMax( final int d )
-	{
-		return position[ d ] + size[ d ] - 1;
-	}
-
-	@Override
-	public void realMax( final double[] max )
-	{
-		for ( int d = 0; d < max.length; ++d )
-			max[ d ] = realMax( d );
-	}
-
-	@Override
-	public void realMax( final RealPositionable max )
-	{
-		for ( int d = 0; d < max.numDimensions(); ++d )
-			max.setPosition( realMax( d ), d );
 	}
 }
