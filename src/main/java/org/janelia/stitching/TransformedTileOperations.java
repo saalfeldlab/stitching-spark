@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Set;
 
 import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedWorldSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.NotEnoughNeighboringTilesException;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
@@ -105,10 +106,11 @@ public class TransformedTileOperations
 	 * @param searchRadiusEstimator
 	 * @return
 	 * @throws PipelineExecutionException
+	 * @throws NotEnoughNeighboringTilesException
 	 */
 	public static AffineGet estimateAffineTransformation(
 			final TileInfo tile,
-			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException
+			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
 		return estimateAffineTransformation(
 				estimateLinearAndTranslationAffineComponents( tile, searchRadiusEstimator )
@@ -145,10 +147,11 @@ public class TransformedTileOperations
 	 * @param searchRadiusEstimator
 	 * @return
 	 * @throws PipelineExecutionException
+	 * @throws NotEnoughNeighboringTilesException
 	 */
 	public static Pair< AffineGet, TranslationGet > estimateLinearAndTranslationAffineComponents(
 			final TileInfo tile,
-			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException
+			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
 		final EstimatedWorldSearchRadius estimatedSearchRadius = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tile );
 		final Set< TileInfo > neighboringTiles = estimatedSearchRadius.neighboringTiles;

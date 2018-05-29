@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedRelativeSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.NotEnoughNeighboringTilesException;
 import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
@@ -81,18 +82,39 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	 *
 	 * @param tileBoxPair
 	 * @throws PipelineExecutionException
+	 * @throws NotEnoughNeighboringTilesException
 	 */
 	public StitchingResult stitchTileBoxPair( final SubdividedTileBoxPair tileBoxPair ) throws PipelineExecutionException
 	{
 		final SubdividedTileBox[] tileBoxes = tileBoxPair.toArray();
 
 		final AffineGet[] estimatedTileTransforms = new AffineGet[ tileBoxes.length ];
-		for ( int i = 0; i < tileBoxes.length; ++i )
+		final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingBox;
+
+		if ( searchRadiusEstimator != null )
 		{
-			if ( searchRadiusEstimator != null )
-				estimatedTileTransforms[ i ] = TransformedTileOperations.estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
-			else
+			try
+			{
+				for ( int i = 0; i < tileBoxes.length; ++i )
+					estimatedTileTransforms[ i ] = TransformedTileOperations.estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
+
+				// get search radius for new moving box position in the fixed box space
+				combinedSearchRadiusForMovingBox = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox( tileBoxes, searchRadiusEstimator );
+
+				combinedSearchRadiusForMovingBox.combinedErrorEllipse.setErrorEllipseTransform(
+						PairwiseTileOperations.getErrorEllipseTransform( tileBoxes, estimatedTileTransforms )
+					);
+			}
+			catch ( final NotEnoughNeighboringTilesException e )
+			{
+				return new StitchingResult( null, null );
+			}
+		}
+		else
+		{
+			for ( int i = 0; i < tileBoxes.length; ++i )
 				estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( tileBoxes[ i ].getFullTile() );
+			combinedSearchRadiusForMovingBox = null;
 		}
 
 		// Render both ROIs in the fixed space
@@ -105,21 +127,6 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		final InvertibleRealTransform[] affinesToFixedBoxSpace = new InvertibleRealTransform[ tileBoxes.length ];
 		for ( int i = 0; i < tileBoxes.length; ++i )
 			affinesToFixedBoxSpace[ i ] = PairwiseTileOperations.getFixedBoxTransform( tileBoxes, affinesToFixedTileSpace[ i ] );
-
-		// get search radius for new moving box position in the fixed box space
-		final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingBox;
-		if ( searchRadiusEstimator != null )
-		{
-			combinedSearchRadiusForMovingBox = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox( tileBoxes, searchRadiusEstimator );
-
-			combinedSearchRadiusForMovingBox.combinedErrorEllipse.setErrorEllipseTransform(
-					PairwiseTileOperations.getErrorEllipseTransform( tileBoxes, estimatedTileTransforms )
-				);
-		}
-		else
-		{
-			combinedSearchRadiusForMovingBox = null;
-		}
 
 		// TODO: use smaller ROI instead of the entire subdivided box?
 		final ImagePlus[] roiImps = new ImagePlus[ tileBoxes.length ];

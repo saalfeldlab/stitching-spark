@@ -61,6 +61,8 @@ public class AffineStitchingVisualization
 
 	final int[] tileEstimationWindow = new int[] { 3, 3 }; // 3x size of a tile
 
+	final int minNumNeighboringTiles = 3;
+
 	final double[] simulatedMovingBoundingBoxOffset = new double[] { 5, -20 };
 //	final double[] simulatedMovingBoundingBoxOffset = new double[] { -31, -33 }; // center of the error ellipse
 //	final double[] simulatedMovingBoundingBoxOffset = new double[] { 12, -17 }; // without changing estimated affine transform of the moving tile
@@ -79,7 +81,12 @@ public class AffineStitchingVisualization
 				if ( tileBox.getFullTile().getIndex().intValue() == tilePairIndexes[ i ] )
 					tilePairBoxes[ i ].add( tileBox );
 
-		final TileSearchRadiusEstimator searchRadiusEstimator = new TileSearchRadiusEstimator( tiles, searchRadiusMultiplier, tileEstimationWindow );
+		final TileSearchRadiusEstimator searchRadiusEstimator = new TileSearchRadiusEstimator(
+				tiles,
+				TileSearchRadiusEstimator.getEstimationWindowSize( tiles[ 0 ].getSize(), tileEstimationWindow ),
+				searchRadiusMultiplier,
+				minNumNeighboringTiles
+			);
 
 		final AffineGet[] estimatedTileTransforms = new AffineGet[ 2 ];
 		// fixed tile already has an existing transformation

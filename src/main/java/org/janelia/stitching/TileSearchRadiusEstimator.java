@@ -66,32 +66,38 @@ public class TileSearchRadiusEstimator implements Serializable
 		}
 	}
 
+	public static class NotEnoughNeighboringTilesException extends Exception
+	{
+		private static final long serialVersionUID = -6612788597298487220L;
+
+		public final Set< TileInfo > neighboringTiles;
+		public final int numNeighboringTilesRequested;
+
+		public NotEnoughNeighboringTilesException( final Set< TileInfo > neighboringTiles, final int numNeighboringTilesRequested )
+		{
+			super( "Requested " + numNeighboringTilesRequested + " neighboring tiles, found only " + neighboringTiles.size() );
+			this.neighboringTiles = neighboringTiles;
+			this.numNeighboringTilesRequested = numNeighboringTilesRequested;
+		}
+	}
+
 	private static final long serialVersionUID = 3966655006478467424L;
 
 	final double[] estimationWindowSize;
 	final double searchRadiusMultiplier;
+	final int minNumNeighboringTiles;
 
 	private final KDTree< TileInfo > kdTree;
 
 	public TileSearchRadiusEstimator(
 			final TileInfo[] tiles,
-			final double searchRadiusMultiplier,
-			final int[] statsWindowTileSize )
-	{
-		this(
-				tiles,
-				getEstimationWindowSize( tiles[ 0 ].getSize(), statsWindowTileSize ),
-				searchRadiusMultiplier
-			);
-	}
-
-	public TileSearchRadiusEstimator(
-			final TileInfo[] tiles,
 			final double[] estimationWindowSize,
-			final double searchRadiusMultiplier )
+			final double searchRadiusMultiplier,
+			final int minNumNeighboringTiles )
 	{
 		this.estimationWindowSize = estimationWindowSize;
 		this.searchRadiusMultiplier = searchRadiusMultiplier;
+		this.minNumNeighboringTiles = minNumNeighboringTiles;
 
 		final List< TileInfo > tilesWithStitchedTransform = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
@@ -107,17 +113,17 @@ public class TileSearchRadiusEstimator implements Serializable
 		kdTree = new KDTree<>( tilesWithStitchedTransform, stageSubsetPositions );
 	}
 
-	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final TileInfo tile ) throws PipelineExecutionException
+	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final TileInfo tile ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
 		return estimateSearchRadiusWithinWindow( tile, getEstimationWindow( tile ) );
 	}
 
-	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final TileInfo tile, final Interval estimationWindow ) throws PipelineExecutionException
+	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final TileInfo tile, final Interval estimationWindow ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
 		return estimateSearchRadius( tile, findTilesWithinWindow( estimationWindow ) );
 	}
 
-	public EstimatedWorldSearchRadius estimateSearchRadiusKNearestNeighbors( final TileInfo tile, final int numNearestNeighbors ) throws PipelineExecutionException
+	public EstimatedWorldSearchRadius estimateSearchRadiusKNearestNeighbors( final TileInfo tile, final int numNearestNeighbors ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
 		return estimateSearchRadius(
 				tile,
@@ -145,8 +151,11 @@ public class TileSearchRadiusEstimator implements Serializable
 		return neighboringTiles;
 	}
 
-	private EstimatedWorldSearchRadius estimateSearchRadius( final TileInfo tile, final Set< TileInfo > neighboringTiles ) throws PipelineExecutionException
+	private EstimatedWorldSearchRadius estimateSearchRadius( final TileInfo tile, final Set< TileInfo > neighboringTiles ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
+		if ( neighboringTiles.size() < minNumNeighboringTiles )
+			throw new NotEnoughNeighboringTilesException( neighboringTiles, minNumNeighboringTiles );
+
 		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = getStageAndWorldCoordinates( neighboringTiles );
 
 		final List< double[] > dimOffsets = new ArrayList<>();
@@ -173,7 +182,7 @@ public class TileSearchRadiusEstimator implements Serializable
 		return new EstimatedWorldSearchRadius( searchRadius, tile, neighboringTiles, stageAndWorldCoordinates );
 	}
 
-	static double[] getEstimationWindowSize( final long[] tileSize, final int[] statsWindowTileSize )
+	public static double[] getEstimationWindowSize( final long[] tileSize, final int[] statsWindowTileSize )
 	{
 		final double[] estimationWindowSize = new double[ tileSize.length ];
 		for ( int d = 0; d < tileSize.length; ++d )

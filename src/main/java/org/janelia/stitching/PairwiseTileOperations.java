@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedRelativeSearchRadius;
 import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedWorldSearchRadius;
+import org.janelia.stitching.TileSearchRadiusEstimator.NotEnoughNeighboringTilesException;
 
 import net.imglib2.RealInterval;
 import net.imglib2.realtransform.AffineGet;
@@ -30,10 +31,11 @@ public class PairwiseTileOperations
 	 * @param tileBoxes
 	 * @return
 	 * @throws PipelineExecutionException
+	 * @throws NotEnoughNeighboringTilesException
 	 */
 	public static EstimatedRelativeSearchRadius getCombinedSearchRadiusForMovingBox(
 			final SubdividedTileBox[] tileBoxes,
-			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException
+			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
 		validateInputParametersLength( tileBoxes );
 

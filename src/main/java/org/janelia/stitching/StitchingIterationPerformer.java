@@ -111,10 +111,13 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			tilesMap.get( previousStitchedTile.getIndex() ).setTransform( ( AffineGet ) stitchedTransform.copy() );
 		}
 
+		final double[] estimationWindow = TileSearchRadiusEstimator.getEstimationWindowSize( tiles[ 0 ].getSize(), job.getArgs().searchWindowSizeTiles() );
+
 		return new TileSearchRadiusEstimator(
 				tiles,
+				estimationWindow,
 				job.getArgs().searchRadiusMultiplier(),
-				job.getArgs().searchWindowSizeTiles()
+				job.getArgs().minNumNeighboringTiles()
 			);
 	}
 
