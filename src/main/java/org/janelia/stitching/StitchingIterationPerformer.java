@@ -23,6 +23,7 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.stitching.StitchSubdividedTileBoxPair.StitchingResult;
 import org.janelia.stitching.StitchingOptimizer.OptimizerMode;
+import org.janelia.stitching.TileSearchRadiusEstimator.NotEnoughNeighboringTilesException;
 
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.type.NativeType;
@@ -73,7 +74,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
 				broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator() );
-				final TileInfo[] tiles = getTilesWithEstimatedTransformation();
+				final TileInfo[] tiles = getTilesWithEstimatedTransformation( logWriter );
 
 				final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
 				Arrays.fill( tileBoxesGridSize, 2 );
@@ -137,21 +138,34 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			);
 	}
 
-	private TileInfo[] getTilesWithEstimatedTransformation() throws IOException
+	private TileInfo[] getTilesWithEstimatedTransformation( final PrintWriter logWriter ) throws PipelineExecutionException
 	{
-		return sparkContext.parallelize(
-				Arrays.asList( job.getTiles( 0 ) ),
-				job.getTiles( 0 ).length
-			).map( tile ->
+		final TileInfo[] stageTiles = job.getTiles( 0 );
+		final TileInfo[] newTiles = new TileInfo[ stageTiles.length ];
+
+		int numTilesWithInsufficientNeighborhood = 0;
+		for ( int i = 0; i < stageTiles.length; ++i )
+		{
+			newTiles[ i ] = stageTiles[ i ].clone();
+			if ( broadcastedSearchRadiusEstimator.value() != null )
+			{
+				try
 				{
-					final TileInfo tileWithEstimatedTransformation = tile.clone();
-					if ( broadcastedSearchRadiusEstimator.value() != null )
-						tileWithEstimatedTransformation.setTransform(
-								TransformedTileOperations.estimateAffineTransformation( tile, broadcastedSearchRadiusEstimator.value() )
-							);
-					return tileWithEstimatedTransformation;
+					newTiles[ i ].setTransform(
+							TransformedTileOperations.estimateAffineTransformation( stageTiles[ i ], broadcastedSearchRadiusEstimator.value() )
+						);
 				}
-			).collect().toArray( new TileInfo[ 0 ] );
+				catch ( final NotEnoughNeighboringTilesException e )
+				{
+					++numTilesWithInsufficientNeighborhood;
+				}
+			}
+		}
+
+		if ( logWriter != null )
+			logWriter.println( "Estimated affine transformations for " + ( newTiles.length - numTilesWithInsufficientNeighborhood ) + " out of " + newTiles.length + " tiles" + " (others had insufficient neighborhood)" );
+
+		return newTiles;
 	}
 
 	/**
