@@ -107,7 +107,8 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			}
 			catch ( final NotEnoughNeighboringTilesException e )
 			{
-				return new StitchingResult( null, null );
+				final SerializablePairWiseStitchingResult invalidPairwiseResult = new SerializablePairWiseStitchingResult( tileBoxPair, null, 0 );
+				return new StitchingResult( invalidPairwiseResult, null );
 			}
 		}
 		else
