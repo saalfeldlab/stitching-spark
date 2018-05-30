@@ -1,7 +1,6 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -43,20 +42,6 @@ import net.imglib2.view.Views;
 
 public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > >
 {
-	public static class StitchingResult implements Serializable
-	{
-		private static final long serialVersionUID = -533794988639089455L;
-
-		public final SerializablePairWiseStitchingResult shift;
-		public final double[] searchRadiusLength;
-
-		public StitchingResult( final SerializablePairWiseStitchingResult shift, final double[] searchRadiusLength )
-		{
-			this.shift = shift;
-			this.searchRadiusLength = searchRadiusLength;
-		}
-	}
-
 	private final StitchingJob job;
 	private final TileSearchRadiusEstimator searchRadiusEstimator;
 	private final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels;
@@ -84,12 +69,12 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	 * @throws PipelineExecutionException
 	 * @throws NotEnoughNeighboringTilesException
 	 */
-	public StitchingResult stitchTileBoxPair( final SubdividedTileBoxPair tileBoxPair ) throws PipelineExecutionException
+	public SerializablePairWiseStitchingResult stitchTileBoxPair( final SubdividedTileBoxPair tileBoxPair ) throws PipelineExecutionException
 	{
 		final SubdividedTileBox[] tileBoxes = tileBoxPair.toArray();
 
 		final AffineGet[] estimatedTileTransforms = new AffineGet[ tileBoxes.length ];
-		final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingBox;
+		final ErrorEllipse movingBoxSearchRadius;
 
 		if ( searchRadiusEstimator != null )
 		{
@@ -99,24 +84,31 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 					estimatedTileTransforms[ i ] = TransformedTileOperations.estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
 
 				// get search radius for new moving box position in the fixed box space
-				combinedSearchRadiusForMovingBox = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox( tileBoxes, searchRadiusEstimator );
+				final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingBox = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox( tileBoxes, searchRadiusEstimator );
 
-				combinedSearchRadiusForMovingBox.combinedErrorEllipse.setErrorEllipseTransform(
-						PairwiseTileOperations.getErrorEllipseTransform( tileBoxes, estimatedTileTransforms )
-					);
+				movingBoxSearchRadius = combinedSearchRadiusForMovingBox.combinedErrorEllipse;
 			}
 			catch ( final NotEnoughNeighboringTilesException e )
 			{
 				final SerializablePairWiseStitchingResult invalidPairwiseResult = new SerializablePairWiseStitchingResult( tileBoxPair, null, 0 );
-				return new StitchingResult( invalidPairwiseResult, null );
+				return invalidPairwiseResult;
 			}
 		}
 		else
 		{
 			for ( int i = 0; i < tileBoxes.length; ++i )
 				estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( tileBoxes[ i ].getFullTile() );
-			combinedSearchRadiusForMovingBox = null;
+
+			final double[] uncorrelatedErrorEllipseRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipseRadius(
+					tileBoxPair.getA().getFullTile().getSize(),
+					job.getArgs().errorEllipseRadiusAsTileSizeRatio()
+				);
+			movingBoxSearchRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
 		}
+
+		movingBoxSearchRadius.setErrorEllipseTransform(
+				PairwiseTileOperations.getErrorEllipseTransform( tileBoxes, estimatedTileTransforms )
+			);
 
 		// Render both ROIs in the fixed space
 		final InvertibleRealTransform[] affinesToFixedTileSpace = new InvertibleRealTransform[] {
@@ -146,10 +138,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		if ( !Views.isZeroMin( transformedRoiIntervals[ 0 ] ) )
 			throw new PipelineExecutionException( "fixed box is expected to be zero-min" );
 
-		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise(
-				roiImps,
-				combinedSearchRadiusForMovingBox != null ? combinedSearchRadiusForMovingBox.combinedErrorEllipse : null
-			);
+		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImps, movingBoxSearchRadius );
 
 		if ( pairwiseResult != null )
 		{
@@ -171,10 +160,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 		System.out.println( "Stitched tile box pair " + tileBoxPair );
 
-		return new StitchingResult(
-				pairwiseResult,
-				combinedSearchRadiusForMovingBox != null ? combinedSearchRadiusForMovingBox.combinedErrorEllipse.getEllipseRadius() : null
-			);
+		return pairwiseResult;
 	}
 
 	/**

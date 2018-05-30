@@ -59,6 +59,8 @@ public class AffineStitchingVisualization
 
 	final double searchRadiusMultiplier = 3; // 3 * sigma
 
+	final double errorEllipseRadiusAsTileSizeRatio = 0.1;
+
 	final int[] tileEstimationWindow = new int[] { 3, 3 }; // 3x size of a tile
 
 	final int minNumNeighboringTiles = 3;
@@ -317,6 +319,21 @@ public class AffineStitchingVisualization
 				localDisplaySize,
 				imgLocalRandomAccess,
 				new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) )
+			);
+
+		// draw transformed uncorrelated error ellipse in the fixed box space
+		final double[] uncorrelatedErrorEllipseRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipseRadius(
+				tileBoxPair.getA().getFullTile().getSize(),
+				errorEllipseRadiusAsTileSizeRatio
+			);
+		final ErrorEllipse movingBoxUncorrelatedErrorEllipse = TileSearchRadiusEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
+		movingBoxUncorrelatedErrorEllipse.setErrorEllipseTransform( PairwiseTileOperations.getErrorEllipseTransform( tileBoxPair.toArray(), estimatedTileTransforms ) );
+		drawErrorEllipse(
+				movingBoxUncorrelatedErrorEllipse,
+				displayOffsetTransform,
+				localDisplaySize,
+				imgLocalRandomAccess,
+				new ARGBType( ARGBType.rgba( 64, 255, 64, 255 ) )
 			);
 
 		final ImagePlus impLocal = imgLocal.getImagePlus();

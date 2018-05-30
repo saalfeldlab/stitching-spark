@@ -190,6 +190,23 @@ public class TileSearchRadiusEstimator implements Serializable
 		return estimationWindowSize;
 	}
 
+	public static double[] getUncorrelatedErrorEllipseRadius( final long[] tileSize, final double errorEllipseRadiusAsTileSizeRatio )
+	{
+		final double[] radius = new double[ tileSize.length ];
+		for ( int d = 0; d < radius.length; ++d )
+			radius[ d ] = tileSize[ d ] * errorEllipseRadiusAsTileSizeRatio;
+		return radius;
+	}
+
+	public static ErrorEllipse getUncorrelatedErrorEllipse( final double[] radius ) throws PipelineExecutionException
+	{
+		final double[] zeroMeanValues = new double[ radius.length ];
+		final double[][] uncorrelatedCovarianceMatrix = new double[ radius.length ][ radius.length ];
+		for ( int d = 0; d < radius.length; ++d )
+			uncorrelatedCovarianceMatrix[ d ][ d ] = radius[ d ] * radius[ d ];
+		return new ErrorEllipse( 1.0, zeroMeanValues, uncorrelatedCovarianceMatrix );
+	}
+
 	static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > List< Pair< RealPoint, RealPoint > > getStageAndWorldCoordinates(
 			final Set< TileInfo > neighboringTiles )
 	{

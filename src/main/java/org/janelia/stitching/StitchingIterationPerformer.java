@@ -15,13 +15,11 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.util.LongAccumulator;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.stitching.StitchSubdividedTileBoxPair.StitchingResult;
 import org.janelia.stitching.StitchingOptimizer.OptimizerMode;
 import org.janelia.stitching.TileSearchRadiusEstimator.NotEnoughNeighboringTilesException;
 
@@ -207,11 +205,10 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		else
 		{
 			// Initiate the computation
-			final List< StitchingResult > stitchingResults = computePairwiseShifts( pendingOverlappingBoxes, logWriter );
+			final List< SerializablePairWiseStitchingResult > pendingPairwiseStitchingResults = computePairwiseShifts( pendingOverlappingBoxes, logWriter );
 
 			// merge results with preloaded pairwise shifts
-			for ( final StitchingResult result : stitchingResults )
-				pairwiseShifts.add( result.shift );
+			pairwiseShifts.addAll( pendingPairwiseStitchingResults );
 
 //			saveSearchRadiusStats( stitchingResults, PathResolver.get( basePath, iterationDirname, "searchRadiusStats.txt" ) );
 
@@ -388,7 +385,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	 * @param searchRadiusStatsPath
 	 * @throws PipelineExecutionException
 	 */
-	private void saveSearchRadiusStats( final List< StitchingResult > stitchingResults, final String searchRadiusStatsPath ) throws PipelineExecutionException
+	/*private void saveSearchRadiusStats( final List< StitchingResult > stitchingResults, final String searchRadiusStatsPath ) throws PipelineExecutionException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		try ( final OutputStream out = dataProvider.getOutputStream( URI.create( searchRadiusStatsPath ) ) )
@@ -432,7 +429,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		{
 			throw new PipelineExecutionException( "Can't write search radius stats: " + e.getMessage(), e );
 		}
-	}
+	}*/
 
 	/**
 	 * Computes the best possible pairwise shifts between every pair of tiles on a Spark cluster.
@@ -443,7 +440,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	 * @throws PipelineExecutionException
 	 * @throws IOException
 	 */
-	private < T extends NativeType< T > & RealType< T > > List< StitchingResult > computePairwiseShifts(
+	private < T extends NativeType< T > & RealType< T > > List< SerializablePairWiseStitchingResult > computePairwiseShifts(
 			final List< SubdividedTileBoxPair > overlappingBoxes,
 			final PrintWriter logWriter ) throws PipelineExecutionException, IOException
 	{
@@ -453,7 +450,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		final LongAccumulator noOverlapWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 
-		final JavaRDD< StitchingResult > pairwiseStitching = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() ).map( tileBoxPair ->
+		final List< SerializablePairWiseStitchingResult > pairwiseStitchingResults = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() ).map( tileBoxPair ->
 				new StitchSubdividedTileBoxPair<>(
 						job,
 						broadcastedSearchRadiusEstimator.value(),
@@ -461,32 +458,27 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 						broadcastedTileMapsForChannels.value()
 					)
 				.stitchTileBoxPair( tileBoxPair )
-			);
-
-		final List< StitchingResult > stitchingResults = pairwiseStitching.collect();
+			).collect();
 
 		broadcastedSearchRadiusEstimator.destroy();
 
 		int validPairs = 0;
-		for ( final StitchingResult result : stitchingResults )
-		{
-			final SerializablePairWiseStitchingResult shift = result.shift;
-			if ( shift != null && shift.getIsValidOverlap() )
+		for ( final SerializablePairWiseStitchingResult result : pairwiseStitchingResults )
+			if ( result.getIsValidOverlap() )
 				++validPairs;
-		}
 
 		if ( logWriter != null )
 		{
 			logWriter.println();
 			logWriter.println( "======== Pairwise stitching completed ========" );
-			logWriter.println( "Total pairs: " + stitchingResults.size() );
-			logWriter.println( "Valid pairs: " + validPairs + ", invalid pairs: " + ( stitchingResults.size() - validPairs ) );
+			logWriter.println( "Total pairs: " + pairwiseStitchingResults.size() );
+			logWriter.println( "Valid pairs: " + validPairs + ", invalid pairs: " + ( pairwiseStitchingResults.size() - validPairs ) );
 			logWriter.println( "    not enough neighbors within estimation window: " + notEnoughNeighborsWithinConfidenceIntervalPairsCount.value() );
 			logWriter.println( "    <= 1px overlap within search radius: " + noOverlapWithinConfidenceIntervalPairsCount.value() );
 			logWriter.println( "    no peaks found within search radius: " + noPeaksWithinConfidenceIntervalPairsCount.value() );
 			logWriter.println();
 		}
 
-		return stitchingResults;
+		return pairwiseStitchingResults;
 	}
 }
