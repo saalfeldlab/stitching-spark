@@ -4,12 +4,14 @@ import os
 import sys
 import subprocess
 
-curr_script_dir = os.path.dirname(os.path.realpath(__file__))
-base_folder = os.path.dirname(os.path.dirname(curr_script_dir))
-bin_file = os.path.join('target', 'stitching-spark-0.0.1-SNAPSHOT.jar')
-bin_path = os.path.join(base_folder, bin_file)
-flintstone_file = os.path.join('flintstone', 'flintstone.sh')
-flintstone_path = os.path.join(curr_script_dir, flintstone_file)
+sys.dont_write_bytecode = True
+curr_script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(curr_script_dir))
+from jar_path_util import get_jar_path
+bin_path = get_jar_path()
+
+flintstone_relpath = os.path.join('flintstone', 'flintstone.sh')
+flintstone_path = os.path.join(curr_script_dir, flintstone_relpath)
 
 os.environ['SPARK_VERSION'] = 'test'
 os.environ['N_DRIVER_THREADS'] = '16'
