@@ -99,16 +99,27 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			for ( int i = 0; i < tileBoxes.length; ++i )
 				estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( tileBoxes[ i ].getFullTile() );
 
-			final double[] uncorrelatedErrorEllipseRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipseRadius(
-					tileBoxPair.getA().getFullTile().getSize(),
-					job.getArgs().errorEllipseRadiusAsTileSizeRatio()
-				);
-			movingBoxSearchRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
+			if ( job.getArgs().constrainMatchingOnFirstIteration() )
+			{
+				final double[] uncorrelatedErrorEllipseRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipseRadius(
+						tileBoxPair.getA().getFullTile().getSize(),
+						job.getArgs().errorEllipseRadiusAsTileSizeRatio()
+					);
+				movingBoxSearchRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
+			}
+			else
+			{
+				movingBoxSearchRadius = null;
+				System.out.println( "Matching is not constrained" );
+			}
 		}
 
-		movingBoxSearchRadius.setErrorEllipseTransform(
-				PairwiseTileOperations.getErrorEllipseTransform( tileBoxes, estimatedTileTransforms )
-			);
+		if ( movingBoxSearchRadius != null )
+		{
+			movingBoxSearchRadius.setErrorEllipseTransform(
+					PairwiseTileOperations.getErrorEllipseTransform( tileBoxes, estimatedTileTransforms )
+				);
+		}
 
 		// Render both ROIs in the fixed space
 		final InvertibleRealTransform[] affinesToFixedTileSpace = new InvertibleRealTransform[] {

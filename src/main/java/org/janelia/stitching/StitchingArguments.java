@@ -31,6 +31,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Search radius multiplier (error ellipse size)")
 	private double searchRadiusMultiplier = 3;
 
+	@Option(name = "--constrain", required = false,
+			usage = "Constrain pairwise matching on the first iteration")
+	private boolean constrainMatchingOnFirstIteration = false;
+
 	@Option(name = "-sr", aliases = { "--sphereradius" }, required = false,
 			usage = "Radius of search sphere as a percent of tile size (when prediction model is not available, usually on the first stitching iteration)")
 	private double errorEllipseRadiusAsTileSizeRatio = 10;
@@ -158,6 +162,7 @@ public class StitchingArguments implements Serializable {
 	public List< String > inputTileConfigurations() { return inputTileConfigurations; }
 	public int minNumNeighboringTiles() { return minNumNeighboringTiles; }
 	public double searchRadiusMultiplier() { return searchRadiusMultiplier; }
+	public boolean constrainMatchingOnFirstIteration() { return constrainMatchingOnFirstIteration; }
 	public double errorEllipseRadiusAsTileSizeRatio() { return errorEllipseRadiusAsTileSizeRatio; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurSigma() { return blurSigma; }
