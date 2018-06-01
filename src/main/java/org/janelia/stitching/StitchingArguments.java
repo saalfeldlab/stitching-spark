@@ -37,7 +37,7 @@ public class StitchingArguments implements Serializable {
 
 	@Option(name = "-sr", aliases = { "--sphereradius" }, required = false,
 			usage = "Radius of search sphere as a percent of tile size (when prediction model is not available, usually on the first stitching iteration)")
-	private double errorEllipseRadiusAsTileSizeRatio = 10;
+	private double errorEllipseRadiusAsTileSizeRatio = 0.1;
 
 	@Option(name = "-w", aliases = { "--searchwindow" }, required = false,
 			usage = "Search window size for local offset statistics in terms of number of tiles")
