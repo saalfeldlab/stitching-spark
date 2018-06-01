@@ -1,6 +1,12 @@
 import os
 
-def get_jar_path():
+def get_local_jar_path():
+	return get_jar_path('-local')
+
+def get_provided_jar_path():
+	return get_jar_path('-provided')
+
+def get_jar_path(jar_suffix=None):
 	curr_script_dir = os.path.dirname(os.path.abspath(__file__))
 	base_folder = os.path.dirname(curr_script_dir)
 	target_folder = os.path.join(base_folder, 'target');
@@ -18,4 +24,9 @@ def get_jar_path():
 	if 'artifactId' not in pom_properties or 'version' not in pom_properties:
 		raise Exception("artifactId/version fields are missing in pom.properties file")
 
-return os.path.join(target_folder, pom_properties['artifactId'] + '-' + pom_properties['version'] + '.jar')
+	jar_filename = pom_properties['artifactId'] + '-' + pom_properties['version'] + '.jar'
+	if jar_suffix is not None:
+		jar_filename_ext = os.path.splitext(jar_filename)
+		jar_filename = jar_filename_ext[0] + jar_suffix + jar_filename_ext[1]
+
+	return os.path.join(target_folder, jar_filename)
