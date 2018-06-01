@@ -272,7 +272,7 @@ public class SubdividedTileOperations
 	{
 		final double[] middlePoint = new double[ tileBox.numDimensions() ];
 		for ( int d = 0; d < middlePoint.length; ++d )
-			middlePoint[ d ] = ( tileBox.min( d ) + tileBox.max( d ) ) * 0.5;
+			middlePoint[ d ] = tileBox.min( d ) + tileBox.dimension( d ) * 0.5;
 		return middlePoint;
 	}
 
