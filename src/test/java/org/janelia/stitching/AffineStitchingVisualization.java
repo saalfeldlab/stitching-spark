@@ -65,9 +65,7 @@ public class AffineStitchingVisualization
 
 	final int minNumNeighboringTiles = 3;
 
-	final double[] simulatedMovingBoundingBoxOffset = new double[] { 5, -20 };
-//	final double[] simulatedMovingBoundingBoxOffset = new double[] { -31, -33 }; // center of the error ellipse
-//	final double[] simulatedMovingBoundingBoxOffset = new double[] { 12, -17 }; // without changing estimated affine transform of the moving tile
+	final boolean modifyLinearComponent = true;
 
 	private AffineStitchingVisualization( final String logDirectory ) throws Exception
 	{
@@ -103,11 +101,25 @@ public class AffineStitchingVisualization
 		final TranslationGet estimatedMovingTileTranslationComponent = estimatedMovingTileLinearAndTranslationComponents.getB();
 		// add some noise to estimated affine transform of the moving tile so it is slightly different from the transformation of the fixed tile
 		final double[][] estimatedMovingTileLinearComponentWithNoiseAffineMatrix = new double[ estimatedMovingTileLinearComponent.numDimensions() ][ estimatedMovingTileLinearComponent.numDimensions() + 1 ];
-//		final double[][] noise = null;
-		final double[][] noise = new double[][] {
-			new double[] { 0.0004, -0.1, 0 },
-			new double[] { -0.06, 0.0009, 0 },
-		};
+
+		final double[][] noise;
+		final double[] simulatedMovingBoundingBoxOffset;
+//		final double[] simulatedMovingBoundingBoxOffset = new double[] { -31, -33 }; // center of the error ellipse
+
+		if ( modifyLinearComponent )
+		{
+			noise = new double[][] {
+				new double[] { 0.0004, -0.1, 0 },
+				new double[] { -0.06, 0.0009, 0 },
+			};
+			simulatedMovingBoundingBoxOffset = new double[] { 5, -20 };
+		}
+		else
+		{
+			noise = null;
+			simulatedMovingBoundingBoxOffset = new double[] { 12, -11 };
+		}
+
 		for ( int dRow = 0; dRow < estimatedMovingTileLinearComponent.numDimensions(); ++dRow )
 			for ( int dCol = 0; dCol < estimatedMovingTileLinearComponent.numDimensions(); ++dCol )
 				estimatedMovingTileLinearComponentWithNoiseAffineMatrix[ dRow ][ dCol ] = estimatedMovingTileLinearComponent.get( dRow, dCol ) + ( noise != null ? noise[ dRow ][ dCol ] : 0 );
@@ -318,7 +330,7 @@ public class AffineStitchingVisualization
 				displayOffsetTransform,
 				localDisplaySize,
 				imgLocalRandomAccess,
-				new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) )
+				new ARGBType( ARGBType.rgba( 0, 255, 255, 255 ) )
 			);
 
 		// draw transformed uncorrelated error ellipse in the fixed box space
@@ -349,7 +361,7 @@ public class AffineStitchingVisualization
 				displayOffsetTransform,
 				localDisplaySize,
 				imgLocalRandomAccess,
-				new ARGBType( ARGBType.rgba( 0, 255, 255, 255 ) )
+				new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) )
 			);
 		impLocal.updateAndDraw();
 		System.out.println( "Done" );
