@@ -207,13 +207,8 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			final TileInfo tile = tileMapsForChannels.get( channel ).get( tileBox.getFullTile().getIndex() );
 
 			// validate that all corresponding tiles have the same grid coordinates
-			if ( !Utils.getTileCoordinatesString( tile ).equals( Utils.getTileCoordinatesString( tileBox.getFullTile() ) ) )
-			{
-				throw new RuntimeException(
-						"tile with index " + tile.getIndex() + " has different grid positions: " +
-								Utils.getTileCoordinatesString( tile ) + " vs " + Utils.getTileCoordinatesString( tileBox.getFullTile() )
-					);
-			}
+			// (or skip validation if unable to extract grid coordinates from tile filename)
+			validateGridCoordinates( tileBox, tile );
 
 			// get ROI image
 			final RandomAccessibleInterval< T > roiImg;
@@ -340,5 +335,22 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		}
 
 		return result;
+	}
+
+	private void validateGridCoordinates( final SubdividedTileBox tileBox, final TileInfo tile )
+	{
+		{
+			String error = null;
+			try
+			{
+				if ( !Utils.getTileCoordinatesString( tile ).equals( Utils.getTileCoordinatesString( tileBox.getFullTile() ) ) )
+					error = "tile with index " + tile.getIndex() + " has different grid positions: " +
+								Utils.getTileCoordinatesString( tile ) + " vs " + Utils.getTileCoordinatesString( tileBox.getFullTile() );
+			}
+			catch ( final Exception e ) {}
+
+			if ( error != null )
+				throw new RuntimeException( error );
+		}
 	}
 }
