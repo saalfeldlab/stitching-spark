@@ -35,7 +35,7 @@ public class StitchingOptimizer implements Serializable
 		return Math.min( INITIAL_MAX_ALLOWED_ERROR + iteration * MAX_ALLOWED_ERROR_STEP, MAX_ALLOWED_ERROR_LIMIT );
 	}
 
-	static enum OptimizerMode
+	public static enum OptimizerMode
 	{
 		Translation,
 		Affine
@@ -150,12 +150,12 @@ public class StitchingOptimizer implements Serializable
 		this.sparkContext = sparkContext;
 	}
 
-	void optimize( final int iteration, final OptimizerMode mode ) throws IOException
+	public void optimize( final int iteration, final OptimizerMode mode ) throws IOException
 	{
 		optimize( iteration, mode, null );
 	}
 
-	void optimize( final int iteration, final OptimizerMode mode, final PrintWriter logWriter ) throws IOException
+	public void optimize( final int iteration, final OptimizerMode mode, final PrintWriter logWriter ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 
@@ -365,7 +365,7 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 				);
 
 			comparePointPair.setTileBoxPair( tileBoxShift.getTileBoxPair() );
-			comparePointPair.setRelativeShift( tileBoxShift.getOffset() == null ? null : tileBoxShift.getOffset().clone() );
+			comparePointPair.setRelativeShift( tileBoxShift.getOffset() );
 			comparePointPair.setCrossCorrelation( tileBoxShift.getCrossCorrelation() );
 			comparePointPair.setIsValidOverlap(
 					tileBoxShift.getIsValidOverlap()
