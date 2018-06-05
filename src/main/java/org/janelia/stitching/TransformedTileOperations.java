@@ -46,7 +46,7 @@ public class TransformedTileOperations
 	 */
 	public static Interval getTransformedBoundingBox( final TileInfo tile )
 	{
-		return getTransformedBoundingBox( new FinalInterval( tile.getSize() ), tile.getTransform() );
+		return getTransformedBoundingBox( new FinalInterval( tile.getSize() ), getTileTransform( tile ) );
 	}
 
 	/**
