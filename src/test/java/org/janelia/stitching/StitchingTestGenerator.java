@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.TreeSet;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.DataProvider;
@@ -48,7 +49,8 @@ public class StitchingTestGenerator
 	{
 		Unchanged,
 		Shifted,
-		Transformed
+		Transformed,
+		Filtered
 	}
 
 	public static void main( final String[] args ) throws Exception
@@ -70,6 +72,9 @@ public class StitchingTestGenerator
 			break;
 		case Transformed:
 			testGen = new TransformedTestGenerator<>( n5Path, datasetPath, outputPath );
+			break;
+		case Filtered:
+			testGen = new FilteredTestGenerator<>( n5Path, datasetPath, outputPath );
 			break;
 		default:
 			throw new NotImplementedException();
@@ -292,9 +297,9 @@ public class StitchingTestGenerator
 	private static class TransformedTestGenerator< T extends NativeType< T > & RealType< T > > extends AbstractTestGenerator< T >
 	{
 		private static final double shiftRatio = 0.1;
-		private static final int maxRotationDegrees = 30;
-		private static final double maxScalingRatio = 0.2;
-		private static final double maxShearingRatio = 0.2;
+		private static final int maxRotationDegrees = 0;//10;
+		private static final double maxScalingRatio = 0;//0.1;
+		private static final double maxShearingRatio = 0.1;
 
 		private final Random rnd = new Random( 69997 ); // repeatable results
 
@@ -383,6 +388,196 @@ public class StitchingTestGenerator
 					shift[ d ] = rnd.nextInt( maxShiftPixels + 1 ) - maxShiftPixels / 2;
 				}
 				System.out.println( "tile " + tiles.size() + ": shift=" + Arrays.toString( shift ) );
+
+				final Interval overlappingInterval = IntervalsHelper.offset( nonOverlappingInterval, offset );
+				final Interval shiftedInterval = IntervalsHelper.translate( overlappingInterval, shift );
+
+
+				final AffineTransform3D transformAroundMiddlePoint = new AffineTransform3D();
+				transformAroundMiddlePoint.preConcatenate( new Translation( getMiddlePoint( shiftedInterval ) ).inverse() );
+				transformAroundMiddlePoint.preConcatenate( linearTransform );
+				transformAroundMiddlePoint.preConcatenate(  new Translation( getMiddlePoint( shiftedInterval ) ) );
+
+
+				final TileInfo tile = new TileInfo( 3 );
+				tile.setIndex( tiles.size() );
+
+				tile.setStagePosition( Intervals.minAsDoubleArray( overlappingInterval ) );
+				tile.setSize( Intervals.dimensionsAsLongArray( overlappingInterval ) );
+
+				final RandomAccessible< T > extendedSource = Views.extendZero( img );
+				final RealRandomAccessible< T > interpolatedSource = Views.interpolate( extendedSource, new ClampingNLinearInterpolatorFactory<>() );
+				final RandomAccessible< T > transformedSource = RealViews.transform( interpolatedSource, transformAroundMiddlePoint );
+				final RandomAccessibleInterval< T > transformedCropImg = Views.interval( transformedSource, shiftedInterval );
+
+				final ImagePlus tileImp = copyToImage( transformedCropImg );
+				final String tileImpPath = Paths.get( outputTileImagesDir, "tile_" + tile.getIndex() + ".tif" ).toString();
+				IJ.saveAsTiff( tileImp, tileImpPath );
+
+				tile.setFilePath( tileImpPath );
+				tile.setType( ImageType.valueOf( tileImp.getType() ) );
+				tile.setPixelResolution( pixelResolution.clone() );
+
+				tiles.add( tile );
+
+				final TileInfo groundtruthTile = tile.clone();
+				final AffineTransform3D groundtruthTransform = new AffineTransform3D();
+				groundtruthTransform.preConcatenate( new Translation( Intervals.minAsDoubleArray( shiftedInterval ) ) );
+				groundtruthTransform.preConcatenate( transformAroundMiddlePoint.inverse() );
+				groundtruthTile.setTransform( groundtruthTransform );
+				groundtruthTiles.add( groundtruthTile );
+			}
+
+			final String outputTilesConfigPath = Paths.get( outputPath, "tiles.json" ).toString();
+			TileInfoJSONProvider.saveTilesConfiguration( tiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter(
+					URI.create( outputTilesConfigPath )
+				) );
+
+			TileInfoJSONProvider.saveTilesConfiguration( groundtruthTiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter(
+					URI.create( Utils.addFilenameSuffix( outputTilesConfigPath, "-groundtruth" ) )
+				) );
+		}
+
+		private static double[] getMiddlePoint( final RealInterval interval )
+		{
+			final double[] middlePoint = new double[ interval.numDimensions() ];
+			for ( int d = 0; d < middlePoint.length; ++d )
+				middlePoint[ d ] = ( interval.realMin( d ) + interval.realMax( d ) ) / 2;
+			return middlePoint;
+		}
+	}
+
+
+	private static class FilteredTestGenerator< T extends NativeType< T > & RealType< T > > extends AbstractTestGenerator< T >
+	{
+		private static final double shiftRatio = 0.1;
+		private static final int rotationStepDegrees = 5;
+
+		protected static final double cropRatio = 0.5;
+
+		private final Random rnd = new Random( 69997 ); // repeatable results
+
+		FilteredTestGenerator(
+				final String n5Path,
+				final String datasetPath,
+				final String outputPath )
+		{
+			super( n5Path, datasetPath, outputPath );
+		}
+
+		@Override
+		public void run() throws Exception
+		{
+			final DataProvider dataProvider = DataProviderFactory.createByURI( URI.create( n5Path ) );
+			final N5Reader n5 = dataProvider.createN5Reader( URI.create( n5Path ), N5ExportMetadata.getGsonBuilder() );
+
+			final N5ExportMetadataReader exportMetadata = N5ExportMetadata.openForReading( n5 );
+			final VoxelDimensions voxelDimensions = exportMetadata.getPixelResolution( 0 );
+			final double[] pixelResolution = new double[ voxelDimensions.numDimensions() ];
+			voxelDimensions.dimensions( pixelResolution );
+
+			final RandomAccessibleInterval< T > img = N5Utils.open( n5, datasetPath );
+			final Interval cropInterval = getCropInterval( img, cropRatio );
+			System.out.println( "crop dimensions = " + Arrays.toString( Intervals.dimensionsAsLongArray( cropInterval ) ) );
+
+			final List< Interval > nonOverlappingIntervals = TileOperations.divideSpaceIgnoreSmaller( cropInterval, tileDimensions );
+			final List< TileInfo > tiles = new ArrayList<>(), groundtruthTiles = new ArrayList<>();
+
+			final String outputTileImagesDir = Paths.get( outputPath, "imgs" ).toString();
+			Paths.get( outputTileImagesDir ).toFile().mkdirs();
+
+			System.out.println( "intervals: " + nonOverlappingIntervals.size() );
+
+			@SuppressWarnings( "unchecked" )
+			final TreeSet< Long >[] dimCoords = new TreeSet[ img.numDimensions() ];
+			for ( int d = 0; d < img.numDimensions(); ++d )
+				dimCoords[ d ] = new TreeSet<>();
+			for ( final Interval nonOverlappingInterval : nonOverlappingIntervals )
+				for ( int d = 0; d < nonOverlappingInterval.numDimensions(); ++d )
+					dimCoords[ d ].add( nonOverlappingInterval.min( d ) );
+			final Long[] dimMidCoord = new Long[ dimCoords.length ];
+			for ( int d = 0; d < img.numDimensions(); ++d )
+				dimMidCoord[ d ] = dimCoords[ d ].toArray( new Long[ 0 ] )[ dimCoords[ d ].size() / 2 ];
+
+			// allow all X and Y coords
+			dimMidCoord[ 0 ] = null;
+			dimMidCoord[ 1 ] = null;
+
+			System.out.println( "Including only intervals at: " + Arrays.toString( dimMidCoord ) );
+
+			final List< Interval > filteredNonOverlappingIntervals = new ArrayList<>();
+			for ( final Interval nonOverlappingInterval : nonOverlappingIntervals )
+			{
+				// filter intervals by coords
+				boolean include = true;
+				for ( int d = 0; d < nonOverlappingInterval.numDimensions(); ++d )
+					if ( dimMidCoord[ d ] != null && dimMidCoord[ d ].longValue() != nonOverlappingInterval.min( d ) )
+						include = false;
+				if ( include )
+					filteredNonOverlappingIntervals.add( nonOverlappingInterval );
+			}
+
+			System.out.println( "Filtered " + filteredNonOverlappingIntervals.size() + " intervals out of " + nonOverlappingIntervals.size() );
+
+			for ( final Interval nonOverlappingInterval : filteredNonOverlappingIntervals )
+			{
+				final int[] gridIndex = new int[ nonOverlappingInterval.numDimensions() ];
+				for ( int d = 0; d < gridIndex.length; ++d )
+					gridIndex[ d ] = ( int ) ( ( nonOverlappingInterval.min( d ) - cropInterval.min( d ) ) / tileDimensions.dimension( d ) );
+
+//				final double[] scalingCoeffs = new double[ nonOverlappingInterval.numDimensions() ];
+//				for ( int d = 0; d < scalingCoeffs.length; ++d )
+//					scalingCoeffs[ d ] = 1.0 + ( rnd.nextDouble() - 0.5 ) * maxScalingRatio;
+//				final Scale3D scaleTransform = new Scale3D( scalingCoeffs );
+				final AffineTransform3D scaleTransform = new AffineTransform3D();
+
+				final AffineTransform3D xRotationTransform = new AffineTransform3D();
+//				final double xRotationAngle = Math.toRadians( rnd.nextInt( maxRotationDegrees + 1 ) - maxRotationDegrees / 2 );
+//				xRotationTransform.set( Math.cos( xRotationAngle ), 1, 1 );
+//				xRotationTransform.set( -Math.sin( xRotationAngle ), 1, 2 );
+//				xRotationTransform.set( Math.sin( xRotationAngle ), 2, 1 );
+//				xRotationTransform.set( Math.cos( xRotationAngle ), 2, 2 );
+
+				final AffineTransform3D yRotationTransform = new AffineTransform3D();
+//				final double yRotationAngle = Math.toRadians( rnd.nextInt( maxRotationDegrees + 1 ) - maxRotationDegrees / 2 );
+//				yRotationTransform.set( Math.cos( yRotationAngle ), 0, 0 );
+//				yRotationTransform.set( Math.sin( yRotationAngle ), 0, 2 );
+//				yRotationTransform.set( -Math.sin( yRotationAngle ), 2, 0 );
+//				yRotationTransform.set( Math.cos( yRotationAngle ), 2, 2 );
+
+				final AffineTransform3D zRotationTransform = new AffineTransform3D();
+				final double zRotationAngle = Math.toRadians( ( gridIndex[ 0 ] + 1 ) * rotationStepDegrees );
+				zRotationTransform.set( Math.cos( zRotationAngle ), 0, 0 );
+				zRotationTransform.set( -Math.sin( zRotationAngle ), 0, 1 );
+				zRotationTransform.set( Math.sin( zRotationAngle ), 1, 0 );
+				zRotationTransform.set( Math.cos( zRotationAngle ), 1, 1 );
+
+				final AffineTransform3D rotationTransform = new AffineTransform3D();
+				rotationTransform.concatenate( xRotationTransform ).concatenate( yRotationTransform ).concatenate( zRotationTransform );
+
+				final AffineTransform3D shearTransform = new AffineTransform3D();
+//				shearTransform.set( ( rnd.nextDouble() - 0.5 ) * maxShearingRatio, 0, 1 ); // xy
+//				shearTransform.set( ( rnd.nextDouble() - 0.5 ) * maxShearingRatio, 0, 2 ); // xz
+//				shearTransform.set( ( rnd.nextDouble() - 0.5 ) * maxShearingRatio, 1, 0 ); // yx
+//				shearTransform.set( ( rnd.nextDouble() - 0.5 ) * maxShearingRatio, 1, 2 ); // yz
+//				shearTransform.set( ( rnd.nextDouble() - 0.5 ) * maxShearingRatio, 2, 0 ); // zx
+//				shearTransform.set( ( rnd.nextDouble() - 0.5 ) * maxShearingRatio, 2, 1 ); // zy
+
+				final AffineTransform3D linearTransform = new AffineTransform3D();
+				linearTransform.concatenate( scaleTransform ).concatenate( rotationTransform ).concatenate( shearTransform );
+
+
+				final long[] offset = new long[ nonOverlappingInterval.numDimensions() ];
+				for ( int d = 0; d < offset.length; ++d )
+					offset[ d ] = Math.round( ( ( nonOverlappingInterval.min( d ) - cropInterval.min( d ) ) / tileDimensions.dimension( d ) ) * tileDimensions.dimension( d ) * overlapRatio );
+
+				final long[] shift = new long[ nonOverlappingInterval.numDimensions() ];
+				for ( int d = 0; d < shift.length; ++d )
+				{
+					final int maxShiftPixels = ( int ) Math.round( tileDimensions.dimension( d ) * shiftRatio );
+					shift[ d ] = rnd.nextInt( maxShiftPixels + 1 ) - maxShiftPixels / 2;
+				}
+				System.out.println( "tile " + tiles.size() + ": shift=" + Arrays.toString( shift ) + ", gridIndex=" + Arrays.toString( gridIndex ) + ", rotation=" + Math.round( Math.toDegrees( zRotationAngle ) ) );
 
 				final Interval overlappingInterval = IntervalsHelper.offset( nonOverlappingInterval, offset );
 				final Interval shiftedInterval = IntervalsHelper.translate( overlappingInterval, shift );
