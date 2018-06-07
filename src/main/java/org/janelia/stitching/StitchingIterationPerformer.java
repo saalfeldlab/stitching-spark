@@ -464,7 +464,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 
 		int validPairs = 0;
 		for ( final SerializablePairWiseStitchingResult result : pairwiseStitchingResults )
-			if ( result.getIsValidOverlap() )
+			if ( result != null && result.getIsValidOverlap() )
 				++validPairs;
 
 		if ( logWriter != null )

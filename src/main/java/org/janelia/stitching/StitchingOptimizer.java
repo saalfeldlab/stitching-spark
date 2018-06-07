@@ -324,32 +324,35 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 		final TreeMap< Integer, ImagePlusTimePoint > fakeTileImagesMap = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts )
 		{
-			for ( final TileInfo originalTileInfo : tileBoxShift.getTileBoxPair().getOriginalTilePair().toArray() )
+			if ( tileBoxShift != null )
 			{
-				if ( !fakeTileImagesMap.containsKey( originalTileInfo.getIndex() ) )
+				for ( final TileInfo originalTileInfo : tileBoxShift.getTileBoxPair().getOriginalTilePair().toArray() )
 				{
-					try
+					if ( !fakeTileImagesMap.containsKey( originalTileInfo.getIndex() ) )
 					{
-						final ImageCollectionElement el;
-						switch ( mode )
+						try
 						{
-						case Translation:
-							el = Utils.createElementTranslationModel( originalTileInfo );
-							break;
-						case Affine:
-							el = Utils.createElementAffineModel( originalTileInfo );
-							break;
-						default:
-							throw new UnsupportedOperationException( "stitching mode is not supported: " + mode );
-						}
+							final ImageCollectionElement el;
+							switch ( mode )
+							{
+							case Translation:
+								el = Utils.createElementTranslationModel( originalTileInfo );
+								break;
+							case Affine:
+								el = Utils.createElementAffineModel( originalTileInfo );
+								break;
+							default:
+								throw new UnsupportedOperationException( "stitching mode is not supported: " + mode );
+							}
 
-						final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), ( java.awt.Image ) null );
-						final ImagePlusTimePoint fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
-						fakeTileImagesMap.put( originalTileInfo.getIndex(), fakeTile );
-					}
-					catch ( final Exception e )
-					{
-						e.printStackTrace();
+							final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), ( java.awt.Image ) null );
+							final ImagePlusTimePoint fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
+							fakeTileImagesMap.put( originalTileInfo.getIndex(), fakeTile );
+						}
+						catch ( final Exception e )
+						{
+							e.printStackTrace();
+						}
 					}
 				}
 			}
@@ -359,21 +362,24 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 		final Vector< ComparePointPair > comparePairs = new Vector<>();
 		for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts )
 		{
-			final ComparePointPair comparePointPair = new ComparePointPair(
-					fakeTileImagesMap.get( tileBoxShift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ),
-					fakeTileImagesMap.get( tileBoxShift.getTileBoxPair().getOriginalTilePair().getB().getIndex() )
-				);
+			if ( tileBoxShift != null )
+			{
+				final ComparePointPair comparePointPair = new ComparePointPair(
+						fakeTileImagesMap.get( tileBoxShift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ),
+						fakeTileImagesMap.get( tileBoxShift.getTileBoxPair().getOriginalTilePair().getB().getIndex() )
+					);
 
-			comparePointPair.setTileBoxPair( tileBoxShift.getTileBoxPair() );
-			comparePointPair.setRelativeShift( tileBoxShift.getOffset() );
-			comparePointPair.setCrossCorrelation( tileBoxShift.getCrossCorrelation() );
-			comparePointPair.setIsValidOverlap(
-					tileBoxShift.getIsValidOverlap()
-					&& tileBoxShift.getCrossCorrelation() > optimizationParameters.minCrossCorrelation
-					&& tileBoxShift.getVariance() != null && tileBoxShift.getVariance().doubleValue() > optimizationParameters.minVariance
-				);
+				comparePointPair.setTileBoxPair( tileBoxShift.getTileBoxPair() );
+				comparePointPair.setRelativeShift( tileBoxShift.getOffset() );
+				comparePointPair.setCrossCorrelation( tileBoxShift.getCrossCorrelation() );
+				comparePointPair.setIsValidOverlap(
+						tileBoxShift.getIsValidOverlap()
+						&& tileBoxShift.getCrossCorrelation() > optimizationParameters.minCrossCorrelation
+						&& tileBoxShift.getVariance() != null && tileBoxShift.getVariance().doubleValue() > optimizationParameters.minVariance
+					);
 
-			comparePairs.addElement( comparePointPair );
+				comparePairs.addElement( comparePointPair );
+			}
 		}
 
 		return comparePairs;
