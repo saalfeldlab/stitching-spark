@@ -87,7 +87,7 @@ public class StitchingTestGenerator
 	private static abstract class AbstractTestGenerator< T extends NativeType< T > & RealType< T > >
 	{
 		protected static final Dimensions tileDimensions = new FinalDimensions( 500, 400, 300 );
-		protected static final double overlapRatio = 0.1;
+		protected static final double overlapRatio = 0.2;
 		protected static final double cropRatio = 0.25;
 
 		protected final String n5Path;
@@ -451,7 +451,8 @@ public class StitchingTestGenerator
 	private static class FilteredTestGenerator< T extends NativeType< T > & RealType< T > > extends AbstractTestGenerator< T >
 	{
 		private static final double shiftRatio = 0.1;
-		private static final int rotationStepDegrees = 5;
+		private static final int shiftStep = 10;
+		private static final int rotationStepDegrees = 3;
 
 		protected static final double cropRatio = 0.5;
 
@@ -546,7 +547,7 @@ public class StitchingTestGenerator
 //				yRotationTransform.set( Math.cos( yRotationAngle ), 2, 2 );
 
 				final AffineTransform3D zRotationTransform = new AffineTransform3D();
-				final double zRotationAngle = Math.toRadians( ( gridIndex[ 0 ] + 1 ) * rotationStepDegrees );
+				final double zRotationAngle = Math.toRadians( -(gridIndex[ 0 ] * rotationStepDegrees) );
 				zRotationTransform.set( Math.cos( zRotationAngle ), 0, 0 );
 				zRotationTransform.set( -Math.sin( zRotationAngle ), 0, 1 );
 				zRotationTransform.set( Math.sin( zRotationAngle ), 1, 0 );
@@ -571,12 +572,13 @@ public class StitchingTestGenerator
 				for ( int d = 0; d < offset.length; ++d )
 					offset[ d ] = Math.round( ( ( nonOverlappingInterval.min( d ) - cropInterval.min( d ) ) / tileDimensions.dimension( d ) ) * tileDimensions.dimension( d ) * overlapRatio );
 
-				final long[] shift = new long[ nonOverlappingInterval.numDimensions() ];
-				for ( int d = 0; d < shift.length; ++d )
-				{
-					final int maxShiftPixels = ( int ) Math.round( tileDimensions.dimension( d ) * shiftRatio );
-					shift[ d ] = rnd.nextInt( maxShiftPixels + 1 ) - maxShiftPixels / 2;
-				}
+				final long[] shift = new long[] { 0, shiftStep * gridIndex[ 0 ] * gridIndex[ 0 ], 0 };
+//				final long[] shift = new long[ nonOverlappingInterval.numDimensions() ];
+//				for ( int d = 0; d < shift.length; ++d )
+//				{
+//					final int maxShiftPixels = ( int ) Math.round( tileDimensions.dimension( d ) * shiftRatio );
+//					shift[ d ] = rnd.nextInt( maxShiftPixels + 1 ) - maxShiftPixels / 2 + shiftStep[ d ] * gridIndex[ d ];
+//				}
 				System.out.println( "tile " + tiles.size() + ": shift=" + Arrays.toString( shift ) + ", gridIndex=" + Arrays.toString( gridIndex ) + ", rotation=" + Math.round( Math.toDegrees( zRotationAngle ) ) );
 
 				final Interval overlappingInterval = IntervalsHelper.offset( nonOverlappingInterval, offset );
