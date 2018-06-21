@@ -6,24 +6,23 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.Vector;
-import java.util.concurrent.ExecutionException;
 
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.util.concurrent.MultithreadedExecutor;
 
 import ij.ImagePlus;
 import mpicbg.models.Affine3D;
-import mpicbg.models.IllDefinedDataPointsException;
-import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
 import net.imglib2.realtransform.AffineTransform3D;
+import scala.Tuple2;
 
 public class WarpedStitchingOptimizer implements Serializable
 {
@@ -47,8 +46,6 @@ public class WarpedStitchingOptimizer implements Serializable
 	{
 		private final C1WarpedStitchingArguments args;
 
-		public final List< ImagePlusTimePoint > optimized;
-
 		public final OptimizationParameters optimizationParameters;
 		public final double retainedGraphRatio;
 		public final double maxAllowedError;
@@ -63,7 +60,6 @@ public class WarpedStitchingOptimizer implements Serializable
 
 		public OptimizationResult(
 				final C1WarpedStitchingArguments args,
-				final List< ImagePlusTimePoint > optimized,
 				final double maxAllowedError,
 				final OptimizationParameters optimizationParameters,
 				final int fullGraphSize,
@@ -75,7 +71,6 @@ public class WarpedStitchingOptimizer implements Serializable
 				final int replacedTilesTranslation )
 		{
 			this.args = args;
-			this.optimized = optimized;
 			this.maxAllowedError = maxAllowedError;
 			this.optimizationParameters = optimizationParameters;
 			this.remainingGraphSize = remainingGraphSize;
@@ -128,12 +123,23 @@ public class WarpedStitchingOptimizer implements Serializable
 			// if everything above is the same, the order is determined by smaller or higher error
 			return Double.compare( maxDisplacement, other.maxDisplacement );
 		}
+
+		private static class OptimizationResultComparator implements Comparator< OptimizationResult >, Serializable
+		{
+			@Override
+			public int compare( final OptimizationResult a, final OptimizationResult b )
+			{
+				return a.compareTo( b );
+			}
+		}
 	}
 
+	private final transient JavaSparkContext sparkContext;
 	private final C1WarpedStitchingJob job;
 
-	public WarpedStitchingOptimizer( final C1WarpedStitchingJob job )
+	public WarpedStitchingOptimizer( final JavaSparkContext sparkContext, final C1WarpedStitchingJob job )
 	{
+		this.sparkContext = sparkContext;
 		this.job = job;
 	}
 
@@ -156,7 +162,7 @@ public class WarpedStitchingOptimizer implements Serializable
 				final double maxAllowedError = job.getArgs().maxStitchingError();
 				logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 
-				final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter );
+				final Tuple2< OptimizationResult, List< ImagePlusTimePoint > > bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter );
 
 				// Update tile transforms
 				for ( int channel = 0; channel < job.getChannels(); channel++ )
@@ -164,7 +170,7 @@ public class WarpedStitchingOptimizer implements Serializable
 					final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( job.getTiles( channel ) );
 
 					final List< TileInfo > newTiles = new ArrayList<>();
-					for ( final ImagePlusTimePoint optimizedTile : bestOptimization.optimized )
+					for ( final ImagePlusTimePoint optimizedTile : bestOptimization._2() )
 					{
 						final Affine3D< ? > affineModel = ( Affine3D< ? > ) optimizedTile.getModel();
 						final double[][] matrix = new double[ 3 ][ 4 ];
@@ -193,7 +199,7 @@ public class WarpedStitchingOptimizer implements Serializable
 							tilesToSave,
 							dataProvider.getJsonWriter( URI.create( PathResolver.get(
 									basePath,
-									"ch" + channel + "-" + ( bestOptimization.translationOnlyStitching ? "translation" : "affine" ) + "-stitched.json"
+									"ch" + channel + "-" + ( bestOptimization._1().translationOnlyStitching ? "translation" : "affine" ) + "-stitched.json"
 								) ) )
 						);
 				}
@@ -201,7 +207,7 @@ public class WarpedStitchingOptimizer implements Serializable
 		}
 	}
 
-	private OptimizationResult findBestOptimization( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final double maxAllowedError, final PrintWriter logWriter ) throws IOException
+	private Tuple2< OptimizationResult, List< ImagePlusTimePoint > > findBestOptimization( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final double maxAllowedError, final PrintWriter logWriter ) throws IOException
 	{
 		if ( job.getArgs().translationOnlyStitching() && job.getArgs().affineOnlyStitching() )
 			throw new IllegalArgumentException( "translationOnly & affineOnly are not allowed at the same time" );
@@ -214,70 +220,59 @@ public class WarpedStitchingOptimizer implements Serializable
 		final SerializableStitchingParameters stitchingParameters = job.getParams();
 		final int tilesCount = job.getTiles( 0 ).length;
 
+		final Broadcast< List< SerializablePairWiseStitchingResult > > broadcastedTileBoxShifts = sparkContext.broadcast( tileBoxShifts );
 		GlobalOptimizationPerformer.suppressOutput();
 
-		final List< OptimizationResult > optimizationResultList = new ArrayList<>();
-		try ( final MultithreadedExecutor threadPool = new MultithreadedExecutor() )
-		{
-			threadPool.run( optimizationParametersIndex ->
-					{
-						final OptimizationParameters optimizationParameters = optimizationParametersList.get( optimizationParametersIndex );
+		final List< Tuple2< OptimizationResult, List< ImagePlusTimePoint > > > sortedResults = sparkContext
+			.parallelize( optimizationParametersList, optimizationParametersList.size() )
+			.mapToPair( optimizationParameters ->
+				{
+					final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters );
 
-						final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( tileBoxShifts, optimizationParameters );
+					GlobalOptimizationPerformer.suppressOutput();
+					final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
+					final List< ImagePlusTimePoint > optimizedTileConfiguration = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
 
-						final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
-						GlobalOptimizationPerformer.suppressOutput();
-						final List< ImagePlusTimePoint > optimized;
+					final OptimizationResult optimizationResult = new OptimizationResult(
+							job.getArgs(),
+							maxAllowedError,
+							optimizationParameters,
+							tilesCount,
+							optimizationPerformer.remainingGraphSize,
+							optimizationPerformer.remainingPairs,
+							optimizationPerformer.avgDisplacement,
+							optimizationPerformer.maxDisplacement,
+							optimizationPerformer.translationOnlyStitching,
+							optimizationPerformer.replacedTilesTranslation
+						);
 
-						try
-						{
-							optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
-						}
-						catch ( final NotEnoughDataPointsException | IllDefinedDataPointsException | InterruptedException | ExecutionException e )
-						{
-							throw new RuntimeException( e );
-						}
-
-						final OptimizationResult optimizationResult = new OptimizationResult(
-								job.getArgs(),
-								optimized,
-								maxAllowedError,
-								optimizationParameters,
-								tilesCount,
-								optimizationPerformer.remainingGraphSize,
-								optimizationPerformer.remainingPairs,
-								optimizationPerformer.avgDisplacement,
-								optimizationPerformer.maxDisplacement,
-								optimizationPerformer.translationOnlyStitching,
-								optimizationPerformer.replacedTilesTranslation
-							);
-
-						synchronized ( optimizationResultList )
-						{
-							optimizationResultList.add( optimizationResult );
-							System.err.println( "  done " + optimizationResultList.size() + " out of " + optimizationParametersList.size() );
-						}
-					},
-					optimizationParametersList.size()
-				);
-		}
-		catch ( final InterruptedException | ExecutionException e )
-		{
-			throw new RuntimeException( e );
-		}
+					return new Tuple2<>( optimizationResult, optimizedTileConfiguration );
+				}
+			)
+			.sortByKey( new OptimizationResult.OptimizationResultComparator() )
+			.zipWithIndex()
+			.mapToPair( x -> new Tuple2<>( x._1()._1(), x._2().longValue() == 0 ? x._1()._2() : null ) ) // keep optimized tile configuration only for the best result
+			.collect();
 
 		GlobalOptimizationPerformer.restoreOutput();
+		broadcastedTileBoxShifts.destroy();
 
-		optimizationResultList.removeAll( Collections.singleton( null ) );
-		Collections.sort( optimizationResultList );
-
-		if ( optimizationResultList.isEmpty() )
+		if ( sortedResults.isEmpty() )
 			throw new RuntimeException( "No results available" );
 
 		if ( logWriter != null )
-			logOptimizationResults( logWriter, optimizationResultList );
+		{
+			final List< OptimizationResult > optimizationResults = new ArrayList<>();
+			for ( final Tuple2< OptimizationResult, List< ImagePlusTimePoint > > resultingStatsAndConfig : sortedResults )
+				optimizationResults.add( resultingStatsAndConfig._1() );
+			logOptimizationResults( logWriter, optimizationResults );
+		}
 
-		return optimizationResultList.get( 0 );
+		final Tuple2< OptimizationResult, List< ImagePlusTimePoint > > bestResult = sortedResults.get( 0 );
+		if ( bestResult._2() == null )
+			throw new RuntimeException( "Best resulting tile configuration is not available" );
+
+		return bestResult;
 	}
 
 	private Vector< ComparePointPair > createComparePointPairs( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final OptimizationParameters optimizationParameters )
