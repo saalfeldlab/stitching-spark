@@ -3,6 +3,7 @@ package org.janelia.stitching;
 import mpicbg.models.AffineModel3D;
 import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.Model;
+import mpicbg.models.RigidModel3D;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
 
@@ -15,8 +16,9 @@ import mpicbg.models.TranslationModel3D;
 
 public class TileModelFactory {
 
-	private static final double REGULARIZER_SIMILARITY = 0.1;
-	private static final double REGULARIZER_TRANSLATION = 0.1;
+//	private static final double REGULARIZER_SIMILARITY = 0.1;
+//	private static final double REGULARIZER_TRANSLATION = 0.1;
+	private static final double REGULARIZER = 0.1;
 
 	/**
 	 * @return default translational model initialized to origin
@@ -47,9 +49,10 @@ public class TileModelFactory {
 		if ( tile.numDimensions() != 3 )
 			throw new Exception( "3d only" );
 
+		/*
 		final AffineModel3D affineModel = new AffineModel3D();
 
-		/*
+
 		// initialize the model with the known tile transform
 		final AffineTransform3D tileTransform = TileOperations.getTileTransform( tile );
 		affineModel.set(
@@ -68,9 +71,10 @@ public class TileModelFactory {
 				REGULARIZER_SIMILARITY
 			);*/
 		return ( M ) new InterpolatedAffineModel3D<>(
-				affineModel,
-				new TranslationModel3D(),
-				REGULARIZER_TRANSLATION
+				new AffineModel3D(),
+//				new TranslationModel3D(),
+				new RigidModel3D(),
+				REGULARIZER
 			);
 	}
 
