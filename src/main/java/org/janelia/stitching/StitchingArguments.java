@@ -85,14 +85,6 @@ public class StitchingArguments implements Serializable {
 			usage = "Export overlaps channel based on which connections between tiles have been used for final stitching")
 	private boolean exportOverlaps = false;
 
-	@Option(name = "--blending", required = false,
-			usage = "Export the dataset using blending strategy instead of hardcut (max.min.distance)")
-	private boolean blending = false;
-
-	@Option(name = "--maxintensity", required = false,
-			usage = "Export the dataset using max intensity strategy instead of hardcut (max.min.distance)")
-	private boolean maxIntensity = false;
-
 	/**
 	 * Toggle pipeline stages. By default all stages are executed.
 	 */
