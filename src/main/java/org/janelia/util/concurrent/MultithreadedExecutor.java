@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 import java.util.function.IntToDoubleFunction;
+import java.util.function.IntToLongFunction;
 
 public class MultithreadedExecutor implements AutoCloseable
 {
@@ -55,7 +56,7 @@ public class MultithreadedExecutor implements AutoCloseable
 	}
 
 
-	public double sum( final IntToDoubleFunction func, final int totalSize ) throws InterruptedException, ExecutionException
+	public double sumReal( final IntToDoubleFunction func, final int totalSize ) throws InterruptedException, ExecutionException
 	{
 		final double[] partialSums = new double[ numThreads ];
 
@@ -67,29 +68,67 @@ public class MultithreadedExecutor implements AutoCloseable
 		return sum;
 	}
 
+	public long sum( final IntToLongFunction func, final int totalSize ) throws InterruptedException, ExecutionException
+	{
+		final long[] partialSums = new long[ numThreads ];
 
-	public double min( final IntToDoubleFunction func, final int totalSize ) throws InterruptedException, ExecutionException
+		run( ( thread, i ) -> { partialSums[ thread ] += func.applyAsLong( i ); return 0; }, totalSize );
+
+		long sum = 0;
+		for ( final long partialSum : partialSums )
+			sum += partialSum;
+		return sum;
+	}
+
+
+	public double minReal( final IntToDoubleFunction func, final int totalSize ) throws InterruptedException, ExecutionException
 	{
 		final double[] partialMins = new double[ numThreads ];
-		Arrays.fill( partialMins, Double.MAX_VALUE );
+		Arrays.fill( partialMins, Double.POSITIVE_INFINITY );
 
 		run( ( thread, i ) -> { partialMins[ thread ] = Math.min( func.applyAsDouble( i ), partialMins[ thread ] ); return 0; }, totalSize );
 
-		double min = Double.MAX_VALUE;
+		double min = Double.POSITIVE_INFINITY;
 		for ( final double partialMin : partialMins )
 			min = Math.min( partialMin, min );
 		return min;
 	}
 
-	public double max( final IntToDoubleFunction func, final int totalSize ) throws InterruptedException, ExecutionException
+	public long min( final IntToLongFunction func, final int totalSize ) throws InterruptedException, ExecutionException
+	{
+		final long[] partialMins = new long[ numThreads ];
+		Arrays.fill( partialMins, Long.MAX_VALUE );
+
+		run( ( thread, i ) -> { partialMins[ thread ] = Math.min( func.applyAsLong( i ), partialMins[ thread ] ); return 0; }, totalSize );
+
+		long min = Long.MAX_VALUE;
+		for ( final long partialMin : partialMins )
+			min = Math.min( partialMin, min );
+		return min;
+	}
+
+	public double maxReal( final IntToDoubleFunction func, final int totalSize ) throws InterruptedException, ExecutionException
 	{
 		final double[] partialMaxs = new double[ numThreads ];
-		Arrays.fill( partialMaxs, -Double.MAX_VALUE );
+		Arrays.fill( partialMaxs, Double.NEGATIVE_INFINITY );
 
 		run( ( thread, i ) -> { partialMaxs[ thread ] = Math.max( func.applyAsDouble( i ), partialMaxs[ thread ] ); return 0; }, totalSize );
 
-		double max = -Double.MAX_VALUE;
+		double max = Double.NEGATIVE_INFINITY;
 		for ( final double partialMax : partialMaxs )
+			max = Math.max( partialMax, max );
+		return max;
+	}
+
+	public long max( final IntToLongFunction func, final int totalSize ) throws InterruptedException, ExecutionException
+	{
+		final long[] partialMaxs = new long[ numThreads ];
+		Arrays.fill( partialMaxs, Long.MIN_VALUE );
+
+		run( ( thread, i ) -> { partialMaxs[ thread ] = Math.max( func.applyAsLong( i ), partialMaxs[ thread ] ); return 0; }, totalSize );
+
+		long max = Long.MIN_VALUE;
+		for ( final long partialMax : partialMaxs )
 			max = Math.max( partialMax, max );
 		return max;
 	}

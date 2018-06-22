@@ -2364,7 +2364,7 @@ public class IlluminationCorrectionSliceParallelShrinked implements Serializable
 			for (int j = 0; j < ind.length; j++)
 			{
 				final int i = ind[ind.length-j-1];
-				al[i] = multithreadedExecutor.sum( k -> (S[k][i] * d[k]) / YS[i], S.length );
+				al[i] = multithreadedExecutor.sumReal( k -> (S[k][i] * d[k]) / YS[i], S.length );
 				multithreadedExecutor.run( k -> d[k] -= al[i] * Y[k][i], d.length );
 			}
 
@@ -2374,7 +2374,7 @@ public class IlluminationCorrectionSliceParallelShrinked implements Serializable
 			for (int ii = 0; ii < ind.length; ii++)
 			{
 				final int i = ii;
-				be[ind[i]] = multithreadedExecutor.sum( j -> Y[j][ind[i]] * d[j], Y.length ) / YS[ind[i]];
+				be[ind[i]] = multithreadedExecutor.sumReal( j -> Y[j][ind[i]] * d[j], Y.length ) / YS[ind[i]];
 				multithreadedExecutor.run( j -> d[j] += S[j][ind[i]] * (al[ind[i]] - be[ind[i]]), d.length );
 			}
 

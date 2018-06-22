@@ -29,8 +29,10 @@ public class MultithreadedExecutorTest
 		{
 			final int totalSteps = rnd.nextInt( 100000 );
 			final int totalCount = (int) multithreadedExecutor.sum( i -> 1, totalSteps );
-
 			Assert.assertEquals( totalSteps, totalCount );
+
+			final int totalCountReal = (int) multithreadedExecutor.sumReal( i -> 1, totalSteps );
+			Assert.assertEquals( totalSteps, totalCountReal );
 		}
 	}
 
