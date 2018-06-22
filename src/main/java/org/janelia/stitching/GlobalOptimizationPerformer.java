@@ -167,7 +167,7 @@ public class GlobalOptimizationPerformer
 		final Set< Tile< ? > > tilesSet = new LinkedHashSet<>( connectedTilesMap.keySet() );
 
 		if ( tilesSet.isEmpty() )
-			return null;
+			return new ArrayList<>();
 
 		// print graph sizes
 		final TreeMap< Integer, Integer > graphSizeToCount = getGraphsSize( tilesSet );
