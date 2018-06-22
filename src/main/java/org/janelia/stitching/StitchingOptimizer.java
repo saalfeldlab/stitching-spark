@@ -35,14 +35,16 @@ public class StitchingOptimizer implements Serializable
 		return Math.min( INITIAL_MAX_ALLOWED_ERROR + iteration * MAX_ALLOWED_ERROR_STEP, MAX_ALLOWED_ERROR_LIMIT );
 	}
 
-	public static enum OptimizerMode
+	public static enum OptimizerMode implements Serializable
 	{
 		Translation,
 		Affine
 	}
 
-	private static final class OptimizationParameters
+	private static final class OptimizationParameters implements Serializable
 	{
+		private static final long serialVersionUID = -8853813205822652603L;
+
 		public final double minCrossCorrelation;
 		public final double minVariance;
 
@@ -53,9 +55,9 @@ public class StitchingOptimizer implements Serializable
 		}
 	}
 
-	private static final class OptimizationResult implements Comparable< OptimizationResult >
+	private static final class OptimizationResult implements Comparable< OptimizationResult >, Serializable
 	{
-		public final List< ImagePlusTimePoint > optimized;
+		private static final long serialVersionUID = -3606758225118852918L;
 
 		public final OptimizationParameters optimizationParameters;
 		public final double retainedGraphRatio;
@@ -69,8 +71,9 @@ public class StitchingOptimizer implements Serializable
 		public final boolean translationOnlyStitching;
 		public final int replacedTilesTranslation;
 
+		public List< String > newTileConfigurationPaths;
+
 		public OptimizationResult(
-				final List< ImagePlusTimePoint > optimized,
 				final double maxAllowedError,
 				final OptimizationParameters optimizationParameters,
 				final int fullGraphSize,
@@ -81,7 +84,6 @@ public class StitchingOptimizer implements Serializable
 				final boolean translationOnlyStitching,
 				final int replacedTilesTranslation )
 		{
-			this.optimized = optimized;
 			this.maxAllowedError = maxAllowedError;
 			this.optimizationParameters = optimizationParameters;
 			this.remainingGraphSize = remainingGraphSize;
@@ -120,7 +122,7 @@ public class StitchingOptimizer implements Serializable
 
 			// both are within the accepted error range
 
-			//  better if the resulting graph is larger
+			// better if the resulting graph is larger
 			if ( remainingGraphSize != other.remainingGraphSize )
 				return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
 
@@ -160,8 +162,8 @@ public class StitchingOptimizer implements Serializable
 		final DataProvider dataProvider = job.getDataProvider();
 
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
-		final String iterationDirname = "iter" + iteration;
-		final String pairwiseShiftsPath = PathResolver.get( basePath, iterationDirname, "pairwise.json" );
+		final String iterationDirPath = PathResolver.get( basePath, "iter" + iteration );
+		final String pairwiseShiftsPath = PathResolver.get( iterationDirPath, "pairwise.json" );
 
 		final List< SerializablePairWiseStitchingResult > tileBoxShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 		final double maxAllowedError = getMaxAllowedError( iteration );
@@ -173,48 +175,20 @@ public class StitchingOptimizer implements Serializable
 			logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 		}
 
-		final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter, mode );
+		final OptimizationResult bestOptimization = findBestOptimization(
+				tileBoxShifts,
+				maxAllowedError,
+				logWriter,
+				mode,
+				iterationDirPath
+			);
 
-		// Update tile transforms
-		for ( int channel = 0; channel < job.getChannels(); channel++ )
+		// copy best resulting configuration to the base output path
+		for ( final String bestTileConfigurationPath : bestOptimization.newTileConfigurationPaths )
 		{
-			final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( job.getTiles( channel ) );
-
-			final List< TileInfo > newTiles = new ArrayList<>();
-			for ( final ImagePlusTimePoint optimizedTile : bestOptimization.optimized )
-			{
-				final Affine3D< ? > affineModel = ( Affine3D< ? > ) optimizedTile.getModel();
-				final double[][] matrix = new double[ 3 ][ 4 ];
-				affineModel.toMatrix( matrix );
-
-				final AffineTransform3D tileTransform = new AffineTransform3D();
-				tileTransform.set( matrix );
-
-				if ( tilesMap.containsKey( optimizedTile.getImpId() ) )
-				{
-					final TileInfo newTile = tilesMap.get( optimizedTile.getImpId() ).clone();
-					newTile.setTransform( tileTransform );
-					newTiles.add( newTile );
-				}
-				else
-				{
-					throw new RuntimeException("tile is not in input set");
-				}
-			}
-
-			// sort the tiles by their index
-			final TileInfo[] tilesToSave = Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
-
-			// save final tiles configuration
-			TileInfoJSONProvider.saveTilesConfiguration(
-					tilesToSave,
-					dataProvider.getJsonWriter( URI.create( PathResolver.get(
-							basePath,
-							iterationDirname,
-							Utils.addFilenameSuffix(
-									PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( channel ) ),
-									"-stitched" )
-						) ) )
+			job.getDataProvider().copyFile(
+					URI.create( bestTileConfigurationPath ),
+					URI.create( PathResolver.get( iterationDirPath, PathResolver.getFileName( bestTileConfigurationPath ) ) )
 				);
 		}
 
@@ -262,7 +236,8 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
 			final double maxAllowedError,
 			final PrintWriter logWriter,
-			final OptimizerMode mode )
+			final OptimizerMode mode,
+			final String iterationDirPath ) throws IOException
 	{
 		final List< OptimizationParameters > optimizationParametersList = new ArrayList<>();
 		for ( double testMinCrossCorrelation = 0.1; testMinCrossCorrelation <= 1; testMinCrossCorrelation += 0.05 )
@@ -272,47 +247,81 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 		final SerializableStitchingParameters stitchingParameters = job.getParams();
 		final int tilesCount = job.getTiles( 0 ).length;
 
+		final String resultingConfigsDirPath = PathResolver.get( iterationDirPath, "resulting-tile-configurations" );
+		job.getDataProvider().createFolder( URI.create( resultingConfigsDirPath ) );
+
 		final Broadcast< List< SerializablePairWiseStitchingResult > > broadcastedTileBoxShifts = sparkContext.broadcast( tileBoxShifts );
+
+		final List< TileInfo[] > inputTileChannels = new ArrayList<>();
+		for ( int channel = 0; channel < job.getChannels(); ++channel )
+			inputTileChannels.add( job.getTiles( channel ) );
+		final Broadcast< List< TileInfo[] > > broadcastedInputTileChannels = sparkContext.broadcast( inputTileChannels );
 
 		GlobalOptimizationPerformer.suppressOutput();
 
-		final List< OptimizationResult > optimizationResultList = new ArrayList<>( sparkContext.parallelize( optimizationParametersList, optimizationParametersList.size() ).map( optimizationParameters ->
-			{
-				final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters, mode );
+		final List< OptimizationResult > optimizationResults = new ArrayList<>( sparkContext
+				.parallelize( optimizationParametersList, optimizationParametersList.size() )
+				.map( optimizationParameters ->
+					{
+						final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters, mode );
 
-				final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
-				GlobalOptimizationPerformer.suppressOutput();
-				final List< ImagePlusTimePoint > optimized = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
+						GlobalOptimizationPerformer.suppressOutput();
+						final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
+						final List< ImagePlusTimePoint > optimizedTileConfiguration = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
 
-				final OptimizationResult optimizationResult = new OptimizationResult(
-						optimized,
-						maxAllowedError,
-						optimizationParameters,
-						tilesCount,
-						optimizationPerformer.remainingGraphSize,
-						optimizationPerformer.remainingPairs,
-						optimizationPerformer.avgDisplacement,
-						optimizationPerformer.maxDisplacement,
-						optimizationPerformer.translationOnlyStitching,
-						optimizationPerformer.replacedTilesTranslation
-					);
-				return optimizationResult;
-			}
-		).collect() );
+						final OptimizationResult optimizationResult = new OptimizationResult(
+								maxAllowedError,
+								optimizationParameters,
+								tilesCount,
+								optimizationPerformer.remainingGraphSize,
+								optimizationPerformer.remainingPairs,
+								optimizationPerformer.avgDisplacement,
+								optimizationPerformer.maxDisplacement,
+								optimizationPerformer.translationOnlyStitching,
+								optimizationPerformer.replacedTilesTranslation
+							);
 
-		broadcastedTileBoxShifts.destroy();
+						final String optimizedTileConfigurationFolder = PathResolver.get(
+								resultingConfigsDirPath,
+								String.format(
+										"cross.corr=%.2f,variance=%.2f",
+										optimizationResult.optimizationParameters.minCrossCorrelation,
+										optimizationResult.optimizationParameters.minVariance
+									)
+							);
+						final DataProvider dataProviderLocal = job.getDataProvider();
+						dataProviderLocal.createFolder( URI.create( optimizedTileConfigurationFolder ) );
+
+						optimizationResult.newTileConfigurationPaths = new ArrayList<>();
+						for ( int channel = 0; channel < job.getChannels(); channel++ )
+						{
+							final TileInfo[] newChannelTiles = updateTileTransformations( broadcastedInputTileChannels.value().get( channel ), optimizedTileConfiguration );
+							final String newTileConfigurationPath = PathResolver.get(
+									optimizedTileConfigurationFolder,
+									Utils.addFilenameSuffix(
+											PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( channel ) ),
+											"-stitched"
+										)
+								);
+							TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, dataProviderLocal.getJsonWriter( URI.create( newTileConfigurationPath ) ) );
+							optimizationResult.newTileConfigurationPaths.add( newTileConfigurationPath );
+						}
+
+						return optimizationResult;
+					} )
+				.collect()
+			);
+
 		GlobalOptimizationPerformer.restoreOutput();
+		broadcastedTileBoxShifts.destroy();
+		broadcastedInputTileChannels.destroy();
 
-		optimizationResultList.removeAll( Collections.singleton( null ) );
-		Collections.sort( optimizationResultList );
-
-		if ( optimizationResultList.isEmpty() )
-			throw new RuntimeException( "No results available" );
+		Collections.sort( optimizationResults );
 
 		if ( logWriter != null )
-			logOptimizationResults( logWriter, optimizationResultList );
+			logOptimizationResults( logWriter, optimizationResults );
 
-		return optimizationResultList.get( 0 );
+		return optimizationResults.get( 0 );
 	}
 
 	private Vector< ComparePointPair > createComparePointPairs(
@@ -383,6 +392,35 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 		}
 
 		return comparePairs;
+	}
+
+	private TileInfo[] updateTileTransformations( final TileInfo[] tiles, final List< ImagePlusTimePoint > newTransformations )
+	{
+		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
+		final List< TileInfo > newTiles = new ArrayList<>();
+		for ( final ImagePlusTimePoint optimizedTile : newTransformations )
+		{
+			final Affine3D< ? > affineModel = ( Affine3D< ? > ) optimizedTile.getModel();
+			final double[][] matrix = new double[ 3 ][ 4 ];
+			affineModel.toMatrix( matrix );
+
+			final AffineTransform3D tileTransform = new AffineTransform3D();
+			tileTransform.set( matrix );
+
+			if ( tilesMap.containsKey( optimizedTile.getImpId() ) )
+			{
+				final TileInfo newTile = tilesMap.get( optimizedTile.getImpId() ).clone();
+				newTile.setTransform( tileTransform );
+				newTiles.add( newTile );
+			}
+			else
+			{
+				throw new RuntimeException( "tile is not in the input set" );
+			}
+		}
+
+		// sort the tiles by their index
+		return Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
 	}
 
 	private void logOptimizationResults( final PrintWriter logWriter, final List< OptimizationResult > optimizationResultList )
