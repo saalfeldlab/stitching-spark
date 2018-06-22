@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
-import java.util.TreeSet;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.DataProvider;
@@ -86,7 +85,7 @@ public class StitchingTestGenerator
 
 	private static abstract class AbstractTestGenerator< T extends NativeType< T > & RealType< T > >
 	{
-		protected static final Dimensions tileDimensions = new FinalDimensions( 500, 400, 300 );
+		protected static final Dimensions tileDimensions = new FinalDimensions( 500, 400, 350 );
 		protected static final double overlapRatio = 0.2;
 		protected static final double cropRatio = 0.25;
 
@@ -489,38 +488,7 @@ public class StitchingTestGenerator
 
 			System.out.println( "intervals: " + nonOverlappingIntervals.size() );
 
-			@SuppressWarnings( "unchecked" )
-			final TreeSet< Long >[] dimCoords = new TreeSet[ img.numDimensions() ];
-			for ( int d = 0; d < img.numDimensions(); ++d )
-				dimCoords[ d ] = new TreeSet<>();
 			for ( final Interval nonOverlappingInterval : nonOverlappingIntervals )
-				for ( int d = 0; d < nonOverlappingInterval.numDimensions(); ++d )
-					dimCoords[ d ].add( nonOverlappingInterval.min( d ) );
-			final Long[] dimMidCoord = new Long[ dimCoords.length ];
-			for ( int d = 0; d < img.numDimensions(); ++d )
-				dimMidCoord[ d ] = dimCoords[ d ].toArray( new Long[ 0 ] )[ dimCoords[ d ].size() / 2 ];
-
-			// allow all X and Y coords
-			dimMidCoord[ 0 ] = null;
-			dimMidCoord[ 1 ] = null;
-
-			System.out.println( "Including only intervals at: " + Arrays.toString( dimMidCoord ) );
-
-			final List< Interval > filteredNonOverlappingIntervals = new ArrayList<>();
-			for ( final Interval nonOverlappingInterval : nonOverlappingIntervals )
-			{
-				// filter intervals by coords
-				boolean include = true;
-				for ( int d = 0; d < nonOverlappingInterval.numDimensions(); ++d )
-					if ( dimMidCoord[ d ] != null && dimMidCoord[ d ].longValue() != nonOverlappingInterval.min( d ) )
-						include = false;
-				if ( include )
-					filteredNonOverlappingIntervals.add( nonOverlappingInterval );
-			}
-
-			System.out.println( "Filtered " + filteredNonOverlappingIntervals.size() + " intervals out of " + nonOverlappingIntervals.size() );
-
-			for ( final Interval nonOverlappingInterval : filteredNonOverlappingIntervals )
 			{
 				final int[] gridIndex = new int[ nonOverlappingInterval.numDimensions() ];
 				for ( int d = 0; d < gridIndex.length; ++d )
