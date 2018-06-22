@@ -110,7 +110,6 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			else
 			{
 				movingBoxSearchRadius = null;
-				System.out.println( "Matching is not constrained" );
 			}
 		}
 

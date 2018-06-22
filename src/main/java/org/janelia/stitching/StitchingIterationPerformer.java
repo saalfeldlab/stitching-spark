@@ -71,6 +71,9 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		{
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
+				if ( iteration == 0 )
+					logWriter.println( job.getArgs().constrainMatchingOnFirstIteration() ? "Constrained pairwise matching" : "Unconstrained pairwise matching" );
+
 				broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator() );
 				final TileInfo[] tiles = getTilesWithEstimatedTransformation( logWriter );
 
