@@ -6,7 +6,7 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -22,7 +22,6 @@ import mpicbg.models.Affine3D;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
 import net.imglib2.realtransform.AffineTransform3D;
-import scala.Tuple2;
 
 public class WarpedStitchingOptimizer implements Serializable
 {
@@ -61,6 +60,8 @@ public class WarpedStitchingOptimizer implements Serializable
 
 		public final boolean translationOnlyStitching;
 		public final int replacedTilesTranslation;
+
+		public List< String > newTileConfigurationPaths;
 
 		public OptimizationResult(
 				final C1WarpedStitchingArguments args,
@@ -127,17 +128,6 @@ public class WarpedStitchingOptimizer implements Serializable
 			// if everything above is the same, the order is determined by smaller or higher error
 			return Double.compare( maxDisplacement, other.maxDisplacement );
 		}
-
-		private static class OptimizationResultComparator implements Comparator< OptimizationResult >, Serializable
-		{
-			private static final long serialVersionUID = 8054249734251618797L;
-
-			@Override
-			public int compare( final OptimizationResult a, final OptimizationResult b )
-			{
-				return a.compareTo( b );
-			}
-		}
 	}
 
 	private final transient JavaSparkContext sparkContext;
@@ -168,10 +158,10 @@ public class WarpedStitchingOptimizer implements Serializable
 				final double maxAllowedError = job.getArgs().maxStitchingError();
 				logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 
-				final Tuple2< OptimizationResult, List< String > > bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter );
+				final OptimizationResult bestOptimization = findBestOptimization( tileBoxShifts, maxAllowedError, logWriter );
 
 				// copy best resulting configuration to the base output path
-				for ( final String bestTileConfigurationPath : bestOptimization._2() )
+				for ( final String bestTileConfigurationPath : bestOptimization.newTileConfigurationPaths )
 				{
 					job.getDataProvider().copyFile(
 							URI.create( bestTileConfigurationPath ),
@@ -182,7 +172,7 @@ public class WarpedStitchingOptimizer implements Serializable
 		}
 	}
 
-	private Tuple2< OptimizationResult, List< String > > findBestOptimization(
+	private OptimizationResult findBestOptimization(
 			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
 			final double maxAllowedError,
 			final PrintWriter logWriter ) throws IOException
@@ -209,9 +199,9 @@ public class WarpedStitchingOptimizer implements Serializable
 			inputTileChannels.add( job.getTiles( channel ) );
 		final Broadcast< List< TileInfo[] > > broadcastedInputTileChannels = sparkContext.broadcast( inputTileChannels );
 
-		final List< Tuple2< OptimizationResult, List< String > > > sortedOptimizationResults = sparkContext
+		final List< OptimizationResult > optimizationResults = new ArrayList<>( sparkContext
 			.parallelize( optimizationParametersList, optimizationParametersList.size() )
-			.mapToPair( optimizationParameters ->
+			.map( optimizationParameters ->
 				{
 					final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters );
 
@@ -243,7 +233,7 @@ public class WarpedStitchingOptimizer implements Serializable
 					final DataProvider dataProviderLocal = job.getDataProvider();
 					dataProviderLocal.createFolder( URI.create( optimizedTileConfigurationFolder ) );
 
-					final List< String > newTileConfigurationPaths = new ArrayList<>();
+					optimizationResult.newTileConfigurationPaths = new ArrayList<>();
 					for ( int channel = 0; channel < job.getChannels(); channel++ )
 					{
 						final TileInfo[] newChannelTiles = updateTileTransformations( broadcastedInputTileChannels.value().get( channel ), optimizedTileConfiguration );
@@ -252,32 +242,25 @@ public class WarpedStitchingOptimizer implements Serializable
 								String.format( "ch%d-%s-stitched.json", channel, optimizationResult.translationOnlyStitching ? "translation" : "affine" )
 							);
 						TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, dataProviderLocal.getJsonWriter( URI.create( newTileConfigurationPath ) ) );
-						newTileConfigurationPaths.add( newTileConfigurationPath );
+						optimizationResult.newTileConfigurationPaths.add( newTileConfigurationPath );
 					}
 
-					return new Tuple2<>( optimizationResult, newTileConfigurationPaths );
+					return optimizationResult;
 				}
 			)
-			.sortByKey( new OptimizationResult.OptimizationResultComparator() )
-			.collect();
+			.collect()
+		);
 
 		GlobalOptimizationPerformer.restoreOutput();
 		broadcastedTileBoxShifts.destroy();
 		broadcastedInputTileChannels.destroy();
 
-		if ( sortedOptimizationResults.isEmpty() )
-			throw new RuntimeException( "No results available" );
+		Collections.sort( optimizationResults );
 
 		if ( logWriter != null )
-		{
-			final List< OptimizationResult > optimizationResults = new ArrayList<>();
-			for ( final Tuple2< OptimizationResult, List< String > > resultingStatsAndConfig : sortedOptimizationResults )
-				optimizationResults.add( resultingStatsAndConfig._1() );
 			logOptimizationResults( logWriter, optimizationResults );
-		}
 
-		final Tuple2< OptimizationResult, List< String > > bestResult = sortedOptimizationResults.get( 0 );
-		return bestResult;
+		return optimizationResults.get( 0 );
 	}
 
 	private Vector< ComparePointPair > createComparePointPairs( final List< SerializablePairWiseStitchingResult > tileBoxShifts, final OptimizationParameters optimizationParameters )
