@@ -7,7 +7,6 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 	private static final long serialVersionUID = -8084090265269616284L;
 
 	private SubdividedTileBoxPair tileBoxPair;
-	private PointPair pointPair;
 	private float[] offset;
 	private double[] displacement;
 	private float crossCorrelation;
@@ -50,9 +49,6 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 
 	public SubdividedTileBoxPair getTileBoxPair() { return tileBoxPair; }
 	public void setTileBoxPair( final SubdividedTileBoxPair tileBoxPair ) { this.tileBoxPair = tileBoxPair; }
-
-	public PointPair getPointPair() { return pointPair; }
-	public void setPointPair( final PointPair pointPair ) { this.pointPair = pointPair; }
 
 	public Double getVariance() { return variance; }
 	public void setVariance( final Double variance ) { this.variance = variance; }
