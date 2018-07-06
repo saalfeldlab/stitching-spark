@@ -6,8 +6,10 @@ import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.Vector;
 
@@ -72,6 +74,7 @@ public class StitchingOptimizer implements Serializable
 		public final int replacedTilesTranslation;
 
 		public List< String > newTileConfigurationPaths;
+		public String usedPairwiseConfigurationPath;
 
 		public OptimizationResult(
 				final double maxAllowedError,
@@ -192,45 +195,12 @@ public class StitchingOptimizer implements Serializable
 				);
 		}
 
-//		saveFinalPairwiseShifts();
+		// copy resulting used pairwise shifts configuration
+		job.getDataProvider().copyFile(
+				URI.create( bestOptimization.usedPairwiseConfigurationPath ),
+				URI.create( PathResolver.get( iterationDirPath, PathResolver.getFileName( bestOptimization.usedPairwiseConfigurationPath ) ) )
+			);
 	}
-
-	/*private void saveFinalPairwiseShifts()
-	{
-		// save final pairwise shifts configuration (pairs that were used on the final step of the optimization routine)
-		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( job.getTiles( 0 ) );
-		final Map< Integer, ? extends Map< Integer, SerializablePairWiseStitchingResult[] > > initialShiftsMap = Utils.createPairwiseShiftsMultiMap( shifts, false );
-		final List< SerializablePairWiseStitchingResult[] > usedPairwiseShifts = new ArrayList<>();
-		final List< SerializablePairWiseStitchingResult[] > finalPairwiseShifts = new ArrayList<>();
-		for ( final ComparePair finalPair : comparePairs )
-		{
-			final TilePair tilePair = new TilePair( tilesMap.get( finalPair.getTile1().getImpId() ), tilesMap.get( finalPair.getTile2().getImpId() ) );
-			if ( tilePair.getA() != null && tilePair.getB() != null )
-			{
-				final SerializablePairWiseStitchingResult finalShift = new SerializablePairWiseStitchingResult( tilePair, finalPair.getRelativeShift(), finalPair.getCrossCorrelation() );
-				finalShift.setIsValidOverlap( finalPair.getIsValidOverlap() );
-
-				final int ind1 = Math.min( tilePair.getA().getIndex(), tilePair.getB().getIndex() );
-				final int ind2 = Math.max( tilePair.getA().getIndex(), tilePair.getB().getIndex() );
-				final SerializablePairWiseStitchingResult initialShift = initialShiftsMap.get( ind1 ).get( ind2 )[ 0 ];
-				final double[] displacement = new double[ initialShift.getNumDimensions() ];
-				for ( int d = 0; d < displacement.length; ++d )
-					displacement[ d ] = ( tilePair.getB().getPosition( d ) - tilePair.getA().getPosition( d ) ) - initialShift.getOffset( d );
-				finalShift.setDisplacement( displacement );
-
-				finalShift.setVariance( initialShift.getVariance().doubleValue() );
-
-				finalPairwiseShifts.add( new SerializablePairWiseStitchingResult[] { finalShift } );
-
-				if ( finalPair.getIsValidOverlap() )
-					usedPairwiseShifts.add( new SerializablePairWiseStitchingResult[] { initialShift } );
-			}
-		}
-
-		final String pairwiseInputFile = PathResolver.get( basePath, iterationDirname, "pairwise.json" );
-		TileInfoJSONProvider.savePairwiseShiftsMulti( finalPairwiseShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( pairwiseInputFile, "-stitched" ) ) ) );
-TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( pairwiseInputFile, "-used" ) ) ) );
-	}*/
 
 	private OptimizationResult findBestOptimization(
 			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
@@ -292,6 +262,7 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 						final DataProvider dataProviderLocal = job.getDataProvider();
 						dataProviderLocal.createFolder( URI.create( optimizedTileConfigurationFolder ) );
 
+						// save resulting tile configuration for each channel
 						optimizationResult.newTileConfigurationPaths = new ArrayList<>();
 						for ( int channel = 0; channel < job.getChannels(); channel++ )
 						{
@@ -306,6 +277,19 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 							TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, dataProviderLocal.getJsonWriter( URI.create( newTileConfigurationPath ) ) );
 							optimizationResult.newTileConfigurationPaths.add( newTileConfigurationPath );
 						}
+
+						// save used pairwise configuration
+						final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = getUsedPairwiseConfiguration(
+								optimizedTileConfiguration,
+								broadcastedTileBoxShifts.value(),
+								comparePointPairs
+							);
+						final String usedPairwiseShiftsPath = PathResolver.get(
+								optimizedTileConfigurationFolder,
+								Utils.addFilenameSuffix( "pairwise.json", "-used" )
+							);
+						TileInfoJSONProvider.savePairwiseShifts( usedPairwiseShifts, dataProviderLocal.getJsonWriter( URI.create( usedPairwiseShiftsPath ) ) );
+						optimizationResult.usedPairwiseConfigurationPath = usedPairwiseShiftsPath;
 
 						return optimizationResult;
 					} )
@@ -421,6 +405,32 @@ TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.g
 
 		// sort the tiles by their index
 		return Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
+	}
+
+	private List< SerializablePairWiseStitchingResult > getUsedPairwiseConfiguration(
+			final List< ImagePlusTimePoint > resultingTiles,
+			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
+			final Vector< ComparePointPair > comparePointPairs )
+	{
+		final Map< Integer, ? extends Map< Integer, SerializablePairWiseStitchingResult > > initialShiftsMap = Utils.createPairwiseShiftsMap( tileBoxShifts, false );
+		final Set< ImagePlusTimePoint > resultingTileIndexes = new HashSet<>( resultingTiles );
+
+		final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = new ArrayList<>();
+		for ( final ComparePointPair finalPair : comparePointPairs )
+		{
+			if ( finalPair.getIsValidOverlap() && resultingTileIndexes.contains( finalPair.getTile1() ) && resultingTileIndexes.contains( finalPair.getTile2() ) )
+			{
+				final SubdividedTileBoxPair tileBoxPair = finalPair.getTileBoxPair();
+
+				final int ind1 = Math.min( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
+				final int ind2 = Math.max( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
+				final SerializablePairWiseStitchingResult initialShift = initialShiftsMap.get( ind1 ).get( ind2 );
+
+				usedPairwiseShifts.add( initialShift );
+			}
+		}
+
+		return usedPairwiseShifts;
 	}
 
 	private void logOptimizationResults( final PrintWriter logWriter, final List< OptimizationResult > optimizationResultList )

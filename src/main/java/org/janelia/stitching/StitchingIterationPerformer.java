@@ -185,17 +185,9 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		final DataProvider dataProvider = job.getDataProvider();
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
 		final String iterationDirname = "iter" + iteration;
-		final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 		final String pairwiseFilename = "pairwise.json";
 		dataProvider.createFolder( URI.create( PathResolver.get( basePath, iterationDirname ) ) );
 		final String pairwisePath = PathResolver.get( basePath, iterationDirname, pairwiseFilename );
-
-		// FIXME: replaces checking contents of the pairwise file by simply checking its existence
-//		if ( dataProvider.fileExists( URI.create( pairwisePath ) ) )
-//		{
-//			System.out.println( "pairwise.json file exists, don't recompute shifts" );
-//			return;
-//		}
 
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = tryLoadPrecomputedShifts( basePath );
 		final List< SubdividedTileBoxPair > pendingOverlappingBoxes = removePrecomputedPendingPairs( pairwisePath, overlappingBoxes, pairwiseShifts );
@@ -255,15 +247,15 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		{
 			if ( job.getArgs().stitchingMode() == StitchingMode.INCREMENTAL )
 			{
-				throw new UnsupportedOperationException( "TODO: handle pairwise-used.json correctly in StitchingOptimizer. Incremental stitching is disabled for now." );
-
-				/*System.out.println( "Restitching only excluded pairs" );
-				// use pairwise-used from the previous iteration, so they will not be restitched
+				System.out.println( "Restitching only excluded pairs" );
+				// use pairwise-used from the previous iteration without restitching
 				if ( !dataProvider.fileExists( URI.create( pairwisePath ) ) )
+				{
 					dataProvider.copyFile(
 							URI.create( PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) ) ),
 							URI.create( pairwisePath )
-						);*/
+						);
+				}
 			}
 			else
 			{
