@@ -20,12 +20,12 @@ public class MarkValidShiftsMulti
 		final List< SerializablePairWiseStitchingResult > shiftsFinal = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[0] ) ) );
 		final List< SerializablePairWiseStitchingResult[] > shiftsMulti = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( args[1] ) ) );
 
-		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > shiftsFinalValidMap = Utils.createPairwiseShiftsMap( shiftsFinal, true );
+		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > shiftsFinalValidMap = Utils.createTileBoxPairwiseShiftsMap( shiftsFinal, true );
 
 
 
 		int valid = 0;
-		for ( final TreeMap< Integer, SerializablePairWiseStitchingResult[] > entry : Utils.createPairwiseShiftsMultiMap( shiftsMulti, true ).values() )
+		for ( final TreeMap< Integer, SerializablePairWiseStitchingResult[] > entry : Utils.createTileBoxPairwiseShiftsMultiMap( shiftsMulti, true ).values() )
 			valid += entry.size();
 		System.out.println( "Valid initial multi shifts = " + valid );
 		valid = 0;

@@ -75,7 +75,7 @@ public class AddMissingTilesMultichannel
 				}
 			}
 			final List< TilePair > missingAdjacentPairs = FilterAdjacentShifts.filterAdjacentPairs( missingPairs );
-			final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > missingPairwiseShiftsMap = Utils.createPairwiseShiftsMap( missingPairwiseShifts, false );
+			final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > missingPairwiseShiftsMap = Utils.createTileBoxPairwiseShiftsMap( missingPairwiseShifts, false );
 			missingAdjacentPairwiseShifts[ ch ] = new ArrayList<>();
 			for ( final TilePair pair : missingAdjacentPairs )
 			{

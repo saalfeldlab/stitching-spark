@@ -412,7 +412,7 @@ public class StitchingOptimizer implements Serializable
 			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
 			final Vector< ComparePointPair > comparePointPairs )
 	{
-		final Map< Integer, ? extends Map< Integer, SerializablePairWiseStitchingResult > > initialShiftsMap = Utils.createPairwiseShiftsMap( tileBoxShifts, false );
+		final Map< Integer, ? extends Map< Integer, SerializablePairWiseStitchingResult > > initialShiftsMap = Utils.createTileBoxPairwiseShiftsMap( tileBoxShifts, false );
 		final Set< ImagePlusTimePoint > resultingTileIndexes = new HashSet<>( resultingTiles );
 
 		final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = new ArrayList<>();

@@ -79,7 +79,7 @@ public class AddMissingTiles
 			}
 		}
 		final List< TilePair > missingAdjacentPairs = FilterAdjacentShifts.filterAdjacentPairs( missingPairs );
-		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > missingPairwiseShiftsMultiMap = Utils.createPairwiseShiftsMultiMap( missingPairwiseShiftsMulti, false );
+		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > missingPairwiseShiftsMultiMap = Utils.createTileBoxPairwiseShiftsMultiMap( missingPairwiseShiftsMulti, false );
 		for ( final TilePair pair : missingAdjacentPairs )
 		{
 			final int ind1 = Math.min( pair.getA().getIndex(), pair.getB().getIndex() );

@@ -19,7 +19,7 @@ public class ChooseSameSubset {
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
 		final List< SerializablePairWiseStitchingResult > origShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[0] ) ) );
-		final TreeMap<Integer, TreeMap<Integer, SerializablePairWiseStitchingResult>> subsetShiftsMap = Utils.createPairwiseShiftsMap(TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[1] ) ) ), false);
+		final TreeMap<Integer, TreeMap<Integer, SerializablePairWiseStitchingResult>> subsetShiftsMap = Utils.createTileBoxPairwiseShiftsMap(TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[1] ) ) ), false);
 		final ArrayList< SerializablePairWiseStitchingResult > finalShifts = new ArrayList<>();
 
 		int totalCount = 0, finalCount = 0;

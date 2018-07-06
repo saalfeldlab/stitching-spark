@@ -151,16 +151,16 @@ public class Utils {
 		}
 		return tilesMap;
 	}
-	public static TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > createPairwiseShiftsMap( final List< SerializablePairWiseStitchingResult > shifts, final boolean onlyValid )
+	public static TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > createTileBoxPairwiseShiftsMap( final List< SerializablePairWiseStitchingResult > shifts, final boolean onlyValid )
 	{
 		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > shiftsMap = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
 			if ( !onlyValid || shift.getIsValidOverlap() )
 			{
-				final TilePair originalTilePair = shift.getTileBoxPair().getOriginalTilePair();
-				final int ind1 = Math.min( originalTilePair.getA().getIndex(), originalTilePair.getB().getIndex() );
-				final int ind2 = Math.max( originalTilePair.getA().getIndex(), originalTilePair.getB().getIndex() );
+				final SubdividedTileBoxPair tileBoxPair = shift.getTileBoxPair();
+				final int ind1 = Math.min( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
+				final int ind2 = Math.max( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
 
 				if ( !shiftsMap.containsKey( ind1 ) )
 					shiftsMap.put( ind1, new TreeMap<>() );
@@ -170,7 +170,7 @@ public class Utils {
 		}
 		return shiftsMap;
 	}
-	public static TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > createPairwiseShiftsMultiMap( final List< SerializablePairWiseStitchingResult[] > shiftsMulti, final boolean onlyValid )
+	public static TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > createTileBoxPairwiseShiftsMultiMap( final List< SerializablePairWiseStitchingResult[] > shiftsMulti, final boolean onlyValid )
 	{
 		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > shiftsMultiMap = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult[] shiftMulti : shiftsMulti )
@@ -183,9 +183,9 @@ public class Utils {
 
 			if ( isValidOverlap )
 			{
-				final TilePair originalTilePair = shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair();
-				final int ind1 = Math.min( originalTilePair.getA().getIndex(), originalTilePair.getB().getIndex() );
-				final int ind2 = Math.max( originalTilePair.getA().getIndex(), originalTilePair.getB().getIndex() );
+				final SubdividedTileBoxPair tileBoxPair = shiftMulti[ 0 ].getTileBoxPair();
+				final int ind1 = Math.min( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
+				final int ind2 = Math.max( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
 
 				if ( !shiftsMultiMap.containsKey( ind1 ) )
 					shiftsMultiMap.put( ind1, new TreeMap<>() );
