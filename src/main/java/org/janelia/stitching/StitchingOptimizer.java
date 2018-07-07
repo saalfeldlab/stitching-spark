@@ -2,7 +2,9 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.Reader;
 import java.io.Serializable;
+import java.io.Writer;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,6 +19,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
+
+import com.google.gson.GsonBuilder;
 
 import ij.ImagePlus;
 import mpicbg.models.Affine3D;
@@ -74,7 +78,7 @@ public class StitchingOptimizer implements Serializable
 		public final int replacedTilesTranslation;
 
 		public List< String > newTileConfigurationPaths;
-		public String usedPairwiseConfigurationPath;
+		public String usedPairwiseIndexesPath;
 
 		public OptimizationResult(
 				final double maxAllowedError,
@@ -166,7 +170,8 @@ public class StitchingOptimizer implements Serializable
 
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
 		final String iterationDirPath = PathResolver.get( basePath, "iter" + iteration );
-		final String pairwiseShiftsPath = PathResolver.get( iterationDirPath, "pairwise.json" );
+		final String pairwiseFilename = "pairwise.json";
+		final String pairwiseShiftsPath = PathResolver.get( iterationDirPath, pairwiseFilename );
 
 		final List< SerializablePairWiseStitchingResult > tileBoxShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 		final double maxAllowedError = getMaxAllowedError( iteration );
@@ -189,17 +194,17 @@ public class StitchingOptimizer implements Serializable
 		// copy best resulting configuration to the base output path
 		for ( final String bestTileConfigurationPath : bestOptimization.newTileConfigurationPaths )
 		{
-			job.getDataProvider().copyFile(
+			dataProvider.copyFile(
 					URI.create( bestTileConfigurationPath ),
 					URI.create( PathResolver.get( iterationDirPath, PathResolver.getFileName( bestTileConfigurationPath ) ) )
 				);
 		}
 
-		// copy resulting used pairwise shifts configuration
-		job.getDataProvider().copyFile(
-				URI.create( bestOptimization.usedPairwiseConfigurationPath ),
-				URI.create( PathResolver.get( iterationDirPath, PathResolver.getFileName( bestOptimization.usedPairwiseConfigurationPath ) ) )
-			);
+		// save resulting used pairwise shifts configuration (load the file with indexes and extract the actual shifts from the existing pairwise file)
+		final PairwiseShiftsIndexFilter usedPairwiseShiftsIndexes = loadPairwiseShiftsIndexesFromFile( dataProvider, bestOptimization.usedPairwiseIndexesPath );
+		final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = usedPairwiseShiftsIndexes.filterPairwiseShifts( tileBoxShifts );
+		final String usedPairwiseShiftsPath = PathResolver.get( iterationDirPath, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) );
+		TileInfoJSONProvider.savePairwiseShifts( usedPairwiseShifts, dataProvider.getJsonWriter( URI.create( usedPairwiseShiftsPath ) ) );
 	}
 
 	private OptimizationResult findBestOptimization(
@@ -238,6 +243,7 @@ public class StitchingOptimizer implements Serializable
 						GlobalOptimizationPerformer.suppressOutput();
 						final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
 						final List< ImagePlusTimePoint > optimizedTileConfiguration = optimizationPerformer.optimize( comparePointPairs, stitchingParameters );
+						GlobalOptimizationPerformer.restoreOutput();
 
 						final OptimizationResult optimizationResult = new OptimizationResult(
 								maxAllowedError,
@@ -278,18 +284,14 @@ public class StitchingOptimizer implements Serializable
 							optimizationResult.newTileConfigurationPaths.add( newTileConfigurationPath );
 						}
 
-						// save used pairwise configuration
-						final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = getUsedPairwiseConfiguration(
+						// save used pairwise indexes (saving the actual used pairwise config for each threshold combination might be too expensive, just save the indexes and then extract the actual shifts only for the best result)
+						final PairwiseShiftsIndexFilter usedPairwiseShiftsIndexes = getUsedPairwiseShiftsIndexFilter(
 								optimizedTileConfiguration,
 								broadcastedTileBoxShifts.value(),
 								comparePointPairs
 							);
-						final String usedPairwiseShiftsPath = PathResolver.get(
-								optimizedTileConfigurationFolder,
-								Utils.addFilenameSuffix( "pairwise.json", "-used" )
-							);
-						TileInfoJSONProvider.savePairwiseShifts( usedPairwiseShifts, dataProviderLocal.getJsonWriter( URI.create( usedPairwiseShiftsPath ) ) );
-						optimizationResult.usedPairwiseConfigurationPath = usedPairwiseShiftsPath;
+						optimizationResult.usedPairwiseIndexesPath = PathResolver.get( optimizedTileConfigurationFolder, "pairwise-used-indexes.json" );
+						savePairwiseShiftsIndexesToFile( usedPairwiseShiftsIndexes, dataProviderLocal, optimizationResult.usedPairwiseIndexesPath );
 
 						return optimizationResult;
 					} )
@@ -407,30 +409,46 @@ public class StitchingOptimizer implements Serializable
 		return Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
 	}
 
-	private List< SerializablePairWiseStitchingResult > getUsedPairwiseConfiguration(
+	private PairwiseShiftsIndexFilter getUsedPairwiseShiftsIndexFilter(
 			final List< ImagePlusTimePoint > resultingTiles,
 			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
 			final Vector< ComparePointPair > comparePointPairs )
 	{
 		final Map< Integer, ? extends Map< Integer, SerializablePairWiseStitchingResult > > initialShiftsMap = Utils.createTileBoxPairwiseShiftsMap( tileBoxShifts, false );
-		final Set< ImagePlusTimePoint > resultingTileIndexes = new HashSet<>( resultingTiles );
+		final Set< Integer > resultingTileIndexes = new HashSet<>();
+		for ( final ImagePlusTimePoint resultingTile : resultingTiles )
+			resultingTileIndexes.add( resultingTile.getImpId() );
 
-		final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = new ArrayList<>();
+		final List< SerializablePairWiseStitchingResult > filteredPairwiseShifts = new ArrayList<>();
 		for ( final ComparePointPair finalPair : comparePointPairs )
 		{
-			if ( finalPair.getIsValidOverlap() && resultingTileIndexes.contains( finalPair.getTile1() ) && resultingTileIndexes.contains( finalPair.getTile2() ) )
+			if ( finalPair.getIsValidOverlap() && resultingTileIndexes.contains( finalPair.getTile1().getImpId() ) && resultingTileIndexes.contains( finalPair.getTile2().getImpId() ) )
 			{
 				final SubdividedTileBoxPair tileBoxPair = finalPair.getTileBoxPair();
-
 				final int ind1 = Math.min( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
 				final int ind2 = Math.max( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
 				final SerializablePairWiseStitchingResult initialShift = initialShiftsMap.get( ind1 ).get( ind2 );
-
-				usedPairwiseShifts.add( initialShift );
+				filteredPairwiseShifts.add( initialShift );
 			}
 		}
 
-		return usedPairwiseShifts;
+		return new PairwiseShiftsIndexFilter( filteredPairwiseShifts );
+	}
+
+	private void savePairwiseShiftsIndexesToFile( final PairwiseShiftsIndexFilter pairwiseShiftsIndexes, final DataProvider dataProvider, final String filePath ) throws IOException
+	{
+		try ( final Writer gsonWriter = dataProvider.getJsonWriter( URI.create( filePath ) ) )
+		{
+			gsonWriter.write( new GsonBuilder().create().toJson( pairwiseShiftsIndexes ) );
+		}
+	}
+
+	private PairwiseShiftsIndexFilter loadPairwiseShiftsIndexesFromFile( final DataProvider dataProvider, final String filePath ) throws IOException
+	{
+		try ( final Reader gsonReader = dataProvider.getJsonReader( URI.create( filePath ) ) )
+		{
+			return new GsonBuilder().create().fromJson( gsonReader, PairwiseShiftsIndexFilter.class );
+		}
 	}
 
 	private void logOptimizationResults( final PrintWriter logWriter, final List< OptimizationResult > optimizationResultList )
