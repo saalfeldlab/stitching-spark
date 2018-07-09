@@ -10,7 +10,6 @@ import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.InvertibleRealTransformSequence;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.Translation;
-import net.imglib2.realtransform.Translation2D;
 import net.imglib2.util.Intervals;
 
 public class PairwiseTileOperations
@@ -166,7 +165,7 @@ public class PairwiseTileOperations
 		final double[] transformedMovingTileBoxToBoundingBoxOffset = getTransformedMovingBoxToBoundingBoxOffset( tileBoxes, movingTileToFixedBoxTransform );
 
 		final InvertibleRealTransformSequence errorEllipseTransform = new InvertibleRealTransformSequence();
-		errorEllipseTransform.add( new Translation2D( Intervals.minAsDoubleArray( tileBoxes[ movingIndex ] ) ) ); // moving box -> moving tile
+		errorEllipseTransform.add( new Translation( Intervals.minAsDoubleArray( tileBoxes[ movingIndex ] ) ) ); // moving box -> moving tile
 		errorEllipseTransform.add( movingTileToFixedBoxTransform ); // moving tile -> fixed box
 		errorEllipseTransform.add( new Translation( transformedMovingTileBoxToBoundingBoxOffset ).inverse() ); // transformed box top-left -> bounding box top-left
 
