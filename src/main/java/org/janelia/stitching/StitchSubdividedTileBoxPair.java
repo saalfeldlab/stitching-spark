@@ -67,7 +67,6 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	 *
 	 * @param tileBoxPair
 	 * @throws PipelineExecutionException
-	 * @throws NotEnoughNeighboringTilesException
 	 */
 	public SerializablePairWiseStitchingResult stitchTileBoxPair( final SubdividedTileBoxPair tileBoxPair ) throws PipelineExecutionException
 	{
@@ -87,9 +86,11 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 				final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingBox = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox( tileBoxes, searchRadiusEstimator );
 
 				movingBoxSearchRadius = combinedSearchRadiusForMovingBox.combinedErrorEllipse;
+				System.out.println( "Estimated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingBoxSearchRadius.estimateBoundingBox() ) ) ) );
 			}
 			catch ( final NotEnoughNeighboringTilesException e )
 			{
+				System.out.println( "Could not estimate error ellipse for pair " + tileBoxPair );
 				final SerializablePairWiseStitchingResult invalidPairwiseResult = new SerializablePairWiseStitchingResult( tileBoxPair, null, 0 );
 				return invalidPairwiseResult;
 			}
@@ -106,6 +107,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 						job.getArgs().errorEllipseRadiusAsTileSizeRatio()
 					);
 				movingBoxSearchRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
+				System.out.println( "Create uncorrelated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingBoxSearchRadius.estimateBoundingBox() ) ) ) + " to constrain matching" );
 			}
 			else
 			{
