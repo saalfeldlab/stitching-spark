@@ -71,7 +71,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 						broadcastedFlatfieldsForChannels,
 						broadcastedTileMapsForChannels
 					);
-				stitchingIterationPerformer.run( OptimizerMode.Affine );
+				stitchingIterationPerformer.run( job.getArgs().translationOnlyStitching() ? OptimizerMode.Translation : OptimizerMode.Affine );
 			}
 			else
 			{

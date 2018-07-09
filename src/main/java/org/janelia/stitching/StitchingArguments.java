@@ -35,6 +35,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Constrain pairwise matching on the first iteration")
 	private boolean constrainMatchingOnFirstIteration = false;
 
+	@Option(name = "-t", aliases = { "--translation" }, required = false,
+			usage = "Use translation-only stitching")
+	private boolean translationOnlyStitching = false;
+
 	@Option(name = "-sr", aliases = { "--sphereradius" }, required = false,
 			usage = "Radius of search sphere as a percent of tile size (when prediction model is not available, usually on the first stitching iteration)")
 	private double errorEllipseRadiusAsTileSizeRatio = 0.1;
@@ -155,6 +159,7 @@ public class StitchingArguments implements Serializable {
 	public int minNumNeighboringTiles() { return minNumNeighboringTiles; }
 	public double searchRadiusMultiplier() { return searchRadiusMultiplier; }
 	public boolean constrainMatchingOnFirstIteration() { return constrainMatchingOnFirstIteration; }
+	public boolean translationOnlyStitching() { return translationOnlyStitching; }
 	public double errorEllipseRadiusAsTileSizeRatio() { return errorEllipseRadiusAsTileSizeRatio; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurSigma() { return blurSigma; }
