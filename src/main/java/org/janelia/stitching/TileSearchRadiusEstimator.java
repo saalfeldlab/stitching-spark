@@ -15,12 +15,9 @@ import net.imglib2.Interval;
 import net.imglib2.KDTree;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
-import net.imglib2.concatenate.Concatenable;
-import net.imglib2.concatenate.PreConcatenable;
 import net.imglib2.neighborsearch.IntervalNeighborSearchOnKDTree;
 import net.imglib2.neighborsearch.KNearestNeighborSearchOnKDTree;
 import net.imglib2.realtransform.AffineGet;
-import net.imglib2.realtransform.AffineSet;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
@@ -207,8 +204,7 @@ public class TileSearchRadiusEstimator implements Serializable
 		return new ErrorEllipse( 1.0, zeroMeanValues, uncorrelatedCovarianceMatrix );
 	}
 
-	static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > List< Pair< RealPoint, RealPoint > > getStageAndWorldCoordinates(
-			final Set< TileInfo > neighboringTiles )
+	static List< Pair< RealPoint, RealPoint > > getStageAndWorldCoordinates( final Set< TileInfo > neighboringTiles )
 	{
 		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = new ArrayList<>();
 		for ( final TileInfo neighboringTile : neighboringTiles )
