@@ -193,7 +193,7 @@ public class PairwiseTileOperations
 		// Convert it to the offset between the moving and fixed boxes in the global translated space (where the linear affine component of each tile has been undone).
 		final RealTransformSequence offsetToWorldTransform = new RealTransformSequence();
 		offsetToWorldTransform.add( new Translation( getTransformedMovingBoxToBoundingBoxOffset( tileBoxes, tileTransforms ) ) ); // bounding box top-left in fixed box space -> transformed top-left in fixed box space
-		offsetToWorldTransform.add( new Translation( Intervals.minAsDoubleArray( tileBoxes[ fixedIndex ] ) ) ); // fixed box -> tixed tile
+		offsetToWorldTransform.add( new Translation( Intervals.minAsDoubleArray( tileBoxes[ fixedIndex ] ) ) ); // fixed box -> fixed tile
 		offsetToWorldTransform.add( tileTransforms[ fixedIndex ] ); // fixed tile -> world
 
 		final double[] newMovingBoxWorldPosition = new double[ dim ];
