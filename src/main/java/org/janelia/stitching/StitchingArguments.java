@@ -59,6 +59,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Padding for the overlap regions")
 	private String padding = "0,0,0";
 
+	@Option(name = "--peaks", required = false,
+			usage = "Number of phase correlation peaks to inspect")
+	private int numCheckPeaks = 50;
+
 	@Option(name = "--min", required = false,
 			usage = "Min coordinate for exporting")
 	private String minCoord = null;
@@ -162,6 +166,7 @@ public class StitchingArguments implements Serializable {
 	public boolean translationOnlyStitching() { return translationOnlyStitching; }
 	public double errorEllipseRadiusAsTileSizeRatio() { return errorEllipseRadiusAsTileSizeRatio; }
 	public int fusionCellSize() { return fusionCellSize; }
+	public int numCheckPeaks() { return numCheckPeaks; }
 	public double blurSigma() { return blurSigma; }
 	public boolean useAllPairs() { return allPairs; }
 	public boolean noLeaves() { return noLeaves; }

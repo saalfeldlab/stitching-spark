@@ -63,9 +63,8 @@ public class StitchingSpark implements Serializable, AutoCloseable
 		}
 
 		final SerializableStitchingParameters params = new SerializableStitchingParameters();
-		params.channel1 = 1;
-		params.channel2 = 1;
-		params.checkPeaks = 100;
+		params.channel1 = params.channel2 = 1; // we average channels in our code, so this will simply wrap ImagePlus into imglib1 datatype without copying
+		params.checkPeaks = args.numCheckPeaks();
 		params.computeOverlap = true;
 		params.subpixelAccuracy = true;
 		job.setParams( params );
