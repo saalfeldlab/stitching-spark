@@ -63,6 +63,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Number of phase correlation peaks to inspect")
 	private int numCheckPeaks = 50;
 
+	@Option(name = "-s", aliases = { "--subdivision" }, required = false,
+			usage = "Number of subdivided boxes in each tile along single dimension")
+	private int subdivision = 2;
+
 	@Option(name = "--min", required = false,
 			usage = "Min coordinate for exporting")
 	private String minCoord = null;
@@ -167,6 +171,7 @@ public class StitchingArguments implements Serializable {
 	public double errorEllipseRadiusAsTileSizeRatio() { return errorEllipseRadiusAsTileSizeRatio; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public int numCheckPeaks() { return numCheckPeaks; }
+	public int subdivision() { return subdivision; }
 	public double blurSigma() { return blurSigma; }
 	public boolean useAllPairs() { return allPairs; }
 	public boolean noLeaves() { return noLeaves; }

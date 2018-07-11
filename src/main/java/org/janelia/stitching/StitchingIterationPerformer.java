@@ -78,7 +78,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				final TileInfo[] tiles = getTilesWithEstimatedTransformation( logWriter );
 
 				final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
-				Arrays.fill( tileBoxesGridSize, 2 );
+				Arrays.fill( tileBoxesGridSize, job.getArgs().subdivision() );
 				final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, tileBoxesGridSize );
 				final List< SubdividedTileBoxPair > overlappingBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
 				preparePairwiseShifts( overlappingBoxes, iteration, logWriter );
