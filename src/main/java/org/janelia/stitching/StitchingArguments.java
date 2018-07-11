@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.List;
 
 import org.janelia.fusion.FusionMode;
+import org.janelia.stitching.StitchingOptimizer.RegularizerType;
 import org.janelia.util.Conversions;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -93,6 +94,15 @@ public class StitchingArguments implements Serializable {
 	private String fusionModeStr = "max-min-distance";
 	private FusionMode fusionMode = null;
 
+	@Option(name = "-reg", aliases = { "--regularizer" }, required = false,
+			usage = "Regularizer model")
+	private String regularizerTypeStr = "rigid";
+	private RegularizerType regularizerType = null;
+
+	@Option(name = "-l", aliases = { "--lambda" }, required = false,
+			usage = "Regularizer lambda")
+	private double regularizerLambda = 0.1;
+
 	@Option(name = "--overlaps", required = false,
 			usage = "Export overlaps channel based on which connections between tiles have been used for final stitching")
 	private boolean exportOverlaps = false;
@@ -127,7 +137,11 @@ public class StitchingArguments implements Serializable {
 			throw new IllegalArgumentException( "Please specify one mode at a time: --stitch / --fuse" );
 
 		if ( !fuseOnly )
+		{
 			stitchingMode = StitchingMode.valueOf( stitchingModeStr.replace( '-', '_' ).toUpperCase() );
+
+			regularizerType = RegularizerType.valueOf( regularizerTypeStr.replace( '-', '_' ).toUpperCase() );
+		}
 
 		if ( !stitchOnly )
 			fusionMode = FusionMode.valueOf( fusionModeStr.replace( '-', '_' ).toUpperCase() );
@@ -182,6 +196,9 @@ public class StitchingArguments implements Serializable {
 
 	public StitchingMode stitchingMode() { return stitchingMode; }
 	public FusionMode fusionMode() { return fusionMode; }
+
+	public RegularizerType regularizerType() { return regularizerType; }
+	public double regularizerLambda() { return regularizerLambda; }
 
 	private long[] parseArray( final String str )
 	{

@@ -13,7 +13,6 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.stitching.StitchingOptimizer.OptimizerMode;
 
 public class StitchingOptimizerRunner implements Serializable, AutoCloseable
 {
@@ -84,7 +83,7 @@ public class StitchingOptimizerRunner implements Serializable, AutoCloseable
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
 				final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );
-				optimizer.optimize( iteration, OptimizerMode.Affine, logWriter );
+				optimizer.optimize( iteration, logWriter );
 			}
 		}
 

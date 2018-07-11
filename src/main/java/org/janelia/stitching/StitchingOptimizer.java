@@ -24,6 +24,7 @@ import com.google.gson.GsonBuilder;
 
 import ij.ImagePlus;
 import mpicbg.models.Affine3D;
+import mpicbg.models.Model;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -43,8 +44,14 @@ public class StitchingOptimizer implements Serializable
 
 	public static enum OptimizerMode implements Serializable
 	{
-		Translation,
-		Affine
+		TRANSLATION,
+		AFFINE
+	}
+
+	public static enum RegularizerType implements Serializable
+	{
+		TRANSLATION,
+		RIGID
 	}
 
 	private static final class OptimizationParameters implements Serializable
@@ -159,13 +166,14 @@ public class StitchingOptimizer implements Serializable
 		this.sparkContext = sparkContext;
 	}
 
-	public void optimize( final int iteration, final OptimizerMode mode ) throws IOException
+	public void optimize( final int iteration ) throws IOException
 	{
-		optimize( iteration, mode, null );
+		optimize( iteration, null );
 	}
 
-	public void optimize( final int iteration, final OptimizerMode mode, final PrintWriter logWriter ) throws IOException
+	public void optimize( final int iteration, final PrintWriter logWriter ) throws IOException
 	{
+		final OptimizerMode optimizerMode = job.getArgs().translationOnlyStitching() ? OptimizerMode.TRANSLATION : OptimizerMode.AFFINE;
 		final DataProvider dataProvider = job.getDataProvider();
 
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
@@ -179,7 +187,7 @@ public class StitchingOptimizer implements Serializable
 		if ( logWriter != null )
 		{
 			logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
-			logWriter.println( "Stitching mode: " + mode );
+			logWriter.println( "Optimizer mode: " + optimizerMode );
 			logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 		}
 
@@ -187,7 +195,7 @@ public class StitchingOptimizer implements Serializable
 				tileBoxShifts,
 				maxAllowedError,
 				logWriter,
-				mode,
+				optimizerMode,
 				iterationDirPath
 			);
 
@@ -211,7 +219,7 @@ public class StitchingOptimizer implements Serializable
 			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
 			final double maxAllowedError,
 			final PrintWriter logWriter,
-			final OptimizerMode mode,
+			final OptimizerMode optimizerMode,
 			final String iterationDirPath ) throws IOException
 	{
 		final List< OptimizationParameters > optimizationParametersList = new ArrayList<>();
@@ -238,7 +246,7 @@ public class StitchingOptimizer implements Serializable
 				.parallelize( optimizationParametersList, optimizationParametersList.size() )
 				.map( optimizationParameters ->
 					{
-						final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters, mode );
+						final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters, optimizerMode );
 
 						GlobalOptimizationPerformer.suppressOutput();
 						final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
@@ -313,7 +321,7 @@ public class StitchingOptimizer implements Serializable
 	private Vector< ComparePointPair > createComparePointPairs(
 			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
 			final OptimizationParameters optimizationParameters,
-			final OptimizerMode mode )
+			final OptimizerMode optimizerMode )
 	{
 		// create tile models
 		final TreeMap< Integer, ImagePlusTimePoint > fakeTileImagesMap = new TreeMap<>();
@@ -325,29 +333,18 @@ public class StitchingOptimizer implements Serializable
 				{
 					if ( !fakeTileImagesMap.containsKey( originalTileInfo.getIndex() ) )
 					{
-						try
-						{
-							final ImageCollectionElement el;
-							switch ( mode )
-							{
-							case Translation:
-								el = Utils.createElementTranslationModel( originalTileInfo );
-								break;
-							case Affine:
-								el = Utils.createElementAffineModel( originalTileInfo );
-								break;
-							default:
-								throw new UnsupportedOperationException( "stitching mode is not supported: " + mode );
-							}
+						final Model< ? > tileModel = createTileModel(
+								originalTileInfo.numDimensions(),
+								optimizerMode,
+								job.getArgs().regularizerType(),
+								job.getArgs().regularizerLambda()
+							);
 
-							final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), ( java.awt.Image ) null );
-							final ImagePlusTimePoint fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
-							fakeTileImagesMap.put( originalTileInfo.getIndex(), fakeTile );
-						}
-						catch ( final Exception e )
-						{
-							e.printStackTrace();
-						}
+						final ImageCollectionElement el = Utils.createElementCollectionElementModel( originalTileInfo, tileModel );
+						final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), ( java.awt.Image ) null );
+						final ImagePlusTimePoint fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
+
+						fakeTileImagesMap.put( originalTileInfo.getIndex(), fakeTile );
 					}
 				}
 			}
@@ -378,6 +375,45 @@ public class StitchingOptimizer implements Serializable
 		}
 
 		return comparePairs;
+	}
+
+	private < M extends Model< M > > M createTileModel(
+			final int numDimensions,
+			final OptimizerMode optimizerMode,
+			final RegularizerType regularizerType,
+			final double regularizerLambda )
+	{
+		final M model;
+		switch ( optimizerMode )
+		{
+		case TRANSLATION:
+			model = TileModelFactory.createTranslationModel( numDimensions );
+			break;
+		case AFFINE:
+		{
+			final M regularizer;
+			switch ( regularizerType )
+			{
+			case TRANSLATION:
+				regularizer = TileModelFactory.createTranslationModel( numDimensions );
+				break;
+			case RIGID:
+				regularizer = TileModelFactory.createRigidModel( numDimensions );
+				break;
+			default:
+				throw new IllegalArgumentException( "regularizer type not supported: " + regularizerType );
+			}
+			model = TileModelFactory.createInterpolatedModel(
+					numDimensions,
+					TileModelFactory.createAffineModel( numDimensions ),
+					regularizer,
+					regularizerLambda
+				);
+		}
+		default:
+			throw new IllegalArgumentException( "optimizer mode not supported: " + optimizerMode );
+		}
+		return model;
 	}
 
 	private TileInfo[] updateTileTransformations( final TileInfo[] tiles, final List< ImagePlusTimePoint > newTransformations )

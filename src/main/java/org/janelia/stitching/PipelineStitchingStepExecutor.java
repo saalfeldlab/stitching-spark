@@ -11,7 +11,6 @@ import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrection;
-import org.janelia.stitching.StitchingOptimizer.OptimizerMode;
 
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
@@ -71,7 +70,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 						broadcastedFlatfieldsForChannels,
 						broadcastedTileMapsForChannels
 					);
-				stitchingIterationPerformer.run( job.getArgs().translationOnlyStitching() ? OptimizerMode.Translation : OptimizerMode.Affine );
+				stitchingIterationPerformer.run();
 			}
 			else
 			{

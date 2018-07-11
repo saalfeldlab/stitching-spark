@@ -14,6 +14,7 @@ import org.janelia.util.Conversions;
 
 import ij.IJ;
 import ij.ImagePlus;
+import mpicbg.models.Model;
 import mpicbg.stitching.ImageCollectionElement;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.img.Img;
@@ -60,23 +61,13 @@ public class Utils {
 		return ret.toString();
 	}
 
-	public static ImageCollectionElement createElementTranslationModel( final TileInfo tile ) throws RuntimeException
+	public static ImageCollectionElement createElementCollectionElementModel( final TileInfo tile, final Model< ? > model )
 	{
 		final File file = new File( tile.getFilePath() );
 		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
 		e.setOffset( Conversions.toFloatArray( tile.getStagePosition() ) );
 		e.setDimensionality( tile.numDimensions() );
-		e.setModel( TileModelFactory.createTranslationModel( tile.numDimensions() ) );
-		return e;
-	}
-
-	public static ImageCollectionElement createElementAffineModel( final TileInfo tile ) throws RuntimeException
-	{
-		final File file = new File( tile.getFilePath() );
-		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
-		e.setOffset( Conversions.toFloatArray( tile.getStagePosition() ) );
-		e.setDimensionality( tile.numDimensions() );
-		e.setModel( TileModelFactory.createAffineModel( tile.numDimensions() ) );
+		e.setModel( model );
 		return e;
 	}
 

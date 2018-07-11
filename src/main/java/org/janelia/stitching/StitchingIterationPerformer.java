@@ -20,7 +20,6 @@ import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.util.LongAccumulator;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.stitching.StitchingOptimizer.OptimizerMode;
 import org.janelia.stitching.TileSearchRadiusEstimator.NotEnoughNeighboringTilesException;
 
 import net.imglib2.realtransform.AffineGet;
@@ -61,7 +60,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		this.broadcastedTileMapsForChannels = broadcastedTileMapsForChannels;
 	}
 
-	public void run( final OptimizerMode mode ) throws PipelineExecutionException, IOException
+	public void run() throws PipelineExecutionException, IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
@@ -90,7 +89,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
 				final StitchingOptimizer optimizer = new StitchingOptimizer( job, sparkContext );
-				optimizer.optimize( iteration, mode, logWriter );
+				optimizer.optimize( iteration, logWriter );
 			}
 		}
 	}
