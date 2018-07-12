@@ -70,8 +70,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		{
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
-				if ( iteration == 0 )
-					logWriter.println( job.getArgs().constrainMatchingOnFirstIteration() ? "Constrained pairwise matching" : "Unconstrained pairwise matching" );
+				printStats( logWriter );
 
 				broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator() );
 				final TileInfo[] tiles = getTilesWithEstimatedTransformation( logWriter );
@@ -92,6 +91,18 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				optimizer.optimize( iteration, logWriter );
 			}
 		}
+	}
+
+	private void printStats( final PrintWriter logWriter )
+	{
+		if ( iteration == 0 )
+			logWriter.println( job.getArgs().constrainMatchingOnFirstIteration() ? "Constrained pairwise matching" : "Unconstrained pairwise matching" );
+
+		final int[] subdividedTileGridSize = new int[ job.getDimensionality() ];
+		Arrays.fill( subdividedTileGridSize, job.getArgs().subdivision() );
+		logWriter.println( "Subdivided tile grid size: " + Arrays.toString( subdividedTileGridSize ) );
+
+		logWriter.println( "Number of phase correlation peaks to inspect: " + job.getArgs().numCheckPeaks() );
 	}
 
 	/**

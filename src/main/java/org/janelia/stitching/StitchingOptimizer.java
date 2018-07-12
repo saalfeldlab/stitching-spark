@@ -185,11 +185,7 @@ public class StitchingOptimizer implements Serializable
 		final double maxAllowedError = getMaxAllowedError( iteration );
 
 		if ( logWriter != null )
-		{
-			logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
-			logWriter.println( "Optimizer mode: " + optimizerMode );
-			logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
-		}
+			printStats( logWriter, optimizerMode, maxAllowedError );
 
 		final OptimizationResult bestOptimization = findBestOptimization(
 				tileBoxShifts,
@@ -213,6 +209,18 @@ public class StitchingOptimizer implements Serializable
 		final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = usedPairwiseShiftsIndexes.filterPairwiseShifts( tileBoxShifts );
 		final String usedPairwiseShiftsPath = PathResolver.get( iterationDirPath, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) );
 		TileInfoJSONProvider.savePairwiseShifts( usedPairwiseShifts, dataProvider.getJsonWriter( URI.create( usedPairwiseShiftsPath ) ) );
+	}
+
+	private void printStats( final PrintWriter logWriter, final OptimizerMode optimizerMode, final double maxAllowedError )
+	{
+		logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
+		logWriter.println( "Optimizer mode: " + optimizerMode );
+		if ( optimizerMode == OptimizerMode.AFFINE )
+		{
+			logWriter.println( "Regularizer type: " + job.getArgs().regularizerType() );
+			logWriter.println( "Regularizer lambda: " + job.getArgs().regularizerLambda() );
+		}
+		logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
 	}
 
 	private OptimizationResult findBestOptimization(
