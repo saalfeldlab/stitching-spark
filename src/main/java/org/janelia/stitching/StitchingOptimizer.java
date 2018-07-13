@@ -417,6 +417,7 @@ public class StitchingOptimizer implements Serializable
 					regularizer,
 					regularizerLambda
 				);
+			break;
 		}
 		default:
 			throw new IllegalArgumentException( "optimizer mode not supported: " + optimizerMode );
