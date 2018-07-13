@@ -94,30 +94,21 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 				final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
 
-				//final String usedPairsFilepath = PathResolver.get( basePath, iterationDirname, "pairwise-used.json" );
-				//final String previousUsedPairsFilepath = PathResolver.get( basePath, previousIterationDirname, "pairwise-used.json" );
-				//final List< SerializablePairWiseStitchingResult > usedPairs = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( usedPairsFilepath ) ) );
-				//final List< SerializablePairWiseStitchingResult > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( previousUsedPairsFilepath ) ) );
+				final String usedPairsFilepath = PathResolver.get( basePath, iterationDirname, "pairwise-used.json" );
+				final String previousUsedPairsFilepath = PathResolver.get( basePath, previousIterationDirname, "pairwise-used.json" );
+				final List< SerializablePairWiseStitchingResult > usedPairs = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( usedPairsFilepath ) ) );
+				final List< SerializablePairWiseStitchingResult > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( previousUsedPairsFilepath ) ) );
 
-				if ( stitchedTiles.length <= previousStitchedTiles.length )
+				if ( stitchedTiles.length < previousStitchedTiles.length || ( stitchedTiles.length == previousStitchedTiles.length && usedPairs.size() <= previousUsedPairs.size() ) )
 				{
-//					if ( stitchedTiles.length < previousStitchedTiles.length || ( stitchedTiles.length == previousStitchedTiles.length && usedPairs.size() <= previousUsedPairs.size() ) )
-//					{
-					/*if ( !higherOrderStitching )
-					{
-						higherOrderStitching = true;
-					}
-					else*/
-					{
-						// mark the last solution as not used because it is worse than from the previous iteration
-						dataProvider.moveFolder(
-								URI.create( PathResolver.get( basePath, iterationDirname ) ),
-								URI.create( PathResolver.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) ) )
-							);
-						copyFinalSolution( iteration - 1 );
-						System.out.println( "Stopping on iteration " + iteration + ": the new solution (n=" + stitchedTiles.length + ") is not greater than the previous solution (n=" + previousStitchedTiles.length + "). Input tiles n=" + stageTiles.length );
-						break;
-					}
+					// mark the last solution as not used because it is worse than from the previous iteration
+					dataProvider.moveFolder(
+							URI.create( PathResolver.get( basePath, iterationDirname ) ),
+							URI.create( PathResolver.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) ) )
+						);
+					copyFinalSolution( iteration - 1 );
+					System.out.println( "Stopping on iteration " + iteration + ": the new solution (n=" + stitchedTiles.length + ") is not greater than the previous solution (n=" + previousStitchedTiles.length + "). Input tiles n=" + stageTiles.length );
+					break;
 				}
 			}
 		}
