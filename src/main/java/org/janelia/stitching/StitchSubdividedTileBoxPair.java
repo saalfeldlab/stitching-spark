@@ -152,26 +152,26 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImps, movingBoxSearchRadius );
 
-		if ( pairwiseResult != null )
+		if ( pairwiseResult == null )
 		{
-			// Resulting offset is between the moving bounding box in the fixed box space.
-			// Convert it to the offset between the moving and fixed boxes in the global translated space (where the linear affine component of each tile has been undone).
-			final double[] newStitchedOffset = PairwiseTileOperations.getNewStitchedOffset(
-					tileBoxes,
-					estimatedTileTransforms,
-					Conversions.toDoubleArray( pairwiseResult.getOffset() )
-				);
-
-			pairwiseResult.setOffset( Conversions.toFloatArray( newStitchedOffset ) );
-			pairwiseResult.setVariance( computeVariance( roiImps ) );
-			pairwiseResult.setTileBoxPair( tileBoxPair );
+			System.out.println( "Could not find phase correlation peaks for pair " + tileBoxPair );
+			final SerializablePairWiseStitchingResult invalidPairwiseResult = new SerializablePairWiseStitchingResult( tileBoxPair, null, 0 );
+			return invalidPairwiseResult;
 		}
 
-		for ( int i = 0; i < 2; i++ )
-			roiImps[ i ].close();
+		// Resulting offset is between the moving bounding box in the fixed box space.
+		// Convert it to the offset between the moving and fixed boxes in the global translated space (where the linear affine component of each tile has been undone).
+		final double[] newStitchedOffset = PairwiseTileOperations.getNewStitchedOffset(
+				tileBoxes,
+				estimatedTileTransforms,
+				Conversions.toDoubleArray( pairwiseResult.getOffset() )
+			);
+
+		pairwiseResult.setOffset( Conversions.toFloatArray( newStitchedOffset ) );
+		pairwiseResult.setVariance( computeVariance( roiImps ) );
+		pairwiseResult.setTileBoxPair( tileBoxPair );
 
 		System.out.println( "Stitched tile box pair " + tileBoxPair );
-
 		return pairwiseResult;
 	}
 

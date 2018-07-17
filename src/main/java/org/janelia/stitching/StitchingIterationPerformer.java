@@ -360,10 +360,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			final SerializablePairWiseStitchingResult result = it.next();
 			final Integer[] indexes = new Integer[ 2 ];
 			for ( int i = 0; i < 2; ++i )
-				if ( indexes[ i ] == null )
-					indexes[ i ] = result.getTileBoxPair().toArray()[ i ].getIndex();
-				else if ( !indexes[ i ].equals( result.getTileBoxPair().toArray()[ i ].getIndex() ) )
-					throw new PipelineExecutionException( "Tile indexes do not match" );
+				indexes[ i ] = result.getTileBoxPair().toArray()[ i ].getIndex();
 
 			final int ind1 = Math.min( indexes[ 0 ], indexes[ 1 ] );
 			final int ind2 = Math.max( indexes[ 0 ], indexes[ 1 ] );
@@ -497,7 +494,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 
 		int validPairs = 0;
 		for ( final SerializablePairWiseStitchingResult result : pairwiseStitchingResults )
-			if ( result != null && result.getIsValidOverlap() )
+			if ( result.getIsValidOverlap() )
 				++validPairs;
 
 		if ( logWriter != null )
