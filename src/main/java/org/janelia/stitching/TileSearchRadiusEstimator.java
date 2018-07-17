@@ -149,7 +149,7 @@ public class TileSearchRadiusEstimator implements Serializable
 	private EstimatedWorldSearchRadius estimateSearchRadius( final TileInfo tile, final Set< TileInfo > neighboringTiles ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
 		// do not use the tile in its offset statistics for prediction
-		neighboringTiles.remove( tile );
+		neighboringTiles.removeIf( t -> t.getIndex().equals( tile.getIndex() ) );
 
 		if ( neighboringTiles.size() < minNumNeighboringTiles )
 			throw new NotEnoughNeighboringTilesException( neighboringTiles, minNumNeighboringTiles );
