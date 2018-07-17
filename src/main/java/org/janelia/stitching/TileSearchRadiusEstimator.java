@@ -6,10 +6,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.commons.math3.linear.MatrixUtils;
-import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.commons.math3.stat.correlation.Covariance;
-
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.KDTree;
@@ -80,21 +76,23 @@ public class TileSearchRadiusEstimator implements Serializable
 
 	private static final long serialVersionUID = 3966655006478467424L;
 
-	final double[] estimationWindowSize;
-	final double searchRadiusMultiplier;
-	final int minNumNeighboringTiles;
-
+	private final double[] estimationWindowSize;
+	private final double searchRadiusMultiplier;
+	private final int minNumNeighboringTiles;
+	private final boolean weighted;
 	private final KDTree< TileInfo > kdTree;
 
 	public TileSearchRadiusEstimator(
 			final TileInfo[] tiles,
 			final double[] estimationWindowSize,
 			final double searchRadiusMultiplier,
-			final int minNumNeighboringTiles )
+			final int minNumNeighboringTiles,
+			final boolean weighted )
 	{
 		this.estimationWindowSize = estimationWindowSize;
 		this.searchRadiusMultiplier = searchRadiusMultiplier;
 		this.minNumNeighboringTiles = minNumNeighboringTiles;
+		this.weighted = weighted;
 
 		final List< TileInfo > tilesWithStitchedTransform = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
@@ -150,33 +148,83 @@ public class TileSearchRadiusEstimator implements Serializable
 
 	private EstimatedWorldSearchRadius estimateSearchRadius( final TileInfo tile, final Set< TileInfo > neighboringTiles ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
+		// do not use the tile in its offset statistics for prediction
+		neighboringTiles.remove( tile );
+
 		if ( neighboringTiles.size() < minNumNeighboringTiles )
 			throw new NotEnoughNeighboringTilesException( neighboringTiles, minNumNeighboringTiles );
 
 		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = getStageAndWorldCoordinates( neighboringTiles );
 
-		final List< double[] > dimOffsets = new ArrayList<>();
+		final List< double[] > offsetSamples = new ArrayList<>();
 		for ( final Pair< RealPoint, RealPoint > stageAndWorld : stageAndWorldCoordinates )
 		{
-			final double[] dimOffset = new double[ tile.numDimensions() ];
-			for ( int d = 0; d < dimOffset.length; ++d )
-				dimOffset[ d ] = stageAndWorld.getB().getDoublePosition( d ) - stageAndWorld.getA().getDoublePosition( d );
-			dimOffsets.add( dimOffset );
+			final double[] offsetSample = new double[ tile.numDimensions() ];
+			for ( int d = 0; d < offsetSample.length; ++d )
+				offsetSample[ d ] = stageAndWorld.getB().getDoublePosition( d ) - stageAndWorld.getA().getDoublePosition( d );
+			offsetSamples.add( offsetSample );
 		}
 
-		final double[] dimOffsetsMeanValues = new double[ tile.numDimensions() ];
-		for ( int d = 0; d < dimOffsetsMeanValues.length; ++d )
+		final List< Double > offsetSamplesWeights = new ArrayList<>();
+		for ( final Pair< RealPoint, RealPoint > stageAndWorld : stageAndWorldCoordinates )
+			offsetSamplesWeights.add( weighted ? getSampleWeight( tile, stageAndWorld.getA() ) : 1 );
+		normalizeWeights( offsetSamplesWeights );
+
+		final double[] meanOffset = new double[ tile.numDimensions() ];
+		for ( int i = 0; i < offsetSamples.size(); ++i )
 		{
-			for ( final double[] dimOffset : dimOffsets )
-				dimOffsetsMeanValues[ d ] += dimOffset[ d ];
-			dimOffsetsMeanValues[ d ] /= stageAndWorldCoordinates.size();
+			final double[] offsetSample = offsetSamples.get( i );
+			final double offsetSampleWeight = offsetSamplesWeights.get( i );
+			for ( int d = 0; d < meanOffset.length; ++d )
+				meanOffset[ d ] += offsetSample[ d ] * offsetSampleWeight;
 		}
 
-		final RealMatrix dimOffsetsMatrix = MatrixUtils.createRealMatrix( dimOffsets.toArray( new double[ 0 ][] ) );
-		final RealMatrix dimOffsetsCovarianceMatrix = new Covariance( dimOffsetsMatrix, false ).getCovarianceMatrix();
+		final double[][] covarianceMatrix = new double[ meanOffset.length ][ meanOffset.length ];
+		double covarianceDenomCoeff = 0;
+		for ( final double offsetSampleWeight : offsetSamplesWeights )
+			covarianceDenomCoeff += Math.pow( offsetSampleWeight, 2 );
+		covarianceDenomCoeff = 1 - covarianceDenomCoeff;
+		for ( int dRow = 0; dRow < covarianceMatrix.length; ++dRow )
+		{
+			for ( int dCol = dRow; dCol < covarianceMatrix[ dRow ].length; ++dCol )
+			{
+				double dRowColOffsetSumProduct = 0;
+				for ( int i = 0; i < offsetSamples.size(); ++i )
+				{
+					final double[] offsetSample = offsetSamples.get( i );
+					final double offsetSampleWeight = offsetSamplesWeights.get( i );
+					dRowColOffsetSumProduct += ( offsetSample[ dRow ] - meanOffset[ dRow ] ) * ( offsetSample[ dCol ] - meanOffset[ dCol ] ) * offsetSampleWeight;
+				}
+				final double covariance = dRowColOffsetSumProduct / covarianceDenomCoeff;
+				covarianceMatrix[ dRow ][ dCol ] = covarianceMatrix[ dCol ][ dRow ] = covariance;
+			}
+		}
 
-		final ErrorEllipse searchRadius = new ErrorEllipse( searchRadiusMultiplier, dimOffsetsMeanValues, dimOffsetsCovarianceMatrix.getData() );
+		final ErrorEllipse searchRadius = new ErrorEllipse( searchRadiusMultiplier, meanOffset, covarianceMatrix );
 		return new EstimatedWorldSearchRadius( searchRadius, tile, neighboringTiles, stageAndWorldCoordinates );
+	}
+
+	private static double getSampleWeight( final TileInfo tile, final RealPoint point )
+	{
+		final RealPoint tileStagePoint = new RealPoint( tile.getStagePosition() );
+		double distanceSqr = 0;
+		for ( int d = 0; d < Math.max( tileStagePoint.numDimensions(), point.numDimensions() ); ++d )
+			distanceSqr += Math.pow( point.getDoublePosition( d ) - tileStagePoint.getDoublePosition( d ), 2 );
+
+		if ( distanceSqr < 1 )
+			throw new IllegalArgumentException( "The sample point is too close to the tile" );
+
+		return 1. / distanceSqr;
+	}
+
+	private static void normalizeWeights( final List< Double > weights )
+	{
+		double sumWeights = 0;
+		for ( final double weight : weights )
+			sumWeights += weight;
+
+		for ( int i = 0; i < weights.size(); ++i )
+			weights.set( i, weights.get( i ) / sumWeights );
 	}
 
 	public static double[] getEstimationWindowSize( final long[] tileSize, final int[] statsWindowTileSize )

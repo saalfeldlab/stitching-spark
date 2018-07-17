@@ -40,11 +40,15 @@ public class StitchingArguments implements Serializable {
 			usage = "Use translation-only stitching")
 	private boolean translationOnlyStitching = false;
 
+	@Option(name = "-w", aliases = { "--weighted" }, required = false,
+			usage = "Weighted predictions for tile positions in the rematching phase")
+	private boolean weightedPredictions = false;
+
 	@Option(name = "-sr", aliases = { "--sphereradius" }, required = false,
 			usage = "Radius of search sphere as a percent of tile size (when prediction model is not available, usually on the first stitching iteration)")
 	private double errorEllipseRadiusAsTileSizeRatio = 0.1;
 
-	@Option(name = "-w", aliases = { "--searchwindow" }, required = false,
+	@Option(name = "-sw", aliases = { "--searchwindow" }, required = false,
 			usage = "Search window size for local offset statistics in terms of number of tiles")
 	private String statsWindowSizeTiles = "3,3,3";
 
@@ -182,6 +186,7 @@ public class StitchingArguments implements Serializable {
 	public double searchRadiusMultiplier() { return searchRadiusMultiplier; }
 	public boolean constrainMatchingOnFirstIteration() { return constrainMatchingOnFirstIteration; }
 	public boolean translationOnlyStitching() { return translationOnlyStitching; }
+	public boolean weightedPredictions() { return weightedPredictions; }
 	public double errorEllipseRadiusAsTileSizeRatio() { return errorEllipseRadiusAsTileSizeRatio; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public int numCheckPeaks() { return numCheckPeaks; }

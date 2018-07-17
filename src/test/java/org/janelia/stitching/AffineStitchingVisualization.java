@@ -85,7 +85,8 @@ public class AffineStitchingVisualization
 				tiles,
 				TileSearchRadiusEstimator.getEstimationWindowSize( tiles[ 0 ].getSize(), tileEstimationWindow ),
 				searchRadiusMultiplier,
-				minNumNeighboringTiles
+				minNumNeighboringTiles,
+				true
 			);
 
 		final AffineGet[] estimatedTileTransforms = new AffineGet[ 2 ];

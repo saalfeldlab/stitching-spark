@@ -72,7 +72,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			{
 				printStats( logWriter );
 
-				broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator() );
+				broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator( logWriter ) );
 				final TileInfo[] tiles = getTilesWithEstimatedTransformation( logWriter );
 
 				final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
@@ -112,7 +112,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	 * @return
 	 * @throws IOException
 	 */
-	private TileSearchRadiusEstimator createSearchRadiusEstimator() throws IOException
+	private TileSearchRadiusEstimator createSearchRadiusEstimator( final PrintWriter logWriter ) throws IOException
 	{
 		if ( iteration == 0 )
 			return null;
@@ -141,11 +141,21 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 
 		final double[] estimationWindow = TileSearchRadiusEstimator.getEstimationWindowSize( tiles[ 0 ].getSize(), job.getArgs().searchWindowSizeTiles() );
 
+		if ( logWriter != null )
+		{
+			logWriter.println( "Creating search radius estimator with the following parameters:" );
+			logWriter.println( "  estimation window: " + Arrays.toString( estimationWindow ) );
+			logWriter.println( "  error ellipse radius multiplier: " + job.getArgs().searchRadiusMultiplier() + " (sigma)" );
+			logWriter.println( "  min number of neighboring tiles: " + job.getArgs().minNumNeighboringTiles() );
+			logWriter.println( "  using weighted predictions: " + job.getArgs().weightedPredictions() );
+		}
+
 		return new TileSearchRadiusEstimator(
 				tiles,
 				estimationWindow,
 				job.getArgs().searchRadiusMultiplier(),
-				job.getArgs().minNumNeighboringTiles()
+				job.getArgs().minNumNeighboringTiles(),
+				job.getArgs().weightedPredictions()
 			);
 	}
 
@@ -173,8 +183,10 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			}
 		}
 
-		if ( logWriter != null )
+		if ( broadcastedSearchRadiusEstimator.value() != null && logWriter != null )
+		{
 			logWriter.println( "Estimated affine transformations for " + ( newTiles.length - numTilesWithInsufficientNeighborhood ) + " out of " + newTiles.length + " tiles" + " (others had insufficient neighborhood)" );
+		}
 
 		return newTiles;
 	}
