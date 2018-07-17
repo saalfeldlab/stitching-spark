@@ -165,46 +165,46 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 
 	private TileInfo[] getTilesWithEstimatedTransformation( final PrintWriter logWriter ) throws PipelineExecutionException, IOException
 	{
-		final TileInfo[] stageTiles = job.getTiles( 0 );
-		final TileInfo[] newTiles = new TileInfo[ stageTiles.length ];
-		final Map< Integer, TileInfo > previousStitchedTilesMap = Utils.createTilesMap( getStitchedTilesFromPreviousIteration() );
+		final TileInfo[] tiles = new TileInfo[ job.getTiles( 0 ).length ];
+		for ( int i = 0; i < tiles.length; ++i )
+			tiles[ i ] = job.getTiles( 0 )[ i ].clone();
 
+		if ( iteration == 0 )
+			return tiles;
+
+		final Map< Integer, TileInfo > previousStitchedTilesMap = Utils.createTilesMap( getStitchedTilesFromPreviousIteration() );
 		int numTilesWithInsufficientNeighborhood = 0, numTilesWithoutTransformations = 0;
-		for ( int i = 0; i < stageTiles.length; ++i )
+		for ( final TileInfo tile : tiles )
 		{
-			newTiles[ i ] = stageTiles[ i ].clone();
-			if ( broadcastedSearchRadiusEstimator.value() != null )
+			final TileInfo previousStitchedTile = previousStitchedTilesMap.get( tile.getIndex() );
+			if ( job.getArgs().stitchingMode() == StitchingMode.FULL || previousStitchedTile == null )
 			{
-				final TileInfo previousStitchedTile = previousStitchedTilesMap.get( stageTiles[ i ].getIndex() );
-				if ( job.getArgs().stitchingMode() == StitchingMode.FULL || previousStitchedTile == null )
+				// estimate tile transformation based on its neighboring tiles
+				++numTilesWithoutTransformations;
+				try
 				{
-					// estimate tile transformation based on its neighboring tiles
-					++numTilesWithoutTransformations;
-					try
-					{
-						newTiles[ i ].setTransform(
-								TransformedTileOperations.estimateAffineTransformation( stageTiles[ i ], broadcastedSearchRadiusEstimator.value() )
-							);
-					}
-					catch ( final NotEnoughNeighboringTilesException e )
-					{
-						++numTilesWithInsufficientNeighborhood;
-					}
+					tile.setTransform(
+							TransformedTileOperations.estimateAffineTransformation( tile, broadcastedSearchRadiusEstimator.value() )
+						);
 				}
-				else
+				catch ( final NotEnoughNeighboringTilesException e )
 				{
-					newTiles[ i ].setTransform( ( AffineGet ) previousStitchedTile.getTransform().copy() );
+					++numTilesWithInsufficientNeighborhood;
 				}
+			}
+			else
+			{
+				tile.setTransform( ( AffineGet ) previousStitchedTile.getTransform().copy() );
 			}
 		}
 
-		if ( broadcastedSearchRadiusEstimator.value() != null && logWriter != null )
+		if ( logWriter != null )
 		{
-			logWriter.println( numTilesWithoutTransformations + " out of " + stageTiles.length + " tiles required estimating their transformations" );
+			logWriter.println( numTilesWithoutTransformations + " out of " + tiles.length + " tiles required estimating their transformations" );
 			logWriter.println( "Estimated affine transformations for " + ( numTilesWithoutTransformations - numTilesWithInsufficientNeighborhood ) + " out of " + numTilesWithoutTransformations + " tiles " + " (others had insufficient neighborhood)" );
 		}
 
-		return newTiles;
+		return tiles;
 	}
 
 	/**
