@@ -105,6 +105,20 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		logWriter.println( "Number of phase correlation peaks to inspect: " + job.getArgs().numCheckPeaks() );
 	}
 
+	private TileInfo[] getStitchedTilesFromPreviousIteration() throws IOException
+	{
+		if ( iteration == 0 )
+			return null;
+
+		final DataProvider dataProvider = job.getDataProvider();
+		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
+		final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
+
+		final String previousIterationDirname = "iter" + ( iteration - 1 );
+		final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
+		return TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
+	}
+
 	/**
 	 * Tries to create a predictive model based on the previous stitching solution if exists.
 	 *
@@ -121,22 +135,12 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		for ( int i = 0; i < tiles.length; ++i )
 			tiles[ i ] = job.getTiles( 0 )[ i ].clone();
 
-		// load stitched transformations from the previous iteration and assign them to the subset of tiles
-		final DataProvider dataProvider = job.getDataProvider();
-		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
-		final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
-
-		final String previousIterationDirname = "iter" + ( iteration - 1 );
-		final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
-		final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
-
-		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
-		for ( final TileInfo previousStitchedTile : previousStitchedTiles )
+		final Map< Integer, TileInfo > previousStitchedTilesMap = Utils.createTilesMap( getStitchedTilesFromPreviousIteration() );
+		for ( final TileInfo tile : tiles )
 		{
-			final AffineGet stitchedTransform = previousStitchedTile.getTransform();
-			if ( stitchedTransform == null )
-				throw new RuntimeException( "stitchedTransform is null" );
-			tilesMap.get( previousStitchedTile.getIndex() ).setTransform( ( AffineGet ) stitchedTransform.copy() );
+			final TileInfo previousStitchedTile = previousStitchedTilesMap.get( tile.getIndex() );
+			if ( previousStitchedTile != null )
+				tile.setTransform( ( AffineGet ) previousStitchedTile.getTransform().copy() );
 		}
 
 		final double[] estimationWindow = TileSearchRadiusEstimator.getEstimationWindowSize( tiles[ 0 ].getSize(), job.getArgs().searchWindowSizeTiles() );
@@ -159,10 +163,11 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			);
 	}
 
-	private TileInfo[] getTilesWithEstimatedTransformation( final PrintWriter logWriter ) throws PipelineExecutionException
+	private TileInfo[] getTilesWithEstimatedTransformation( final PrintWriter logWriter ) throws PipelineExecutionException, IOException
 	{
 		final TileInfo[] stageTiles = job.getTiles( 0 );
 		final TileInfo[] newTiles = new TileInfo[ stageTiles.length ];
+		final Map< Integer, TileInfo > previousStitchedTilesMap = Utils.createTilesMap( getStitchedTilesFromPreviousIteration() );
 
 		int numTilesWithInsufficientNeighborhood = 0, numTilesWithoutTransformations = 0;
 		for ( int i = 0; i < stageTiles.length; ++i )
@@ -170,7 +175,8 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			newTiles[ i ] = stageTiles[ i ].clone();
 			if ( broadcastedSearchRadiusEstimator.value() != null )
 			{
-				if ( job.getArgs().stitchingMode() == StitchingMode.FULL || stageTiles[ i ].getTransform() == null )
+				final TileInfo previousStitchedTile = previousStitchedTilesMap.get( stageTiles[ i ].getIndex() );
+				if ( job.getArgs().stitchingMode() == StitchingMode.FULL || previousStitchedTile == null )
 				{
 					// estimate tile transformation based on its neighboring tiles
 					++numTilesWithoutTransformations;
@@ -184,6 +190,10 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 					{
 						++numTilesWithInsufficientNeighborhood;
 					}
+				}
+				else
+				{
+					newTiles[ i ].setTransform( ( AffineGet ) previousStitchedTile.getTransform().copy() );
 				}
 			}
 		}
