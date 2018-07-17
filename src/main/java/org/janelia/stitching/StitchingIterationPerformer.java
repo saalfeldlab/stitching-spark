@@ -164,28 +164,34 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		final TileInfo[] stageTiles = job.getTiles( 0 );
 		final TileInfo[] newTiles = new TileInfo[ stageTiles.length ];
 
-		int numTilesWithInsufficientNeighborhood = 0;
+		int numTilesWithInsufficientNeighborhood = 0, numTilesWithoutTransformations = 0;
 		for ( int i = 0; i < stageTiles.length; ++i )
 		{
 			newTiles[ i ] = stageTiles[ i ].clone();
 			if ( broadcastedSearchRadiusEstimator.value() != null )
 			{
-				try
+				if ( job.getArgs().stitchingMode() == StitchingMode.FULL || stageTiles[ i ].getTransform() == null )
 				{
-					newTiles[ i ].setTransform(
-							TransformedTileOperations.estimateAffineTransformation( stageTiles[ i ], broadcastedSearchRadiusEstimator.value() )
-						);
-				}
-				catch ( final NotEnoughNeighboringTilesException e )
-				{
-					++numTilesWithInsufficientNeighborhood;
+					// estimate tile transformation based on its neighboring tiles
+					++numTilesWithoutTransformations;
+					try
+					{
+						newTiles[ i ].setTransform(
+								TransformedTileOperations.estimateAffineTransformation( stageTiles[ i ], broadcastedSearchRadiusEstimator.value() )
+							);
+					}
+					catch ( final NotEnoughNeighboringTilesException e )
+					{
+						++numTilesWithInsufficientNeighborhood;
+					}
 				}
 			}
 		}
 
 		if ( broadcastedSearchRadiusEstimator.value() != null && logWriter != null )
 		{
-			logWriter.println( "Estimated affine transformations for " + ( newTiles.length - numTilesWithInsufficientNeighborhood ) + " out of " + newTiles.length + " tiles" + " (others had insufficient neighborhood)" );
+			logWriter.println( numTilesWithoutTransformations + " out of " + stageTiles.length + " tiles required estimating their transformations" );
+			logWriter.println( "Estimated affine transformations for " + ( numTilesWithoutTransformations - numTilesWithInsufficientNeighborhood ) + " out of " + numTilesWithoutTransformations + " tiles " + " (others had insufficient neighborhood)" );
 		}
 
 		return newTiles;
