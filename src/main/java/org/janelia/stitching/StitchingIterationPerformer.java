@@ -116,7 +116,12 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 
 		final String previousIterationDirname = "iter" + ( iteration - 1 );
 		final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
-		return TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
+
+		final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
+		for ( final TileInfo previousStitchedTile : previousStitchedTiles )
+			if ( previousStitchedTile.getTransform() == null )
+				throw new RuntimeException( "all stitched tiles must have a stage->world transform" );
+		return previousStitchedTiles;
 	}
 
 	/**
