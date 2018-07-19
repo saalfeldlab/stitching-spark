@@ -27,7 +27,7 @@ public class ApproximateStageCoordinates
 			final int[] noSubdivisionGrid = new int[ tile.numDimensions() ];
 			Arrays.fill( noSubdivisionGrid, 1 );
 			final SubdividedTileBox tileBox = SubdividedTileOperations.subdivideTiles( new TileInfo[] { tile }, noSubdivisionGrid ).iterator().next();
-			final double[] transformedMiddlePoint = TransformedTileOperations.transformTileBoxMiddlePoint( tileBox );
+			final double[] transformedMiddlePoint = TransformedTileOperations.transformTileBoxMiddlePoint( tileBox, false );
 			final RealInterval approximatedTileInterval = SubdividedTileOperations.getTileBoxInterval( transformedMiddlePoint, tile.getSize() );
 			final double[] approximatedStagePosition = Intervals.minAsDoubleArray( approximatedTileInterval );
 			tile.setStagePosition( approximatedStagePosition );

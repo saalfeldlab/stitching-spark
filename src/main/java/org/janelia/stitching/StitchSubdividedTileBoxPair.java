@@ -75,14 +75,14 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		// Get approximate transformations for tile pair. If it is not the first iteration, they have already been estimated prior to pairwise matching.
 		final AffineGet[] estimatedTileTransforms = new AffineGet[ tileBoxes.length ];
 		for ( int i = 0; i < tileBoxes.length; ++i )
-			estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( tileBoxes[ i ].getFullTile() );
+			estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( tileBoxes[ i ].getFullTile(), searchRadiusEstimator != null );
 
 		final ErrorEllipse movingBoxSearchRadius;
 
 		if ( searchRadiusEstimator != null )
 		{
-			for ( int i = 0; i < tileBoxes.length; ++i )
-				if ( tileBoxes[ i ].getFullTile().getTransform() == null )
+			for ( final AffineGet estimatedTileTransform : estimatedTileTransforms )
+				if ( estimatedTileTransform == null )
 					throw new RuntimeException( "expected non-null affine transform for tile" );
 
 			try
@@ -221,8 +221,8 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 						tile,
 						dataProvider,
 						Optional.ofNullable( flatfieldsForChannels.get( channel ) ),
-						IntervalsHelper.roundRealInterval( tileBox ),
-						fullTileTransform
+						fullTileTransform,
+						IntervalsHelper.roundRealInterval( tileBox )
 					);
 			}
 			catch ( final IOException e )

@@ -85,7 +85,7 @@ public class SubdividedTileOperationsTest
 		{
 			final SubdividedTileBox movingTileBox = tileBoxes.get( 8 );
 			Assert.assertArrayEquals( new double[] { 22.5, 20, 17.5 }, SubdividedTileOperations.getTileBoxMiddlePoint( movingTileBox ), EPSILON );
-			final Pair< Interval, Interval > transformedInGlobalSpace = TransformedTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), movingTileBox ) );
+			final Pair< Interval, Interval > transformedInGlobalSpace = TransformedTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), movingTileBox ), false );
 			final Interval transformedSecondTileBox = SubdividedTileOperations.globalToFixedBoxSpace( transformedInGlobalSpace ).getB();
 			Assert.assertArrayEquals( new long[] { 40, 10, -10 }, Intervals.minAsLongArray( transformedSecondTileBox ) );
 			Assert.assertArrayEquals( Intervals.dimensionsAsLongArray( movingTileBox ), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
@@ -95,10 +95,16 @@ public class SubdividedTileOperationsTest
 		{
 			final SubdividedTileBox movingTileBox = tileBoxes.get( 15 );
 			Assert.assertArrayEquals( new double[] { 67.5, 60, 52.5 }, SubdividedTileOperations.getTileBoxMiddlePoint( movingTileBox ), EPSILON );
-			final Pair< Interval, Interval > transformedInGlobalSpace = TransformedTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), movingTileBox ) );
+			final Pair< Interval, Interval > transformedInGlobalSpace = TransformedTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), movingTileBox ), false );
 			final Interval transformedSecondTileBox = SubdividedTileOperations.globalToFixedBoxSpace( transformedInGlobalSpace ).getB();
 			Assert.assertArrayEquals( new long[] { 85, 50, 25 }, Intervals.minAsLongArray( transformedSecondTileBox ) );
 			Assert.assertArrayEquals( Intervals.dimensionsAsLongArray( movingTileBox ), Intervals.dimensionsAsLongArray( transformedSecondTileBox ) );
+		}
+
+		// test world-only
+		{
+			final Pair< Interval, Interval > transformedInGlobalSpace = TransformedTileOperations.transformTileBoxPair( new SubdividedTileBoxPair( tileBoxes.get( 0 ), tileBoxes.get( 1 ) ), true );
+			Assert.assertTrue( transformedInGlobalSpace.getA() == null && transformedInGlobalSpace.getB() == null );
 		}
 	}
 
@@ -119,8 +125,11 @@ public class SubdividedTileOperationsTest
 		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, new int[] { 2, 2, 2 } );
 		Assert.assertEquals( 16, tileBoxes.size() );
 
-		final List< SubdividedTileBoxPair > overlappingTileBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, true );
+		final List< SubdividedTileBoxPair > overlappingTileBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, true, false );
 		Assert.assertEquals( 4, overlappingTileBoxes.size() );
+
+		// world-only should yield an empty list
+		Assert.assertTrue( SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, true, true ).isEmpty() );
 
 		// test references to the original tiles and their order
 		for ( final SubdividedTileBoxPair tileBoxPair : overlappingTileBoxes )

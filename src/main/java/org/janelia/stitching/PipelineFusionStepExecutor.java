@@ -231,7 +231,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 		final Map< Integer, Interval > transformedTilesBoundingBoxes = new HashMap<>();
 		for ( final TileInfo tile : tiles )
-			transformedTilesBoundingBoxes.put( tile.getIndex(), TransformedTileOperations.getTransformedBoundingBox( tile ) );
+			transformedTilesBoundingBoxes.put( tile.getIndex(), TransformedTileOperations.getTransformedBoundingBox( tile, true ) ); // TODO: add parameter to allow exporting stage configurations (without world transforms)
 
 		final Interval fullBoundingBox = TileOperations.getCollectionBoundaries( transformedTilesBoundingBoxes.values() );
 		final long[] offset = Intervals.minAsLongArray( fullBoundingBox );

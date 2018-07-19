@@ -27,12 +27,14 @@ public class TransformedTileImageLoader
 	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > loadTile(
 			final TileInfo tile,
 			final DataProvider dataProvider,
-			final Optional< RandomAccessiblePairNullable< U, U > > flatfield ) throws IOException
+			final Optional< RandomAccessiblePairNullable< U, U > > flatfield,
+			final InvertibleRealTransform tileTransform ) throws IOException
 	{
 		return loadTile(
 				tile,
 				dataProvider,
 				flatfield,
+				tileTransform,
 				new FinalInterval( tile.getSize() )
 			);
 	}
@@ -41,38 +43,8 @@ public class TransformedTileImageLoader
 			final TileInfo tile,
 			final DataProvider dataProvider,
 			final Optional< RandomAccessiblePairNullable< U, U > > flatfield,
+			final InvertibleRealTransform tileTransform,
 			final Interval tileInterval ) throws IOException
-	{
-		return loadTile(
-				tile,
-				dataProvider,
-				flatfield,
-				tileInterval,
-				TransformedTileOperations.getTileTransform( tile )
-			);
-	}
-
-	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > loadTile(
-			final TileInfo tile,
-			final DataProvider dataProvider,
-			final Optional< RandomAccessiblePairNullable< U, U > > flatfield,
-			final InvertibleRealTransform tileTransform ) throws IOException
-	{
-		return loadTile(
-				tile,
-				dataProvider,
-				flatfield,
-				new FinalInterval( tile.getSize() ),
-				tileTransform
-			);
-	}
-
-	public static < T extends RealType< T > & NativeType< T >, U extends RealType< U > & NativeType< U > > RandomAccessibleInterval< T > loadTile(
-			final TileInfo tile,
-			final DataProvider dataProvider,
-			final Optional< RandomAccessiblePairNullable< U, U > > flatfield,
-			final Interval tileInterval,
-			final InvertibleRealTransform tileTransform ) throws IOException
 	{
 		final RandomAccessibleInterval< T > rawImg = TileLoader.loadTile( tile, dataProvider );
 		final RandomAccessibleInterval< T > source;

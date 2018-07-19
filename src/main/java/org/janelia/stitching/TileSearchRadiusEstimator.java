@@ -258,7 +258,7 @@ public class TileSearchRadiusEstimator implements Serializable
 		for ( final TileInfo neighboringTile : neighboringTiles )
 		{
 			// invert the linear part of the affine transformation
-			final AffineGet neighboringTileTransform = TransformedTileOperations.getTileTransform( neighboringTile );
+			final AffineGet neighboringTileTransform = TransformedTileOperations.getTileTransform( neighboringTile, true );
 			final RealTransform neighboringTileLocalToOffsetTransform = TransformUtils.undoLinearComponent( neighboringTileTransform );
 
 			final double[] stagePosition = neighboringTile.getStagePosition();

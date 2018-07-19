@@ -26,15 +26,21 @@ import net.imglib2.util.ValuePair;
 public class TransformedTileOperations
 {
 	/**
-	 * Returns tile transform, that is its affine transform if not null, or translation transform to the position of the tile otherwise.
+	 * Returns tile transform, that is its affine transform if not null, or translation transform to the stage position of the tile otherwise (if allowed by the boolean flag).
+	 *
+	 * @param tile
+	 * @param worldTransformOnly
+	 * @return
 	 */
-	public static AffineGet getTileTransform( final TileInfo tile )
+	public static AffineGet getTileTransform( final TileInfo tile, final boolean worldTransformOnly )
 	{
 		final AffineGet ret;
 		if ( tile.getTransform() != null )
 			ret = tile.getTransform();
-		else
+		else if ( !worldTransformOnly )
 			ret = new Translation( tile.getStagePosition() );
+		else
+			ret = null;
 		return ret;
 	}
 
@@ -42,11 +48,13 @@ public class TransformedTileOperations
 	 * Estimates the bounding box of a transformed (or shifted) tile.
 	 *
 	 * @param tile
+	 * @param worldTransformOnly
 	 * @return
 	 */
-	public static Interval getTransformedBoundingBox( final TileInfo tile )
+	public static Interval getTransformedBoundingBox( final TileInfo tile, final boolean worldTransformOnly )
 	{
-		return getTransformedBoundingBox( new FinalInterval( tile.getSize() ), getTileTransform( tile ) );
+		final AffineGet tileTransform = getTileTransform( tile, worldTransformOnly );
+		return tileTransform != null ? getTransformedBoundingBox( new FinalInterval( tile.getSize() ), tileTransform ) : null;
 	}
 
 	/**
@@ -159,7 +167,7 @@ public class TransformedTileOperations
 		final double[][] expectedLinearAffineMatrix = new double[ tile.numDimensions() ][ tile.numDimensions() + 1 ];
 		for ( final TileInfo neighboringTile : neighboringTiles )
 		{
-			final AffineGet neighboringTileTransform = getTileTransform( neighboringTile );
+			final AffineGet neighboringTileTransform = getTileTransform( neighboringTile, true );
 			for ( int dRow = 0; dRow < tile.numDimensions(); ++dRow )
 				for ( int dCol = 0; dCol < tile.numDimensions(); ++dCol )
 					expectedLinearAffineMatrix[ dRow ][ dCol ] += neighboringTileTransform.get( dRow, dCol );
@@ -182,13 +190,14 @@ public class TransformedTileOperations
 	 * Returns transformed tile box intervals for a pair of tile boxes.
 	 *
 	 * @param tileBoxPair
+	 * @param worldTransformOnly
 	 * @return
 	 */
-	public static Pair< Interval, Interval > transformTileBoxPair( final SubdividedTileBoxPair tileBoxPair )
+	public static Pair< Interval, Interval > transformTileBoxPair( final SubdividedTileBoxPair tileBoxPair, final boolean worldTransformOnly )
 	{
 		return new ValuePair<>(
-				transformTileBox( tileBoxPair.getA() ),
-				transformTileBox( tileBoxPair.getB() )
+				transformTileBox( tileBoxPair.getA(), worldTransformOnly ),
+				transformTileBox( tileBoxPair.getB(), worldTransformOnly )
 			);
 	}
 
@@ -197,11 +206,13 @@ public class TransformedTileOperations
 	 * The center coordinate of the resulting interval is defined by transforming the middle point of the tile box.
 	 *
 	 * @param tileBox
+	 * @param worldTransformOnly
 	 * @return
 	 */
-	public static Interval transformTileBox( final SubdividedTileBox tileBox )
+	public static Interval transformTileBox( final SubdividedTileBox tileBox, final boolean worldTransformOnly )
 	{
-		return transformTileBox( tileBox, getTileTransform( tileBox.getFullTile() ) );
+		final AffineGet tileTransform = getTileTransform( tileBox.getFullTile(), worldTransformOnly );
+		return tileTransform != null ? transformTileBox( tileBox, tileTransform ) : null;
 	}
 
 	/**
@@ -225,11 +236,13 @@ public class TransformedTileOperations
 	 * Transforms middle point of a given tile box.
 	 *
 	 * @param tileBox
+	 * @param worldTransformOnly
 	 * @return
 	 */
-	public static double[] transformTileBoxMiddlePoint( final SubdividedTileBox tileBox )
+	public static double[] transformTileBoxMiddlePoint( final SubdividedTileBox tileBox, final boolean worldTransformOnly )
 	{
-		return transformTileBoxMiddlePoint( tileBox, getTileTransform( tileBox.getFullTile() ) );
+		final AffineGet tileTransform = getTileTransform( tileBox.getFullTile(), worldTransformOnly );
+		return tileTransform != null ? transformTileBoxMiddlePoint( tileBox, tileTransform ) : null;
 	}
 
 	/**

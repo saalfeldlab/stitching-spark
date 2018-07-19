@@ -60,7 +60,10 @@ public class SubdividedTileOperations
 	 * @param adjacentOnly
 	 * @return
 	 */
-	public static List< SubdividedTileBoxPair > findOverlappingTileBoxes( final List< SubdividedTileBox > tileBoxes, final boolean adjacentOnly )
+	public static List< SubdividedTileBoxPair > findOverlappingTileBoxes(
+			final List< SubdividedTileBox > tileBoxes,
+			final boolean adjacentOnly,
+			final boolean worldTransformOnly )
 	{
 		// TODO: optimize
 		final List< SubdividedTileBoxPair > overlappingBoxes = new ArrayList<>();
@@ -69,7 +72,7 @@ public class SubdividedTileOperations
 			for ( int j = i + 1; j < tileBoxes.size(); j++ )
 			{
 				final SubdividedTileBoxPair tileBoxPair = new SubdividedTileBoxPair( tileBoxes.get( i ), tileBoxes.get( j ) );
-				if ( isOverlappingTileBoxPair( tileBoxPair, adjacentOnly ) )
+				if ( isOverlappingTileBoxPair( tileBoxPair, adjacentOnly, worldTransformOnly ) )
 					overlappingBoxes.add( tileBoxPair );
 			}
 		}
@@ -84,11 +87,17 @@ public class SubdividedTileOperations
 	 * @param adjacent
 	 * @return
 	 */
-	public static boolean isOverlappingTileBoxPair( final SubdividedTileBoxPair tileBoxPair, final boolean adjacentOnly )
+	public static boolean isOverlappingTileBoxPair(
+			final SubdividedTileBoxPair tileBoxPair,
+			final boolean adjacentOnly,
+			final boolean worldTransformOnly )
 	{
 		if ( tileBoxPair.getA().getFullTile().getIndex().intValue() != tileBoxPair.getB().getFullTile().getIndex().intValue() )
 		{
-			final Pair< Interval, Interval > transformedTileBoxPair = TransformedTileOperations.transformTileBoxPair( tileBoxPair );
+			final Pair< Interval, Interval > transformedTileBoxPair = TransformedTileOperations.transformTileBoxPair( tileBoxPair, worldTransformOnly );
+			if ( transformedTileBoxPair.getA() == null || transformedTileBoxPair.getB() == null )
+				return false;
+
 			final Interval tileBoxesOverlap = IntervalsNullable.intersect( transformedTileBoxPair.getA(), transformedTileBoxPair.getB() );
 			if ( tileBoxesOverlap != null )
 			{

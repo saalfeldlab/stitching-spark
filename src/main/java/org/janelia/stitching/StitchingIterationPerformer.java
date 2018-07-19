@@ -22,7 +22,6 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.stitching.TileSearchRadiusEstimator.NotEnoughNeighboringTilesException;
 
-import net.imglib2.realtransform.AffineGet;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.view.RandomAccessiblePairNullable;
@@ -78,7 +77,11 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
 				Arrays.fill( tileBoxesGridSize, job.getArgs().subdivision() );
 				final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tilesWithEstimatedTransforms, tileBoxesGridSize );
-				final List< SubdividedTileBoxPair > overlappingBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
+				final List< SubdividedTileBoxPair > overlappingBoxes = SubdividedTileOperations.findOverlappingTileBoxes(
+						tileBoxes,
+						!job.getArgs().useAllPairs(), // adjacent vs. all overlapping pairs
+						iteration > 0 // use stage coords on the first run, and only world transform (last stitched / estimated) on subsequent iterations
+					);
 				preparePairwiseShifts( overlappingBoxes, iteration, logWriter );
 			}
 		}
@@ -184,11 +187,12 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				catch ( final NotEnoughNeighboringTilesException e )
 				{
 					++numTilesWithInsufficientNeighborhood;
+					tile.setTransform( null );
 				}
 			}
 			else
 			{
-				tile.setTransform( ( AffineGet ) previousStitchedTile.getTransform().copy() );
+				tile.setTransform( previousStitchedTile.clone().getTransform() );
 			}
 		}
 
@@ -471,14 +475,24 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		final LongAccumulator noOverlapWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 
-		final List< SerializablePairWiseStitchingResult > pairwiseStitchingResults = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() ).map( tileBoxPair ->
-				new StitchSubdividedTileBoxPair<>(
-						job,
-						broadcastedSearchRadiusEstimator.value(),
-						broadcastedFlatfieldsForChannels.value(),
-						broadcastedTileMapsForChannels.value()
-					)
-				.stitchTileBoxPair( tileBoxPair )
+		final List< SerializablePairWiseStitchingResult > pairwiseStitchingResults = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() ).map(
+				tileBoxPair ->
+				{
+					try
+					{
+						return new StitchSubdividedTileBoxPair<>(
+								job,
+								broadcastedSearchRadiusEstimator.value(),
+								broadcastedFlatfieldsForChannels.value(),
+								broadcastedTileMapsForChannels.value()
+							)
+						.stitchTileBoxPair( tileBoxPair );
+					}
+					catch ( final Exception e )
+					{
+						throw new RuntimeException( "Exception when stitching " + tileBoxPair + ": " + e.getMessage(), e );
+					}
+				}
 			).collect();
 
 		broadcastedSearchRadiusEstimator.destroy();

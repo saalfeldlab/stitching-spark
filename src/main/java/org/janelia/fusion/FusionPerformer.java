@@ -12,8 +12,8 @@ import java.util.Set;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.stitching.ImageType;
 import org.janelia.stitching.TileInfo;
-import org.janelia.stitching.TransformedTileOperations;
 import org.janelia.stitching.TransformedTileImageLoader;
+import org.janelia.stitching.TransformedTileOperations;
 import org.janelia.stitching.Utils;
 
 import net.imglib2.Cursor;
@@ -109,11 +109,12 @@ public class FusionPerformer
 
 		for ( final TileInfo tile : tilesWithinCell )
 		{
-			final InvertibleRealTransform tileTransform = TransformedTileOperations.getTileTransform( tile );
+			final InvertibleRealTransform tileTransform = TransformedTileOperations.getTileTransform( tile, true ); // TODO: add parameter to allow exporting stage configurations (without world transforms)
 			final RandomAccessibleInterval< T > transformedTileImg = TransformedTileImageLoader.loadTile(
 					tile,
 					dataProvider,
-					Optional.ofNullable( flatfield )
+					Optional.ofNullable( flatfield ),
+					tileTransform
 				);
 
 			final FinalRealInterval intersection = IntervalsNullable.intersectReal( transformedTileImg, targetInterval );
