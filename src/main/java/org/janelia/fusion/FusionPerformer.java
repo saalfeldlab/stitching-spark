@@ -37,9 +37,10 @@ public class FusionPerformer
 			final DataProvider dataProvider,
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
+			final boolean worldTransformOnly,
 			final Interval targetInterval ) throws Exception
 	{
-		return fuseTilesWithinCell( dataProvider, mode, tilesWithinCell, targetInterval, null );
+		return fuseTilesWithinCell( dataProvider, mode, tilesWithinCell, worldTransformOnly, targetInterval, null );
 	}
 
 	public static <
@@ -49,10 +50,11 @@ public class FusionPerformer
 			final DataProvider dataProvider,
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
+			final boolean worldTransformOnly,
 			final Interval targetInterval,
 			final RandomAccessiblePairNullable< U, U > flatfield ) throws Exception
 	{
-		return fuseTilesWithinCell( dataProvider, mode, tilesWithinCell, targetInterval, flatfield, null );
+		return fuseTilesWithinCell( dataProvider, mode, tilesWithinCell, worldTransformOnly, targetInterval, flatfield, null );
 	}
 
 	/**
@@ -64,9 +66,11 @@ public class FusionPerformer
 	 * 			Required strategy to be used for rendering overlaps
 	 * @param tilesWithinCell
 	 * 			A list of tiles that have non-empty intersection with the target interval in the transformed space
+	 * @param worldTransformOnly
+	 * 			Indicates whether stage export is allowed (when some tiles may not have world transforms)
 	 * @param targetInterval
 	 * 			An output fusion cell in the transformed space
-	 * @param flatfieldCorrection
+	 * @param flatfield
 	 * 			Optional flatfield correction coefficients (can be null)
 	 * @param pairwiseConnectionsMap
 	 * 			Optional connectivity map specifying the overlaps that have been used to obtain the tile transforms (can be null)
@@ -79,6 +83,7 @@ public class FusionPerformer
 			final DataProvider dataProvider,
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
+			final boolean worldTransformOnly,
 			final Interval targetInterval,
 			final RandomAccessiblePairNullable< U, U > flatfield,
 			final Map< Integer, Set< Integer > > pairwiseConnectionsMap ) throws Exception
@@ -109,7 +114,7 @@ public class FusionPerformer
 
 		for ( final TileInfo tile : tilesWithinCell )
 		{
-			final InvertibleRealTransform tileTransform = TransformedTileOperations.getTileTransform( tile, true ); // TODO: add parameter to allow exporting stage configurations (without world transforms)
+			final InvertibleRealTransform tileTransform = TransformedTileOperations.getTileTransform( tile, worldTransformOnly );
 			final RandomAccessibleInterval< T > transformedTileImg = TransformedTileImageLoader.loadTile(
 					tile,
 					dataProvider,

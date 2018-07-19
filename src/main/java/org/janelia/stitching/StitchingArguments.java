@@ -98,6 +98,10 @@ public class StitchingArguments implements Serializable {
 	private String fusionModeStr = "max-min-distance";
 	private FusionMode fusionMode = null;
 
+	@Option(name = "--fusestage", required = false,
+			usage = "Allow fusing tiles using their stage coordinates if the world transform is missing, i.e. when exporting initial tile configuration.")
+	private boolean allowFusingStage = false;
+
 	@Option(name = "-reg", aliases = { "--regularizer" }, required = false,
 			usage = "Regularizer model")
 	private String regularizerTypeStr = "rigid";
@@ -162,39 +166,7 @@ public class StitchingArguments implements Serializable {
 
 	public boolean parsedSuccessfully() { return parsedSuccessfully; }
 
-	public long[] padding()
-	{
-		return parseArray( padding );
-	}
-
-	public long[] minCoord()
-	{
-		return parseArray( minCoord );
-	}
-	public long[] maxCoord()
-	{
-		return parseArray( maxCoord );
-	}
-
-	public int[] searchWindowSizeTiles()
-	{
-		return Conversions.toIntArray( parseArray( statsWindowSizeTiles ) );
-	}
-
 	public List< String > inputTileConfigurations() { return inputTileConfigurations; }
-	public int minNumNeighboringTiles() { return minNumNeighboringTiles; }
-	public double searchRadiusMultiplier() { return searchRadiusMultiplier; }
-	public boolean constrainMatchingOnFirstIteration() { return constrainMatchingOnFirstIteration; }
-	public boolean translationOnlyStitching() { return translationOnlyStitching; }
-	public boolean weightedPredictions() { return weightedPredictions; }
-	public double errorEllipseRadiusAsTileSizeRatio() { return errorEllipseRadiusAsTileSizeRatio; }
-	public int fusionCellSize() { return fusionCellSize; }
-	public int numCheckPeaks() { return numCheckPeaks; }
-	public int subdivision() { return subdivision; }
-	public double blurSigma() { return blurSigma; }
-	public boolean useAllPairs() { return allPairs; }
-	public boolean noLeaves() { return noLeaves; }
-	public boolean exportOverlaps() { return exportOverlaps; }
 
 	public boolean stitchOnly() { return stitchOnly; }
 	public boolean fuseOnly() { return fuseOnly; }
@@ -202,8 +174,30 @@ public class StitchingArguments implements Serializable {
 	public StitchingMode stitchingMode() { return stitchingMode; }
 	public FusionMode fusionMode() { return fusionMode; }
 
+	// Stitching options
+	public int minNumNeighboringTiles() { return minNumNeighboringTiles; }
+	public double searchRadiusMultiplier() { return searchRadiusMultiplier; }
+	public boolean constrainMatchingOnFirstIteration() { return constrainMatchingOnFirstIteration; }
+	public double errorEllipseRadiusAsTileSizeRatio() { return errorEllipseRadiusAsTileSizeRatio; }
+	public boolean translationOnlyStitching() { return translationOnlyStitching; }
+	public int[] searchWindowSizeTiles() { return Conversions.toIntArray( parseArray( statsWindowSizeTiles ) ); }
+	public boolean weightedPredictions() { return weightedPredictions; }
+	public long[] padding() { return parseArray( padding ); }
+	public int numCheckPeaks() { return numCheckPeaks; }
+	public int subdivision() { return subdivision; }
+	public double blurSigma() { return blurSigma; }
+	public boolean useAllPairs() { return allPairs; }
+	public boolean noLeaves() { return noLeaves; }
+
 	public RegularizerType regularizerType() { return regularizerType; }
 	public double regularizerLambda() { return regularizerLambda; }
+
+	// Fusion options
+	public int fusionCellSize() { return fusionCellSize; }
+	public boolean allowFusingStage() { return allowFusingStage; }
+	public boolean exportOverlaps() { return exportOverlaps; }
+	public long[] minCoord() { return parseArray( minCoord ); }
+	public long[] maxCoord() { return parseArray( maxCoord ); }
 
 	private long[] parseArray( final String str )
 	{

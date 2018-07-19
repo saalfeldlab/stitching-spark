@@ -228,10 +228,15 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final DataProvider dataProvider = job.getDataProvider();
 		final int[] cellSize = getOptimalCellSize();
 
+		final boolean worldTransformOnly = !job.getArgs().allowFusingStage();
+		for ( final TileInfo tile : tiles )
+			if ( TransformedTileOperations.getTileTransform( tile, worldTransformOnly ) == null )
+				throw new RuntimeException( "World transform is not present for tile " + tile.getIndex() + ". If you intend to export the initial (stage) configuration, make sure to use the --fusestage parameter." );
+
 		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 		final Map< Integer, Interval > transformedTilesBoundingBoxes = new HashMap<>();
 		for ( final TileInfo tile : tiles )
-			transformedTilesBoundingBoxes.put( tile.getIndex(), TransformedTileOperations.getTransformedBoundingBox( tile, true ) ); // TODO: add parameter to allow exporting stage configurations (without world transforms)
+			transformedTilesBoundingBoxes.put( tile.getIndex(), TransformedTileOperations.getTransformedBoundingBox( tile, worldTransformOnly ) );
 
 		final Interval fullBoundingBox = TileOperations.getCollectionBoundaries( transformedTilesBoundingBoxes.values() );
 		final long[] offset = Intervals.minAsLongArray( fullBoundingBox );
@@ -325,6 +330,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 						dataProviderLocal,
 						job.getArgs().fusionMode(),
 						tilesWithinCell,
+						worldTransformOnly,
 						biggerCellBox,
 						broadcastedFlatfieldCorrection.value(),
 						broadcastedPairwiseConnectionsMap.value()
