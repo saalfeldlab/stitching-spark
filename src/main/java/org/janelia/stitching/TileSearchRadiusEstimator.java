@@ -263,7 +263,7 @@ public class TileSearchRadiusEstimator implements Serializable
 
 			final double[] stagePosition = neighboringTile.getStagePosition();
 			final double[] transformedPosition = new double[ neighboringTile.numDimensions() ];
-			neighboringTileLocalToOffsetTransform.apply( transformedPosition, transformedPosition );
+			neighboringTileLocalToOffsetTransform.apply( new double[ neighboringTile.numDimensions() ], transformedPosition );
 
 			stageAndWorldCoordinates.add( new ValuePair<>( new RealPoint( stagePosition ), new RealPoint( transformedPosition ) ) );
 		}
