@@ -136,19 +136,8 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		if ( iteration == 0 )
 			return null;
 
-		final TileInfo[] tiles = new TileInfo[ job.getTiles( 0 ).length ];
-		for ( int i = 0; i < tiles.length; ++i )
-			tiles[ i ] = job.getTiles( 0 )[ i ].clone();
-
-		final Map< Integer, TileInfo > previousStitchedTilesMap = Utils.createTilesMap( getStitchedTilesFromPreviousIteration() );
-		for ( final TileInfo tile : tiles )
-		{
-			final TileInfo previousStitchedTile = previousStitchedTilesMap.get( tile.getIndex() );
-			if ( previousStitchedTile != null )
-				tile.setTransform( ( AffineGet ) previousStitchedTile.getTransform().copy() );
-		}
-
-		final double[] estimationWindow = TileSearchRadiusEstimator.getEstimationWindowSize( tiles[ 0 ].getSize(), job.getArgs().searchWindowSizeTiles() );
+		final TileInfo[] previousStitchedTiles = getStitchedTilesFromPreviousIteration();
+		final double[] estimationWindow = TileSearchRadiusEstimator.getEstimationWindowSize( previousStitchedTiles[ 0 ].getSize(), job.getArgs().searchWindowSizeTiles() );
 
 		if ( logWriter != null )
 		{
@@ -160,7 +149,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		}
 
 		return new TileSearchRadiusEstimator(
-				tiles,
+				previousStitchedTiles,
 				estimationWindow,
 				job.getArgs().searchRadiusMultiplier(),
 				job.getArgs().minNumNeighboringTiles(),
