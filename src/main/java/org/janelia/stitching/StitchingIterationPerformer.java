@@ -73,11 +73,11 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				printStats( logWriter );
 
 				broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator( logWriter ) );
-				final TileInfo[] tiles = getTilesWithEstimatedTransformation( logWriter );
+				final TileInfo[] tilesWithEstimatedTransforms = getTilesWithEstimatedTransformation( logWriter );
 
 				final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
 				Arrays.fill( tileBoxesGridSize, job.getArgs().subdivision() );
-				final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, tileBoxesGridSize );
+				final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tilesWithEstimatedTransforms, tileBoxesGridSize );
 				final List< SubdividedTileBoxPair > overlappingBoxes = SubdividedTileOperations.findOverlappingTileBoxes( tileBoxes, !job.getArgs().useAllPairs() );
 				preparePairwiseShifts( overlappingBoxes, iteration, logWriter );
 			}
@@ -370,9 +370,6 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		if ( pairsRemoved != 0 )
 			TileInfoJSONProvider.savePairwiseShifts( pairwiseShifts, dataProvider.getJsonWriter( URI.create( pairwisePath ) ) );
 
-		// find only pairs that need to be computed
-		final List< SubdividedTileBoxPair > pendingOverlappingBoxes = new ArrayList<>();
-
 		// Create a cache to efficiently lookup the existing pairs of tiles loaded from disk
 		final Map< Integer, Set< Integer > > cache = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult result : pairwiseShifts )
@@ -391,6 +388,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		}
 
 		// Populate a new list of pending tile pairs (add only those pairs that are not contained in the cache)
+		final List< SubdividedTileBoxPair > pendingOverlappingBoxes = new ArrayList<>();
 		for ( final SubdividedTileBoxPair boxPair : overlappingBoxes )
 		{
 			final int firstIndex =  Math.min( boxPair.getA().getIndex(), boxPair.getB().getIndex() ),
@@ -398,7 +396,6 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			if ( !cache.containsKey( firstIndex ) || !cache.get( firstIndex ).contains( secondIndex ) )
 				pendingOverlappingBoxes.add( boxPair );
 		}
-
 		return pendingOverlappingBoxes;
 	}
 

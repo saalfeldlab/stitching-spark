@@ -72,16 +72,21 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	{
 		final SubdividedTileBox[] tileBoxes = tileBoxPair.toArray();
 
+		// Get approximate transformations for tile pair. If it is not the first iteration, they have already been estimated prior to pairwise matching.
 		final AffineGet[] estimatedTileTransforms = new AffineGet[ tileBoxes.length ];
+		for ( int i = 0; i < tileBoxes.length; ++i )
+			estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( tileBoxes[ i ].getFullTile() );
+
 		final ErrorEllipse movingBoxSearchRadius;
 
 		if ( searchRadiusEstimator != null )
 		{
+			for ( int i = 0; i < tileBoxes.length; ++i )
+				if ( tileBoxes[ i ].getFullTile().getTransform() == null )
+					throw new RuntimeException( "expected non-null affine transform for tile" );
+
 			try
 			{
-				for ( int i = 0; i < tileBoxes.length; ++i )
-					estimatedTileTransforms[ i ] = TransformedTileOperations.estimateAffineTransformation( tileBoxes[ i ].getFullTile(), searchRadiusEstimator );
-
 				// get search radius for new moving box position in the fixed box space
 				final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingBox = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox( tileBoxes, searchRadiusEstimator );
 
@@ -97,9 +102,6 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		}
 		else
 		{
-			for ( int i = 0; i < tileBoxes.length; ++i )
-				estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( tileBoxes[ i ].getFullTile() );
-
 			if ( job.getArgs().constrainMatchingOnFirstIteration() )
 			{
 				final double[] uncorrelatedErrorEllipseRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipseRadius(
