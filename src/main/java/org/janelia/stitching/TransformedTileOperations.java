@@ -106,29 +106,8 @@ public class TransformedTileOperations
 		return new FinalRealInterval( transformedMin, transformedMax );
 	}
 
-//	/**
-//	 * Estimates an expected affine transformation for a given tile based on offset statistics selected from local neighborhood.
-//	 * The estimated transformation performs the following mapping: local tile coordinates -> expected world coordinates.
-//	 *
-//	 * @param tile
-//	 * @param searchRadiusEstimator
-//	 * @return
-//	 * @throws PipelineExecutionException
-//	 * @throws NotEnoughNeighboringTilesException
-//	 */
-//	public static AffineGet estimateAffineTransformation(
-//			final TileInfo tile,
-//			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
-//	{
-//		return estimateAffineTransformation(
-//				estimateLinearAndTranslationAffineComponents( tile, searchRadiusEstimator )
-//			);
-//	}
 	/**
-	 * Estimates an expected affine transformation for a given tile in the following way:
-	 * (1) Find affine transformations for subtiles by fitting it to local->world points of neighboring subtiles
-	 * (2) Find affine transformation for the given tile by fitting it to local->transformed points of its subtiles using the transformations estimated in (1)
-	 *
+	 * Estimates an expected affine transformation for a given tile based on offset statistics selected from local neighborhood.
 	 * The estimated transformation performs the following mapping: local tile coordinates -> expected world coordinates.
 	 *
 	 * @param tile
