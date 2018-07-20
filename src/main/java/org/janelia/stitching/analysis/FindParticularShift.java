@@ -36,8 +36,8 @@ public class FindParticularShift
 		int hits = 0;
 		SerializablePairWiseStitchingResult shift = null;
 		for ( final SerializablePairWiseStitchingResult s : shifts ) {
-			if ( (s.getTileBoxPair().getOriginalTilePair().getA().getIndex() == i1 && s.getTileBoxPair().getOriginalTilePair().getB().getIndex() == i2) ||
-					(s.getTileBoxPair().getOriginalTilePair().getA().getIndex() == i2 && s.getTileBoxPair().getOriginalTilePair().getB().getIndex() == i1) )
+			if ( (s.getSubTilePair().getFullTilePair().getA().getIndex() == i1 && s.getSubTilePair().getFullTilePair().getB().getIndex() == i2) ||
+					(s.getSubTilePair().getFullTilePair().getA().getIndex() == i2 && s.getSubTilePair().getFullTilePair().getB().getIndex() == i1) )
 			{
 				shift = s;
 				hits++;
@@ -50,8 +50,8 @@ public class FindParticularShift
 			throw new Exception( "Impossible: present more than once" );
 
 		System.out.println( "Found:" );
-		System.out.println( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() + ": " + shift.getTileBoxPair().getOriginalTilePair().getA().getFilePath() );
-		System.out.println( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() + ": " + shift.getTileBoxPair().getOriginalTilePair().getB().getFilePath() );
+		System.out.println( shift.getSubTilePair().getFullTilePair().getA().getIndex() + ": " + shift.getSubTilePair().getFullTilePair().getA().getFilePath() );
+		System.out.println( shift.getSubTilePair().getFullTilePair().getB().getIndex() + ": " + shift.getSubTilePair().getFullTilePair().getB().getFilePath() );
 
 		System.out.println( "------------------");
 		System.out.println( "offset=" + Arrays.toString( shift.getOffset() ) );
@@ -59,8 +59,8 @@ public class FindParticularShift
 		System.out.println( "phase correlation=" + shift.getPhaseCorrelation() );
 		System.out.println( "------------------");
 
-		final TileInfo t1 = shift.getTileBoxPair().getOriginalTilePair().getA();
-		final TileInfo t2 = shift.getTileBoxPair().getOriginalTilePair().getB();
+		final TileInfo t1 = shift.getSubTilePair().getFullTilePair().getA();
+		final TileInfo t2 = shift.getSubTilePair().getFullTilePair().getB();
 
 		Interval overlap = TileOperations.getOverlappingRegionGlobal( t1, t2 );
 		System.out.println( "Initial overlap at " + Arrays.toString( Intervals.minAsLongArray( overlap ) ) + " with dimensions " + Arrays.toString( Intervals.dimensionsAsLongArray( overlap ) ) );

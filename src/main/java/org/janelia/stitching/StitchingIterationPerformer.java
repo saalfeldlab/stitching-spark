@@ -74,15 +74,15 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator( logWriter ) );
 				final TileInfo[] tilesWithEstimatedTransforms = getTilesWithEstimatedTransformation( logWriter );
 
-				final int[] tileBoxesGridSize = new int[ job.getDimensionality() ];
-				Arrays.fill( tileBoxesGridSize, job.getArgs().subdivision() );
-				final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tilesWithEstimatedTransforms, tileBoxesGridSize );
-				final List< SubdividedTileBoxPair > overlappingBoxes = SubdividedTileOperations.findOverlappingTileBoxes(
-						tileBoxes,
+				final int[] subTilesGridSize = new int[ job.getDimensionality() ];
+				Arrays.fill( subTilesGridSize, job.getArgs().subdivision() );
+				final List< SubTile > subTiles = SubTileOperations.subdivideTiles( tilesWithEstimatedTransforms, subTilesGridSize );
+				final List< SubTilePair > overlappingSubTiles = SubTileOperations.findOverlappingSubTiles(
+						subTiles,
 						!job.getArgs().useAllPairs(), // adjacent vs. all overlapping pairs
 						iteration > 0 // use stage coords on the first run, and only world transform (last stitched / estimated) on subsequent iterations
 					);
-				preparePairwiseShifts( overlappingBoxes, iteration, logWriter );
+				preparePairwiseShifts( overlappingSubTiles, iteration, logWriter );
 			}
 		}
 
@@ -214,7 +214,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	 * @throws IOException
 	 */
 	private void preparePairwiseShifts(
-			final List< SubdividedTileBoxPair > overlappingBoxes,
+			final List< SubTilePair > overlappingBoxes,
 			final int iteration,
 			final PrintWriter logWriter ) throws PipelineExecutionException, IOException
 	{
@@ -226,7 +226,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		final String pairwisePath = PathResolver.get( basePath, iterationDirname, pairwiseFilename );
 
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = tryLoadPrecomputedShifts( basePath );
-		final List< SubdividedTileBoxPair > pendingOverlappingBoxes = removePrecomputedPendingPairs( pairwisePath, overlappingBoxes, pairwiseShifts );
+		final List< SubTilePair > pendingOverlappingBoxes = removePrecomputedPendingPairs( pairwisePath, overlappingBoxes, pairwiseShifts );
 
 		if ( pendingOverlappingBoxes.isEmpty() && !pairwiseShifts.isEmpty() )
 		{
@@ -336,15 +336,15 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	 * @throws PipelineExecutionException
 	 * @throws IOException
 	 */
-	private List< SubdividedTileBoxPair > removePrecomputedPendingPairs(
+	private List< SubTilePair > removePrecomputedPendingPairs(
 			final String pairwisePath,
-			final List< SubdividedTileBoxPair > overlappingBoxes,
+			final List< SubTilePair > overlappingBoxes,
 			final List< SerializablePairWiseStitchingResult > pairwiseShifts ) throws PipelineExecutionException, IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		// remove redundant pairs (that are not contained in the given overlappingTiles list)
 		final Map< Integer, Set< Integer > > overlappingPairsCache = new TreeMap<>();
-		for ( final SubdividedTileBoxPair boxPair : overlappingBoxes )
+		for ( final SubTilePair boxPair : overlappingBoxes )
 		{
 			final int ind1 = Math.min( boxPair.getA().getIndex(), boxPair.getB().getIndex() );
 			final int ind2 = Math.max( boxPair.getA().getIndex(), boxPair.getB().getIndex() );
@@ -358,7 +358,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			final SerializablePairWiseStitchingResult result = it.next();
 			final Integer[] indexes = new Integer[ 2 ];
 			for ( int i = 0; i < 2; ++i )
-				indexes[ i ] = result.getTileBoxPair().toArray()[ i ].getIndex();
+				indexes[ i ] = result.getSubTilePair().toArray()[ i ].getIndex();
 
 			final int ind1 = Math.min( indexes[ 0 ], indexes[ 1 ] );
 			final int ind2 = Math.max( indexes[ 0 ], indexes[ 1 ] );
@@ -381,8 +381,8 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			final Integer[] indexes = new Integer[ 2 ];
 			for ( int i = 0; i < 2; ++i )
 				if ( indexes[ i ] == null )
-					indexes[ i ] = result.getTileBoxPair().toArray()[ i ].getIndex();
-				else if ( !indexes[ i ].equals( result.getTileBoxPair().toArray()[ i ].getIndex() ) )
+					indexes[ i ] = result.getSubTilePair().toArray()[ i ].getIndex();
+				else if ( !indexes[ i ].equals( result.getSubTilePair().toArray()[ i ].getIndex() ) )
 					throw new PipelineExecutionException( "Tile indexes do not match" );
 
 			final int firstIndex =  Math.min( indexes[ 0 ], indexes[ 1 ] ), secondIndex  =  Math.max( indexes[ 0 ], indexes[ 1 ] );
@@ -392,8 +392,8 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		}
 
 		// Populate a new list of pending tile pairs (add only those pairs that are not contained in the cache)
-		final List< SubdividedTileBoxPair > pendingOverlappingBoxes = new ArrayList<>();
-		for ( final SubdividedTileBoxPair boxPair : overlappingBoxes )
+		final List< SubTilePair > pendingOverlappingBoxes = new ArrayList<>();
+		for ( final SubTilePair boxPair : overlappingBoxes )
 		{
 			final int firstIndex =  Math.min( boxPair.getA().getIndex(), boxPair.getB().getIndex() ),
 					secondIndex =  Math.max( boxPair.getA().getIndex(), boxPair.getB().getIndex() );
@@ -466,7 +466,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	 * @throws IOException
 	 */
 	private < T extends NativeType< T > & RealType< T > > List< SerializablePairWiseStitchingResult > computePairwiseShifts(
-			final List< SubdividedTileBoxPair > overlappingBoxes,
+			final List< SubTilePair > overlappingBoxes,
 			final PrintWriter logWriter ) throws PipelineExecutionException, IOException
 	{
 		System.out.println( "Processing " + overlappingBoxes.size() + " pairs..." );
@@ -476,21 +476,21 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		final LongAccumulator noPeaksWithinConfidenceIntervalPairsCount = sparkContext.sc().longAccumulator();
 
 		final List< SerializablePairWiseStitchingResult > pairwiseStitchingResults = sparkContext.parallelize( overlappingBoxes, overlappingBoxes.size() ).map(
-				tileBoxPair ->
+				subTilePair ->
 				{
 					try
 					{
-						return new StitchSubdividedTileBoxPair<>(
+						return new StitchSubTilePair<>(
 								job,
 								broadcastedSearchRadiusEstimator.value(),
 								broadcastedFlatfieldsForChannels.value(),
 								broadcastedTileMapsForChannels.value()
 							)
-						.stitchTileBoxPair( tileBoxPair );
+						.stitchSubTilePair( subTilePair );
 					}
 					catch ( final Exception e )
 					{
-						throw new RuntimeException( "Exception when stitching " + tileBoxPair + ": " + e.getMessage(), e );
+						throw new RuntimeException( "Exception when stitching " + subTilePair + ": " + e.getMessage(), e );
 					}
 				}
 			).collect();

@@ -181,14 +181,14 @@ public class StitchingOptimizer implements Serializable
 		final String pairwiseFilename = "pairwise.json";
 		final String pairwiseShiftsPath = PathResolver.get( iterationDirPath, pairwiseFilename );
 
-		final List< SerializablePairWiseStitchingResult > tileBoxShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
+		final List< SerializablePairWiseStitchingResult > subTilePairwiseResults = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
 		final double maxAllowedError = getMaxAllowedError( iteration );
 
 		if ( logWriter != null )
 			printStats( logWriter, optimizerMode, maxAllowedError );
 
 		final OptimizationResult bestOptimization = findBestOptimization(
-				tileBoxShifts,
+				subTilePairwiseResults,
 				maxAllowedError,
 				logWriter,
 				optimizerMode,
@@ -206,7 +206,7 @@ public class StitchingOptimizer implements Serializable
 
 		// save resulting used pairwise shifts configuration (load the file with indexes and extract the actual shifts from the existing pairwise file)
 		final PairwiseShiftsIndexFilter usedPairwiseShiftsIndexes = loadPairwiseShiftsIndexesFromFile( dataProvider, bestOptimization.usedPairwiseIndexesPath );
-		final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = usedPairwiseShiftsIndexes.filterPairwiseShifts( tileBoxShifts );
+		final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = usedPairwiseShiftsIndexes.filterPairwiseShifts( subTilePairwiseResults );
 		final String usedPairwiseShiftsPath = PathResolver.get( iterationDirPath, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) );
 		TileInfoJSONProvider.savePairwiseShifts( usedPairwiseShifts, dataProvider.getJsonWriter( URI.create( usedPairwiseShiftsPath ) ) );
 	}
@@ -224,7 +224,7 @@ public class StitchingOptimizer implements Serializable
 	}
 
 	private OptimizationResult findBestOptimization(
-			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
+			final List< SerializablePairWiseStitchingResult > subTilePairwiseResults,
 			final double maxAllowedError,
 			final PrintWriter logWriter,
 			final OptimizerMode optimizerMode,
@@ -241,7 +241,7 @@ public class StitchingOptimizer implements Serializable
 		final String resultingConfigsDirPath = PathResolver.get( iterationDirPath, "resulting-tile-configurations" );
 		job.getDataProvider().createFolder( URI.create( resultingConfigsDirPath ) );
 
-		final Broadcast< List< SerializablePairWiseStitchingResult > > broadcastedTileBoxShifts = sparkContext.broadcast( tileBoxShifts );
+		final Broadcast< List< SerializablePairWiseStitchingResult > > broadcastedSubTilePairwiseResults = sparkContext.broadcast( subTilePairwiseResults );
 
 		final List< TileInfo[] > inputTileChannels = new ArrayList<>();
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
@@ -254,7 +254,7 @@ public class StitchingOptimizer implements Serializable
 				.parallelize( optimizationParametersList, optimizationParametersList.size() )
 				.map( optimizationParameters ->
 					{
-						final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedTileBoxShifts.value(), optimizationParameters, optimizerMode );
+						final Vector< ComparePointPair > comparePointPairs = createComparePointPairs( broadcastedSubTilePairwiseResults.value(), optimizationParameters, optimizerMode );
 
 						GlobalOptimizationPerformer.suppressOutput();
 						final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
@@ -303,7 +303,7 @@ public class StitchingOptimizer implements Serializable
 						// save used pairwise indexes (saving the actual used pairwise config for each threshold combination might be too expensive, just save the indexes and then extract the actual shifts only for the best result)
 						final PairwiseShiftsIndexFilter usedPairwiseShiftsIndexes = getUsedPairwiseShiftsIndexFilter(
 								optimizedTileConfiguration,
-								broadcastedTileBoxShifts.value(),
+								broadcastedSubTilePairwiseResults.value(),
 								comparePointPairs
 							);
 						optimizationResult.usedPairwiseIndexesPath = PathResolver.get( optimizedTileConfigurationFolder, "pairwise-used-indexes.json" );
@@ -315,7 +315,7 @@ public class StitchingOptimizer implements Serializable
 			);
 
 		GlobalOptimizationPerformer.restoreOutput();
-		broadcastedTileBoxShifts.destroy();
+		broadcastedSubTilePairwiseResults.destroy();
 		broadcastedInputTileChannels.destroy();
 
 		Collections.sort( optimizationResults );
@@ -327,17 +327,17 @@ public class StitchingOptimizer implements Serializable
 	}
 
 	private Vector< ComparePointPair > createComparePointPairs(
-			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
+			final List< SerializablePairWiseStitchingResult > subTilePairwiseResults,
 			final OptimizationParameters optimizationParameters,
 			final OptimizerMode optimizerMode )
 	{
 		// create tile models
 		final TreeMap< Integer, ImagePlusTimePoint > fakeTileImagesMap = new TreeMap<>();
-		for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts )
+		for ( final SerializablePairWiseStitchingResult subTilePairwiseResult : subTilePairwiseResults )
 		{
-			if ( tileBoxShift != null )
+			if ( subTilePairwiseResult != null )
 			{
-				for ( final TileInfo originalTileInfo : tileBoxShift.getTileBoxPair().getOriginalTilePair().toArray() )
+				for ( final TileInfo originalTileInfo : subTilePairwiseResult.getSubTilePair().getFullTilePair().toArray() )
 				{
 					if ( !fakeTileImagesMap.containsKey( originalTileInfo.getIndex() ) )
 					{
@@ -360,22 +360,22 @@ public class StitchingOptimizer implements Serializable
 
 		// create pairs
 		final Vector< ComparePointPair > comparePairs = new Vector<>();
-		for ( final SerializablePairWiseStitchingResult tileBoxShift : tileBoxShifts )
+		for ( final SerializablePairWiseStitchingResult subTilePairwiseResult : subTilePairwiseResults )
 		{
-			if ( tileBoxShift != null )
+			if ( subTilePairwiseResult != null )
 			{
 				final ComparePointPair comparePointPair = new ComparePointPair(
-						fakeTileImagesMap.get( tileBoxShift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ),
-						fakeTileImagesMap.get( tileBoxShift.getTileBoxPair().getOriginalTilePair().getB().getIndex() )
+						fakeTileImagesMap.get( subTilePairwiseResult.getSubTilePair().getFullTilePair().getA().getIndex() ),
+						fakeTileImagesMap.get( subTilePairwiseResult.getSubTilePair().getFullTilePair().getB().getIndex() )
 					);
 
-				comparePointPair.setTileBoxPair( tileBoxShift.getTileBoxPair() );
-				comparePointPair.setRelativeShift( tileBoxShift.getOffset() );
-				comparePointPair.setCrossCorrelation( tileBoxShift.getCrossCorrelation() );
+				comparePointPair.setSubTilePair( subTilePairwiseResult.getSubTilePair() );
+				comparePointPair.setRelativeShift( subTilePairwiseResult.getOffset() );
+				comparePointPair.setCrossCorrelation( subTilePairwiseResult.getCrossCorrelation() );
 				comparePointPair.setIsValidOverlap(
-						tileBoxShift.getIsValidOverlap()
-						&& tileBoxShift.getCrossCorrelation() > optimizationParameters.minCrossCorrelation
-						&& tileBoxShift.getVariance() != null && tileBoxShift.getVariance().doubleValue() > optimizationParameters.minVariance
+						subTilePairwiseResult.getIsValidOverlap()
+						&& subTilePairwiseResult.getCrossCorrelation() > optimizationParameters.minCrossCorrelation
+						&& subTilePairwiseResult.getVariance() != null && subTilePairwiseResult.getVariance().doubleValue() > optimizationParameters.minVariance
 					);
 
 				comparePairs.addElement( comparePointPair );
@@ -456,10 +456,10 @@ public class StitchingOptimizer implements Serializable
 
 	private PairwiseShiftsIndexFilter getUsedPairwiseShiftsIndexFilter(
 			final List< ImagePlusTimePoint > resultingTiles,
-			final List< SerializablePairWiseStitchingResult > tileBoxShifts,
+			final List< SerializablePairWiseStitchingResult > subTilePairwiseResults,
 			final Vector< ComparePointPair > comparePointPairs )
 	{
-		final Map< Integer, ? extends Map< Integer, SerializablePairWiseStitchingResult > > initialShiftsMap = Utils.createTileBoxPairwiseShiftsMap( tileBoxShifts, false );
+		final Map< Integer, ? extends Map< Integer, SerializablePairWiseStitchingResult > > initialShiftsMap = Utils.createSubTilePairwiseResultsMap( subTilePairwiseResults, false );
 		final Set< Integer > resultingTileIndexes = new HashSet<>();
 		for ( final ImagePlusTimePoint resultingTile : resultingTiles )
 			resultingTileIndexes.add( resultingTile.getImpId() );
@@ -469,9 +469,9 @@ public class StitchingOptimizer implements Serializable
 		{
 			if ( finalPair.getIsValidOverlap() && resultingTileIndexes.contains( finalPair.getTile1().getImpId() ) && resultingTileIndexes.contains( finalPair.getTile2().getImpId() ) )
 			{
-				final SubdividedTileBoxPair tileBoxPair = finalPair.getTileBoxPair();
-				final int ind1 = Math.min( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
-				final int ind2 = Math.max( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
+				final SubTilePair subTilePair = finalPair.getSubTilePair();
+				final int ind1 = Math.min( subTilePair.getA().getIndex(), subTilePair.getB().getIndex() );
+				final int ind2 = Math.max( subTilePair.getA().getIndex(), subTilePair.getB().getIndex() );
 				final SerializablePairWiseStitchingResult initialShift = initialShiftsMap.get( ind1 ).get( ind2 );
 				filteredPairwiseShifts.add( initialShift );
 			}

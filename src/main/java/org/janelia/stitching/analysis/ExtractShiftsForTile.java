@@ -25,7 +25,7 @@ public class ExtractShiftsForTile
 
 		final List< SerializablePairWiseStitchingResult > shiftsForTile = new ArrayList<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
+			for ( final TileInfo tile : shift.getSubTilePair().getFullTilePair().toArray() )
 				if ( tile.getIndex() == tileIndex )
 					shiftsForTile.add( shift );
 
@@ -36,9 +36,9 @@ public class ExtractShiftsForTile
 		for ( final SerializablePairWiseStitchingResult shift : shiftsForTile )
 		{
 			System.out.println("-----------------");
-			System.out.println( String.format( "(%s,%s),   offset=%s, cr.corr=%f, ph.corr=%f:", shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex(), Arrays.toString( shift.getOffset() ), shift.getCrossCorrelation(), shift.getPhaseCorrelation() ) );
-			System.out.println( String.format( "   tile %s:  timestamp=%d,  coordinates=%s", shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), timestampsMap.get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ), Arrays.toString( coordinatesMap.get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ) ) ) );
-			System.out.println( String.format( "   tile %s:  timestamp=%d,  coordinates=%s", shift.getTileBoxPair().getOriginalTilePair().getB().getIndex(), timestampsMap.get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ), Arrays.toString( coordinatesMap.get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ) ) ) );
+			System.out.println( String.format( "(%s,%s),   offset=%s, cr.corr=%f, ph.corr=%f:", shift.getSubTilePair().getFullTilePair().getA().getIndex(), shift.getSubTilePair().getFullTilePair().getB().getIndex(), Arrays.toString( shift.getOffset() ), shift.getCrossCorrelation(), shift.getPhaseCorrelation() ) );
+			System.out.println( String.format( "   tile %s:  timestamp=%d,  coordinates=%s", shift.getSubTilePair().getFullTilePair().getA().getIndex(), timestampsMap.get( shift.getSubTilePair().getFullTilePair().getA().getIndex() ), Arrays.toString( coordinatesMap.get( shift.getSubTilePair().getFullTilePair().getA().getIndex() ) ) ) );
+			System.out.println( String.format( "   tile %s:  timestamp=%d,  coordinates=%s", shift.getSubTilePair().getFullTilePair().getB().getIndex(), timestampsMap.get( shift.getSubTilePair().getFullTilePair().getB().getIndex() ), Arrays.toString( coordinatesMap.get( shift.getSubTilePair().getFullTilePair().getB().getIndex() ) ) ) );
 		}
 	}
 }

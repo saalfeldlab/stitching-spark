@@ -119,10 +119,10 @@ public class GlobalOptimizationPerformer
 			{
 				++pairsAdded;
 
-				final SubdividedTileBoxPair tileBoxPair = comparePointPair.getTileBoxPair();
-				final SubdividedTileBox[] tileBoxes = tileBoxPair.toArray();
+				final SubTilePair subTilePair = comparePointPair.getSubTilePair();
+				final SubTile[] subTiles = subTilePair.toArray();
 				final float weight = comparePointPair.getCrossCorrelation();
-				final double[] fullTileOffset = SubdividedTileOperations.getFullTileOffset( tileBoxPair, Conversions.toDoubleArray( comparePointPair.getRelativeShift() ) );
+				final double[] fullTileOffset = SubTileOperations.getFullTileOffset( subTilePair, Conversions.toDoubleArray( comparePointPair.getRelativeShift() ) );
 
 				final Tile< ? > t1 = comparePointPair.getTile1();
 				final Tile< ? > t2 = comparePointPair.getTile2();
@@ -143,7 +143,7 @@ public class GlobalOptimizationPerformer
 				// 2) middle point of the moving tile box -> fixed tile
 				for ( int i = 0; i < 2; ++i )
 				{
-					final Point p1 = new Point( SubdividedTileOperations.getTileBoxMiddlePoint( tileBoxes[ i ] ) );
+					final Point p1 = new Point( SubTileOperations.getSubTileMiddlePoint( subTiles[ i ] ) );
 					final double[] p2Coords = new double[ fullTileOffset.length ];
 					for ( int d = 0; d < p2Coords.length; ++d )
 						p2Coords[ d ] = p1.getL()[ d ] - ( i == 0 ? 1 : -1 ) * fullTileOffset[ d ]; // inverse mapping, hence '-' for fixed->moving mapping and '+' for moving->fixed

@@ -17,6 +17,6 @@ public class SortPairsByVariance
 		final List< SerializablePairWiseStitchingResult > pairwise = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwisePath ) ) );
 		pairwise.sort( ( a, b ) -> -Double.compare( a.getVariance() != null ? a.getVariance() : 0, b.getVariance() != null ? b.getVariance() : 0 ) );
 		for ( final SerializablePairWiseStitchingResult pair : pairwise )
-			System.out.println( String.format( "variance=%.2f %s cr.corr=%.2f, ph.corr=%.8f", pair.getVariance(), pair.getTileBoxPair().getOriginalTilePair(), pair.getCrossCorrelation(), pair.getPhaseCorrelation() ) );
+			System.out.println( String.format( "variance=%.2f %s cr.corr=%.2f, ph.corr=%.8f", pair.getVariance(), pair.getSubTilePair().getFullTilePair(), pair.getCrossCorrelation(), pair.getPhaseCorrelation() ) );
 	}
 }

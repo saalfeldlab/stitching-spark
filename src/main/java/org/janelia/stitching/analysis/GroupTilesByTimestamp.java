@@ -52,7 +52,7 @@ public class GroupTilesByTimestamp
 				groupTileIndexes.add( tile.getIndex() );
 			final List< SerializablePairWiseStitchingResult > groupShifts = new ArrayList<>();
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
-				if ( groupTileIndexes.contains( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ) && groupTileIndexes.contains( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ) )
+				if ( groupTileIndexes.contains( shift.getSubTilePair().getFullTilePair().getA().getIndex() ) && groupTileIndexes.contains( shift.getSubTilePair().getFullTilePair().getB().getIndex() ) )
 					groupShifts.add( shift );
 
 			final String groupSuffix = "_group" + i;

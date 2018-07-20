@@ -39,7 +39,7 @@ public class FindWorstShift
 				continue;
 
 			validShiftsCount++;
-			final TilePair pair = shift.getTileBoxPair().getOriginalTilePair();
+			final TilePair pair = shift.getSubTilePair().getFullTilePair();
 			final double dist[] = new double[ shift.getNumDimensions() ];
 
 			for ( int d = 0; d < shift.getNumDimensions(); d++ )

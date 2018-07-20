@@ -83,7 +83,7 @@ public class TilesCoverage
 		final Map< Integer, TileInfo > uncoveredTiles = new TreeMap<>( tilesMap );
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( shift.getIsValidOverlap() )
-				for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
+				for ( final TileInfo tile : shift.getSubTilePair().getFullTilePair().toArray() )
 					uncoveredTiles.remove( tile.getIndex() );
 		return uncoveredTiles;
 	}
@@ -92,7 +92,7 @@ public class TilesCoverage
 		final Map< Integer, TileInfo > remainingTiles = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( shift.getIsValidOverlap() )
-				for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
+				for ( final TileInfo tile : shift.getSubTilePair().getFullTilePair().toArray() )
 					remainingTiles.put( tile.getIndex(), tile );
 		return remainingTiles;
 	}

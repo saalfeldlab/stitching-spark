@@ -48,7 +48,7 @@ public class FilterStageCoordinates
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
 			{
 				boolean desired = true;
-				for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
+				for ( final TileInfo tile : shift.getSubTilePair().getFullTilePair().toArray() )
 					if ( tileIndexToCoord.get( tile.getIndex() )[ d ] != z )
 						desired = false;
 

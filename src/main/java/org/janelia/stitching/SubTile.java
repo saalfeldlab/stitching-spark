@@ -4,23 +4,23 @@ import net.imglib2.AbstractInterval;
 import net.imglib2.Interval;
 
 /**
- * Represents a box within a tile as a result of subdivision.
+ * Represents a subtile within a full tile.
  *
  * @author Igor Pisarev
  */
 
-public class SubdividedTileBox extends AbstractInterval
+public class SubTile extends AbstractInterval
 {
 	private final TileInfo fullTile;
 	private Integer index;
 
-	public SubdividedTileBox( final TileInfo fullTile )
+	public SubTile( final TileInfo fullTile )
 	{
 		super( fullTile.numDimensions() );
 		this.fullTile = fullTile;
 	}
 
-	public SubdividedTileBox( final TileInfo fullTile, final Interval interval )
+	public SubTile( final TileInfo fullTile, final Interval interval )
 	{
 		super( interval );
 		this.fullTile = fullTile;

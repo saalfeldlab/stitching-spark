@@ -36,7 +36,7 @@ public class FixTilePosition
 			final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( Utils.addFilenameSuffix( args[ 0 ], "_pairwise" ) ) ) );
 			final List< SerializablePairWiseStitchingResult > fixedShifts = new ArrayList<>();
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
-				if ( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() != tileIndex && shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() != tileIndex )
+				if ( shift.getSubTilePair().getFullTilePair().getA().getIndex() != tileIndex && shift.getSubTilePair().getFullTilePair().getB().getIndex() != tileIndex )
 					fixedShifts.add( shift );
 			TileInfoJSONProvider.savePairwiseShifts( fixedShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( outFilename, "_pairwise" ) ) ) );
 		}

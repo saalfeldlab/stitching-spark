@@ -25,23 +25,23 @@ public class PairwiseTileOperations
 	}
 
 	/**
-	 * Returns new error ellipse that is a combination of error ellipses for the fixed box and the moving box.
+	 * Returns new error ellipse that is a combination of error ellipses for the fixed subtile and the moving subtile.
 	 *
 	 * @param searchRadiusEstimator
-	 * @param tileBoxes
+	 * @param subTiles
 	 * @return
 	 * @throws PipelineExecutionException
 	 * @throws NotEnoughNeighboringTilesException
 	 */
-	public static EstimatedRelativeSearchRadius getCombinedSearchRadiusForMovingBox(
-			final SubdividedTileBox[] tileBoxes,
+	public static EstimatedRelativeSearchRadius getCombinedSearchRadiusForMovingSubTile(
+			final SubTile[] subTiles,
 			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
-		validateInputParametersLength( tileBoxes );
+		validateInputParametersLength( subTiles );
 
-		final EstimatedWorldSearchRadius[] searchRadiusStats = new EstimatedWorldSearchRadius[ tileBoxes.length ];
-		for ( int i = 0; i < tileBoxes.length; ++i )
-			searchRadiusStats[ i ] = searchRadiusEstimator.estimateSearchRadiusWithinWindow( tileBoxes[ i ].getFullTile() );
+		final EstimatedWorldSearchRadius[] searchRadiusStats = new EstimatedWorldSearchRadius[ subTiles.length ];
+		for ( int i = 0; i < subTiles.length; ++i )
+			searchRadiusStats[ i ] = searchRadiusEstimator.estimateSearchRadiusWithinWindow( subTiles[ i ].getFullTile() );
 
 		return searchRadiusEstimator.getCombinedCovariancesSearchRadius( searchRadiusStats );
 	}
@@ -57,160 +57,160 @@ public class PairwiseTileOperations
 		validateInputParametersLength( tileTransforms );
 
 		final InvertibleRealTransformSequence movingTileToFixedTileTransform = new InvertibleRealTransformSequence();
-		movingTileToFixedTileTransform.add( tileTransforms[ movingIndex ] );           // moving tile -> world
+		movingTileToFixedTileTransform.add( tileTransforms[ movingIndex ] ); // moving tile -> world
 		movingTileToFixedTileTransform.add( tileTransforms[ fixedIndex ].inverse() ); // world -> fixed tile
 		return movingTileToFixedTileTransform;
 
 	}
 
 	/**
-	 * Returns the transformation to map the moving tile into the coordinate space of the fixed box.
+	 * Returns the transformation to map the moving tile into the coordinate space of the fixed subtile.
 	 *
-	 * @param tileBoxes
+	 * @param subTiles
 	 * @param tileTransforms
 	 * @return
 	 */
-	public static InvertibleRealTransform getMovingTileToFixedBoxTransform(
-			final SubdividedTileBox[] tileBoxes,
+	public static InvertibleRealTransform getMovingTileToFixedSubTileTransform(
+			final SubTile[] subTiles,
 			final AffineGet[] tileTransforms )
 	{
-		validateInputParametersLength( tileBoxes, tileTransforms );
+		validateInputParametersLength( subTiles, tileTransforms );
 
-		return getFixedBoxTransform(
-				tileBoxes,
+		return getFixedSubTileTransform(
+				subTiles,
 				getMovingTileToFixedTileTransform( tileTransforms )
 			);
 	}
 
 	/**
-	 * Maps the given transformation in the fixed tile space into the fixed box space.
+	 * Maps the given transformation in the fixed tile space into the fixed subtile space.
 	 *
-	 * @param tileBoxes
+	 * @param subTiles
 	 * @param transformToFixedTileSpace
 	 * @return
 	 */
-	public static InvertibleRealTransform getFixedBoxTransform(
-			final SubdividedTileBox[] tileBoxes,
+	public static InvertibleRealTransform getFixedSubTileTransform(
+			final SubTile[] subTiles,
 			final InvertibleRealTransform transformToFixedTileSpace )
 	{
-		validateInputParametersLength( tileBoxes );
+		validateInputParametersLength( subTiles );
 
-		final InvertibleRealTransformSequence fixedTileToFixedBoxTransform = new InvertibleRealTransformSequence();
-		fixedTileToFixedBoxTransform.add( transformToFixedTileSpace ); // ... -> fixed tile
-		fixedTileToFixedBoxTransform.add( new Translation( Intervals.minAsDoubleArray( tileBoxes[ fixedIndex ] ) ).inverse() ); // fixed tile -> fixed box
-		return fixedTileToFixedBoxTransform;
+		final InvertibleRealTransformSequence fixedTileToFixedSubTileTransform = new InvertibleRealTransformSequence();
+		fixedTileToFixedSubTileTransform.add( transformToFixedTileSpace ); // ... -> fixed tile
+		fixedTileToFixedSubTileTransform.add( new Translation( Intervals.minAsDoubleArray( subTiles[ fixedIndex ] ) ).inverse() ); // fixed tile -> fixed subtile
+		return fixedTileToFixedSubTileTransform;
 	}
 
 	/**
-	 * Returns the offset between zero-min of the transformed moving box and its bounding box.
+	 * Returns the offset between zero-min of the transformed moving subtile and its bounding box.
 	 *
-	 * @param tileBoxes
+	 * @param subTiles
 	 * @param tileTransforms
 	 * @return
 	 */
-	public static double[] getTransformedMovingBoxToBoundingBoxOffset(
-			final SubdividedTileBox[] tileBoxes,
+	public static double[] getTransformedMovingSubTileToBoundingBoxOffset(
+			final SubTile[] subTiles,
 			final AffineGet[] tileTransforms )
 	{
-		validateInputParametersLength( tileBoxes, tileTransforms );
+		validateInputParametersLength( subTiles, tileTransforms );
 
-		return getTransformedMovingBoxToBoundingBoxOffset(
-				tileBoxes,
-				getMovingTileToFixedBoxTransform( tileBoxes, tileTransforms )
+		return getTransformedMovingSubTileToBoundingBoxOffset(
+				subTiles,
+				getMovingTileToFixedSubTileTransform( subTiles, tileTransforms )
 			);
 	}
 
 	/**
-	 * Returns the offset between zero-min of the transformed moving box and its bounding box.
+	 * Returns the offset between zero-min of the transformed moving subtile and its bounding box.
 	 *
-	 * @param tileBoxes
-	 * @param movingTileToFixedBoxTransform
+	 * @param subTiles
+	 * @param movingTileToFixedSubTileTransform
 	 * @return
 	 */
-	public static double[] getTransformedMovingBoxToBoundingBoxOffset(
-			final SubdividedTileBox[] tileBoxes,
-			final InvertibleRealTransform movingTileToFixedBoxTransform )
+	public static double[] getTransformedMovingSubTileToBoundingBoxOffset(
+			final SubTile[] subTiles,
+			final InvertibleRealTransform movingTileToFixedSubTileTransform )
 	{
-		validateInputParametersLength( tileBoxes );
+		validateInputParametersLength( subTiles );
 
-		final double[] transformedMovingTileBoxPosition = new double[ tileBoxes[ movingIndex ].numDimensions() ];
-		movingTileToFixedBoxTransform.apply( Intervals.minAsDoubleArray( tileBoxes[ movingIndex ] ), transformedMovingTileBoxPosition );
+		final double[] transformedMovingSubTilePosition = new double[ subTiles[ movingIndex ].numDimensions() ];
+		movingTileToFixedSubTileTransform.apply( Intervals.minAsDoubleArray( subTiles[ movingIndex ] ), transformedMovingSubTilePosition );
 
-		final RealInterval transformedMovingBoxInterval = TransformedTileOperations.getTransformedBoundingBoxReal(
-				tileBoxes[ movingIndex ],
-				movingTileToFixedBoxTransform
+		final RealInterval transformedMovingSubTileInterval = TransformedTileOperations.getTransformedBoundingBoxReal(
+				subTiles[ movingIndex ],
+				movingTileToFixedSubTileTransform
 			);
 
-		final double[] transformedMovingTileBoxToBoundingBoxOffset = new double[ tileBoxes[ movingIndex ].numDimensions() ];
-		for ( int d = 0; d < transformedMovingTileBoxToBoundingBoxOffset.length; ++d )
-			transformedMovingTileBoxToBoundingBoxOffset[ d ] = transformedMovingTileBoxPosition[ d ] - transformedMovingBoxInterval.realMin( d );
+		final double[] transformedMovingSubTileToBoundingBoxOffset = new double[ subTiles[ movingIndex ].numDimensions() ];
+		for ( int d = 0; d < transformedMovingSubTileToBoundingBoxOffset.length; ++d )
+			transformedMovingSubTileToBoundingBoxOffset[ d ] = transformedMovingSubTilePosition[ d ] - transformedMovingSubTileInterval.realMin( d );
 
-		return transformedMovingTileBoxToBoundingBoxOffset;
+		return transformedMovingSubTileToBoundingBoxOffset;
 	}
 
 	/**
-	 * Builds the transformation for the error ellipse to map it into the coordinate space of the fixed box.
+	 * Builds the transformation for the error ellipse to map it into the coordinate space of the fixed subtile.
 	 *
-	 * @param tileBoxes
+	 * @param subTiles
 	 * @param tileTransforms
 	 * @return
 	 */
 	public static InvertibleRealTransform getErrorEllipseTransform(
-			final SubdividedTileBox[] tileBoxes,
+			final SubTile[] subTiles,
 			final AffineGet[] tileTransforms )
 	{
-		validateInputParametersLength( tileBoxes, tileTransforms );
+		validateInputParametersLength( subTiles, tileTransforms );
 
-		final InvertibleRealTransform movingTileToFixedBoxTransform = getMovingTileToFixedBoxTransform( tileBoxes, tileTransforms );
-		final double[] transformedMovingTileBoxToBoundingBoxOffset = getTransformedMovingBoxToBoundingBoxOffset( tileBoxes, movingTileToFixedBoxTransform );
+		final InvertibleRealTransform movingTileToFixedSubTileTransform = getMovingTileToFixedSubTileTransform( subTiles, tileTransforms );
+		final double[] transformedMovingSubTileToBoundingBoxOffset = getTransformedMovingSubTileToBoundingBoxOffset( subTiles, movingTileToFixedSubTileTransform );
 
 		final InvertibleRealTransformSequence errorEllipseTransform = new InvertibleRealTransformSequence();
-		errorEllipseTransform.add( new Translation( Intervals.minAsDoubleArray( tileBoxes[ movingIndex ] ) ) ); // moving box -> moving tile
-		errorEllipseTransform.add( movingTileToFixedBoxTransform ); // moving tile -> fixed box
-		errorEllipseTransform.add( new Translation( transformedMovingTileBoxToBoundingBoxOffset ).inverse() ); // transformed box top-left -> bounding box top-left
+		errorEllipseTransform.add( new Translation( Intervals.minAsDoubleArray( subTiles[ movingIndex ] ) ) ); // moving subtile -> moving tile
+		errorEllipseTransform.add( movingTileToFixedSubTileTransform ); // moving tile -> fixed subtile
+		errorEllipseTransform.add( new Translation( transformedMovingSubTileToBoundingBoxOffset ).inverse() ); // transformed subtile top-left -> bounding box top-left
 
 		return errorEllipseTransform;
 	}
 
 	/**
-	 * Builds the new transformation for the moving tile based on the new offset of its tile box.
+	 * Builds the new transformation for the moving tile based on the new offset of its subtile.
 	 *
-	 * @param tileBoxes
+	 * @param subTiles
 	 * @param tileTransforms
 	 * @param movingBoundingBoxOffset
 	 * @return
 	 */
 	public static AffineGet getNewMovingTileTransform(
-			final SubdividedTileBox[] tileBoxes,
+			final SubTile[] subTiles,
 			final AffineGet[] tileTransforms,
 			final double[] movingBoundingBoxOffset )
 	{
-		validateInputParametersLength( tileBoxes, tileTransforms );
+		validateInputParametersLength( subTiles, tileTransforms );
 
 		final int dim = movingBoundingBoxOffset.length;
 
-		// Resulting offset is between the moving bounding box in the fixed box space.
-		// Convert it to the offset between the moving and fixed boxes in the global translated space (where the linear affine component of each tile has been undone).
+		// Resulting offset is for the moving bounding box in the fixed subtile space.
+		// Convert it to the offset between the moving and fixed subtiles in the global translated space (where the linear affine component of each tile has been undone).
 		final RealTransformSequence offsetToWorldTransform = new RealTransformSequence();
-		offsetToWorldTransform.add( new Translation( getTransformedMovingBoxToBoundingBoxOffset( tileBoxes, tileTransforms ) ) ); // bounding box top-left in fixed box space -> transformed top-left in fixed box space
-		offsetToWorldTransform.add( new Translation( Intervals.minAsDoubleArray( tileBoxes[ fixedIndex ] ) ) ); // fixed box -> fixed tile
+		offsetToWorldTransform.add( new Translation( getTransformedMovingSubTileToBoundingBoxOffset( subTiles, tileTransforms ) ) ); // bounding box top-left in fixed subtile space -> transformed top-left in fixed subtile space
+		offsetToWorldTransform.add( new Translation( Intervals.minAsDoubleArray( subTiles[ fixedIndex ] ) ) ); // fixed subtile -> fixed tile
 		offsetToWorldTransform.add( tileTransforms[ fixedIndex ] ); // fixed tile -> world
 
-		final double[] newMovingBoxWorldPosition = new double[ dim ];
-		offsetToWorldTransform.apply( movingBoundingBoxOffset, newMovingBoxWorldPosition );
+		final double[] newMovingSubTileWorldPosition = new double[ dim ];
+		offsetToWorldTransform.apply( movingBoundingBoxOffset, newMovingSubTileWorldPosition );
 
-		final double[] movingBoxWorldPosition = new double[ dim ];
-		tileTransforms[ movingIndex ].apply( Intervals.minAsDoubleArray( tileBoxes[ movingIndex ] ), movingBoxWorldPosition );
+		final double[] movingSubTileWorldPosition = new double[ dim ];
+		tileTransforms[ movingIndex ].apply( Intervals.minAsDoubleArray( subTiles[ movingIndex ] ), movingSubTileWorldPosition );
 
-		final double[] newMovingBoxWorldOffset = new double[ dim ];
+		final double[] newMovingSubTileWorldOffset = new double[ dim ];
 		for ( int d = 0; d < dim; ++d )
-			newMovingBoxWorldOffset[ d ] = newMovingBoxWorldPosition[ d ] - movingBoxWorldPosition[ d ];
+			newMovingSubTileWorldOffset[ d ] = newMovingSubTileWorldPosition[ d ] - movingSubTileWorldPosition[ d ];
 
 		// new translation component
 		final AffineGet movingTileTransformTranslationComponent = TransformUtils.getTranslationalComponent( tileTransforms[ movingIndex ] );
 		final double[] newMovingTileTransformTranslationComponent = new double[ dim ];
 		for ( int d = 0; d < dim; ++d )
-			newMovingTileTransformTranslationComponent[ d ] = newMovingBoxWorldOffset[ d ] + movingTileTransformTranslationComponent.get( d, dim );
+			newMovingTileTransformTranslationComponent[ d ] = newMovingSubTileWorldOffset[ d ] + movingTileTransformTranslationComponent.get( d, dim );
 
 		// linear component stays the same
 		final AffineGet movingTileTransformLinearComponent = TransformUtils.getLinearComponent( tileTransforms[ movingIndex ] );
@@ -228,32 +228,32 @@ public class PairwiseTileOperations
 	}
 
 	/**
-	 * Returns transformed offset between the fixed box and the moving box at its new position.
+	 * Returns transformed offset between the fixed subtile and the moving subtile at its new position.
 	 *
-	 * @param tileBoxes
+	 * @param subTiles
 	 * @param tileTransforms
 	 * @param movingBoundingBoxOffset
 	 * @return
 	 */
 	public static double[] getNewStitchedOffset(
-			final SubdividedTileBox[] tileBoxes,
+			final SubTile[] subTiles,
 			final AffineGet[] tileTransforms,
 			final double[] movingBoundingBoxOffset )
 	{
-		validateInputParametersLength( tileBoxes, tileTransforms );
+		validateInputParametersLength( subTiles, tileTransforms );
 
 		final int dim = movingBoundingBoxOffset.length;
 
-		final double[] fixedBoxTranslatedPosition = new double[ dim ];
-		TransformUtils.undoLinearComponent( tileTransforms[ fixedIndex ] ).apply( Intervals.minAsDoubleArray( tileBoxes[ fixedIndex ] ), fixedBoxTranslatedPosition );
+		final double[] fixedSubTileTranslatedPosition = new double[ dim ];
+		TransformUtils.undoLinearComponent( tileTransforms[ fixedIndex ] ).apply( Intervals.minAsDoubleArray( subTiles[ fixedIndex ] ), fixedSubTileTranslatedPosition );
 
-		final double[] newMovingBoxTranslatedPosition = new double[ dim ];
-		final AffineGet newMovingTileTransform = getNewMovingTileTransform( tileBoxes, tileTransforms, movingBoundingBoxOffset );
-		TransformUtils.undoLinearComponent( newMovingTileTransform ).apply( Intervals.minAsDoubleArray( tileBoxes[ movingIndex ] ), newMovingBoxTranslatedPosition );
+		final double[] newMovingSubTileTranslatedPosition = new double[ dim ];
+		final AffineGet newMovingTileTransform = getNewMovingTileTransform( subTiles, tileTransforms, movingBoundingBoxOffset );
+		TransformUtils.undoLinearComponent( newMovingTileTransform ).apply( Intervals.minAsDoubleArray( subTiles[ movingIndex ] ), newMovingSubTileTranslatedPosition );
 
 		final double[] stitchedOffset = new double[ dim ];
 		for ( int d = 0; d < dim; ++d )
-			stitchedOffset[ d ] = newMovingBoxTranslatedPosition[ d ] - fixedBoxTranslatedPosition[ d ];
+			stitchedOffset[ d ] = newMovingSubTileTranslatedPosition[ d ] - fixedSubTileTranslatedPosition[ d ];
 		return stitchedOffset;
 	}
 }

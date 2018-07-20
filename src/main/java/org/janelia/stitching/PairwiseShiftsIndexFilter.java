@@ -17,7 +17,7 @@ public class PairwiseShiftsIndexFilter implements Serializable
 		pairwiseShiftsIndexes = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : filteredPairwiseShifts )
 		{
-			final SubdividedTileBoxPair tileBoxPair = shift.getTileBoxPair();
+			final SubTilePair tileBoxPair = shift.getSubTilePair();
 			final int ind1 = Math.min( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
 			final int ind2 = Math.max( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
 
@@ -38,7 +38,7 @@ public class PairwiseShiftsIndexFilter implements Serializable
 		final List< SerializablePairWiseStitchingResult > filteredPairwiseShifts = new ArrayList<>();
 		for ( final SerializablePairWiseStitchingResult shift : pairwiseShifts )
 		{
-			final SubdividedTileBoxPair tileBoxPair = shift.getTileBoxPair();
+			final SubTilePair tileBoxPair = shift.getSubTilePair();
 			final int ind1 = Math.min( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
 			final int ind2 = Math.max( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
 			if ( pairwiseShiftsIndexes.containsKey( ind1 ) && pairwiseShiftsIndexes.get( ind1 ).contains( ind2 ) )

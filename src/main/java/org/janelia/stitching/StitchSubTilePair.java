@@ -40,14 +40,14 @@ import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
-public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > >
+public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > >
 {
 	private final StitchingJob job;
 	private final TileSearchRadiusEstimator searchRadiusEstimator;
 	private final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels;
 	private final List< Map< Integer, TileInfo > > tileMapsForChannels;
 
-	public StitchSubdividedTileBoxPair(
+	public StitchSubTilePair(
 			final StitchingJob job,
 			final TileSearchRadiusEstimator searchRadiusEstimator,
 			final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels,
@@ -61,23 +61,23 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 	}
 
 	/**
-	 * Estimate pairwise shift vector between a pair of tile boxes (smaller parts of input tiles).
-	 * The first tile box of the given pair is considered 'fixed', and the second is 'moving',
+	 * Estimate pairwise shift vector between a pair of subtiles.
+	 * The first subtile of the given pair is considered 'fixed', and the second is 'moving',
 	 * that means, the resulting shift vector will effectively be equal to (NewMovingPos - FixedPos).
 	 *
-	 * @param tileBoxPair
+	 * @param subTilePair
 	 * @throws PipelineExecutionException
 	 */
-	public SerializablePairWiseStitchingResult stitchTileBoxPair( final SubdividedTileBoxPair tileBoxPair ) throws PipelineExecutionException
+	public SerializablePairWiseStitchingResult stitchSubTilePair( final SubTilePair subTilePair ) throws PipelineExecutionException
 	{
-		final SubdividedTileBox[] tileBoxes = tileBoxPair.toArray();
+		final SubTile[] subTiles = subTilePair.toArray();
 
-		// Get approximate transformations for tile pair. If it is not the first iteration, they have already been estimated prior to pairwise matching.
-		final AffineGet[] estimatedTileTransforms = new AffineGet[ tileBoxes.length ];
-		for ( int i = 0; i < tileBoxes.length; ++i )
-			estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( tileBoxes[ i ].getFullTile(), searchRadiusEstimator != null );
+		// Get approximate transformations for the tile pair. If it is not the first iteration, they have already been estimated prior to pairwise matching.
+		final AffineGet[] estimatedTileTransforms = new AffineGet[ subTiles.length ];
+		for ( int i = 0; i < subTiles.length; ++i )
+			estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( subTiles[ i ].getFullTile(), searchRadiusEstimator != null );
 
-		final ErrorEllipse movingBoxSearchRadius;
+		final ErrorEllipse movingSubTileSearchRadius;
 
 		if ( searchRadiusEstimator != null )
 		{
@@ -87,16 +87,16 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 			try
 			{
-				// get search radius for new moving box position in the fixed box space
-				final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingBox = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox( tileBoxes, searchRadiusEstimator );
+				// get search radius for new moving subtile position in the fixed subtile space
+				final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingSubtile = PairwiseTileOperations.getCombinedSearchRadiusForMovingSubTile( subTiles, searchRadiusEstimator );
 
-				movingBoxSearchRadius = combinedSearchRadiusForMovingBox.combinedErrorEllipse;
-				System.out.println( "Estimated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingBoxSearchRadius.estimateBoundingBox() ) ) ) );
+				movingSubTileSearchRadius = combinedSearchRadiusForMovingSubtile.combinedErrorEllipse;
+				System.out.println( "Estimated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingSubTileSearchRadius.estimateBoundingBox() ) ) ) );
 			}
 			catch ( final NotEnoughNeighboringTilesException e )
 			{
-				System.out.println( "Could not estimate error ellipse for pair " + tileBoxPair );
-				final SerializablePairWiseStitchingResult invalidPairwiseResult = new SerializablePairWiseStitchingResult( tileBoxPair, null, 0 );
+				System.out.println( "Could not estimate error ellipse for pair " + subTilePair );
+				final SerializablePairWiseStitchingResult invalidPairwiseResult = new SerializablePairWiseStitchingResult( subTilePair, null, 0 );
 				return invalidPairwiseResult;
 			}
 		}
@@ -105,95 +105,95 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 			if ( job.getArgs().constrainMatchingOnFirstIteration() )
 			{
 				final double[] uncorrelatedErrorEllipseRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipseRadius(
-						tileBoxPair.getA().getFullTile().getSize(),
+						subTilePair.getA().getFullTile().getSize(),
 						job.getArgs().errorEllipseRadiusAsTileSizeRatio()
 					);
-				movingBoxSearchRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
-				System.out.println( "Create uncorrelated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingBoxSearchRadius.estimateBoundingBox() ) ) ) + " to constrain matching" );
+				movingSubTileSearchRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
+				System.out.println( "Create uncorrelated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingSubTileSearchRadius.estimateBoundingBox() ) ) ) + " to constrain matching" );
 			}
 			else
 			{
-				movingBoxSearchRadius = null;
+				movingSubTileSearchRadius = null;
 			}
 		}
 
-		if ( movingBoxSearchRadius != null )
+		if ( movingSubTileSearchRadius != null )
 		{
-			movingBoxSearchRadius.setErrorEllipseTransform(
-					PairwiseTileOperations.getErrorEllipseTransform( tileBoxes, estimatedTileTransforms )
+			movingSubTileSearchRadius.setErrorEllipseTransform(
+					PairwiseTileOperations.getErrorEllipseTransform( subTiles, estimatedTileTransforms )
 				);
 		}
 
 		// Render both ROIs in the fixed space
 		final InvertibleRealTransform[] affinesToFixedTileSpace = new InvertibleRealTransform[] {
-				TransformUtils.createTransform( tileBoxPair.getA().numDimensions() ), // identity transform for fixed tile
+				TransformUtils.createTransform( subTilePair.getA().numDimensions() ), // identity transform for fixed tile
 				PairwiseTileOperations.getMovingTileToFixedTileTransform( estimatedTileTransforms ) // moving tile to fixed tile
 			};
 
-		// convert to fixed box space
-		final InvertibleRealTransform[] affinesToFixedBoxSpace = new InvertibleRealTransform[ tileBoxes.length ];
-		for ( int i = 0; i < tileBoxes.length; ++i )
-			affinesToFixedBoxSpace[ i ] = PairwiseTileOperations.getFixedBoxTransform( tileBoxes, affinesToFixedTileSpace[ i ] );
+		// convert to fixed subtile space
+		final InvertibleRealTransform[] affinesToFixedSubTileSpace = new InvertibleRealTransform[ subTiles.length ];
+		for ( int i = 0; i < subTiles.length; ++i )
+			affinesToFixedSubTileSpace[ i ] = PairwiseTileOperations.getFixedSubTileTransform( subTiles, affinesToFixedTileSpace[ i ] );
 
-		// TODO: use smaller ROI instead of the entire subdivided box?
-		final ImagePlus[] roiImps = new ImagePlus[ tileBoxes.length ];
-		final Interval[] transformedRoiIntervals = new Interval[ tileBoxes.length ];
-		for ( int i = 0; i < tileBoxes.length; ++i )
+		// TODO: use smaller ROI instead of the whole subtile?
+		final ImagePlus[] roiImps = new ImagePlus[ subTiles.length ];
+		final Interval[] transformedRoiIntervals = new Interval[ subTiles.length ];
+		for ( int i = 0; i < subTiles.length; ++i )
 		{
-			final Pair< ImagePlus, Interval > roiAndBoundingBox = renderTileBox(
-					tileBoxes[ i ],
-					affinesToFixedBoxSpace[ i ],
+			final Pair< ImagePlus, Interval > roiAndBoundingBox = renderSubTile(
+					subTiles[ i ],
+					affinesToFixedSubTileSpace[ i ],
 					flatfieldsForChannels
 				);
 			roiImps[ i ] = roiAndBoundingBox.getA();
 			transformedRoiIntervals[ i ] = roiAndBoundingBox.getB();
 		}
-		// ROIs are rendered in the fixed box space, validate that the fixed box has zero-min
+		// ROIs are rendered in the fixed subtile space, validate that the fixed subtile has zero-min
 		if ( !Views.isZeroMin( transformedRoiIntervals[ 0 ] ) )
-			throw new PipelineExecutionException( "fixed box is expected to be zero-min" );
+			throw new PipelineExecutionException( "fixed subtile is expected to be zero-min" );
 
-		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImps, movingBoxSearchRadius );
+		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImps, movingSubTileSearchRadius );
 
 		if ( pairwiseResult == null )
 		{
-			System.out.println( "Could not find phase correlation peaks for pair " + tileBoxPair );
-			final SerializablePairWiseStitchingResult invalidPairwiseResult = new SerializablePairWiseStitchingResult( tileBoxPair, null, 0 );
+			System.out.println( "Could not find phase correlation peaks for pair " + subTilePair );
+			final SerializablePairWiseStitchingResult invalidPairwiseResult = new SerializablePairWiseStitchingResult( subTilePair, null, 0 );
 			return invalidPairwiseResult;
 		}
 
-		// Resulting offset is between the moving bounding box in the fixed box space.
-		// Convert it to the offset between the moving and fixed boxes in the global translated space (where the linear affine component of each tile has been undone).
+		// Resulting offset is for the moving bounding box in the fixed subtile space.
+		// Convert it to the offset between the moving and fixed subtiles in the global translated space (where the linear affine component of each tile has been undone).
 		final double[] newStitchedOffset = PairwiseTileOperations.getNewStitchedOffset(
-				tileBoxes,
+				subTiles,
 				estimatedTileTransforms,
 				Conversions.toDoubleArray( pairwiseResult.getOffset() )
 			);
 
 		pairwiseResult.setOffset( Conversions.toFloatArray( newStitchedOffset ) );
 		pairwiseResult.setVariance( computeVariance( roiImps ) );
-		pairwiseResult.setTileBoxPair( tileBoxPair );
+		pairwiseResult.setSubTilePair( subTilePair );
 
-		System.out.println( "Stitched tile box pair " + tileBoxPair );
+		System.out.println( "Stitched subtile pair " + subTilePair );
 		return pairwiseResult;
 	}
 
 	/**
-	 * Renders the given tile box in the transformed space averaging over all channels and optionally flat-fielding them.
+	 * Renders the given subtile in the transformed space averaging over all channels and optionally flat-fielding them.
 	 * The resulting image is wrapped as {@link ImagePlus}.
 	 *
-	 * @param tileBox
+	 * @param subTile
 	 * @param fullTileTransform
 	 * @param flatfieldsForChannels
 	 * @return pair: (rendered image; its world bounding box)
 	 * @throws PipelineExecutionException
 	 */
-	private Pair< ImagePlus, Interval > renderTileBox(
-			final SubdividedTileBox tileBox,
+	private Pair< ImagePlus, Interval > renderSubTile(
+			final SubTile subTile,
 			final InvertibleRealTransform fullTileTransform,
 			final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels ) throws PipelineExecutionException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
-		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( tileBox.getFullTile().getPixelResolution() );
+		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( subTile.getFullTile().getPixelResolution() );
 		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
 		final double[] blurSigmas = new  double[ normalizedVoxelDimensions.length ];
 		for ( int d = 0; d < blurSigmas.length; d++ )
@@ -207,11 +207,11 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
 		{
-			final TileInfo tile = tileMapsForChannels.get( channel ).get( tileBox.getFullTile().getIndex() );
+			final TileInfo tile = tileMapsForChannels.get( channel ).get( subTile.getFullTile().getIndex() );
 
 			// validate that all corresponding tiles have the same grid coordinates
 			// (or skip validation if unable to extract grid coordinates from tile filename)
-			validateGridCoordinates( tileBox, tile );
+			validateGridCoordinates( subTile, tile );
 
 			// get ROI image
 			final RandomAccessibleInterval< T > roiImg;
@@ -222,7 +222,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 						dataProvider,
 						Optional.ofNullable( flatfieldsForChannels.get( channel ) ),
 						fullTileTransform,
-						IntervalsHelper.roundRealInterval( tileBox )
+						IntervalsHelper.roundRealInterval( subTile )
 					);
 			}
 			catch ( final IOException e )
@@ -253,7 +253,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		}
 
 		if ( channelsUsed == 0 )
-			throw new PipelineExecutionException( tileBox.getFullTile().getIndex() + ": images are missing in all channels" );
+			throw new PipelineExecutionException( subTile.getFullTile().getIndex() + ": images are missing in all channels" );
 
 		// average output image over the number of accumulated channels
 		final FloatType denom = new FloatType( channelsUsed );
@@ -340,7 +340,7 @@ public class StitchSubdividedTileBoxPair< T extends NativeType< T > & RealType< 
 		return result;
 	}
 
-	private void validateGridCoordinates( final SubdividedTileBox tileBox, final TileInfo tile )
+	private void validateGridCoordinates( final SubTile tileBox, final TileInfo tile )
 	{
 		{
 			String error = null;

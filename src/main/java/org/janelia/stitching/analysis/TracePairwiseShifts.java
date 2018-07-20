@@ -51,7 +51,7 @@ public class TracePairwiseShifts
 		final PrintWriter writer = new PrintWriter(outFilepath, "UTF-8");
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			final TileInfo[] tilePair = shift.getTileBoxPair().getOriginalTilePair().toArray();
+			final TileInfo[] tilePair = shift.getSubTilePair().getFullTilePair().toArray();
 
 			if ( tilePair[ 0 ].getIndex() > tilePair[ 1 ].getIndex() )
 				System.out.println( "Indices are unsorted" );

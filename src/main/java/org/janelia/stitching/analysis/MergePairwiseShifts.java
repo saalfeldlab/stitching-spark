@@ -31,8 +31,8 @@ public class MergePairwiseShifts
 			final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( input ) ) );
 			for ( final SerializablePairWiseStitchingResult shift : shifts )
 			{
-				final int ind1 = Math.min( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() );
-				final int ind2 = Math.max( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() );
+				final int ind1 = Math.min( shift.getSubTilePair().getFullTilePair().getA().getIndex(), shift.getSubTilePair().getFullTilePair().getB().getIndex() );
+				final int ind2 = Math.max( shift.getSubTilePair().getFullTilePair().getA().getIndex(), shift.getSubTilePair().getFullTilePair().getB().getIndex() );
 
 				if ( !mergedShiftsMap.containsKey( ind1 ) )
 					mergedShiftsMap.put( ind1, new TreeMap<>() );

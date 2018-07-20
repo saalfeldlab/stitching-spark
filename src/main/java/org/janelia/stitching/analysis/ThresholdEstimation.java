@@ -59,7 +59,7 @@ public class ThresholdEstimation
 		final TreeSet< Integer > uncoveredTiles = new TreeSet<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( shift.getIsValidOverlap() )
-				for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
+				for ( final TileInfo tile : shift.getSubTilePair().getFullTilePair().toArray() )
 					uncoveredTiles.add( tile.getIndex() );
 
 		double threshold = 1.;
@@ -68,7 +68,7 @@ public class ThresholdEstimation
 			if ( !shift.getIsValidOverlap() )
 				continue;
 
-			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
+			for ( final TileInfo tile : shift.getSubTilePair().getFullTilePair().toArray() )
 				uncoveredTiles.remove( tile.getIndex() );
 
 			if ( uncoveredTiles.isEmpty() )
@@ -89,14 +89,14 @@ public class ThresholdEstimation
 
 		final TreeSet< Integer > uncoveredTiles = new TreeSet<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
+			for ( final TileInfo tile : shift.getSubTilePair().getFullTilePair().toArray() )
 				uncoveredTiles.add( tile.getIndex() );
 
 		double threshold = 1.;
 		int index = shifts.size();
 		for ( int i = 0; i < shifts.size(); i++ )
 		{
-			for ( final TileInfo tile : shifts.get( i ).getTileBoxPair().getOriginalTilePair().toArray() )
+			for ( final TileInfo tile : shifts.get( i ).getSubTilePair().getFullTilePair().toArray() )
 				uncoveredTiles.remove( tile.getIndex() );
 
 			if ( uncoveredTiles.isEmpty() )
@@ -132,7 +132,7 @@ public class ThresholdEstimation
 		// shifts are already sorted
 		final TreeMap< Integer, SerializablePairWiseStitchingResult > ret = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
+			for ( final TileInfo tile : shift.getSubTilePair().getFullTilePair().toArray() )
 				if ( !ret.containsKey( tile.getIndex() ) )
 					ret.put( tile.getIndex(), shift );
 		return ret;
@@ -199,7 +199,7 @@ public class ThresholdEstimation
 		// shifts are already sorted
 		final TreeMap< Integer, Double > ret = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
+			for ( final TileInfo tile : shift.getSubTilePair().getFullTilePair().toArray() )
 				if ( !ret.containsKey( tile.getIndex() ) )
 					ret.put( tile.getIndex(), ( double ) shift.getCrossCorrelation() );
 		return ret;

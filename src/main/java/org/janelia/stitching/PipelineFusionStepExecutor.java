@@ -423,7 +423,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				final SerializablePairWiseStitchingResult pairwiseShift = pairwiseShiftMulti[ 0 ];
 				if ( pairwiseShift.getIsValidOverlap() )
 				{
-					final TileInfo[] pairArr = pairwiseShift.getTileBoxPair().getOriginalTilePair().toArray();
+					final TileInfo[] pairArr = pairwiseShift.getSubTilePair().getFullTilePair().toArray();
 					for ( int i = 0; i < 2; ++i )
 					{
 						if ( !pairwiseConnectionsMap.containsKey( pairArr[ i ].getIndex() ) )

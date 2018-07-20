@@ -73,10 +73,10 @@ public class AffineStitchingVisualization
 
 		final TileInfo[] tiles = getTiles();
 
-		final List< SubdividedTileBox > tileBoxes = SubdividedTileOperations.subdivideTiles( tiles, new int[] { 2, 2 } );
+		final List< SubTile > tileBoxes = SubTileOperations.subdivideTiles( tiles, new int[] { 2, 2 } );
 		@SuppressWarnings( "unchecked" )
-		final List< SubdividedTileBox >[] tilePairBoxes = new ArrayList[] { new ArrayList<>(), new ArrayList<>() };
-		for ( final SubdividedTileBox tileBox : tileBoxes )
+		final List< SubTile >[] tilePairBoxes = new ArrayList[] { new ArrayList<>(), new ArrayList<>() };
+		for ( final SubTile tileBox : tileBoxes )
 			for ( int i = 0; i < 2; ++i )
 				if ( tileBox.getFullTile().getIndex().intValue() == tilePairIndexes[ i ] )
 					tilePairBoxes[ i ].add( tileBox );
@@ -133,12 +133,12 @@ public class AffineStitchingVisualization
 
 		final TilePair tilePair = new TilePair( tiles[ tilePairIndexes[ 0 ] ], tiles[ tilePairIndexes[ 1 ] ] );
 
-		final SubdividedTileBoxPair tileBoxPair = new SubdividedTileBoxPair(
+		final SubTilePair tileBoxPair = new SubTilePair(
 				tilePairBoxes[ 0 ].get( tileBoxPairIndexes[ 0 ] ),
 				tilePairBoxes[ 1 ].get( tileBoxPairIndexes[ 1 ] )
 			);
 
-		final EstimatedRelativeSearchRadius movingBoxRelativeSearchRadius = PairwiseTileOperations.getCombinedSearchRadiusForMovingBox(
+		final EstimatedRelativeSearchRadius movingBoxRelativeSearchRadius = PairwiseTileOperations.getCombinedSearchRadiusForMovingSubTile(
 				tileBoxPair.toArray(),
 				searchRadiusEstimator
 			);
@@ -263,7 +263,7 @@ public class AffineStitchingVisualization
 		final int[] localDisplaySize = new int[] { 800, 400 };
 		final Translation2D displayOffsetTransform = new Translation2D( localDisplaySize[ 0 ] / 2, localDisplaySize[ 1 ] / 2 );
 
-		final InvertibleRealTransform movingTileToFixedBoxTransform = PairwiseTileOperations.getMovingTileToFixedBoxTransform(
+		final InvertibleRealTransform movingTileToFixedBoxTransform = PairwiseTileOperations.getMovingTileToFixedSubTileTransform(
 				tileBoxPair.toArray(),
 				estimatedTileTransforms
 			);
@@ -310,7 +310,7 @@ public class AffineStitchingVisualization
 
 
 		// account for the offset between zero-min of the transformed tile and the ROI
-		final double[] transformedMovingTileBoxToBoundingBoxOffset = PairwiseTileOperations.getTransformedMovingBoxToBoundingBoxOffset(
+		final double[] transformedMovingTileBoxToBoundingBoxOffset = PairwiseTileOperations.getTransformedMovingSubTileToBoundingBoxOffset(
 				tileBoxPair.toArray(),
 				estimatedTileTransforms
 			);
@@ -592,12 +592,12 @@ public class AffineStitchingVisualization
 	}
 
 	private void drawTileBoxes(
-			final List< SubdividedTileBox > tileBoxes,
+			final List< SubTile > tileBoxes,
 			final int[] displaySize,
 			final RandomAccess< ARGBType > imgRandomAccess,
 			final ARGBType color )
 	{
-		for ( final SubdividedTileBox tileBox : tileBoxes )
+		for ( final SubTile tileBox : tileBoxes )
 		{
 			final AffineTransform2D tileTransform = new AffineTransform2D();
 			for ( int d = 0; d < tileBox.getFullTile().numDimensions(); ++d )

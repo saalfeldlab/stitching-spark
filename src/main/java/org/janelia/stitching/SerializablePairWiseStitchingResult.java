@@ -6,7 +6,7 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 
 	private static final long serialVersionUID = -8084090265269616284L;
 
-	private SubdividedTileBoxPair tileBoxPair;
+	private SubTilePair subTilePair;
 	private float[] offset;
 	private double[] displacement;
 	private float crossCorrelation;
@@ -14,16 +14,16 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 	private Double variance;
 	private boolean isValidOverlap = true;
 
-	public SerializablePairWiseStitchingResult( final SubdividedTileBoxPair tileBoxPair, final float[] offset, final float crossCorrelation ) {
-		this( tileBoxPair, offset, crossCorrelation, null, null );
+	public SerializablePairWiseStitchingResult( final SubTilePair subTilePair, final float[] offset, final float crossCorrelation ) {
+		this( subTilePair, offset, crossCorrelation, null, null );
 	}
 
-	public SerializablePairWiseStitchingResult( final SubdividedTileBoxPair tileBoxPair, final float[] offset, final float crossCorrelation, final Float phaseCorrelation ) {
-		this( tileBoxPair, offset, crossCorrelation, phaseCorrelation, null );
+	public SerializablePairWiseStitchingResult( final SubTilePair subTilePair, final float[] offset, final float crossCorrelation, final Float phaseCorrelation ) {
+		this( subTilePair, offset, crossCorrelation, phaseCorrelation, null );
 	}
 
-	public SerializablePairWiseStitchingResult( final SubdividedTileBoxPair tileBoxPair, final float[] offset, final float crossCorrelation, final Float phaseCorrelation, final Double variance ) {
-		this.tileBoxPair = tileBoxPair;
+	public SerializablePairWiseStitchingResult( final SubTilePair subTilePair, final float[] offset, final float crossCorrelation, final Float phaseCorrelation, final Double variance ) {
+		this.subTilePair = subTilePair;
 		this.offset = offset;
 		this.crossCorrelation = crossCorrelation;
 		this.phaseCorrelation = phaseCorrelation;
@@ -47,8 +47,8 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 	public float getCrossCorrelation() { return crossCorrelation; }
 	public Float getPhaseCorrelation() { return phaseCorrelation; }
 
-	public SubdividedTileBoxPair getTileBoxPair() { return tileBoxPair; }
-	public void setTileBoxPair( final SubdividedTileBoxPair tileBoxPair ) { this.tileBoxPair = tileBoxPair; }
+	public SubTilePair getSubTilePair() { return subTilePair; }
+	public void setSubTilePair( final SubTilePair subTilePair ) { this.subTilePair = subTilePair; }
 
 	public Double getVariance() { return variance; }
 	public void setVariance( final Double variance ) { this.variance = variance; }
@@ -61,13 +61,13 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 
 	public void swap()
 	{
-		tileBoxPair.swap();
+		subTilePair.swap();
 		for ( int d = 0; d < offset.length; d++ )
 			offset[ d ] *= -1;
 	}
 
 	public boolean isNull()
 	{
-		return tileBoxPair == null;
+		return subTilePair == null;
 	}
 }

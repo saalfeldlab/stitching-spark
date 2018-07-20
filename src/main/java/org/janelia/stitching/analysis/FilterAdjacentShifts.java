@@ -115,12 +115,12 @@ public class FilterAdjacentShifts
 			validShifts++;
 			shift.setIsValidOverlap( false );
 
-			final Interval overlap = TileOperations.getOverlappingRegionGlobal( shift.getTileBoxPair().getOriginalTilePair().getA(), shift.getTileBoxPair().getOriginalTilePair().getB() );
+			final Interval overlap = TileOperations.getOverlappingRegionGlobal( shift.getSubTilePair().getFullTilePair().getA(), shift.getSubTilePair().getFullTilePair().getB() );
 
 			final boolean[] shortEdges = new boolean[overlap.numDimensions() ];
 			for ( int d = 0; d < overlap.numDimensions(); d++ )
 			{
-				final int maxPossibleOverlap = ( int ) Math.min( shift.getTileBoxPair().getOriginalTilePair().getA().getSize( d ), shift.getTileBoxPair().getOriginalTilePair().getB().getSize( d ) );
+				final int maxPossibleOverlap = ( int ) Math.min( shift.getSubTilePair().getFullTilePair().getA().getSize( d ), shift.getSubTilePair().getFullTilePair().getB().getSize( d ) );
 				if ( overlap.dimension( d ) < maxPossibleOverlap / 2 )
 					shortEdges[d] = true;
 			}
@@ -134,8 +134,8 @@ public class FilterAdjacentShifts
 					)
 				continue;
 
-			final int ind1 = Math.min( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() );
-			final int ind2 = Math.max( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex(), shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() );
+			final int ind1 = Math.min( shift.getSubTilePair().getFullTilePair().getA().getIndex(), shift.getSubTilePair().getFullTilePair().getB().getIndex() );
+			final int ind2 = Math.max( shift.getSubTilePair().getFullTilePair().getA().getIndex(), shift.getSubTilePair().getFullTilePair().getB().getIndex() );
 			if ( !validation.containsKey( ind1 ) )
 				validation.put( ind1, new HashSet<>() );
 			validation.get( ind1 ).add( ind2 );
@@ -146,7 +146,7 @@ public class FilterAdjacentShifts
 			{
 				if ( shortEdges[ d ] )
 				{
-					if ( shift.getTileBoxPair().getOriginalTilePair().getA().getStagePosition( d ) > shift.getTileBoxPair().getOriginalTilePair().getB().getStagePosition( d ) )
+					if ( shift.getSubTilePair().getFullTilePair().getA().getStagePosition( d ) > shift.getSubTilePair().getFullTilePair().getB().getStagePosition( d ) )
 					{
 						swappedCount++;
 						shift.swap();

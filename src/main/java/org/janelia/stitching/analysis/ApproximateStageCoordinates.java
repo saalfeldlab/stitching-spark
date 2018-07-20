@@ -5,8 +5,8 @@ import java.util.Arrays;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.stitching.SubdividedTileBox;
-import org.janelia.stitching.SubdividedTileOperations;
+import org.janelia.stitching.SubTile;
+import org.janelia.stitching.SubTileOperations;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TransformedTileOperations;
@@ -26,9 +26,9 @@ public class ApproximateStageCoordinates
 		{
 			final int[] noSubdivisionGrid = new int[ tile.numDimensions() ];
 			Arrays.fill( noSubdivisionGrid, 1 );
-			final SubdividedTileBox tileBox = SubdividedTileOperations.subdivideTiles( new TileInfo[] { tile }, noSubdivisionGrid ).iterator().next();
-			final double[] transformedMiddlePoint = TransformedTileOperations.transformTileBoxMiddlePoint( tileBox, false );
-			final RealInterval approximatedTileInterval = SubdividedTileOperations.getTileBoxInterval( transformedMiddlePoint, tile.getSize() );
+			final SubTile tileBox = SubTileOperations.subdivideTiles( new TileInfo[] { tile }, noSubdivisionGrid ).iterator().next();
+			final double[] transformedMiddlePoint = TransformedTileOperations.transformSubTileMiddlePoint( tileBox, false );
+			final RealInterval approximatedTileInterval = SubTileOperations.getSubTileInterval( transformedMiddlePoint, tile.getSize() );
 			final double[] approximatedStagePosition = Intervals.minAsDoubleArray( approximatedTileInterval );
 			tile.setStagePosition( approximatedStagePosition );
 		}

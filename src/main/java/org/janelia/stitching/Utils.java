@@ -120,7 +120,7 @@ public class Utils {
 	{
 		final TreeMap< Integer, TileInfo > tilesMap = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
-			for ( final TileInfo tile : shift.getTileBoxPair().getOriginalTilePair().toArray() )
+			for ( final TileInfo tile : shift.getSubTilePair().getFullTilePair().toArray() )
 				if ( !onlyValid || shift.getIsValidOverlap() )
 					tilesMap.put( tile.getIndex(), tile );
 		return tilesMap;
@@ -137,54 +137,54 @@ public class Utils {
 						isValidOverlap = false;
 
 			if ( isValidOverlap )
-				for ( final TileInfo tile : shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().toArray() )
+				for ( final TileInfo tile : shiftMulti[ 0 ].getSubTilePair().getFullTilePair().toArray() )
 					tilesMap.put( tile.getIndex(), tile );
 		}
 		return tilesMap;
 	}
-	public static TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > createTileBoxPairwiseShiftsMap( final List< SerializablePairWiseStitchingResult > shifts, final boolean onlyValid )
+	public static TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > createSubTilePairwiseResultsMap( final List< SerializablePairWiseStitchingResult > subTilePairwiseResults, final boolean onlyValid )
 	{
-		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > shiftsMap = new TreeMap<>();
-		for ( final SerializablePairWiseStitchingResult shift : shifts )
+		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > subTilePairwiseResultsMap = new TreeMap<>();
+		for ( final SerializablePairWiseStitchingResult subTilePairwiseResult : subTilePairwiseResults )
 		{
-			if ( !onlyValid || shift.getIsValidOverlap() )
+			if ( !onlyValid || subTilePairwiseResult.getIsValidOverlap() )
 			{
-				final SubdividedTileBoxPair tileBoxPair = shift.getTileBoxPair();
-				final int ind1 = Math.min( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
-				final int ind2 = Math.max( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
+				final SubTilePair subTilePair = subTilePairwiseResult.getSubTilePair();
+				final int ind1 = Math.min( subTilePair.getA().getIndex(), subTilePair.getB().getIndex() );
+				final int ind2 = Math.max( subTilePair.getA().getIndex(), subTilePair.getB().getIndex() );
 
-				if ( !shiftsMap.containsKey( ind1 ) )
-					shiftsMap.put( ind1, new TreeMap<>() );
+				if ( !subTilePairwiseResultsMap.containsKey( ind1 ) )
+					subTilePairwiseResultsMap.put( ind1, new TreeMap<>() );
 
-				shiftsMap.get( ind1 ).put( ind2, shift );
+				subTilePairwiseResultsMap.get( ind1 ).put( ind2, subTilePairwiseResult );
 			}
 		}
-		return shiftsMap;
+		return subTilePairwiseResultsMap;
 	}
-	public static TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > createTileBoxPairwiseShiftsMultiMap( final List< SerializablePairWiseStitchingResult[] > shiftsMulti, final boolean onlyValid )
+	public static TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > createSubTilePairwiseResultsMultiMap( final List< SerializablePairWiseStitchingResult[] > subTilePairwiseResultsMulti, final boolean onlyValid )
 	{
-		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > shiftsMultiMap = new TreeMap<>();
-		for ( final SerializablePairWiseStitchingResult[] shiftMulti : shiftsMulti )
+		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult[] > > subTilePairwiseResultsMultiMap = new TreeMap<>();
+		for ( final SerializablePairWiseStitchingResult[] subTilePairwiseResultMulti : subTilePairwiseResultsMulti )
 		{
 			boolean isValidOverlap = true;
 			if ( onlyValid )
-				for ( final SerializablePairWiseStitchingResult shift: shiftMulti )
-					if ( !shift.getIsValidOverlap() )
+				for ( final SerializablePairWiseStitchingResult subTilePairwiseResult : subTilePairwiseResultMulti )
+					if ( !subTilePairwiseResult.getIsValidOverlap() )
 						isValidOverlap = false;
 
 			if ( isValidOverlap )
 			{
-				final SubdividedTileBoxPair tileBoxPair = shiftMulti[ 0 ].getTileBoxPair();
-				final int ind1 = Math.min( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
-				final int ind2 = Math.max( tileBoxPair.getA().getIndex(), tileBoxPair.getB().getIndex() );
+				final SubTilePair subTilePair = subTilePairwiseResultMulti[ 0 ].getSubTilePair();
+				final int ind1 = Math.min( subTilePair.getA().getIndex(), subTilePair.getB().getIndex() );
+				final int ind2 = Math.max( subTilePair.getA().getIndex(), subTilePair.getB().getIndex() );
 
-				if ( !shiftsMultiMap.containsKey( ind1 ) )
-					shiftsMultiMap.put( ind1, new TreeMap<>() );
+				if ( !subTilePairwiseResultsMultiMap.containsKey( ind1 ) )
+					subTilePairwiseResultsMultiMap.put( ind1, new TreeMap<>() );
 
-				shiftsMultiMap.get( ind1 ).put( ind2, shiftMulti );
+				subTilePairwiseResultsMultiMap.get( ind1 ).put( ind2, subTilePairwiseResultMulti );
 			}
 		}
-		return shiftsMultiMap;
+		return subTilePairwiseResultsMultiMap;
 	}
 
 

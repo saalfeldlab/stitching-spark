@@ -34,7 +34,7 @@ public class FilterPairwiseShifts
 		for ( final Iterator< SerializablePairWiseStitchingResult > it = shifts.iterator(); it.hasNext(); )
 		{
 			final SerializablePairWiseStitchingResult shift = it.next();
-			if ( tileIndexToCoordinates.get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() )[ 2 ] - tileIndexToCoordinates.get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() )[ 2 ] != 0 )
+			if ( tileIndexToCoordinates.get( shift.getSubTilePair().getFullTilePair().getA().getIndex() )[ 2 ] - tileIndexToCoordinates.get( shift.getSubTilePair().getFullTilePair().getB().getIndex() )[ 2 ] != 0 )
 				it.remove();
 		}
 		final int sizeAfter = shifts.size();

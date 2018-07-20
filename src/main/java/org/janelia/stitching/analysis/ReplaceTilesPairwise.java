@@ -28,8 +28,8 @@ public class ReplaceTilesPairwise
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
 			final TilePair newTilePair = new TilePair(
-					tiles.get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ),
-					tiles.get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ) );
+					tiles.get( shift.getSubTilePair().getFullTilePair().getA().getIndex() ),
+					tiles.get( shift.getSubTilePair().getFullTilePair().getB().getIndex() ) );
 			final SerializablePairWiseStitchingResult newShift = new SerializablePairWiseStitchingResult(
 					null, //FIXME
 					shift.getOffset().clone(),

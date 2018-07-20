@@ -20,12 +20,12 @@ public class MarkValidShiftsMulti
 		final List< SerializablePairWiseStitchingResult > shiftsFinal = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[0] ) ) );
 		final List< SerializablePairWiseStitchingResult[] > shiftsMulti = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( args[1] ) ) );
 
-		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > shiftsFinalValidMap = Utils.createTileBoxPairwiseShiftsMap( shiftsFinal, true );
+		final TreeMap< Integer, TreeMap< Integer, SerializablePairWiseStitchingResult > > shiftsFinalValidMap = Utils.createSubTilePairwiseResultsMap( shiftsFinal, true );
 
 
 
 		int valid = 0;
-		for ( final TreeMap< Integer, SerializablePairWiseStitchingResult[] > entry : Utils.createTileBoxPairwiseShiftsMultiMap( shiftsMulti, true ).values() )
+		for ( final TreeMap< Integer, SerializablePairWiseStitchingResult[] > entry : Utils.createSubTilePairwiseResultsMultiMap( shiftsMulti, true ).values() )
 			valid += entry.size();
 		System.out.println( "Valid initial multi shifts = " + valid );
 		valid = 0;
@@ -44,8 +44,8 @@ public class MarkValidShiftsMulti
 		valid = 0;
 		for ( final SerializablePairWiseStitchingResult[] shiftMulti : shiftsMulti )
 		{
-			final int ind1 = Math.min( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex(), shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() );
-			final int ind2 = Math.max( shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getA().getIndex(), shiftMulti[ 0 ].getTileBoxPair().getOriginalTilePair().getB().getIndex() );
+			final int ind1 = Math.min( shiftMulti[ 0 ].getSubTilePair().getFullTilePair().getA().getIndex(), shiftMulti[ 0 ].getSubTilePair().getFullTilePair().getB().getIndex() );
+			final int ind2 = Math.max( shiftMulti[ 0 ].getSubTilePair().getFullTilePair().getA().getIndex(), shiftMulti[ 0 ].getSubTilePair().getFullTilePair().getB().getIndex() );
 
 			final boolean validShift = ( shiftsFinalValidMap.containsKey( ind1 ) && shiftsFinalValidMap.get( ind1 ).containsKey( ind2 ) );
 			if ( validShift )

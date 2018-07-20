@@ -30,16 +30,16 @@ public class RenamePairwise
 		final Set< Integer > validation = new HashSet<>();
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			validation.add( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() );
-			validation.add( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() );
+			validation.add( shift.getSubTilePair().getFullTilePair().getA().getIndex() );
+			validation.add( shift.getSubTilePair().getFullTilePair().getB().getIndex() );
 		}
 		if ( tilesMap.size() != validation.size() )
 			throw new Exception( "Different sets of tiles" );
 
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{
-			shift.getTileBoxPair().getOriginalTilePair().getA().setFilePath( tilesMap.get( shift.getTileBoxPair().getOriginalTilePair().getA().getIndex() ).getFilePath() );
-			shift.getTileBoxPair().getOriginalTilePair().getB().setFilePath( tilesMap.get( shift.getTileBoxPair().getOriginalTilePair().getB().getIndex() ).getFilePath() );
+			shift.getSubTilePair().getFullTilePair().getA().setFilePath( tilesMap.get( shift.getSubTilePair().getFullTilePair().getA().getIndex() ).getFilePath() );
+			shift.getSubTilePair().getFullTilePair().getB().setFilePath( tilesMap.get( shift.getSubTilePair().getFullTilePair().getB().getIndex() ).getFilePath() );
 		}
 
 		TileInfoJSONProvider.savePairwiseShifts( shifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 1 ], "_renamed" ) ) ) );
