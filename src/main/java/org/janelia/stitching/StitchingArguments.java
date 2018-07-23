@@ -69,8 +69,8 @@ public class StitchingArguments implements Serializable {
 	private int numCheckPeaks = 50;
 
 	@Option(name = "-s", aliases = { "--subdivision" }, required = false,
-			usage = "Number of subdivided boxes in each tile along single dimension")
-	private int subdivision = 2;
+			usage = "Size of the subtile grid in single dimension")
+	private int subdivisionGridSize = 2;
 
 	@Option(name = "--min", required = false,
 			usage = "Min coordinate for exporting")
@@ -184,7 +184,7 @@ public class StitchingArguments implements Serializable {
 	public boolean weightedPredictions() { return weightedPredictions; }
 	public long[] padding() { return parseArray( padding ); }
 	public int numCheckPeaks() { return numCheckPeaks; }
-	public int subdivision() { return subdivision; }
+	public int subdivisionGridSize() { return subdivisionGridSize; }
 	public double blurSigma() { return blurSigma; }
 	public boolean useAllPairs() { return allPairs; }
 	public boolean noLeaves() { return noLeaves; }

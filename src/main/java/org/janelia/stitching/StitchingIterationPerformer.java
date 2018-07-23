@@ -75,7 +75,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				final TileInfo[] tilesWithEstimatedTransforms = getTilesWithEstimatedTransformation( logWriter );
 
 				final int[] subTilesGridSize = new int[ job.getDimensionality() ];
-				Arrays.fill( subTilesGridSize, job.getArgs().subdivision() );
+				Arrays.fill( subTilesGridSize, job.getArgs().subdivisionGridSize() );
 				final List< SubTile > subTiles = SubTileOperations.subdivideTiles( tilesWithEstimatedTransforms, subTilesGridSize );
 				final List< SubTilePair > overlappingSubTiles = SubTileOperations.findOverlappingSubTiles(
 						subTiles,
@@ -102,7 +102,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			logWriter.println( job.getArgs().constrainMatchingOnFirstIteration() ? "Constrained pairwise matching" : "Unconstrained pairwise matching" );
 
 		final int[] subdividedTileGridSize = new int[ job.getDimensionality() ];
-		Arrays.fill( subdividedTileGridSize, job.getArgs().subdivision() );
+		Arrays.fill( subdividedTileGridSize, job.getArgs().subdivisionGridSize() );
 		logWriter.println( "Subdivided tile grid size: " + Arrays.toString( subdividedTileGridSize ) );
 
 		logWriter.println( "Number of phase correlation peaks to inspect: " + job.getArgs().numCheckPeaks() );

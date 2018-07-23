@@ -123,11 +123,10 @@ public class SubTileOperations
 	 */
 	public static double[] getSubTileMiddlePointStagePosition( final SubTile subTile )
 	{
-		final double[] tileStagePosition = subTile.getFullTile().getStagePosition();
 		final double[] subTileMiddlePoint = getSubTileMiddlePoint( subTile );
 		final double[] subTileMiddlePointStagePosition = new double[ subTile.numDimensions() ];
 		for ( int d = 0; d < subTileMiddlePointStagePosition.length; ++d )
-			subTileMiddlePointStagePosition[ d ] = subTileMiddlePoint[ d ] + tileStagePosition[ d ];
+			subTileMiddlePointStagePosition[ d ] = subTileMiddlePoint[ d ] + subTile.getFullTile().getStagePosition( d );
 		return subTileMiddlePointStagePosition;
 	}
 
