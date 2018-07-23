@@ -23,7 +23,6 @@ import org.janelia.dataaccess.PathResolver;
 import com.google.gson.GsonBuilder;
 
 import ij.ImagePlus;
-import mpicbg.models.Affine3D;
 import mpicbg.models.Model;
 import mpicbg.stitching.ImageCollectionElement;
 import mpicbg.stitching.ImagePlusTimePoint;
@@ -431,13 +430,7 @@ public class StitchingOptimizer implements Serializable
 		final List< TileInfo > newTiles = new ArrayList<>();
 		for ( final ImagePlusTimePoint optimizedTile : newTransformations )
 		{
-			final Affine3D< ? > affineModel = ( Affine3D< ? > ) optimizedTile.getModel();
-			final double[][] matrix = new double[ 3 ][ 4 ];
-			affineModel.toMatrix( matrix );
-
-			final AffineTransform3D tileTransform = new AffineTransform3D();
-			tileTransform.set( matrix );
-
+			final AffineTransform3D tileTransform = TransformUtils.getModelTransform( optimizedTile.getModel() );
 			if ( tilesMap.containsKey( optimizedTile.getImpId() ) )
 			{
 				final TileInfo newTile = tilesMap.get( optimizedTile.getImpId() ).clone();
@@ -449,7 +442,6 @@ public class StitchingOptimizer implements Serializable
 				throw new RuntimeException( "tile is not in the input set" );
 			}
 		}
-
 		// sort the tiles by their index
 		return Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
 	}
