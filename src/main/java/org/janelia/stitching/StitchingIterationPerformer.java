@@ -156,6 +156,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				estimationWindow,
 				job.getArgs().searchRadiusMultiplier(),
 				job.getArgs().minNumNeighboringTiles(),
+				job.getArgs().subdivisionGridSize(),
 				job.getArgs().weightedPredictions()
 			);
 	}

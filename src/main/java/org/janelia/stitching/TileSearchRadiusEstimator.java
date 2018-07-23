@@ -2,6 +2,8 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,6 +17,7 @@ import net.imglib2.neighborsearch.IntervalNeighborSearchOnKDTree;
 import net.imglib2.neighborsearch.KNearestNeighborSearchOnKDTree;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
@@ -79,6 +82,7 @@ public class TileSearchRadiusEstimator implements Serializable
 	private final double[] estimationWindowSize;
 	private final double searchRadiusMultiplier;
 	private final int minNumNeighboringTiles;
+	private final int subdivisionGridSize;
 	private final boolean weighted;
 	private final KDTree< TileInfo > kdTree;
 
@@ -87,11 +91,13 @@ public class TileSearchRadiusEstimator implements Serializable
 			final double[] estimationWindowSize,
 			final double searchRadiusMultiplier,
 			final int minNumNeighboringTiles,
+			final int subdivisionGridSize,
 			final boolean weighted )
 	{
 		this.estimationWindowSize = estimationWindowSize;
 		this.searchRadiusMultiplier = searchRadiusMultiplier;
 		this.minNumNeighboringTiles = minNumNeighboringTiles;
+		this.subdivisionGridSize = subdivisionGridSize;
 		this.weighted = weighted;
 
 		final List< TileInfo > tilesWithStitchedTransform = new ArrayList<>();
@@ -107,6 +113,12 @@ public class TileSearchRadiusEstimator implements Serializable
 		// in the neighborhood for any given stage position
 		kdTree = new KDTree<>( tilesWithStitchedTransform, stageSubsetPositions );
 	}
+
+	public double[] getEstimationWindowSize() { return estimationWindowSize; }
+	public double getSearchRadiusMultiplier() { return searchRadiusMultiplier; }
+	public int getMinNumNeighboringTiles() { return minNumNeighboringTiles; }
+	public int getSubdivisionGridSize() { return subdivisionGridSize; }
+	public boolean isWeighted() { return weighted; }
 
 	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final TileInfo tile ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
@@ -127,6 +139,32 @@ public class TileSearchRadiusEstimator implements Serializable
 						numNearestNeighbors
 					)
 			);
+	}
+
+	public Collection< SubTile > findSubTilesWithinWindow( final SubTile subTile )
+	{
+		return findSubTilesWithinWindow( subTile, getEstimationWindow( subTile.getFullTile() ) );
+	}
+
+	public Collection< SubTile > findSubTilesWithinWindow( final SubTile subTile, final Interval window )
+	{
+		return getNeighboringSubTiles( subTile, findTilesWithinWindow( window ) );
+	}
+
+	private Collection< SubTile > getNeighboringSubTiles( final SubTile subTile, final Set< TileInfo > neighboringTiles )
+	{
+		final Collection< SubTile > neighboringSubTiles = new ArrayList<>();
+		final int[] subTilesGridSize = new int[ subTile.numDimensions() ];
+		Arrays.fill( subTilesGridSize, subdivisionGridSize );
+		for ( final TileInfo neighboringTile : neighboringTiles )
+		{
+			for ( final SubTile neighboringSubTile : SubTileOperations.subdivideTiles( new TileInfo[] { neighboringTile }, subTilesGridSize ) )
+				if ( Intervals.equals( neighboringSubTile, subTile ) )
+					neighboringSubTiles.add( neighboringSubTile );
+		}
+		if ( neighboringSubTiles.size() != neighboringTiles.size() )
+			throw new RuntimeException( "neighboringTiles size: " + neighboringTiles.size() + ", neighboringSubTiles size: " + neighboringSubTiles.size() );
+		return neighboringSubTiles;
 	}
 
 	public Set< TileInfo > findTilesWithinWindow( final Interval estimationWindow )
