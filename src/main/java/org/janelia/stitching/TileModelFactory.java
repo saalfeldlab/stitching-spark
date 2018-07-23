@@ -9,11 +9,13 @@ import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.Model;
 import mpicbg.models.RigidModel2D;
 import mpicbg.models.RigidModel3D;
+import mpicbg.models.SimilarityModel2D;
+import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
 
 /**
- * Convenience class for creating tile {@link Model}s used by the global optimizer.
+ * Convenience class for creating tile {@link Model}s.
  *
  * @author Igor Pisarev
  */
@@ -42,7 +44,7 @@ public class TileModelFactory
 					lambda
 				);
 		default:
-			throw new IllegalArgumentException( "only 2d and 3d are supported" );
+			throw new IllegalArgumentException( "only 2d/3d are supported" );
 		}
 	}
 
@@ -56,7 +58,7 @@ public class TileModelFactory
 		case 3:
 			return ( M ) new AffineModel3D();
 		default:
-			throw new IllegalArgumentException( "only 2d and 3d are supported" );
+			throw new IllegalArgumentException( "only 2d/3d are supported" );
 		}
 	}
 
@@ -70,7 +72,7 @@ public class TileModelFactory
 		case 3:
 			return ( M ) new TranslationModel3D();
 		default:
-			throw new IllegalArgumentException( "only 2d and 3d are supported" );
+			throw new IllegalArgumentException( "only 2d/3d are supported" );
 		}
 	}
 
@@ -84,7 +86,21 @@ public class TileModelFactory
 		case 3:
 			return ( M ) new RigidModel3D();
 		default:
-			throw new IllegalArgumentException( "only 2d and 3d are supported" );
+			throw new IllegalArgumentException( "only 2d/3d are supported" );
+		}
+	}
+
+	@SuppressWarnings( "unchecked" )
+	public static < M extends Model< M > > M createSimilarityModel( final int numDimensions )
+	{
+		switch ( numDimensions )
+		{
+		case 2:
+			return ( M ) new SimilarityModel2D();
+		case 3:
+			return ( M ) new SimilarityModel3D();
+		default:
+			throw new IllegalArgumentException( "only 2d/3d are supported" );
 		}
 	}
 }
