@@ -9,8 +9,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedRelativeSearchRadius;
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedWorldSearchRadius;
+import org.janelia.stitching.OffsetUncertaintyEstimator.EstimatedRelativeSearchRadius;
+import org.janelia.stitching.OffsetUncertaintyEstimator.EstimatedWorldSearchRadius;
 import org.janelia.util.Conversions;
 
 import ij.ImageJ;
@@ -64,6 +64,8 @@ public class AffineStitchingVisualization
 
 	final int minNumNeighboringTiles = 3;
 
+	final boolean weightedPredictions = false;
+
 	final boolean modifyLinearComponent = true;
 
 	private AffineStitchingVisualization( final String logDirectory ) throws Exception
@@ -80,20 +82,28 @@ public class AffineStitchingVisualization
 				if ( tileBox.getFullTile().getIndex().intValue() == tilePairIndexes[ i ] )
 					tilePairBoxes[ i ].add( tileBox );
 
-		final TileSearchRadiusEstimator searchRadiusEstimator = new TileSearchRadiusEstimator(
-				tiles,
-				TileSearchRadiusEstimator.getEstimationWindowSize( tiles[ 0 ].getSize(), tileEstimationWindow ),
+		final double[] searchWindowSize = NeighboringTilesLocator.getSearchWindowSize( tiles[ 0 ].getSize(), tileEstimationWindow );
+		final NeighboringTilesLocator neighboringTilesLocator = new NeighboringTilesLocator( tiles, searchWindowSize, 2 );
+
+		final SampleWeightCalculator sampleWeightCalculator = new SampleWeightCalculator( !weightedPredictions );
+
+		final OffsetUncertaintyEstimator searchRadiusEstimator = new OffsetUncertaintyEstimator(
+				neighboringTilesLocator,
+				sampleWeightCalculator,
 				searchRadiusMultiplier,
-				minNumNeighboringTiles,
-				2,
-				true
+				minNumNeighboringTiles
 			);
 
 		final AffineGet[] estimatedTileTransforms = new AffineGet[] {
 				tiles[ tilePairIndexes[ 0 ] ].getTransform(), // fixed tile already has an existing transformation
-				TransformedTileOperations.estimateAffineTransformation( tiles[ tilePairIndexes[ 1 ] ], searchRadiusEstimator ) // estimate the transform for the moving tile
+				TileTransformEstimator.estimateAffineTransformation(  // estimate the transform for the moving tile
+						tiles[ tilePairIndexes[ 1 ] ],
+						neighboringTilesLocator,
+						sampleWeightCalculator
+					)
 			};
 
+		System.out.println( "Estimated transform of the moving tile: " + estimatedTileTransforms[ 1 ] );
 		final double[] simulatedMovingBoundingBoxOffset = new double[] { 12, -11 };
 
 		final TilePair tilePair = new TilePair( tiles[ tilePairIndexes[ 0 ] ], tiles[ tilePairIndexes[ 1 ] ] );
@@ -250,11 +260,11 @@ public class AffineStitchingVisualization
 			);
 
 		// draw transformed uncorrelated error ellipse in the fixed box space
-		final double[] uncorrelatedErrorEllipseRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipseRadius(
+		final double[] uncorrelatedErrorEllipseRadius = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipseRadius(
 				tileBoxPair.getA().getFullTile().getSize(),
 				errorEllipseRadiusAsTileSizeRatio
 			);
-		final ErrorEllipse movingBoxUncorrelatedErrorEllipse = TileSearchRadiusEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
+		final ErrorEllipse movingBoxUncorrelatedErrorEllipse = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
 		movingBoxUncorrelatedErrorEllipse.setErrorEllipseTransform( PairwiseTileOperations.getErrorEllipseTransform( tileBoxPair.toArray(), estimatedTileTransforms ) );
 		drawErrorEllipse(
 				movingBoxUncorrelatedErrorEllipse,

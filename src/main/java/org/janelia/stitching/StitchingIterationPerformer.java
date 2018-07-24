@@ -20,7 +20,7 @@ import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.util.LongAccumulator;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.stitching.TileSearchRadiusEstimator.NotEnoughNeighboringTilesException;
+import org.janelia.stitching.OffsetUncertaintyEstimator.NotEnoughNeighboringTilesException;
 
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
@@ -43,7 +43,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	private final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldsForChannels;
 	private final Broadcast< List< Map< Integer, TileInfo > > > broadcastedTileMapsForChannels;
 
-	private Broadcast< TileSearchRadiusEstimator > broadcastedSearchRadiusEstimator;
+	private Broadcast< OffsetUncertaintyEstimator > broadcastedOffsetUncertaintyEstimator;
 
 	public StitchingIterationPerformer(
 			final StitchingJob job,
@@ -71,7 +71,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			{
 				printStats( logWriter );
 
-				broadcastedSearchRadiusEstimator = sparkContext.broadcast( createSearchRadiusEstimator( logWriter ) );
+				broadcastedOffsetUncertaintyEstimator = sparkContext.broadcast( createOffsetUncertaintyEstimator( logWriter ) );
 				final TileInfo[] tilesWithEstimatedTransforms = getTilesWithEstimatedTransformation( logWriter );
 
 				final int[] subTilesGridSize = new int[ job.getDimensionality() ];
@@ -134,13 +134,13 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 	 * @return
 	 * @throws IOException
 	 */
-	private TileSearchRadiusEstimator createSearchRadiusEstimator( final PrintWriter logWriter ) throws IOException
+	private OffsetUncertaintyEstimator createOffsetUncertaintyEstimator( final PrintWriter logWriter ) throws IOException
 	{
 		if ( iteration == 0 )
 			return null;
 
 		final TileInfo[] previousStitchedTiles = getStitchedTilesFromPreviousIteration();
-		final double[] estimationWindow = TileSearchRadiusEstimator.getEstimationWindowSize( previousStitchedTiles[ 0 ].getSize(), job.getArgs().searchWindowSizeTiles() );
+		final double[] estimationWindow = NeighboringTilesLocator.getSearchWindowSize( previousStitchedTiles[ 0 ].getSize(), job.getArgs().searchWindowSizeTiles() );
 
 		if ( logWriter != null )
 		{
@@ -151,13 +151,19 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			logWriter.println( "  using weighted predictions: " + job.getArgs().weightedPredictions() );
 		}
 
-		return new TileSearchRadiusEstimator(
+		final NeighboringTilesLocator neighboringTilesLocator = new NeighboringTilesLocator(
 				previousStitchedTiles,
 				estimationWindow,
+				job.getArgs().subdivisionGridSize()
+			);
+
+		final SampleWeightCalculator sampleWeightCalculator = new SampleWeightCalculator( job.getArgs().weightedPredictions() );
+
+		return new OffsetUncertaintyEstimator(
+				neighboringTilesLocator,
+				sampleWeightCalculator,
 				job.getArgs().searchRadiusMultiplier(),
-				job.getArgs().minNumNeighboringTiles(),
-				job.getArgs().subdivisionGridSize(),
-				job.getArgs().weightedPredictions()
+				job.getArgs().minNumNeighboringTiles()
 			);
 	}
 
@@ -182,7 +188,11 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				try
 				{
 					tile.setTransform(
-							TransformedTileOperations.estimateAffineTransformation( tile, broadcastedSearchRadiusEstimator.value() )
+							TileTransformEstimator.estimateAffineTransformation(
+									tile,
+									broadcastedOffsetUncertaintyEstimator.value().getNeighboringTilesLocator(),
+									broadcastedOffsetUncertaintyEstimator.value().getSampleWeightCalculator()
+								)
 						);
 				}
 				catch ( final NotEnoughNeighboringTilesException e )
@@ -483,7 +493,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 					{
 						return new StitchSubTilePair<>(
 								job,
-								broadcastedSearchRadiusEstimator.value(),
+								broadcastedOffsetUncertaintyEstimator.value(),
 								broadcastedFlatfieldsForChannels.value(),
 								broadcastedTileMapsForChannels.value()
 							)
@@ -496,7 +506,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				}
 			).collect();
 
-		broadcastedSearchRadiusEstimator.destroy();
+		broadcastedOffsetUncertaintyEstimator.destroy();
 
 		int validPairs = 0;
 		for ( final SerializablePairWiseStitchingResult result : pairwiseStitchingResults )

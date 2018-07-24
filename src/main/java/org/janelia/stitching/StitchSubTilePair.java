@@ -7,8 +7,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.janelia.dataaccess.DataProvider;
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedRelativeSearchRadius;
-import org.janelia.stitching.TileSearchRadiusEstimator.NotEnoughNeighboringTilesException;
+import org.janelia.stitching.OffsetUncertaintyEstimator.EstimatedRelativeSearchRadius;
+import org.janelia.stitching.OffsetUncertaintyEstimator.NotEnoughNeighboringTilesException;
 import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
@@ -43,19 +43,19 @@ import net.imglib2.view.Views;
 public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > >
 {
 	private final StitchingJob job;
-	private final TileSearchRadiusEstimator searchRadiusEstimator;
+	private final OffsetUncertaintyEstimator offsetUncertaintyEstimator;
 	private final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels;
 	private final List< Map< Integer, TileInfo > > tileMapsForChannels;
 
 	public StitchSubTilePair(
 			final StitchingJob job,
-			final TileSearchRadiusEstimator searchRadiusEstimator,
+			final OffsetUncertaintyEstimator offsetUncertaintyEstimator,
 			final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels,
 			final List< Map< Integer, TileInfo > > tileMapsForChannels
 		)
 	{
 		this.job = job;
-		this.searchRadiusEstimator = searchRadiusEstimator;
+		this.offsetUncertaintyEstimator = offsetUncertaintyEstimator;
 		this.flatfieldsForChannels = flatfieldsForChannels;
 		this.tileMapsForChannels = tileMapsForChannels;
 	}
@@ -75,11 +75,11 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 		// Get approximate transformations for the tile pair. If it is not the first iteration, they have already been estimated prior to pairwise matching.
 		final AffineGet[] estimatedTileTransforms = new AffineGet[ subTiles.length ];
 		for ( int i = 0; i < subTiles.length; ++i )
-			estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( subTiles[ i ].getFullTile(), searchRadiusEstimator != null );
+			estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( subTiles[ i ].getFullTile(), offsetUncertaintyEstimator != null );
 
 		final ErrorEllipse movingSubTileSearchRadius;
 
-		if ( searchRadiusEstimator != null )
+		if ( offsetUncertaintyEstimator != null )
 		{
 			for ( final AffineGet estimatedTileTransform : estimatedTileTransforms )
 				if ( estimatedTileTransform == null )
@@ -88,7 +88,7 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 			try
 			{
 				// get search radius for new moving subtile position in the fixed subtile space
-				final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingSubtile = PairwiseTileOperations.getCombinedSearchRadiusForMovingSubTile( subTiles, searchRadiusEstimator );
+				final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingSubtile = PairwiseTileOperations.getCombinedSearchRadiusForMovingSubTile( subTiles, offsetUncertaintyEstimator );
 
 				movingSubTileSearchRadius = combinedSearchRadiusForMovingSubtile.combinedErrorEllipse;
 				System.out.println( "Estimated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingSubTileSearchRadius.estimateBoundingBox() ) ) ) );
@@ -104,11 +104,11 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 		{
 			if ( job.getArgs().constrainMatchingOnFirstIteration() )
 			{
-				final double[] uncorrelatedErrorEllipseRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipseRadius(
+				final double[] uncorrelatedErrorEllipseRadius = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipseRadius(
 						subTilePair.getA().getFullTile().getSize(),
 						job.getArgs().errorEllipseRadiusAsTileSizeRatio()
 					);
-				movingSubTileSearchRadius = TileSearchRadiusEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
+				movingSubTileSearchRadius = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
 				System.out.println( "Create uncorrelated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingSubTileSearchRadius.estimateBoundingBox() ) ) ) + " to constrain matching" );
 			}
 			else

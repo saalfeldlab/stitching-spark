@@ -1,8 +1,8 @@
 package org.janelia.stitching;
 
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedRelativeSearchRadius;
-import org.janelia.stitching.TileSearchRadiusEstimator.EstimatedWorldSearchRadius;
-import org.janelia.stitching.TileSearchRadiusEstimator.NotEnoughNeighboringTilesException;
+import org.janelia.stitching.OffsetUncertaintyEstimator.EstimatedRelativeSearchRadius;
+import org.janelia.stitching.OffsetUncertaintyEstimator.EstimatedWorldSearchRadius;
+import org.janelia.stitching.OffsetUncertaintyEstimator.NotEnoughNeighboringTilesException;
 
 import net.imglib2.RealInterval;
 import net.imglib2.realtransform.AffineGet;
@@ -27,7 +27,7 @@ public class PairwiseTileOperations
 	/**
 	 * Returns new error ellipse that is a combination of error ellipses for the fixed subtile and the moving subtile.
 	 *
-	 * @param searchRadiusEstimator
+	 * @param offsetUncertaintyEstimator
 	 * @param subTiles
 	 * @return
 	 * @throws PipelineExecutionException
@@ -35,15 +35,15 @@ public class PairwiseTileOperations
 	 */
 	public static EstimatedRelativeSearchRadius getCombinedSearchRadiusForMovingSubTile(
 			final SubTile[] subTiles,
-			final TileSearchRadiusEstimator searchRadiusEstimator ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
+			final OffsetUncertaintyEstimator offsetUncertaintyEstimator ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
 		validateInputParametersLength( subTiles );
 
 		final EstimatedWorldSearchRadius[] searchRadiusStats = new EstimatedWorldSearchRadius[ subTiles.length ];
 		for ( int i = 0; i < subTiles.length; ++i )
-			searchRadiusStats[ i ] = searchRadiusEstimator.estimateSearchRadiusWithinWindow( subTiles[ i ].getFullTile() );
+			searchRadiusStats[ i ] = offsetUncertaintyEstimator.estimateSearchRadiusWithinWindow( subTiles[ i ].getFullTile() );
 
-		return searchRadiusEstimator.getCombinedCovariancesSearchRadius( searchRadiusStats );
+		return offsetUncertaintyEstimator.getCombinedCovariancesSearchRadius( searchRadiusStats );
 	}
 
 	/**
