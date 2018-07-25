@@ -2,18 +2,20 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public final class AxisMapping implements Serializable
 {
 	private static final long serialVersionUID = 2407124829248425056L;
 
+	private final static List< String > axesStr = Collections.unmodifiableList( Arrays.asList( "x", "y", "z" ) );
+
 	public final int[] axisMapping;
 	public final boolean[] flip;
 
 	public AxisMapping( final String[] axisMappingStr )
 	{
-		final List< String > axesStr = Arrays.asList( "x", "y", "z" );
 		axisMapping = new int[ axisMappingStr.length ];
 		flip = new boolean[ axisMappingStr.length ];
 		for ( int d = 0; d < axisMappingStr.length; ++d )
@@ -32,5 +34,10 @@ public final class AxisMapping implements Serializable
 			axesIncluded[ axisMapping[ d ] ] = 1;
 		if ( Arrays.stream( axesIncluded ).min().getAsInt() == 0 )
 			throw new IllegalArgumentException( "axis mapping is not consistent as it does not include all x/y/z axes" );
+	}
+
+	public static String getAxisStr( final int dimension )
+	{
+		return axesStr.get( dimension );
 	}
 }
