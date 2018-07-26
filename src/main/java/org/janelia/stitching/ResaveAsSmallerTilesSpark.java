@@ -93,6 +93,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 	private final ResaveAsSmallerTilesCmdArgs args;
 	private final String targetImagesLocation;
 	private final transient JavaSparkContext sparkContext;
+	private final transient PrintWriter logWriter;
 
 	private ResaveAsSmallerTilesSpark( final ResaveAsSmallerTilesCmdArgs args ) throws IOException
 	{
@@ -106,6 +107,8 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 				.setAppName( "ResaveSmallerTiles" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 			);
+
+		logWriter = new PrintWriter( dataProviderTarget.getOutputStream( URI.create( PathResolver.get( args.targetLocation, "retiling-log.txt" ) ) ) );
 	}
 
 	private void run() throws IOException
@@ -131,6 +134,14 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		// global indexing
 		for ( int i = 0; i < newTiles.size(); ++i )
 			newTiles.get( i ).setIndex( i );
+
+		if ( logWriter != null )
+		{
+			logWriter.println();
+			logWriter.println( "Total number of input tiles: " + tiles.length );
+			logWriter.println( "Total number of output tiles: " + newTiles.size() );
+			logWriter.println( "--------------------------------------------" );
+		}
 
 		final DataProvider targetDataProvider = DataProviderFactory.createByURI( URI.create( args.targetLocation ) );
 		final String newTilesConfigurationFilename = Utils.addFilenameSuffix( PathResolver.getFileName( inputTileConfiguration ), "-retiled-in-" + AxisMapping.getAxisStr( args.retileDimension ).toUpperCase() );
@@ -222,6 +233,16 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			final int retileDimension,
 			final double minOverlapRatioEachSide )
 	{
+		return getNewTilesIntervalsInSingleTile( originalTileSize, newTileSize, retileDimension, minOverlapRatioEachSide, null );
+	}
+
+	public static List< Interval > getNewTilesIntervalsInSingleTile(
+			final long[] originalTileSize,
+			final long[] newTileSize,
+			final int retileDimension,
+			final double minOverlapRatioEachSide,
+			final PrintWriter logWriter )
+	{
 		for ( int d = 0; d < Math.max( originalTileSize.length, newTileSize.length ); ++d )
 			if ( d != retileDimension && originalTileSize[ d ] != newTileSize[ d ] )
 				throw new RuntimeException( "tile size is different in any dimensions other than retile dimension: originalTileSize=" + Arrays.toString( originalTileSize ) + ", newTileSize=" + Arrays.toString( newTileSize ) );
@@ -242,6 +263,20 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			max[ retileDimension ] = min[ retileDimension ] + newTileSize[ retileDimension ] - 1;
 			newTilesIntervals.add( new FinalInterval( min, max ) );
 		}
+
+		if ( logWriter != null )
+		{
+			logWriter.println( "Original tile size: " + Arrays.toString( originalTileSize ) );
+			logWriter.println( "New tile size: " + Arrays.toString( newTileSize ) );
+			logWriter.println( "Retile dimension: " + retileDimension );
+			logWriter.println( "Min overlap ratio (each side): " + minOverlapRatioEachSide );
+			logWriter.println();
+			logWriter.println( "Number of new tiles: " + numNewTiles );
+			logWriter.println( "Min overlap (each side): " + minOverlapEachSide );
+			logWriter.println( "Extra overlap per intersection: " + extraOverlapPerIntersection );
+			logWriter.println( "Number of new tiles with extra 1px overlap: " + numNewTilesWithExtraOnePixelOverlap );
+		}
+
 		return newTilesIntervals;
 	}
 
@@ -249,5 +284,6 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 	public void close() throws Exception
 	{
 		sparkContext.close();
+		logWriter.close();
 	}
 }
