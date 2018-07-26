@@ -1,6 +1,7 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
@@ -48,12 +49,12 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		public String targetLocation;
 
 		@Option(name = "-d", aliases = { "--dimension" }, required = false,
-				usage = "Dimension to split tiles along (Z by default)")
-		public int splitDimension = 2;
+				usage = "Dimension to retile (Z by default)")
+		public int retileDimension = 2;
 
 		@Option(name = "-s", aliases = { "--size" }, required = false,
-				usage = "Size of a new tile in the dimension to split along. Defaults to an average size in other two dimensions")
-		public Integer splitSize = null;
+				usage = "Size of a new tile in the retile dimension. Defaults to an average size in other two dimensions")
+		public Integer retileSize = null;
 
 		@Option(name = "-o", aliases = { "--overlap" }, required = false,
 				usage = "Overlap on each side as a ratio relative to the new tile size. This is only an initial guess, where the actual overlap is determined based on the size of the volume such that all tiles have the same size.")
@@ -80,6 +81,9 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		if ( !resaveSmallerTilesCmdArgs.parsedSuccessfully )
 			System.exit( 1 );
 
+		if ( resaveSmallerTilesCmdArgs.minOverlapRatioEachSide > 0.5 )
+			throw new IllegalArgumentException( "Given min.overlap ratio " + resaveSmallerTilesCmdArgs.minOverlapRatioEachSide + " exceeds its max.allowed value (0.5)" );
+
 		try ( final ResaveAsSmallerTilesSpark driver = new ResaveAsSmallerTilesSpark( resaveSmallerTilesCmdArgs ) )
 		{
 			driver.run();
@@ -94,7 +98,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 	{
 		this.args = args;
 
-		targetImagesLocation = PathResolver.get( args.targetLocation, "tile-images-retiled-in-" + AxisMapping.getAxisStr( args.splitDimension ).toUpperCase() );
+		targetImagesLocation = PathResolver.get( args.targetLocation, "tile-images-retiled-in-" + AxisMapping.getAxisStr( args.retileDimension ).toUpperCase() );
 		final DataProvider dataProviderTarget = DataProviderFactory.createByURI( URI.create( targetImagesLocation ) );
 		dataProviderTarget.createFolder( URI.create( targetImagesLocation ) );
 
@@ -129,7 +133,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			newTiles.get( i ).setIndex( i );
 
 		final DataProvider targetDataProvider = DataProviderFactory.createByURI( URI.create( args.targetLocation ) );
-		final String newTilesConfigurationFilename = Utils.addFilenameSuffix( PathResolver.getFileName( inputTileConfiguration ), "-retiled-in-" + AxisMapping.getAxisStr( args.splitDimension ).toUpperCase() );
+		final String newTilesConfigurationFilename = Utils.addFilenameSuffix( PathResolver.getFileName( inputTileConfiguration ), "-retiled-in-" + AxisMapping.getAxisStr( args.retileDimension ).toUpperCase() );
 		final String newTilesConfigurationPath = PathResolver.get( args.targetLocation, newTilesConfigurationFilename );
 		TileInfoJSONProvider.saveTilesConfiguration( newTiles.toArray( new TileInfo[ 0 ] ), targetDataProvider.getJsonWriter( URI.create( newTilesConfigurationPath ) ) );
 	}
@@ -152,7 +156,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			final ImagePlus newTileImagePlus = newTileImg.getImagePlus();
 			Utils.workaroundImagePlusNSlices( newTileImagePlus );
 
-			final String newTileImageFilename = Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "_retiled-" + newTilesInSingleTile.size() + AxisMapping.getAxisStr( args.splitDimension ) );
+			final String newTileImageFilename = Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "_retiled-" + newTilesInSingleTile.size() + AxisMapping.getAxisStr( args.retileDimension ) );
 			final String newTileImagePath = PathResolver.get( targetImagesLocation, newTileImageFilename );
 			targetDataProvider.saveImage( newTileImagePlus, URI.create( newTileImagePath ) );
 
@@ -175,51 +179,67 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 
 	private long[] determineNewTileSize( final long[] originalTileSize )
 	{
+		return determineNewTileSize( originalTileSize, args.retileDimension, args.retileSize );
+	}
+
+	public static long[] determineNewTileSize( final long[] originalTileSize, final int retileDimension )
+	{
+		return determineNewTileSize( originalTileSize, retileDimension, null );
+	}
+
+	public static long[] determineNewTileSize( final long[] originalTileSize, final int retileDimension, final Integer retileSize )
+	{
 		final long[] newTileSize = originalTileSize.clone();
-		if ( args.splitSize != null )
+		if ( retileSize != null )
 		{
-			newTileSize[ args.splitDimension ] = args.splitSize;
+			newTileSize[ retileDimension ] = retileSize;
 		}
 		else
 		{
-			int tileSizeSumExcludingSplitDimension = 0;
+			int tileSizeSumExcludingRetileDimension = 0;
 			for ( int d = 0; d < originalTileSize.length; ++d )
-				if ( d != args.splitDimension )
-					tileSizeSumExcludingSplitDimension += originalTileSize[ d ];
-			newTileSize[ args.splitDimension ] = Math.round( ( double ) tileSizeSumExcludingSplitDimension / ( newTileSize.length - 1 ) );
+				if ( d != retileDimension )
+					tileSizeSumExcludingRetileDimension += originalTileSize[ d ];
+			newTileSize[ retileDimension ] = Math.round( ( double ) tileSizeSumExcludingRetileDimension / ( newTileSize.length - 1 ) );
 		}
 		return newTileSize;
 	}
 
 	private List< Interval > getNewTilesIntervalsInSingleTile( final long[] originalTileSize, final long[] newTileSize )
 	{
-		return getNewTilesIntervalsInSingleTile( originalTileSize, newTileSize, args.splitDimension, args.minOverlapRatioEachSide );
+		return getNewTilesIntervalsInSingleTile(
+				originalTileSize,
+				newTileSize,
+				args.retileDimension,
+				args.minOverlapRatioEachSide,
+				logWriter
+			);
 	}
 
 	public static List< Interval > getNewTilesIntervalsInSingleTile(
 			final long[] originalTileSize,
 			final long[] newTileSize,
-			final int splitDimension,
+			final int retileDimension,
 			final double minOverlapRatioEachSide )
 	{
 		for ( int d = 0; d < Math.max( originalTileSize.length, newTileSize.length ); ++d )
-			if ( d != splitDimension && originalTileSize[ d ] != newTileSize[ d ] )
-				throw new RuntimeException( "tile size is different in any dimensions other than split dimension: originalTileSize=" + Arrays.toString( originalTileSize ) + ", newTileSize=" + Arrays.toString( newTileSize ) );
+			if ( d != retileDimension && originalTileSize[ d ] != newTileSize[ d ] )
+				throw new RuntimeException( "tile size is different in any dimensions other than retile dimension: originalTileSize=" + Arrays.toString( originalTileSize ) + ", newTileSize=" + Arrays.toString( newTileSize ) );
 
 		// fit in new tiles such that they exactly cover the original tile while the overlap is as close as possible to the requrested min ratio
-		final long minOverlapInSplitDimensionEachSide = ( long ) Math.ceil( newTileSize[ splitDimension ] * minOverlapRatioEachSide );
-		final int numNewTilesInSplitDimension = ( int ) Math.ceil( ( double ) ( originalTileSize[ splitDimension ] - minOverlapInSplitDimensionEachSide ) / ( newTileSize[ splitDimension ] - minOverlapInSplitDimensionEachSide ) );
-		final long newTotalSizeInSplitDimension = numNewTilesInSplitDimension * ( newTileSize[ splitDimension ] - minOverlapInSplitDimensionEachSide ) + minOverlapInSplitDimensionEachSide;
-		final int numNewTilesWithIncreasedOverlap = ( int ) ( newTotalSizeInSplitDimension - originalTileSize[ splitDimension ] );
-		if ( numNewTilesWithIncreasedOverlap < 0 || numNewTilesWithIncreasedOverlap >= numNewTilesInSplitDimension )
-			throw new RuntimeException( "incorrect calculation, numNewTilesWithIncreasedOverlap=" + numNewTilesWithIncreasedOverlap + ", numNewTilesInSplitDimension=" + numNewTilesInSplitDimension );
+		final long minOverlapEachSide = ( long ) Math.ceil( newTileSize[ retileDimension ] * minOverlapRatioEachSide );
+		final int numNewTiles = ( int ) Math.ceil( ( double ) ( originalTileSize[ retileDimension ] - minOverlapEachSide ) / ( newTileSize[ retileDimension ] - minOverlapEachSide ) );
+		final long newTotalSize = numNewTiles * ( newTileSize[ retileDimension ] - minOverlapEachSide ) + minOverlapEachSide;
+		final long extraOverlap = newTotalSize - originalTileSize[ retileDimension ];
+		final long extraOverlapPerIntersection = numNewTiles <= 1 ? 0 : extraOverlap / ( numNewTiles - 1 );
+		final int numNewTilesWithExtraOnePixelOverlap = ( int ) ( extraOverlap - extraOverlapPerIntersection * ( numNewTiles - 1 ) );
 
 		final List< Interval > newTilesIntervals = new ArrayList<>();
-		for ( int i = 0; i < numNewTilesInSplitDimension; ++i )
+		for ( int i = 0; i < numNewTiles; ++i )
 		{
 			final long[] min = new long[ newTileSize.length ], max = Intervals.maxAsLongArray( new FinalInterval( originalTileSize ) );
-			min[ splitDimension ] = i * ( newTileSize[ splitDimension ] - minOverlapInSplitDimensionEachSide ) - Math.min( i, numNewTilesWithIncreasedOverlap );
-			max[ splitDimension ] = min[ splitDimension ] + newTileSize[ splitDimension ] - 1;
+			min[ retileDimension ] = i * ( newTileSize[ retileDimension ] - minOverlapEachSide - extraOverlapPerIntersection ) - Math.min( i, numNewTilesWithExtraOnePixelOverlap );
+			max[ retileDimension ] = min[ retileDimension ] + newTileSize[ retileDimension ] - 1;
 			newTilesIntervals.add( new FinalInterval( min, max ) );
 		}
 		return newTilesIntervals;
