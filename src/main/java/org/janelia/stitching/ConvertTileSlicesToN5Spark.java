@@ -140,7 +140,7 @@ public class ConvertTileSlicesToN5Spark implements Serializable, AutoCloseable
 		final DataProvider targetDataProvider = DataProviderFactory.createByURI( URI.create( args.outputLocation ) );
 		final N5Writer n5 = targetDataProvider.createN5Writer( URI.create( args.outputLocation ) );
 
-		final Path tileSlicesBaseDirPath = Paths.get( PathResolver.getParent( patternTile.getFilePath() ) );
+		final Path tileSlicesBaseDirPath = Paths.get( patternTile.getFilePath() ).getParent();
 		final String tileSlicesFileNamePattern = PathResolver.getFileName( patternTile.getFilePath() );
 		final List< String > tileSlicesImagePaths = getTileSlicesImagePaths( tileSlicesBaseDirPath, tileSlicesFileNamePattern );
 
