@@ -143,6 +143,7 @@ public class ConvertTileSlicesToN5Spark implements Serializable, AutoCloseable
 		final Path tileSlicesBaseDirPath = Paths.get( patternTile.getFilePath() ).getParent();
 		final String tileSlicesFileNamePattern = PathResolver.getFileName( patternTile.getFilePath() );
 		final List< String > tileSlicesImagePaths = getTileSlicesImagePaths( tileSlicesBaseDirPath, tileSlicesFileNamePattern );
+		System.out.println( "Found " + tileSlicesImagePaths.size() + " slice images for tile " + patternTile.getIndex() );
 
 		final Matcher matcher = Pattern.compile( tileSlicesFileNamePattern ).matcher( PathResolver.getFileName( tileSlicesImagePaths.iterator().next() ) );
 		if (!matcher.find() || matcher.groupCount() != 1 )
@@ -174,7 +175,7 @@ public class ConvertTileSlicesToN5Spark implements Serializable, AutoCloseable
 
 			if ( slice - partialTileImgStartingSlice + 1 == partialTileImg.dimension( 2 ) )
 			{
-				N5Utils.saveBlock( partialTileImg, n5, convertedTileDatasetName, new long[] { 0, 0, partialTileImgStartingSlice } );
+				N5Utils.saveBlock( partialTileImg, n5, convertedTileDatasetName, new long[] { 0, 0, partialTileImgStartingSlice / blockSize[ 2 ] } );
 				partialTileImg = null;
 			}
 		}
