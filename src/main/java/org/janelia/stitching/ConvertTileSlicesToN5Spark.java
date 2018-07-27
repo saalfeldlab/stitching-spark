@@ -10,6 +10,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -198,12 +199,24 @@ public class ConvertTileSlicesToN5Spark implements Serializable, AutoCloseable
 			}
 		};
 
-		final List< String > tileSlicesImagePaths = new ArrayList<>();
+		final TreeMap< Integer, String > sortedTileSlicesImagePaths = new TreeMap<>();
 		final String[] fileList = baseImagesDirPath.toFile().list( fileNameFilter );
-		for ( final String fileName : fileList )
-			tileSlicesImagePaths.add( PathResolver.get( baseImagesDirPath.toString(), fileName ) );
 
-		return tileSlicesImagePaths;
+		final Pattern pattern = Pattern.compile( fileNamePattern );
+		for ( final String fileName : fileList )
+		{
+			final Matcher matcher = pattern.matcher( fileName );
+			if (!matcher.find() || matcher.groupCount() != 1 )
+				throw new RuntimeException( "filename pattern is incorrect" );
+			final int sliceIndex = Integer.parseInt( matcher.group( 1 ) );
+
+			sortedTileSlicesImagePaths.put( sliceIndex, PathResolver.get( baseImagesDirPath.toString(), fileName ) );
+		}
+
+		if ( sortedTileSlicesImagePaths.lastKey().intValue() - sortedTileSlicesImagePaths.firstKey().intValue() + 1 != sortedTileSlicesImagePaths.size() )
+			throw new RuntimeException( "some of the slices are missing" );
+
+		return new ArrayList<>( sortedTileSlicesImagePaths.values() );
 	}
 
 	@Override
