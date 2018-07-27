@@ -58,7 +58,7 @@ public class ConvertTileSlicesToN5Spark implements Serializable, AutoCloseable
 				usage = "Output location (filesystem directory or cloud bucket) to store the resulting tiles and configurations.")
 		public String outputLocation;
 
-		@Option(name = "-b", aliases = { "--blockSize" }, required = false,
+		@Option(name = "-b", aliases = { "--blockSize" }, required = true,
 				usage = "N5 block size.")
 		public String blockSizeStrArr;
 
