@@ -157,7 +157,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				job.getArgs().subdivisionGridSize()
 			);
 
-		final SampleWeightCalculator sampleWeightCalculator = new SampleWeightCalculator( job.getArgs().weightedPredictions() );
+		final SampleWeightCalculator sampleWeightCalculator = new SampleWeightCalculator( !job.getArgs().weightedPredictions() );
 
 		return new OffsetUncertaintyEstimator(
 				neighboringTilesLocator,
