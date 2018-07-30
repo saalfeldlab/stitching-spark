@@ -384,32 +384,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 		final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedFlatfieldCorrectionForChannels = sparkContext.broadcast( flatfieldCorrectionForChannels );
 
-		final List< Map< String, TileInfo > > coordsToTilesChannels = new ArrayList<>();
+		final List< Map< Integer, TileInfo > > tileChannelMappingByIndex = new ArrayList<>();
 		for ( int channel = 0; channel < job.getChannels(); ++channel )
-		{
-			final Map< String, TileInfo > coordsToTiles = new HashMap<>();
-			for ( final TileInfo tile : job.getTiles( channel ) )
-			{
-				final String coords;
-				try
-				{
-					coords = Utils.getTileCoordinatesString( tile );
-				}
-				catch ( final Exception e )
-				{
-					System.out.println( "Cannot get tile coordinates string: " + tile.getFilePath() );
-					e.printStackTrace();
-					throw new PipelineExecutionException( e );
-				}
-
-				if ( coordsToTiles.containsKey( coords ) )
-					throw new PipelineExecutionException( "Tile with coords " + coords + " is not unique" );
-
-				coordsToTiles.put( coords, tile );
-			}
-			coordsToTilesChannels.add( coordsToTiles );
-		}
-		final Broadcast< List< Map< String, TileInfo > > > broadcastedCoordsToTilesChannels = sparkContext.broadcast( coordsToTilesChannels );
+			tileChannelMappingByIndex.add( Utils.createTilesMap( job.getTiles( channel ) ) );
+		final Broadcast< List< Map< Integer, TileInfo > > > broadcastedTileChannelMappingByIndex = sparkContext.broadcast( tileChannelMappingByIndex );
 
 		System.out.println( "Processing " + overlappingTiles.size() + " pairs..." );
 
@@ -576,12 +554,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				{
 					System.out.println( "Averaging corresponding tile images for " + job.getChannels() + " channels" );
 //					final ComparableTuple< Integer > coordinates = new ComparableTuple<>( Conversions.toBoxedArray( Utils.getTileCoordinates( pair[ j ] ) ) );
-					final String coordsStr = Utils.getTileCoordinatesString( pair[ j ] );
+					final Integer tileIndex = pair[ j ].getIndex();
 					int channelsUsed = 0;
 					final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( overlaps[ j ] ) );
 					for ( int channel = 0; channel < job.getChannels(); channel++ )
 					{
-						final TileInfo tileInfo = broadcastedCoordsToTilesChannels.value().get( channel ).get( coordsStr );
+						final TileInfo tileInfo = broadcastedTileChannelMappingByIndex.value().get( channel ).get( tileIndex );
 //						for ( final TileInfo tile : job.getTiles( channel ) )
 //						{
 //							if ( coordinates.compareTo( new ComparableTuple<>( Conversions.toBoxedArray( Utils.getTileCoordinates( tile ) ) ) ) == 0 )
@@ -594,9 +572,6 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 						// skip if no tile exists for this channel at this particular stage position
 						if ( tileInfo == null )
 							throw new PipelineExecutionException( pairOfTiles + ": cannot find corresponding tile for this channel" );
-
-						if ( pair[ j ].getIndex().intValue() != tileInfo.getIndex().intValue() )
-							throw new PipelineExecutionException( pairOfTiles + ": different indexes for the same stage position " + Utils.getTileCoordinatesString( tileInfo ) );
 
 						// FIXME: throw exception in case some image files are missing (or, check for missing files beforehand)
 						final RandomAccessibleInterval< T > img = TileLoader.loadTile( tileInfo, dataProviderLocal );
@@ -769,7 +744,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 		broadcastedFlatfieldCorrectionForChannels.destroy();
 		broadcastedSearchRadiusEstimator.destroy();
-		broadcastedCoordsToTilesChannels.destroy();
+		broadcastedTileChannelMappingByIndex.destroy();
 
 		int validPairs = 0;
 		for ( final SerializablePairWiseStitchingResult[] shiftMulti : stitchingResults )
