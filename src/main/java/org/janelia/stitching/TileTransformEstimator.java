@@ -7,8 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.janelia.stitching.OffsetUncertaintyEstimator.NotEnoughNeighboringTilesException;
-
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
@@ -37,7 +35,7 @@ public class TileTransformEstimator
 	public static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > AffineGet estimateAffineTransformation(
 			final TileInfo tile,
 			final NeighboringTilesLocator neighboringTilesLocator,
-			final SampleWeightCalculator sampleWeightCalculator ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
+			final SampleWeightCalculator sampleWeightCalculator ) throws PipelineExecutionException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		// (1) Find affine transformations for subtiles by fitting it to stage->world points of neighboring subtiles
 		final int[] subTilesGridSize = new int[ tile.numDimensions() ];
@@ -80,15 +78,7 @@ public class TileTransformEstimator
 					0.1 // TODO: allow to tweak regularizer lambda value by cmd arg
 				);
 
-			try
-			{
-				model.fit( pointMatches );
-			}
-			catch ( final NotEnoughDataPointsException | IllDefinedDataPointsException e )
-			{
-				throw new PipelineExecutionException( e );
-			}
-
+			model.fit( pointMatches );
 			estimatedSubTileTransforms.put( subTile, TransformUtils.getModelTransform( model ) );
 		}
 

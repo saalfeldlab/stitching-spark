@@ -20,8 +20,9 @@ import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.util.LongAccumulator;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.stitching.OffsetUncertaintyEstimator.NotEnoughNeighboringTilesException;
 
+import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.NotEnoughDataPointsException;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.view.RandomAccessiblePairNullable;
@@ -177,7 +178,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			return tiles;
 
 		final Map< Integer, TileInfo > previousStitchedTilesMap = Utils.createTilesMap( getStitchedTilesFromPreviousIteration() );
-		int numTilesWithInsufficientNeighborhood = 0, numTilesWithoutTransformations = 0;
+		int numTilesWithInsufficientNeighborhood = 0, numTilesWithIllDefinedDataPoints = 0, numTilesWithoutTransformations = 0;
 		for ( final TileInfo tile : tiles )
 		{
 			final TileInfo previousStitchedTile = previousStitchedTilesMap.get( tile.getIndex() );
@@ -195,9 +196,14 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 								)
 						);
 				}
-				catch ( final NotEnoughNeighboringTilesException e )
+				catch ( final NotEnoughDataPointsException e )
 				{
 					++numTilesWithInsufficientNeighborhood;
+					tile.setTransform( null );
+				}
+				catch ( final IllDefinedDataPointsException e )
+				{
+					++numTilesWithIllDefinedDataPoints;
 					tile.setTransform( null );
 				}
 			}
@@ -210,7 +216,9 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		if ( logWriter != null )
 		{
 			logWriter.println( numTilesWithoutTransformations + " out of " + tiles.length + " tiles required estimating their transformations" );
-			logWriter.println( "Estimated affine transformations for " + ( numTilesWithoutTransformations - numTilesWithInsufficientNeighborhood ) + " out of " + numTilesWithoutTransformations + " tiles " + " (others had insufficient neighborhood)" );
+			logWriter.println( "Estimated affine transformations for " + ( numTilesWithoutTransformations - numTilesWithInsufficientNeighborhood - numTilesWithIllDefinedDataPoints ) + " out of " + numTilesWithoutTransformations + " tiles" );
+			logWriter.println( "  Tiles with not enough data poitns: " + numTilesWithInsufficientNeighborhood );
+			logWriter.println( "  Tiles with ill-defined data poitns: " + numTilesWithIllDefinedDataPoints );
 		}
 
 		return tiles;
