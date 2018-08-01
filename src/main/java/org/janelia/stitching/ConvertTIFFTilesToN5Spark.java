@@ -4,11 +4,15 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.URI;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -18,6 +22,7 @@ import org.janelia.saalfeldlab.googlecloud.GoogleCloudOAuth;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudResourceManagerClient;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageClient;
 import org.janelia.saalfeldlab.n5.Compression;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5WriterSupplier;
@@ -37,10 +42,13 @@ import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.util.Intervals;
+import scala.Tuple3;
 
-abstract class TilesToN5Converter
+public class ConvertTIFFTilesToN5Spark
 {
-	static class TilesToN5Arguments implements Serializable
+	private static final int MAX_PARTITIONS = 15000;
+
+	private static class TilesToN5Arguments implements Serializable
 	{
 		private static final long serialVersionUID = 215043103837732209L;
 
@@ -84,15 +92,9 @@ abstract class TilesToN5Converter
 			if ( !CloudURI.isCloudURI( n5OutputPath ) )
 				n5OutputPath = Paths.get( n5OutputPath ).toAbsolutePath().toString();
 		}
-
-		public boolean parsedSuccessfully() { return parsedSuccessfully; }
-
-		public List< String > getInputChannelsPath() { return inputChannelsPath; }
-		public String getN5OutputPath() { return n5OutputPath; }
-		public int getBlockSize() { return blockSize; }
 	}
 
-	static class CloudN5WriterSupplier implements N5WriterSupplier
+	private static class CloudN5WriterSupplier implements N5WriterSupplier
 	{
 		private static final long serialVersionUID = -1199787780776971335L;
 
@@ -117,7 +119,7 @@ abstract class TilesToN5Converter
 								GoogleCloudStorageClient.StorageScope.READ_WRITE
 							),
 						"n5-viewer-google-cloud-oauth2",  // TODO: create separate application? currently using n5-viewer app id
-						TilesToN5Converter.class.getResourceAsStream("/googlecloud_client_secrets.json")
+						ConvertTIFFTilesToN5Spark.class.getResourceAsStream("/googlecloud_client_secrets.json")
 					);
 
 				accessToken = oauth.getAccessToken();
@@ -186,7 +188,89 @@ abstract class TilesToN5Converter
 	}
 
 	/**
-	 * Converts a stack of TIFF images to N5 breaking the images down into cells of given size.
+	 * Converts a collection of TIFF tile images to N5 breaking the images down into cells of given size using Spark.
+	 *
+	 * @param sparkContext
+	 * 			Spark context
+	 * @param outputPath
+	 * 			Base N5 path for constructing new tile paths
+	 * @param n5Supplier
+	 * 			{@link N5Writer} supplier
+	 * @param tilesChannels
+	 * 			Input tile configurations for channels
+	 * @param blockSize
+	 * 			Output block size
+	 * @param compression
+	 * 			Output N5 compression
+	 * @return
+	 * 			New tile configurations with updated paths
+	 * @throws IOException
+	 */
+	public static < T extends NumericType< T > & NativeType< T > > Map< String, TileInfo[] > convertTiffToN5(
+			final JavaSparkContext sparkContext,
+			final Map< String, TileInfo[] > inputTilesChannels,
+			final String outputN5Path,
+			final N5WriterSupplier n5Supplier,
+			final int blockSize,
+			final Compression n5Compression ) throws IOException
+	{
+		final int dimensionality = inputTilesChannels.values().iterator().next()[ 0 ].numDimensions();
+
+		final int[] blockSizeArr = new int[ dimensionality ];
+		Arrays.fill( blockSizeArr, blockSize );
+
+		// TODO: can consider pixel resolution to calculate isotropic block size in Z
+
+		final List< Tuple3< String, Integer, TileInfo > > inputChannelIndexTileTuples = new ArrayList<>();
+		for ( final Entry< String, TileInfo[] > entry : inputTilesChannels.entrySet() )
+		{
+			final String channelName = entry.getKey();
+			n5Supplier.get().createGroup( channelName );
+
+			for ( int i = 0; i < entry.getValue().length; ++i )
+				inputChannelIndexTileTuples.add( new Tuple3<>( entry.getKey(), i, entry.getValue()[ i ] )  );
+		}
+
+		final List< Tuple3< String, Integer, TileInfo > > outputChannelIndexTileTuples = sparkContext
+				.parallelize( inputChannelIndexTileTuples, Math.min( inputChannelIndexTileTuples.size(), MAX_PARTITIONS ) )
+				.map( inputChannelIndexTileTuple ->
+					{
+						final String channelName = inputChannelIndexTileTuple._1();
+						final Integer index = inputChannelIndexTileTuple._2();
+						final TileInfo inputTile = inputChannelIndexTileTuple._3();
+
+						final String outputTileDatasetPath = convertTileToN5(
+								inputTile,
+								n5Supplier.get(),
+								channelName,
+								blockSize,
+								n5Compression
+							);
+
+						final String outputTilePath = PathResolver.get( outputN5Path, outputTileDatasetPath );
+						final TileInfo outputTile = inputTile.clone();
+						outputTile.setFilePath( outputTilePath );
+						return new Tuple3<>( channelName, index, outputTile );
+					}
+				).collect();
+
+		final Map< String, TileInfo[] > outputTilesChannels = new LinkedHashMap<>();
+		for ( final Entry< String, TileInfo[] > entry : inputTilesChannels.entrySet() )
+			outputTilesChannels.put( entry.getKey(), new TileInfo[ entry.getValue().length ] );
+
+		for ( final Tuple3< String, Integer, TileInfo > outputChannelIndexTileTuple : outputChannelIndexTileTuples )
+		{
+			final String channelName = outputChannelIndexTileTuple._1();
+			final Integer index = outputChannelIndexTileTuple._2();
+			final TileInfo outputTile = outputChannelIndexTileTuple._3();
+			outputTilesChannels.get( channelName )[ index ] = outputTile;
+		}
+
+		return outputTilesChannels;
+	}
+
+	/**
+	 * Converts a tile image to N5 breaking the images down into cells of given size.
 	 *
 	 * @param inputTile
 	 * @param n5
@@ -225,9 +309,43 @@ abstract class TilesToN5Converter
 		}
 
 		N5Utils.save( img, n5, tileDatasetPath, blockSizeArr, n5Compression );
-
 		return tileDatasetPath;
 	}
+
+//	private static boolean checkDimensionality( final Interval img, final TileInfo metadata )
+//	{
+//		if ( img.numDimensions() != metadata.numDimensions() )
+//		{
+//			if ( img.numDimensions() == 5 ) // must be x,y,c,z,t
+//			{
+//				if ( ( metadata.numDimensions() > 2 ? metadata.getSize( 2 ) : 1 ) != img.dimension( 3 ) ) // check slices
+//					return false;
+//
+//				if ( img.dimension( 4 ) != 1 ) // check that there is a single timepoint (multiple timepoints are not supported)
+//					return false;
+//
+//				return true;
+//			}
+//			else
+//				return false;
+//		}
+//		else
+//			return true;
+//	}
+
+//	private static < T extends NumericType< T > & NativeType< T > > List< RandomAccessibleInterval< T > > getChannelImgs( final RandomAccessibleInterval< T > img )
+//	{
+//		if ( img.numDimensions() == 5 ) // must be x,y,c,z,t
+//		{
+//			final List< RandomAccessibleInterval< T > > channelImgs = new ArrayList<>();
+//			final int channelDim = 2;
+//			for ( int ch = 0; ch < img.dimension( channelDim ); ++ch )
+//				channelImgs.add( Views.dropSingletonDimensions( Views.hyperSlice( img, channelDim, ch ) ) );
+//			return channelImgs;
+//		}
+//		else
+//			return Collections.singletonList( img );
+//	}
 
 	static Map< String, TileInfo[] > getTilesChannels( final List< String > inputChannelsPath ) throws IOException
 	{
@@ -260,5 +378,36 @@ abstract class TilesToN5Converter
 			final String newConfigPath = PathResolver.get( n5Path, Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-converted-n5" ) );
 			TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, dataProvider.getJsonWriter( URI.create( newConfigPath ) ) );
 		}
+	}
+
+	public static void main( final String... args ) throws IOException
+	{
+		final TilesToN5Arguments parsedArgs = new TilesToN5Arguments( args );
+		if ( !parsedArgs.parsedSuccessfully )
+			System.exit( 1 );
+
+		final Map< String, TileInfo[] > inputTilesChannels = getTilesChannels( parsedArgs.inputChannelsPath );
+		final CloudN5WriterSupplier cloudN5WriterSupplier = new CloudN5WriterSupplier( parsedArgs.n5OutputPath );
+
+		System.out.println( "Converting tiles to N5..." );
+
+		final Map< String, TileInfo[] > outputTilesChannels;
+		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
+				.setAppName( "ConvertTIFFTilesToN5Spark" )
+				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
+			) )
+		{
+			outputTilesChannels = convertTiffToN5(
+					sparkContext,
+					inputTilesChannels,
+					parsedArgs.n5OutputPath,
+					cloudN5WriterSupplier,
+					parsedArgs.blockSize,
+					new GzipCompression()
+				);
+		}
+
+		saveTilesChannels( parsedArgs.inputChannelsPath, outputTilesChannels, parsedArgs.n5OutputPath );
+		System.out.println( "Done" );
 	}
 }

@@ -37,87 +37,8 @@ import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
-public class TilesToN5Test
+public class ConvertTilesToN5Test
 {
-	@Test
-	public void testFSMultithreaded() throws ImgLibException, IOException
-	{
-		final Random rnd = new Random();
-		final long[] dimensions = new long[ 3 ];
-		for ( int d = 0; d < dimensions.length; ++d )
-			dimensions[ d ] = rnd.nextInt( 700 ) + 1;
-
-		final int blockSize = rnd.nextInt( 100 ) + 30;
-
-		System.out.println( "Generating random image of size " + Arrays.toString( dimensions ) + ", block size set to " + blockSize );
-
-		final ImagePlusImg< UnsignedShortType, ? > img = ImagePlusImgs.unsignedShorts( dimensions );
-		final Cursor< UnsignedShortType > cursor = img.cursor();
-		while ( cursor.hasNext() )
-			cursor.next().set( ( int ) Math.round( ( rnd.nextGaussian() + 1.0 ) * 100 ) );
-
-		final ImagePlus imp = img.getImagePlus();
-		Utils.workaroundImagePlusNSlices( imp );
-
-		final Path tempDir = Files.createTempDirectory( "TilesToN5Test-" );
-		final String impFilename = "test-imp.tif";
-		final String impPath = tempDir.resolve( impFilename ).toString();
-
-		System.out.println( "Saving test image to: " + impPath );
-		IJ.saveAsTiff( imp, impPath );
-
-		final TileInfo tile = new TileInfo( dimensions.length );
-		tile.setIndex( 0 );
-		tile.setSize( dimensions );
-		tile.setPosition( new double[ dimensions.length ] );
-		tile.setFilePath( impPath );
-		tile.setType( ImageType.GRAY16 );
-		final TileInfo[] tiles = new TileInfo[] { tile };
-
-		final String n5Path = tempDir.resolve( "n5-test" ).toString();
-		final String datasetPath = "test-channel";
-
-		final Map< String, TileInfo[] > newTiles = TilesToN5ConverterMultithreaded.convertTiffToN5(
-				n5Path,
-				() -> new N5FSWriter( n5Path ),
-				Collections.singletonMap( datasetPath, tiles ),
-				blockSize,
-				new GzipCompression()
-			);
-
-		Assert.assertEquals( datasetPath, newTiles.keySet().iterator().next() );
-
-		final TileInfo newTile = newTiles.values().iterator().next()[ 0 ];
-		Assert.assertEquals( Paths.get( n5Path, datasetPath, impFilename ).toString(), newTile.getFilePath() );
-
-		System.out.println( "Loading N5 cell export from:" + Paths.get( n5Path, datasetPath ).toString() );
-
-		final RandomAccessibleInterval< UnsignedShortType > rai = TileLoader.loadTile( newTile, DataProviderFactory.createByURI( URI.create( newTile.getFilePath() ) ) );
-		final Cursor< UnsignedShortType > raiCursor = Views.iterable( rai ).localizingCursor();
-		final RandomAccess< UnsignedShortType > imgRandomAccess = img.randomAccess();
-		int pixelsProcessed = 0;
-		while ( raiCursor.hasNext() )
-		{
-			++pixelsProcessed;
-			raiCursor.fwd();
-			imgRandomAccess.setPosition( raiCursor );
-			if ( !raiCursor.get().valueEquals( imgRandomAccess.get() ) )
-			{
-				final long[] position = new long[ raiCursor.numDimensions() ];
-				raiCursor.localize( position );
-				fail( "pixel value differs at " + Arrays.toString( position ) );
-			}
-		}
-
-		if ( pixelsProcessed != Intervals.numElements( dimensions ) )
-			fail( "processed less pixels than contained in the image" );
-
-		System.out.println( "All checks passed, removing temp data..." );
-		Assert.assertTrue( new N5FSWriter( tempDir.toString() ).remove() );
-
-		System.out.println( "OK" );
-	}
-
 	@Test
 	public void testFSSpark() throws ImgLibException, IOException
 	{
@@ -159,13 +80,14 @@ public class TilesToN5Test
 		final Map< String, TileInfo[] > newTiles;
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
 				.setMaster( "local[*]" )
-				.setAppName( "TilesToN5Test" )
+				.setAppName( "ConvertTilesToN5Test" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" ) ) )
 		{
-			newTiles = TilesToN5ConverterMultithreaded.convertTiffToN5(
+			newTiles = ConvertTIFFTilesToN5Spark.convertTiffToN5(
+					sparkContext,
+					Collections.singletonMap( datasetPath, tiles ),
 					n5Path,
 					() -> new N5FSWriter( n5Path ),
-					Collections.singletonMap( datasetPath, tiles ),
 					blockSize,
 					new GzipCompression()
 				);
@@ -205,7 +127,7 @@ public class TilesToN5Test
 	}
 
 //	@Test
-	public void testS3Multithreaded() throws ImgLibException, IOException
+	public void testS3Spark() throws ImgLibException, IOException
 	{
 		final Random rnd = new Random();
 		final long[] dimensions = new long[ 3 ];
@@ -247,13 +169,21 @@ public class TilesToN5Test
 		final String s3Link = new AmazonS3URI( "s3://" + n5Bucket + "/" ).toString();
 		final String datasetPath = "test-channel";
 
-		final Map< String, TileInfo[] > newTiles = TilesToN5ConverterMultithreaded.convertTiffToN5(
-				s3Link,
-				() -> new N5AmazonS3Writer( AmazonS3ClientBuilder.standard().build(), n5Bucket ),
-				Collections.singletonMap( datasetPath, tiles ),
-				blockSize,
-				new GzipCompression()
-			);
+		final Map< String, TileInfo[] > newTiles;
+		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
+				.setMaster( "local[*]" )
+				.setAppName( "ConvertTilesToN5Test" )
+				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" ) ) )
+		{
+			newTiles = ConvertTIFFTilesToN5Spark.convertTiffToN5(
+					sparkContext,
+					Collections.singletonMap( datasetPath, tiles ),
+					s3Link,
+					() -> new N5AmazonS3Writer( AmazonS3ClientBuilder.standard().build(), n5Bucket ),
+					blockSize,
+					new GzipCompression()
+				);
+		}
 
 		Assert.assertEquals( datasetPath, newTiles.keySet().iterator().next() );
 
