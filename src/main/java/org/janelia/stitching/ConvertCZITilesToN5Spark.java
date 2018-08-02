@@ -194,7 +194,7 @@ public class ConvertCZITilesToN5Spark
 		final boolean multichannel = img.numDimensions() > inputTile.numDimensions();
 		final int channelDim = 2;
 
-		for ( int ch = 0; ch < ( multichannel ? 1 : img.dimension( channelDim ) ); ++ch )
+		for ( int ch = 0; ch < ( multichannel ? img.dimension( channelDim ) : 1 ); ++ch )
 		{
 			final RandomAccessibleInterval< T > channelImg = Views.dropSingletonDimensions( multichannel ? Views.hyperSlice( img, channelDim, ch ) : img );
 
