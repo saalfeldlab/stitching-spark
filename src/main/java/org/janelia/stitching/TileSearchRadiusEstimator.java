@@ -154,30 +154,11 @@ public class TileSearchRadiusEstimator implements Serializable
 	 */
 	public static double[] getStitchedTilesOffset( final Map< Integer, TileInfo > stageTilesMap, final Map< Integer, TileInfo > stitchedTilesMap )
 	{
-		long minTimestampStitched = Long.MAX_VALUE;
-		TileInfo minTimestampStitchedTile = null;
-		for ( final TileInfo stitchedTile : stitchedTilesMap.values() )
-		{
-			try
-			{
-				final long timestampStitched = Utils.getTileTimestamp( stitchedTile );
-				if ( minTimestampStitched > timestampStitched )
-				{
-					minTimestampStitched = timestampStitched;
-					minTimestampStitchedTile = stitchedTile;
-				}
-			}
-			catch ( final Exception e )
-			{
-				System.out.println( "Cannot get timestamp:" );
-				e.printStackTrace();
-			}
-		}
-
-		final TileInfo correspondingStageTile = stageTilesMap.get( minTimestampStitchedTile.getIndex() );
-		final double[] stitchedTilesOffset = new double[ minTimestampStitchedTile.numDimensions() ];
+		final TileInfo referenceStitchedTile = stitchedTilesMap.values().iterator().next();
+		final TileInfo correspondingStageTile = stageTilesMap.get( referenceStitchedTile.getIndex() );
+		final double[] stitchedTilesOffset = new double[ referenceStitchedTile.numDimensions() ];
 		for ( int d = 0; d < stitchedTilesOffset.length; ++d )
-			stitchedTilesOffset[ d ] = minTimestampStitchedTile.getPosition( d ) - correspondingStageTile.getPosition( d );
+			stitchedTilesOffset[ d ] = referenceStitchedTile.getPosition( d ) - correspondingStageTile.getPosition( d );
 		return stitchedTilesOffset;
 	}
 
