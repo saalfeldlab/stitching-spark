@@ -185,20 +185,20 @@ public class ConvertCZITilesToN5Spark
 
 		final ImagePlus imp = ImageImporter.openImage( inputTile.getFilePath() );
 		final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
-		if ( img.numDimensions() != 5 )
-			throw new RuntimeException( "Expected 5-dimensional input (x,y,c,z,t), got " + img.numDimensions() + "-dimensional image" );
 
-		if ( img.dimension( 4 ) != 1 )
+		if ( img.numDimensions() >= 5 && img.dimension( 4 ) != 1 )
 			throw new UnsupportedOperationException( "Multiple timepoints are not supported" );
 
 		final List< String > channelTileDatasetPaths = new ArrayList<>();
 
+		final boolean multichannel = img.numDimensions() > inputTile.numDimensions();
 		final int channelDim = 2;
-		for ( int ch = 0; ch < img.dimension( channelDim ); ++ch )
-		{
-			final RandomAccessibleInterval< T > channelImg = Views.dropSingletonDimensions( Views.hyperSlice( img, channelDim, ch ) );
 
-			if ( !Intervals.equalDimensions( img, new FinalInterval( inputTile.getSize() ) ) )
+		for ( int ch = 0; ch < ( multichannel ? 1 : img.dimension( channelDim ) ); ++ch )
+		{
+			final RandomAccessibleInterval< T > channelImg = Views.dropSingletonDimensions( multichannel ? Views.hyperSlice( img, channelDim, ch ) : img );
+
+			if ( !Intervals.equalDimensions( channelImg, new FinalInterval( inputTile.getSize() ) ) )
 			{
 				throw new RuntimeException( String.format(
 						"Image size %s does not match the value from metadata %s, filepath: %s",
