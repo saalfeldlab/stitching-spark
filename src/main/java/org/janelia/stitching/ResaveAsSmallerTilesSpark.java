@@ -167,7 +167,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			final ImagePlus newTileImagePlus = newTileImg.getImagePlus();
 			Utils.workaroundImagePlusNSlices( newTileImagePlus );
 
-			final String newTileImageFilename = Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "_retiled-" + newTilesInSingleTile.size() + AxisMapping.getAxisStr( args.retileDimension ) );
+			final String newTileImageFilename = Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "_retiled-" + newTilesInSingleTile.size() + AxisMapping.getAxisStr( args.retileDimension ) ) + ".tif";
 			final String newTileImagePath = PathResolver.get( targetImagesLocation, newTileImageFilename );
 			targetDataProvider.saveImage( newTileImagePlus, URI.create( newTileImagePath ) );
 
