@@ -13,14 +13,11 @@ import java.util.Map.Entry;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.dataaccess.CloudN5WriterSupplier;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.saalfeldlab.googlecloud.GoogleCloudOAuth;
-import org.janelia.saalfeldlab.googlecloud.GoogleCloudResourceManagerClient;
-import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageClient;
 import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -30,10 +27,6 @@ import org.janelia.util.ImageImporter;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
-
-import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
-import com.google.auth.oauth2.AccessToken;
-import com.google.cloud.storage.Storage;
 
 import ij.ImagePlus;
 import net.imglib2.FinalInterval;
@@ -48,7 +41,7 @@ public class ConvertTIFFTilesToN5Spark
 {
 	private static final int MAX_PARTITIONS = 15000;
 
-	private static class TilesToN5Arguments implements Serializable
+	private static class ConvertTIFFTilesToN5CmdArgs implements Serializable
 	{
 		private static final long serialVersionUID = 215043103837732209L;
 
@@ -66,7 +59,7 @@ public class ConvertTIFFTilesToN5Spark
 
 		private boolean parsedSuccessfully = false;
 
-		public TilesToN5Arguments( final String... args ) throws IllegalArgumentException
+		public ConvertTIFFTilesToN5CmdArgs( final String... args ) throws IllegalArgumentException
 		{
 			final CmdLineParser parser = new CmdLineParser( this );
 			try
@@ -91,99 +84,6 @@ public class ConvertTIFFTilesToN5Spark
 			// make sure that n5OutputPath is absolute if running on a traditional filesystem
 			if ( !CloudURI.isCloudURI( n5OutputPath ) )
 				n5OutputPath = Paths.get( n5OutputPath ).toAbsolutePath().toString();
-		}
-	}
-
-	private static class CloudN5WriterSupplier implements N5WriterSupplier
-	{
-		private static final long serialVersionUID = -1199787780776971335L;
-
-		private final URI n5Uri;
-		private final DataProviderType type;
-
-		private final AccessToken accessToken;
-		private final String refreshToken;
-		private final String clientId;
-		private final String clientSecret;
-
-		public CloudN5WriterSupplier( final String n5Path ) throws IOException
-		{
-			n5Uri = URI.create( n5Path );
-			type = DataProviderFactory.getTypeByURI( n5Uri );
-
-			if ( type == DataProviderType.GOOGLE_CLOUD )
-			{
-				final GoogleCloudOAuth oauth = new GoogleCloudOAuth(
-						Arrays.asList(
-								GoogleCloudResourceManagerClient.ProjectsScope.READ_ONLY,
-								GoogleCloudStorageClient.StorageScope.READ_WRITE
-							),
-						"n5-viewer-google-cloud-oauth2",  // TODO: create separate application? currently using n5-viewer app id
-						ConvertTIFFTilesToN5Spark.class.getResourceAsStream("/googlecloud_client_secrets.json")
-					);
-
-				accessToken = oauth.getAccessToken();
-				refreshToken = oauth.getRefreshToken();
-				final GoogleClientSecrets clientSecrets = oauth.getClientSecrets();
-				clientId = clientSecrets.getDetails().getClientId();
-				clientSecret = clientSecrets.getDetails().getClientSecret();
-			}
-			else
-			{
-				accessToken = null;
-				refreshToken = null;
-				clientId = null;
-				clientSecret = null;
-			}
-		}
-
-		public DataProvider getDataProvider()
-		{
-			if ( type == DataProviderType.GOOGLE_CLOUD )
-			{
-				final GoogleClientSecrets.Details clientSecretsDetails = new GoogleClientSecrets.Details();
-				clientSecretsDetails.setClientId( clientId );
-				clientSecretsDetails.setClientSecret( clientSecret );
-				final GoogleClientSecrets clientSecrets = new GoogleClientSecrets();
-				clientSecrets.setInstalled( clientSecretsDetails );
-
-				final GoogleCloudStorageClient storageClient = new GoogleCloudStorageClient(
-						accessToken,
-						clientSecrets,
-						refreshToken
-					);
-
-				final Storage storage = storageClient.create();
-				return DataProviderFactory.createGoogleCloudDataProvider( storage );
-			}
-			else
-			{
-				return DataProviderFactory.createByType( type );
-			}
-		}
-
-		@Override
-		public N5Writer get() throws IOException
-		{
-			if ( type == DataProviderType.GOOGLE_CLOUD )
-			{
-				final DataProvider googleCloudDataProvider = getDataProvider();
-				try
-				{
-					return googleCloudDataProvider.createN5Writer( n5Uri );
-				}
-				catch ( final Exception e )
-				{
-					if ( e instanceof IOException )
-						throw e;
-					else
-						throw new RuntimeException( "Please create the desired output Google Cloud bucket first." );
-				}
-			}
-			else
-			{
-				return getDataProvider().createN5Writer( n5Uri );
-			}
 		}
 	}
 
@@ -312,42 +212,7 @@ public class ConvertTIFFTilesToN5Spark
 		return tileDatasetPath;
 	}
 
-//	private static boolean checkDimensionality( final Interval img, final TileInfo metadata )
-//	{
-//		if ( img.numDimensions() != metadata.numDimensions() )
-//		{
-//			if ( img.numDimensions() == 5 ) // must be x,y,c,z,t
-//			{
-//				if ( ( metadata.numDimensions() > 2 ? metadata.getSize( 2 ) : 1 ) != img.dimension( 3 ) ) // check slices
-//					return false;
-//
-//				if ( img.dimension( 4 ) != 1 ) // check that there is a single timepoint (multiple timepoints are not supported)
-//					return false;
-//
-//				return true;
-//			}
-//			else
-//				return false;
-//		}
-//		else
-//			return true;
-//	}
-
-//	private static < T extends NumericType< T > & NativeType< T > > List< RandomAccessibleInterval< T > > getChannelImgs( final RandomAccessibleInterval< T > img )
-//	{
-//		if ( img.numDimensions() == 5 ) // must be x,y,c,z,t
-//		{
-//			final List< RandomAccessibleInterval< T > > channelImgs = new ArrayList<>();
-//			final int channelDim = 2;
-//			for ( int ch = 0; ch < img.dimension( channelDim ); ++ch )
-//				channelImgs.add( Views.dropSingletonDimensions( Views.hyperSlice( img, channelDim, ch ) ) );
-//			return channelImgs;
-//		}
-//		else
-//			return Collections.singletonList( img );
-//	}
-
-	static Map< String, TileInfo[] > getTilesChannels( final List< String > inputChannelsPath ) throws IOException
+	private static Map< String, TileInfo[] > getTilesChannels( final List< String > inputChannelsPath ) throws IOException
 	{
 		final Map< String, TileInfo[] > tilesChannels = new LinkedHashMap<>();
 		for ( final String inputPath : inputChannelsPath )
@@ -360,7 +225,7 @@ public class ConvertTIFFTilesToN5Spark
 		return tilesChannels;
 	}
 
-	static String getChannelName( final String tileConfigPath )
+	private static String getChannelName( final String tileConfigPath )
 	{
 		final String filename = PathResolver.getFileName( tileConfigPath );
 		final int lastDotIndex = filename.lastIndexOf( '.' );
@@ -368,7 +233,7 @@ public class ConvertTIFFTilesToN5Spark
 		return filenameWithoutExtension;
 	}
 
-	static void saveTilesChannels( final List< String > inputChannelsPath, final Map< String, TileInfo[] > newTiles, final String n5Path ) throws IOException
+	private static void saveTilesChannels( final List< String > inputChannelsPath, final Map< String, TileInfo[] > newTiles, final String n5Path ) throws IOException
 	{
 		final DataProvider dataProvider = new CloudN5WriterSupplier( n5Path ).getDataProvider();
 		for ( final String inputPath : inputChannelsPath )
@@ -382,7 +247,7 @@ public class ConvertTIFFTilesToN5Spark
 
 	public static void main( final String... args ) throws IOException
 	{
-		final TilesToN5Arguments parsedArgs = new TilesToN5Arguments( args );
+		final ConvertTIFFTilesToN5CmdArgs parsedArgs = new ConvertTIFFTilesToN5CmdArgs( args );
 		if ( !parsedArgs.parsedSuccessfully )
 			System.exit( 1 );
 
