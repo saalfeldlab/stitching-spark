@@ -23,6 +23,7 @@ import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5WriterSupplier;
+import org.janelia.saalfeldlab.n5.spark.util.CmdUtils;
 import org.janelia.util.ImageImporter;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -54,8 +55,8 @@ public class ConvertTIFFTilesToN5Spark
 		private String n5OutputPath;
 
 		@Option(name = "-b", aliases = { "--blockSize" }, required = false,
-				usage = "Output block size.")
-		private int blockSize = 128;
+				usage = "Output block size as a comma-separated list.")
+		private String blockSizeStr = "128,128,64";
 
 		private boolean parsedSuccessfully = false;
 
@@ -111,14 +112,9 @@ public class ConvertTIFFTilesToN5Spark
 			final Map< String, TileInfo[] > inputTilesChannels,
 			final String outputN5Path,
 			final N5WriterSupplier n5Supplier,
-			final int blockSize,
+			final int[] blockSize,
 			final Compression n5Compression ) throws IOException
 	{
-		final int dimensionality = inputTilesChannels.values().iterator().next()[ 0 ].numDimensions();
-
-		final int[] blockSizeArr = new int[ dimensionality ];
-		Arrays.fill( blockSizeArr, blockSize );
-
 		// TODO: can consider pixel resolution to calculate isotropic block size in Z
 
 		final List< Tuple3< String, Integer, TileInfo > > inputChannelIndexTileTuples = new ArrayList<>();
@@ -184,13 +180,11 @@ public class ConvertTIFFTilesToN5Spark
 			final TileInfo inputTile,
 			final N5Writer n5,
 			final String outputGroupPath,
-			final int blockSize,
+			final int[] blockSize,
 			final Compression n5Compression ) throws IOException
 	{
-		final int dimensionality = inputTile.numDimensions();
-
-		final int[] blockSizeArr = new int[ dimensionality ];
-		Arrays.fill( blockSizeArr, blockSize );
+		if ( inputTile.numDimensions() != blockSize.length )
+			throw new RuntimeException( "dimensionality mismatch" );
 
 		// TODO: can consider pixel resolution to calculate isotropic block size in Z
 
@@ -208,7 +202,7 @@ public class ConvertTIFFTilesToN5Spark
 				) );
 		}
 
-		N5Utils.save( img, n5, tileDatasetPath, blockSizeArr, n5Compression );
+		N5Utils.save( img, n5, tileDatasetPath, blockSize, n5Compression );
 		return tileDatasetPath;
 	}
 
@@ -267,7 +261,7 @@ public class ConvertTIFFTilesToN5Spark
 					inputTilesChannels,
 					parsedArgs.n5OutputPath,
 					cloudN5WriterSupplier,
-					parsedArgs.blockSize,
+					CmdUtils.parseIntArray( parsedArgs.blockSizeStr ),
 					new GzipCompression()
 				);
 		}

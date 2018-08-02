@@ -24,6 +24,7 @@ import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5WriterSupplier;
+import org.janelia.saalfeldlab.n5.spark.util.CmdUtils;
 import org.janelia.util.ImageImporter;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -54,8 +55,8 @@ public class ConvertCZITilesToN5Spark
 		private String n5OutputPath;
 
 		@Option(name = "-b", aliases = { "--blockSize" }, required = false,
-				usage = "Output block size.")
-		private int blockSize = 128;
+				usage = "Output block size as a comma-separated list.")
+		private String blockSizeStr = "128,128,64";
 
 		private boolean parsedSuccessfully = false;
 
@@ -107,14 +108,9 @@ public class ConvertCZITilesToN5Spark
 			final TileInfo[] inputTiles,
 			final String outputN5Path,
 			final N5WriterSupplier n5Supplier,
-			final int blockSize,
+			final int[] blockSize,
 			final Compression n5Compression ) throws IOException
 	{
-		final int dimensionality = inputTiles[ 0 ].numDimensions();
-
-		final int[] blockSizeArr = new int[ dimensionality ];
-		Arrays.fill( blockSizeArr, blockSize );
-
 		// TODO: can consider pixel resolution to calculate isotropic block size in Z
 
 		final List< Tuple2< Integer, TileInfo > > outputChannelTileTuples = sparkContext
@@ -173,18 +169,18 @@ public class ConvertCZITilesToN5Spark
 	public static < T extends NumericType< T > & NativeType< T > > List< String > convertTileToN5(
 			final TileInfo inputTile,
 			final N5Writer n5,
-			final int blockSize,
+			final int[] blockSize,
 			final Compression n5Compression ) throws IOException
 	{
-		final int dimensionality = inputTile.numDimensions();
-
-		final int[] blockSizeArr = new int[ dimensionality ];
-		Arrays.fill( blockSizeArr, blockSize );
+		if ( inputTile.numDimensions() != blockSize.length )
+			throw new RuntimeException( "dimensionality mismatch" );
 
 		// TODO: can consider pixel resolution to calculate isotropic block size in Z
 
 		final ImagePlus imp = ImageImporter.openImage( inputTile.getFilePath() );
 		final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
+
+		System.out.println( "Loaded tile image of size " + Arrays.toString( Intervals.dimensionsAsLongArray( img ) ) );
 
 		if ( img.numDimensions() >= 5 && img.dimension( 4 ) != 1 )
 			throw new UnsupportedOperationException( "Multiple timepoints are not supported" );
@@ -209,7 +205,7 @@ public class ConvertCZITilesToN5Spark
 			}
 
 			final String channelTileDatasetPath = PathResolver.get( getChannelName( ch ), PathResolver.getFileName( inputTile.getFilePath() ) );
-			N5Utils.save( channelImg, n5, channelTileDatasetPath, blockSizeArr, n5Compression );
+			N5Utils.save( channelImg, n5, channelTileDatasetPath, blockSize, n5Compression );
 			channelTileDatasetPaths.add( channelTileDatasetPath );
 		}
 
@@ -257,7 +253,7 @@ public class ConvertCZITilesToN5Spark
 					inputTiles,
 					parsedArgs.n5OutputPath,
 					cloudN5WriterSupplier,
-					parsedArgs.blockSize,
+					CmdUtils.parseIntArray( parsedArgs.blockSizeStr ),
 					new GzipCompression()
 				);
 		}

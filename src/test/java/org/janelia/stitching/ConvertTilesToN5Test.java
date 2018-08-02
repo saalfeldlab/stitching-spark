@@ -88,7 +88,7 @@ public class ConvertTilesToN5Test
 					Collections.singletonMap( datasetPath, tiles ),
 					n5Path,
 					() -> new N5FSWriter( n5Path ),
-					blockSize,
+					new int[] { blockSize, blockSize, blockSize },
 					new GzipCompression()
 				);
 		}
@@ -180,7 +180,7 @@ public class ConvertTilesToN5Test
 					Collections.singletonMap( datasetPath, tiles ),
 					s3Link,
 					() -> new N5AmazonS3Writer( AmazonS3ClientBuilder.standard().build(), n5Bucket ),
-					blockSize,
+					new int[] { blockSize, blockSize, blockSize },
 					new GzipCompression()
 				);
 		}
