@@ -204,7 +204,8 @@ public class ConvertCZITilesToN5Spark
 					) );
 			}
 
-			final String channelTileDatasetPath = PathResolver.get( getChannelName( ch ), PathResolver.getFileName( inputTile.getFilePath() ) );
+			final String channelName = getChannelName( ch );
+			final String channelTileDatasetPath = PathResolver.get( channelName, channelName + "_" + PathResolver.getFileName( inputTile.getFilePath() ) );
 			N5Utils.save( channelImg, n5, channelTileDatasetPath, blockSize, n5Compression );
 			channelTileDatasetPaths.add( channelTileDatasetPath );
 		}
