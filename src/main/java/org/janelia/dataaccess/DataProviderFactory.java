@@ -1,11 +1,15 @@
 package org.janelia.dataaccess;
 
 import java.net.URI;
+import java.net.URL;
+import java.net.URLStreamHandlerFactory;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.fs.FSDataProvider;
 import org.janelia.dataaccess.googlecloud.GoogleCloudDataProvider;
+import org.janelia.dataaccess.googlecloud.GoogleCloudURLStreamHandlerFactory;
 import org.janelia.dataaccess.s3.AmazonS3DataProvider;
+import org.janelia.dataaccess.s3.AmazonS3URLStreamHandlerFactory;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -18,7 +22,7 @@ public abstract class DataProviderFactory
 	private static final String s3Protocol = "s3";
 	private static final String googleCloudProtocol = "gs";
 
-	private static boolean initializedCustomURLStreamHandlerFactory;
+	private static boolean initializedCustomURLStreamHandlerFactory = false;
 
 	/**
 	 * Constructs a filesystem-based {@link DataProvider}.
@@ -27,7 +31,7 @@ public abstract class DataProviderFactory
 	 */
 	public static DataProvider createFSDataProvider()
 	{
-		init( null, null );
+		initCustomURLStreamHandlerFactory( null );
 		return new FSDataProvider();
 	}
 
@@ -39,7 +43,7 @@ public abstract class DataProviderFactory
 	 */
 	public static DataProvider createAmazonS3DataProvider( final AmazonS3 s3 )
 	{
-		init( s3, null );
+		initCustomURLStreamHandlerFactory( new AmazonS3URLStreamHandlerFactory( s3 ) );
 		return new AmazonS3DataProvider( s3 );
 	}
 
@@ -61,7 +65,7 @@ public abstract class DataProviderFactory
 	 */
 	public static DataProvider createGoogleCloudDataProvider( final Storage googleCloudStorage )
 	{
-		init( null, googleCloudStorage );
+		initCustomURLStreamHandlerFactory( new GoogleCloudURLStreamHandlerFactory( googleCloudStorage ) );
 		return new GoogleCloudDataProvider( googleCloudStorage );
 	}
 
@@ -151,13 +155,13 @@ public abstract class DataProviderFactory
 		return URI.create( protocol + "://" + bucketName + "/" );
 	}
 
-	private synchronized static void init( final AmazonS3 s3, final Storage googleCloudStorage )
+	private synchronized static void initCustomURLStreamHandlerFactory( final URLStreamHandlerFactory urlStreamHandlerFactory )
 	{
 		if ( !initializedCustomURLStreamHandlerFactory )
 		{
 			initializedCustomURLStreamHandlerFactory = true;
-			if ( s3 != null || googleCloudStorage != null )
-				CustomURLStreamHandlerFactory.init( s3, googleCloudStorage );
+			if ( urlStreamHandlerFactory != null )
+				URL.setURLStreamHandlerFactory( urlStreamHandlerFactory );
 		}
 	}
 }
