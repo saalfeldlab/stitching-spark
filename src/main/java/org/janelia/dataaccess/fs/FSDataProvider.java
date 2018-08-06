@@ -59,7 +59,7 @@ public class FSDataProvider implements DataProvider
 		}
 		catch ( final UnsupportedEncodingException e )
 		{
-			throw new URISyntaxException( path, e.getMessage() );
+			throw new IllegalArgumentException( e.getMessage(), e );
 		}
 	}
 
