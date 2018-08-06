@@ -1,7 +1,6 @@
 package org.janelia.stitching.analysis;
 
 import java.io.File;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -40,7 +39,7 @@ public class ExtractMiddleSlice
 		final String outFolder = args.length > 1 ? args[ 1 ] : Paths.get( Paths.get( input ).getParent().toString(), "middle" ).toString();
 		new File( outFolder ).mkdirs();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( DataProviderFactory.createFSDataProvider().getJsonReader( URI.create( input ) ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( DataProviderFactory.createFSDataProvider().getJsonReader( input ) );
 		final List< TileInfo > middleSliceTiles;
 
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf().setAppName( "ExtractMiddleSlice" ) ) )
@@ -77,7 +76,7 @@ public class ExtractMiddleSlice
 
 		TileInfoJSONProvider.saveTilesConfiguration(
 				middleSliceTiles.toArray( new TileInfo[ 0 ] ),
-				DataProviderFactory.createFSDataProvider().getJsonWriter( URI.create( Utils.addFilenameSuffix( input, "_middle" ) ) )
+				DataProviderFactory.createFSDataProvider().getJsonWriter( Utils.addFilenameSuffix( input, "_middle" ) )
 			);
 		System.out.println("Done");
 	}

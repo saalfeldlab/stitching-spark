@@ -1,7 +1,6 @@
 package org.janelia.stitching.analysis;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.List;
 
 import org.janelia.dataaccess.DataProvider;
@@ -15,7 +14,7 @@ public class TraceHighestCrossCorrelation
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 0 ] ) );
 		double maxCrossCorr = 0;
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 		{

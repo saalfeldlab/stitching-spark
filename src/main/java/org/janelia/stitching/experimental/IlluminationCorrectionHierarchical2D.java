@@ -12,7 +12,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Serializable;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -158,7 +157,7 @@ public class IlluminationCorrectionHierarchical2D implements Serializable
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
 		try {
-			tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( inputFilepath ) ) );
+			tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( inputFilepath ) );
 		} catch (final IOException e) {
 			e.printStackTrace();
 			return;

@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.net.URI;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Map;
@@ -18,7 +17,7 @@ public class ExtractTilePosition
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 		TileOperations.translateTilesToOriginReal( tiles );
 		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 		for ( final int i : new int[] { 18299, 18300 } )

@@ -10,7 +10,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -137,7 +136,7 @@ public class IlluminationCorrectionLocal
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
 		try {
-			tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( inputFilepath ) ) );
+			tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( inputFilepath ) );
 			N = tiles.length;
 		} catch (final IOException e) {
 			e.printStackTrace();

@@ -1,7 +1,6 @@
 package org.janelia.stitching.experimental;
 
 import java.io.File;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -151,7 +150,7 @@ public class ExportOverlaps
 		final int tileIndex = Integer.parseInt( args[ 1 ] );
 		System.out.println( "Processing tile " + tileIndex );
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 		final TreeMap< Integer, TileInfo > tilesMap = Utils.createTilesMap( tiles );
 
 		for ( final TileInfo tile : tiles )

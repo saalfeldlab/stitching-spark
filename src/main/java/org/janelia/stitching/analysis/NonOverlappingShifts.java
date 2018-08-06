@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
@@ -30,7 +29,7 @@ public class NonOverlappingShifts
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 0 ] ) );
 
 		for ( final SerializablePairWiseStitchingResult shift : shifts )
 			if ( !shift.getIsValidOverlap() )

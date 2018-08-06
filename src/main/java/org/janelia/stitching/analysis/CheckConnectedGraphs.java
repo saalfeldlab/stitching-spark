@@ -1,7 +1,6 @@
 package org.janelia.stitching.analysis;
 
 import java.io.File;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -35,7 +34,7 @@ public class CheckConnectedGraphs
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tileInfos = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final TileInfo[] tileInfos = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 
 		final List< Integer > graphsSize = connectedComponentsSize( tileInfos );
 

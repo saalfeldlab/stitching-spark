@@ -1,7 +1,6 @@
 package org.janelia.stitching.analysis;
 
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Paths;
 
 import org.janelia.dataaccess.DataProviderFactory;
@@ -14,10 +13,10 @@ public class ChangeTilePaths
 	{
 		final String config = args[ 0 ];
 		final String newTileFolder = args[ 1 ];
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( DataProviderFactory.createFSDataProvider().getJsonReader( URI.create( config ) ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( DataProviderFactory.createFSDataProvider().getJsonReader( config ) );
 		for ( final TileInfo tile : tiles )
 			tile.setFilePath( Paths.get( newTileFolder, Paths.get( tile.getFilePath() ).getFileName().toString() ).toString() );
-		TileInfoJSONProvider.saveTilesConfiguration( tiles, DataProviderFactory.createFSDataProvider().getJsonWriter( URI.create( config ) ) );
+		TileInfoJSONProvider.saveTilesConfiguration( tiles, DataProviderFactory.createFSDataProvider().getJsonWriter( config ) );
 		System.out.println( "Done" );
 	}
 }

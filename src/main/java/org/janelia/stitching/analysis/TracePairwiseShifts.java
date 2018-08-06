@@ -1,7 +1,6 @@
 package org.janelia.stitching.analysis;
 
 import java.io.PrintWriter;
-import java.net.URI;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +23,7 @@ public class TracePairwiseShifts
 
 		final Map< Integer, TileInfo >[] channelsMap = new TreeMap[ args.length - 2 ];
 		for ( int i = 0; i < channelsMap.length; i++ )
-			channelsMap[ i ] = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ i ] ) ) ) );
+			channelsMap[ i ] = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ i ] ) ) );
 
 		for ( int i = 1; i < channelsMap.length; i++ )
 			if ( channelsMap[ i ].size() != channelsMap[ i - 1 ].size() )
@@ -34,7 +33,7 @@ public class TracePairwiseShifts
 			System.out.println( tilesPerChannel + " tiles per channel" );
 
 		final String pairwiseShiftsFilepath = args[ args.length - 2 ];
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseShiftsFilepath ) ) );
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( pairwiseShiftsFilepath ) );
 
 		final String outputFolder = args[ args.length - 1 ];
 

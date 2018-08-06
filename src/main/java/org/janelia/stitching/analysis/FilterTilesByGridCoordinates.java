@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +21,7 @@ public class FilterTilesByGridCoordinates
 		final String tileConfigPath = args[ 0 ];
 
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
-		final Map< Integer, TileInfo > tiles = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( tileConfigPath ) ) ) );
+		final Map< Integer, TileInfo > tiles = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( tileConfigPath ) ) );
 		final Map< Integer, int[] > tileGridCoordinates = Utils.getTilesCoordinatesMap( tiles.values().toArray( new TileInfo[ 0 ] ) );
 
 		final int dimension = new String( DIMENSION_STR ).indexOf( args[ 1 ] );
@@ -75,7 +74,7 @@ public class FilterTilesByGridCoordinates
 
 		TileInfoJSONProvider.saveTilesConfiguration(
 				filteredTiles.toArray( new TileInfo[ 0 ] ),
-				dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( tileConfigPath, "_" + filteredFilenameSuffix ) ) )
+				dataProvider.getJsonWriter( Utils.addFilenameSuffix( tileConfigPath, "_" + filteredFilenameSuffix ) )
 			);
 
 		System.out.println( "Filtered " + filteredTiles.size() + " tiles out of " + tiles.size() + " with grid coordinates " + filteredFilenameSuffix );

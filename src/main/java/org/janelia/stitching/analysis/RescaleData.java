@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.net.URI;
 import java.nio.file.Paths;
 
 import org.janelia.dataaccess.DataProvider;
@@ -27,8 +26,8 @@ public class RescaleData {
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
-		final TileInfo[] deconTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
+		final TileInfo[] deconTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) );
 		final int tileIndex = 1;
 		final TileInfo tile = tiles[ tileIndex ];
 		final TileInfo deconTile = deconTiles[ tileIndex ];

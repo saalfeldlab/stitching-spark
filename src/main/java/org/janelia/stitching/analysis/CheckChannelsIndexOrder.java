@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +19,7 @@ public class CheckChannelsIndexOrder
 
 		final List< TileInfo[] > channels = new ArrayList<>();
 		for (final String s : args)
-			channels.add( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( s ) ) ) );
+			channels.add( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( s ) ) );
 
 		final int n = channels.get(0).length;
 		for (int c = 0; c < channels.size(); c++ )

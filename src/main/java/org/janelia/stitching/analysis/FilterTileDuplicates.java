@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -22,7 +21,7 @@ public class FilterTileDuplicates
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 		System.out.println( "Total number of tiles = " + tiles.length );
 
 		// build a map of tile coordinates to find duplicates
@@ -78,7 +77,7 @@ public class FilterTileDuplicates
 		else
 		{
 			System.out.println( String.format("Removed %d duplicated tiles out of %d tiles", tiles.length - retainedTiles.size(), tiles.length ) );
-			TileInfoJSONProvider.saveTilesConfiguration( retainedTiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[ 0 ], "_retained" ) ) ) );
+			TileInfoJSONProvider.saveTilesConfiguration( retainedTiles.toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[ 0 ], "_retained" ) ) );
 		}
 	}
 }

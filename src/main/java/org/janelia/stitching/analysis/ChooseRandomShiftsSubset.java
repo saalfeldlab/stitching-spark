@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -17,7 +16,7 @@ public class ChooseRandomShiftsSubset
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final List<SerializablePairWiseStitchingResult> origShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[0] ) ) );
+		final List<SerializablePairWiseStitchingResult> origShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[0] ) );
 		final ArrayList<SerializablePairWiseStitchingResult> finalShifts = new ArrayList<>();
 		final double prob = 0.01;
 		final Random rnd = new Random();
@@ -46,6 +45,6 @@ public class ChooseRandomShiftsSubset
 
 		System.out.println( "origCount="+origCount );
 		System.out.println( "finalCount="+finalCount );
-		TileInfoJSONProvider.savePairwiseShifts( finalShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix(args[0], "_subset") ) ) );
+		TileInfoJSONProvider.savePairwiseShifts( finalShifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix(args[0], "_subset") ) );
 	}
 }

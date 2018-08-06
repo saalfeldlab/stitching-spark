@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,7 +16,7 @@ public class ChangeTilesOrder
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 
 		final List< TileInfo >[] channels = new ArrayList[] { new ArrayList<>(), new ArrayList<>() };
 		for ( final TileInfo tile : tiles)
@@ -41,6 +40,6 @@ public class ChangeTilesOrder
 			allTiles.get( i ).setType( ImageType.GRAY16 );
 		}
 
-		TileInfoJSONProvider.saveTilesConfiguration( allTiles.toArray( new TileInfo[0] ), dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( args[0], "_out" ) ) ) );
+		TileInfoJSONProvider.saveTilesConfiguration( allTiles.toArray( new TileInfo[0] ), dataProvider.getJsonWriter( Utils.addFilenameSuffix( args[0], "_out" ) ) );
 	}
 }

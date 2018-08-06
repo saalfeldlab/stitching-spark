@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.net.URI;
 import java.util.TreeMap;
 
 import org.janelia.dataaccess.DataProvider;
@@ -15,8 +14,8 @@ public class CompareTileConfiguration
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TreeMap<Integer,TileInfo> tilesBefore = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) ) );
-		final TreeMap<Integer, TileInfo > tilesAfter = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) ) );
+		final TreeMap<Integer,TileInfo> tilesBefore = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) ) );
+		final TreeMap<Integer, TileInfo > tilesAfter = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) ) );
 
 		System.out.println( "Tiles before: " + tilesBefore.size() );
 		System.out.println( "Tiles after: " + tilesAfter.size() );

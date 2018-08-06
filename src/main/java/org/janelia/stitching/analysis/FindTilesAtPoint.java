@@ -2,7 +2,6 @@ package org.janelia.stitching.analysis;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 
@@ -25,7 +24,7 @@ public class FindTilesAtPoint
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
 		TileOperations.translateTilesToOriginReal( tiles );
 
 		final double[] point = Conversions.parseDoubleArray( args[ 1 ].split( "," ) );

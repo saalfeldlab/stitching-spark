@@ -1,7 +1,6 @@
 package org.janelia.stitching.analysis;
 
 import java.io.PrintWriter;
-import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
@@ -19,8 +18,8 @@ public class TraceConfigurationsDistance
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tilesBefore = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
-		final Map< Integer, TileInfo > tilesMapAfter = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) ) );
+		final TileInfo[] tilesBefore = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
+		final Map< Integer, TileInfo > tilesMapAfter = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) ) );
 
 		//final Integer dim = ;
 

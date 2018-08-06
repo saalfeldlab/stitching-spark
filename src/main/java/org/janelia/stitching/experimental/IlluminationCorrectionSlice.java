@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -167,7 +166,7 @@ public class IlluminationCorrectionSlice implements Serializable
 			);
 
 		try {
-			tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( inputFilepath ) ) );
+			tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( inputFilepath ) );
 			N = tiles.length;
 		} catch (final IOException e) {
 			e.printStackTrace();
@@ -1316,7 +1315,7 @@ public class IlluminationCorrectionSlice implements Serializable
 		correctedTiles = task.collect().toArray( new TileInfo[0] );
 		try {
 			final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
-			TileInfoJSONProvider.saveTilesConfiguration( correctedTiles, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( inputFilepath, "_corrected" ) ) ) );
+			TileInfoJSONProvider.saveTilesConfiguration( correctedTiles, dataProvider.getJsonWriter( Utils.addFilenameSuffix( inputFilepath, "_corrected" ) ) );
 		} catch ( final IOException e ) {
 			e.printStackTrace();
 		}

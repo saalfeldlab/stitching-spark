@@ -2,7 +2,6 @@ package org.janelia.stitching.analysis;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -31,8 +30,8 @@ public class DistanceFromOriginal
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tilesOrig = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
-		final TileInfo[] tilesMod  = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) );
+		final TileInfo[] tilesOrig = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
+		final TileInfo[] tilesMod  = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 1 ] ) );
 
 		TileOperations.translateTilesToOrigin( tilesOrig );
 		TileOperations.translateTilesToOrigin( tilesMod  );

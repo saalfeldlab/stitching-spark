@@ -2,7 +2,6 @@ package org.janelia.stitching.analysis;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Paths;
 import java.util.Arrays;
 
@@ -32,7 +31,7 @@ public class ExtractSlice
 			final String outFolder = Paths.get( input ).getParent().toString() + "/slice" + slice;
 			new File(outFolder).mkdirs();
 
-			final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( input ) ) );
+			final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( input ) );
 			final JavaRDD< TileInfo > rdd = sparkContext.parallelize( Arrays.asList( tiles ) );
 			final TileInfo[] sliceTiles = rdd.map( tile ->
 				{
@@ -49,7 +48,7 @@ public class ExtractSlice
 				}
 			).collect().toArray( new TileInfo[ 0 ] );
 
-			TileInfoJSONProvider.saveTilesConfiguration( sliceTiles, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( input, "_slice" + slice ) ) ) );
+			TileInfoJSONProvider.saveTilesConfiguration( sliceTiles, dataProvider.getJsonWriter( Utils.addFilenameSuffix( input, "_slice" + slice ) ) );
 		}
 
 		System.out.println("Done");

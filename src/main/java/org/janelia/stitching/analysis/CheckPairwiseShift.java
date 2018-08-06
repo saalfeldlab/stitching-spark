@@ -2,7 +2,6 @@ package org.janelia.stitching.analysis;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 
@@ -17,7 +16,7 @@ public class CheckPairwiseShift
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 0 ] ) );
 
 		final int i1 = 1126;
 		final int i2 = 1129;

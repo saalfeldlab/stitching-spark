@@ -1,7 +1,6 @@
 package org.janelia.stitching.analysis;
 
 import java.io.File;
-import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,8 +26,8 @@ public class TilesPairwiseCoverage
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) ) );
-		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) );
+		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) ) );
+		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 1 ] ) );
 
 		int validShifts = 0;
 		//final Map< Integer, TileInfo > uncoveredTiles = Utils.createTilesMap( shifts );

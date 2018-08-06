@@ -1,7 +1,6 @@
 package org.janelia.stitching.analysis;
 
 import java.io.IOException;
-import java.net.URI;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -15,10 +14,10 @@ public class IndexTileConfiguration
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[0] ) ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[0] ) );
 		for ( int i = 0; i < tiles.length; i++ )
 			tiles[ i ].setIndex( i );
 
-		TileInfoJSONProvider.saveTilesConfiguration(tiles, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix(args[0], "_indexed" ) )) );
+		TileInfoJSONProvider.saveTilesConfiguration(tiles, dataProvider.getJsonWriter( Utils.addFilenameSuffix(args[0], "_indexed" ) ) );
 	}
 }

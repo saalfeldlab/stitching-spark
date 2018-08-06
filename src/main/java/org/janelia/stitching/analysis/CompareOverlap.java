@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -27,7 +26,7 @@ public class CompareOverlap
 		String filename = args[ 0 ];
 		final int i1 = Integer.parseInt( args[ 1 ] ), i2 = Integer.parseInt( args[ 2 ] );
 		System.out.println( "Tiles " + i1 + " and " + i2 + ":" );
-		TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( filename ) ) );
+		TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( filename ) );
 		ArrayList< TileInfo > twoTiles = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
 			if ( tile.getIndex() == i1 || tile.getIndex() == i2 )
@@ -48,7 +47,7 @@ public class CompareOverlap
 
 
 		filename = Utils.addFilenameSuffix( Utils.removeFilenameSuffix( filename, "_full" ), "_shifted" );
-		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( filename ) ) );
+		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( filename ) );
 		TileOperations.translateTilesToOrigin( tiles );
 		twoTiles = new ArrayList<>();
 		for ( final TileInfo tile : tiles )
