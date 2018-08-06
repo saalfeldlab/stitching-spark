@@ -1,6 +1,5 @@
 package org.janelia.dataaccess.fs;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
@@ -9,9 +8,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,7 +53,14 @@ public class FSDataProvider implements DataProvider
 	@Override
 	public URI getUri( final String path ) throws URISyntaxException
 	{
-		return new URI( path );
+		try
+		{
+			return new URI( URLEncoder.encode( path, StandardCharsets.UTF_8.name() ) );
+		}
+		catch ( final UnsupportedEncodingException e )
+		{
+			throw new URISyntaxException( path, e.getMessage() );
+		}
 	}
 
 	@Override
@@ -62,7 +72,7 @@ public class FSDataProvider implements DataProvider
 	@Override
 	public void createFolder( final URI uri ) throws IOException
 	{
-		new File( uri.toString() ).mkdirs();
+		createDirs( getPath( uri ) );
 	}
 
 	@Override
@@ -133,7 +143,7 @@ public class FSDataProvider implements DataProvider
 	@Override
 	public OutputStream getOutputStream( final URI uri ) throws IOException
 	{
-		createDirs( uri );
+		createDirs( getPath( uri ).getParent() );
 		return new FileOutputStream( getPath( uri ).toFile() );
 	}
 
@@ -146,7 +156,7 @@ public class FSDataProvider implements DataProvider
 	@Override
 	public void saveImage( final ImagePlus imp, final URI uri ) throws IOException
 	{
-		createDirs( uri );
+		createDirs( getPath( uri ).getParent() );
 		Utils.workaroundImagePlusNSlices( imp );
 		IJ.saveAsTiff( imp, getCanonicalPathString( uri ) );
 	}
@@ -160,7 +170,7 @@ public class FSDataProvider implements DataProvider
 	@Override
 	public Writer getJsonWriter( final URI uri ) throws IOException
 	{
-		createDirs( uri );
+		createDirs( getPath( uri ).getParent() );
 		return new FileWriter( getPath( uri ).toFile() );
 	}
 
@@ -188,15 +198,23 @@ public class FSDataProvider implements DataProvider
 		return new N5FSWriter( getCanonicalPathString( baseUri ), gsonBuilder );
 	}
 
-	private static boolean createDirs( final URI uri )
-	{
-		return getPath( uri ).getParent().toFile().mkdirs();
-	}
-
 	private static Path getPath( final URI uri )
 	{
-		return uri.getScheme() != null ? Paths.get( uri ) : Paths.get( uri.toString() );
+		try
+		{
+			return uri.getScheme() != null ? Paths.get( uri ) : Paths.get( URLDecoder.decode( uri.toString(), StandardCharsets.UTF_8.name() ) );
+		}
+		catch ( final UnsupportedEncodingException e )
+		{
+			throw new IllegalArgumentException( e.getMessage(), e );
+		}
 	}
+
+	private static boolean createDirs( final Path path )
+	{
+		return path.toFile().mkdirs();
+	}
+
 	private static String getCanonicalPathString( final URI uri ) throws IOException
 	{
 		return getPath( uri ).toFile().getCanonicalPath();
