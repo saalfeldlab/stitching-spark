@@ -1,7 +1,6 @@
 package org.janelia.flatfield;
 
 import java.io.IOException;
-import java.net.URI;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -35,7 +34,7 @@ public class ExtractDarkfield
 	@SuppressWarnings( { "rawtypes", "unchecked" } )
 	private static < U extends NativeType< U > & RealType< U > > void run( final String basePath, final double pivotValue, final boolean is2d ) throws IOException, ImgLibException
 	{
-		final DataProvider dataProvider = DataProviderFactory.createByURI( URI.create( basePath ) );
+		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( basePath ) );
 		final RandomAccessiblePairNullable< U, U > flatfield = FlatfieldCorrection.loadCorrectionImages( dataProvider, Utils.removeFilenameSuffix( basePath, "-flatfield" ), is2d ? 2 : 3 );
 		final ImagePlusImg< U, ? > darkfield = new ImagePlusImgFactory< U >().create( ( Dimensions ) flatfield.getA(), ( U ) Util.getTypeFromInterval( ( RandomAccessibleInterval) flatfield.getA() ) );
 		final Cursor< U > scalingCursor = Views.flatIterable( ( RandomAccessibleInterval ) flatfield.getA() ).cursor();
@@ -49,6 +48,6 @@ public class ExtractDarkfield
 		}
 		final ImagePlus darkfieldImp = darkfield.getImagePlus();
 		Utils.workaroundImagePlusNSlices( darkfieldImp );
-		dataProvider.saveImage( darkfieldImp, URI.create( PathResolver.get( basePath, "extracted_darkfield.tif" ) ) );
+		dataProvider.saveImage( darkfieldImp, PathResolver.get( basePath, "extracted_darkfield.tif" ) );
 	}
 }

@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -197,7 +196,7 @@ public class ParseTilesImageList
 		// finally save the configurations as JSON files
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 		for ( final int channel : tiles.keySet() )
-			TileInfoJSONProvider.saveTilesConfiguration( tiles.get( channel ).toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( URI.create( Paths.get( baseOutputFolder, channel + "nm.json" ).toString() ) ) );
+			TileInfoJSONProvider.saveTilesConfiguration( tiles.get( channel ).toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( Paths.get( baseOutputFolder, channel + "nm.json" ).toString() ) );
 
 		System.out.println( "Done" );
 	}

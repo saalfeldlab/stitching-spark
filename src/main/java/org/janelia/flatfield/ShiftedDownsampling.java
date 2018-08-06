@@ -1,7 +1,6 @@
 package org.janelia.flatfield;
 
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -83,7 +82,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 			downsamplingTransform.set( -0.5, d, downsamplingTransform.numDimensions() );
 		}
 
-		final DataProvider dataProvider = DataProviderFactory.createByType( dataProviderType );
+		final DataProvider dataProvider = DataProviderFactory.create( dataProviderType );
 
 		final String histogramsDatasetParentGroupPath = ( Paths.get( fullScaleHistogramsDataset ).getParent() != null ? Paths.get( fullScaleHistogramsDataset ).getParent().toString() : "" );
 		downsampledHistogramsGroupPath = Paths.get( histogramsDatasetParentGroupPath, "histograms-downsampled" ).toString();
@@ -102,7 +101,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 		scalePyramidDatasetPaths.add( fullScaleHistogramsDataset );
 		scalePyramidDatasetPaths.addAll( N5OffsetScalePyramidSpark.downsampleOffsetScalePyramid(
 				sparkContext,
-				() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				() -> DataProviderFactory.create( dataProviderType ).createN5Writer( histogramsN5BasePath ),
 				fullScaleHistogramsDataset,
 				downsampledHistogramsGroupPath,
 				downsamplingFactors,
@@ -110,7 +109,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 			) );
 
 		scalePyramidDatasetDimensions = new ArrayList<>();
-		final N5Reader n5 = dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) );
+		final N5Reader n5 = dataProvider.createN5Reader( histogramsN5BasePath );
 		for ( final String scalePyramidDatasetPath : scalePyramidDatasetPaths )
 		{
 			final long[] extendedDimensions = n5.getDatasetAttributes( scalePyramidDatasetPath ).getDimensions();
@@ -192,7 +191,7 @@ public class ShiftedDownsampling< A extends AffineGet & AffineSet >
 
 		N5RemoveSpark.remove(
 				sparkContext,
-				() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				() -> DataProviderFactory.create( dataProviderType ).createN5Writer( histogramsN5BasePath ),
 				downsampledHistogramsGroupPath
 			);
 	}

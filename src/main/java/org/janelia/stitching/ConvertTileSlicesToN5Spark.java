@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.Serializable;
-import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -105,8 +104,8 @@ public class ConvertTileSlicesToN5Spark implements Serializable, AutoCloseable
 		this.args = args;
 
 		// create N5 container to prevent race conditions
-		final DataProvider targetDataProvider = DataProviderFactory.createByURI( URI.create( args.outputLocation ) );
-		targetDataProvider.createN5Writer( URI.create( args.outputLocation ) );
+		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.outputLocation ) );
+		targetDataProvider.createN5Writer( args.outputLocation );
 
 		sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "ConvertTileSlicesToN5" )
@@ -122,23 +121,23 @@ public class ConvertTileSlicesToN5Spark implements Serializable, AutoCloseable
 
 	private void processChannel( final String inputTileConfiguration ) throws IOException
 	{
-		final DataProvider sourceDataProvider = DataProviderFactory.createByURI( URI.create( inputTileConfiguration ) );
-		final TileInfo[] patternTiles = TileInfoJSONProvider.loadTilesConfiguration( sourceDataProvider.getJsonReader( URI.create( inputTileConfiguration ) ) );
+		final DataProvider sourceDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputTileConfiguration ) );
+		final TileInfo[] patternTiles = TileInfoJSONProvider.loadTilesConfiguration( sourceDataProvider.getJsonReader( inputTileConfiguration ) );
 		final List< TileInfo > convertedTiles = sparkContext.parallelize( Arrays.asList( patternTiles ), patternTiles.length ).map(
 				patternTile -> convertTileToN5( patternTile )
 			).collect();
 
-		final DataProvider targetDataProvider = DataProviderFactory.createByURI( URI.create( args.outputLocation ) );
+		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.outputLocation ) );
 		final String convertedTilesConfigurationFilename = Utils.addFilenameSuffix( PathResolver.getFileName( inputTileConfiguration ), "-converted-n5" );
 		final String convertedTilesConfigurationPath = PathResolver.get( args.outputLocation, convertedTilesConfigurationFilename );
-		TileInfoJSONProvider.saveTilesConfiguration( convertedTiles.toArray( new TileInfo[ 0 ] ), targetDataProvider.getJsonWriter( URI.create( convertedTilesConfigurationPath ) ) );
+		TileInfoJSONProvider.saveTilesConfiguration( convertedTiles.toArray( new TileInfo[ 0 ] ), targetDataProvider.getJsonWriter( convertedTilesConfigurationPath ) );
 	}
 
 	@SuppressWarnings( "unchecked" )
 	private < T extends NativeType< T > & RealType< T > > TileInfo convertTileToN5( final TileInfo patternTile ) throws IOException
 	{
-		final DataProvider targetDataProvider = DataProviderFactory.createByURI( URI.create( args.outputLocation ) );
-		final N5Writer n5 = targetDataProvider.createN5Writer( URI.create( args.outputLocation ) );
+		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.outputLocation ) );
+		final N5Writer n5 = targetDataProvider.createN5Writer( args.outputLocation );
 
 		final Path tileSlicesBaseDirPath = Paths.get( patternTile.getFilePath() ).getParent();
 		final String tileSlicesFileNamePattern = PathResolver.getFileName( patternTile.getFilePath() );
@@ -187,7 +186,7 @@ public class ConvertTileSlicesToN5Spark implements Serializable, AutoCloseable
 
 	private List< String > getTileSlicesImagePaths( final Path baseImagesDirPath, final String fileNamePattern )
 	{
-		final DataProvider sourceDataProvider = DataProviderFactory.createByURI( baseImagesDirPath.toUri() );
+		final DataProvider sourceDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( baseImagesDirPath.toString() ) );
 		if ( sourceDataProvider.getType() != DataProviderType.FILESYSTEM )
 			throw new IllegalArgumentException( "Only filesystem storage type is supported for input data" );
 

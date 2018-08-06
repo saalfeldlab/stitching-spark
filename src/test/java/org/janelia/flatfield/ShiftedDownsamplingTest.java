@@ -1,7 +1,6 @@
 package org.janelia.flatfield;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
@@ -78,7 +77,7 @@ public class ShiftedDownsamplingTest
 	private static void cleanup() throws IOException
 	{
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
-		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		final N5Writer n5 = dataProvider.createN5Writer( histogramsN5BasePath );
 		Assert.assertTrue( n5.remove() );
 	}
 
@@ -127,7 +126,7 @@ public class ShiftedDownsamplingTest
 		for ( int bin = 0; bin < bins; ++bin )
 			for ( int i = 0; i < histograms.length; ++i )
 				histogramsHelperArray[ helperArrayIndex++ ] = histograms[ i ][ bin ];
-		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		final N5Writer n5 = dataProvider.createN5Writer( histogramsN5BasePath );
 		final RandomAccessibleInterval< DoubleType > source = ArrayImgs.doubles( histogramsHelperArray, extendedDimensions );
 		N5Utils.save( source, n5, histogramsDataset, extendedBlockSize, new GzipCompression() );
 

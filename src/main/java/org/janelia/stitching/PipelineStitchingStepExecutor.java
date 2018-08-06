@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -97,7 +96,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				final String iterationDirname = "iter" + iteration;
 				final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 
-				if ( !dataProvider.fileExists( URI.create( stitchedTilesFilepath ) ) )
+				if ( !dataProvider.fileExists( stitchedTilesFilepath ) )
 				{
 					System.out.println( "************** Iteration " + iteration + " **************" );
 					preparePairwiseShiftsMulti( overlappingTiles, iteration );
@@ -110,7 +109,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 				// check if number of stitched tiles has increased compared to the previous iteration
 				final TileInfo[] stageTiles = job.getTiles( 0 );
-				final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( stitchedTilesFilepath ) ) );
+				final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( stitchedTilesFilepath ) );
 
 				// TODO: test and keep if works or remove (currently generates worse solutions)
 				// find new pairs using new solution for predicting positions of the excluded (missing) tiles
@@ -133,19 +132,19 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 
 					final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
-					final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( previousStitchedTilesFilepath ) ) );
+					final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( previousStitchedTilesFilepath ) );
 
 					final String usedPairsFilepath = PathResolver.get( basePath, iterationDirname, "pairwise-used.json" );
 					final String previousUsedPairsFilepath = PathResolver.get( basePath, previousIterationDirname, "pairwise-used.json" );
-					final List< SerializablePairWiseStitchingResult[] > usedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( usedPairsFilepath ) ) );
-					final List< SerializablePairWiseStitchingResult[] > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( previousUsedPairsFilepath ) ) );
+					final List< SerializablePairWiseStitchingResult[] > usedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( usedPairsFilepath ) );
+					final List< SerializablePairWiseStitchingResult[] > previousUsedPairs = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( previousUsedPairsFilepath ) );
 
 					if ( stitchedTiles.length < previousStitchedTiles.length || ( stitchedTiles.length == previousStitchedTiles.length && usedPairs.size() <= previousUsedPairs.size() ) )
 					{
 						// mark the last solution as not used because it is worse than from the previous iteration
 						dataProvider.moveFolder(
-								URI.create( PathResolver.get( basePath, iterationDirname ) ),
-								URI.create( PathResolver.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) ) )
+								PathResolver.get( basePath, iterationDirname ),
+								PathResolver.get( basePath, Utils.addFilenameSuffix( iterationDirname, "-notused" ) )
 							);
 						copyFinalSolution( iteration - 1 );
 						System.out.println( "Stopping on iteration " + iteration + ": the new solution (n=" + stitchedTiles.length + ") is not greater than the previous solution (n=" + previousStitchedTiles.length + "). Input tiles n=" + stageTiles.length );
@@ -172,12 +171,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			final String iterationDirname = "iter" + fromIteration;
 			final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 			final String finalTilesFilepath = PathResolver.get( basePath, Utils.addFilenameSuffix( filename, "-final" ) );
-			dataProvider.copyFile( URI.create( stitchedTilesFilepath ), URI.create( finalTilesFilepath ) );
+			dataProvider.copyFile( stitchedTilesFilepath, finalTilesFilepath );
 
 			if ( channel == 0 )
 				dataProvider.copyFile(
-						URI.create( PathResolver.get( basePath, iterationDirname, "optimizer.txt" ) ),
-						URI.create( PathResolver.get( basePath, "optimizer-final.txt" ) )
+						PathResolver.get( basePath, iterationDirname, "optimizer.txt" ),
+						PathResolver.get( basePath, "optimizer-final.txt" )
 					);
 		}
 	}
@@ -190,15 +189,15 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final String iterationDirname = "iter" + iteration;
 		final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 		final String pairwiseFilename = "pairwise.json";
-		dataProvider.createFolder( URI.create( PathResolver.get( basePath, iterationDirname ) ) );
+		dataProvider.createFolder( PathResolver.get( basePath, iterationDirname ) );
 		final String pairwisePath = PathResolver.get( basePath, iterationDirname, pairwiseFilename );
 
 		if ( iteration == 0 )
 		{
 			// use the pairwise file from the previous run in the old mode if exists
 			final String oldPairwiseFile = PathResolver.get( basePath, pairwiseFilename );
-			if ( dataProvider.fileExists( URI.create( oldPairwiseFile ) ) )
-				dataProvider.moveFile( URI.create( oldPairwiseFile ), URI.create( pairwisePath ) );
+			if ( dataProvider.fileExists( oldPairwiseFile ) )
+				dataProvider.moveFile( oldPairwiseFile, pairwisePath );
 		}
 		else
 		{
@@ -206,10 +205,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			{
 				System.out.println( "Restitching only excluded pairs" );
 				// use pairwise-used from the previous iteration, so they will not be restitched
-				if ( !dataProvider.fileExists( URI.create( pairwisePath ) ) )
+				if ( !dataProvider.fileExists( pairwisePath ) )
 					dataProvider.copyFile(
-							URI.create( PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) ) ),
-							URI.create( pairwisePath )
+							PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) ),
+							pairwisePath
 						);
 			}
 			else
@@ -221,12 +220,12 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		// Try to load precalculated shifts for some pairs of tiles
 		final List< SerializablePairWiseStitchingResult[] > pairwiseShiftsMulti = new ArrayList<>();
 
-		if ( dataProvider.fileExists( URI.create( pairwisePath ) ) )
+		if ( dataProvider.fileExists( pairwisePath ) )
 		{
 			try
 			{
 				System.out.println( "try to load pairwise results from disk" );
-				pairwiseShiftsMulti.addAll( TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( pairwisePath ) ) ) );
+				pairwiseShiftsMulti.addAll( TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( pairwisePath ) ) );
 			}
 			catch ( final FileNotFoundException e )
 			{
@@ -279,7 +278,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 			// resave the new file if something has changed
 			if ( pairsRemoved != 0 )
-				TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, dataProvider.getJsonWriter( URI.create( pairwisePath ) ) );
+				TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, dataProvider.getJsonWriter( pairwisePath ) );
 		}
 
 		// find only pairs that need to be computed
@@ -332,7 +331,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 
 			try {
 				System.out.println( "Stitched all tiles pairwise, store this information on disk.." );
-				TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, dataProvider.getJsonWriter( URI.create( pairwisePath ) ) );
+				TileInfoJSONProvider.savePairwiseShiftsMulti( pairwiseShiftsMulti, dataProvider.getJsonWriter( pairwisePath ) );
 			} catch ( final IOException e ) {
 				e.printStackTrace();
 			}
@@ -355,7 +354,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			System.out.println( "=== Building prediction model based on previous stitching solution ===" );
 			try
 			{
-				final TileInfo[] statsTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( statsTileConfigurationPath ) ) );
+				final TileInfo[] statsTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( statsTileConfigurationPath ) );
 				System.out.println( "-- Creating search radius estimator using " + job.getTiles( 0 ).length + " stage tiles and " + statsTiles.length + " stitched tiles --" );
 				searchRadiusEstimator = new TileSearchRadiusEstimator( job.getTiles( 0 ), statsTiles );
 				System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( searchRadiusEstimator.getEstimationWindowSize() ) ) + " --" );

@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Serializable;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -118,9 +117,9 @@ public class StitchingOptimizer implements Serializable
 //		if ( Files.exists( Paths.get( Utils.addFilenameSuffix( pairwiseShiftsPath, "-used" ) ) ) )
 //			return;
 
-		final List< SerializablePairWiseStitchingResult[] > shifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
+		final List< SerializablePairWiseStitchingResult[] > shifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( pairwiseShiftsPath ) );
 
-		try ( final OutputStream logOut = dataProvider.getOutputStream( URI.create( PathResolver.get( basePath, iterationDirname, "optimizer.txt" ) ) ) )
+		try ( final OutputStream logOut = dataProvider.getOutputStream( PathResolver.get( basePath, iterationDirname, "optimizer.txt" ) ) )
 		{
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
@@ -172,7 +171,7 @@ public class StitchingOptimizer implements Serializable
 							iterationDirname,
 							Utils.addFilenameSuffix( PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( channel ) ), "-stitched" )
 						);
-					TileInfoJSONProvider.saveTilesConfiguration( tilesToSave, dataProvider.getJsonWriter( URI.create( stitchedConfigFile ) ) );
+					TileInfoJSONProvider.saveTilesConfiguration( tilesToSave, dataProvider.getJsonWriter( stitchedConfigFile ) );
 				}
 
 				// save final pairwise shifts configuration (pairs that have been used on the final step of the optimization routine)
@@ -206,8 +205,8 @@ public class StitchingOptimizer implements Serializable
 				}
 
 				final String pairwiseInputFile = PathResolver.get( basePath, iterationDirname, "pairwise.json" );
-				TileInfoJSONProvider.savePairwiseShiftsMulti( finalPairwiseShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( pairwiseInputFile, "-stitched" ) ) ) );
-				TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.getJsonWriter( URI.create( Utils.addFilenameSuffix( pairwiseInputFile, "-used" ) ) ) );
+				TileInfoJSONProvider.savePairwiseShiftsMulti( finalPairwiseShifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix( pairwiseInputFile, "-stitched" ) ) );
+				TileInfoJSONProvider.savePairwiseShiftsMulti( usedPairwiseShifts, dataProvider.getJsonWriter( Utils.addFilenameSuffix( pairwiseInputFile, "-used" ) ) );
 			}
 		}
 	}

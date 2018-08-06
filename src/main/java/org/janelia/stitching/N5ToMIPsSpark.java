@@ -1,7 +1,6 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -71,11 +70,11 @@ public class N5ToMIPsSpark
 		final String outputPath = PathResolver.get( outBaseFolder, outFolder );
 		System.out.println( "Output path: " + outputPath );
 
-		final DataProvider dataProvider = DataProviderFactory.createByURI( URI.create( n5Path ) );
+		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( n5Path ) );
 		final DataProviderType dataProviderType = dataProvider.getType();
 
 		final List< int[] > channelsCellDimensions = new ArrayList<>();
-		final N5Reader n5 = dataProvider.createN5Reader( URI.create( n5Path ), N5ExportMetadata.getGsonBuilder() );
+		final N5Reader n5 = dataProvider.createN5Reader( n5Path, N5ExportMetadata.getGsonBuilder() );
 		final N5ExportMetadataReader exportMetadata = N5ExportMetadata.openForReading( n5 );
 		for ( int channel = 0; channel < exportMetadata.getNumChannels(); ++channel )
 		{
@@ -113,7 +112,7 @@ public class N5ToMIPsSpark
 						sparkContext,
 						() -> {
 							try {
-								return DataProviderFactory.createByType( dataProviderType ).createN5Reader( URI.create( n5Path ), N5ExportMetadata.getGsonBuilder() );
+								return DataProviderFactory.create( dataProviderType ).createN5Reader( n5Path, N5ExportMetadata.getGsonBuilder() );
 							} catch ( final IOException e ) {
 								throw new RuntimeException( e );
 							}

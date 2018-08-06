@@ -1,7 +1,6 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Paths;
 
 import org.janelia.dataaccess.DataProvider;
@@ -32,7 +31,7 @@ public class TileLoader
 
 		try
 		{
-			final N5Reader n5 = dataProvider.createN5Reader( URI.create( n5Path ) );
+			final N5Reader n5 = dataProvider.createN5Reader( n5Path );
 			if ( n5.datasetExists( tileDatasetPath ) )
 				return TileType.N5_DATASET;
 		}
@@ -57,7 +56,7 @@ public class TileLoader
 		final String n5Path  = PathResolver.getParent( PathResolver.getParent( tile.getFilePath() ) );
 		final String tileDatasetPath = Paths.get( n5Path ).relativize( Paths.get( tile.getFilePath() ) ).toString();
 
-		final N5Reader n5 = dataProvider.createN5Reader( URI.create( n5Path ) );
+		final N5Reader n5 = dataProvider.createN5Reader( n5Path );
 		return n5.getDatasetAttributes( tileDatasetPath );
 	}
 
@@ -66,12 +65,12 @@ public class TileLoader
 		// check if a given tile path is an N5 dataset
 		final String n5Path  = PathResolver.getParent( PathResolver.getParent( tile.getFilePath() ) );
 		final String tileDatasetPath = Paths.get( n5Path ).relativize( Paths.get( tile.getFilePath() ) ).toString();
-		final N5Reader n5 = dataProvider.createN5Reader( URI.create( n5Path ) );
+		final N5Reader n5 = dataProvider.createN5Reader( n5Path );
 		if ( n5.datasetExists( tileDatasetPath ) )
 			return N5Utils.open( n5, tileDatasetPath );
 
 		// if it is a file, try to read it as an image file
-		if ( dataProvider.fileExists( URI.create( tile.getFilePath() ) ) )
+		if ( dataProvider.fileExists( tile.getFilePath() ) )
 		{
 			final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
 			return ImagePlusImgs.from( imp );

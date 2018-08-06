@@ -181,7 +181,7 @@ public class HistogramsProvider implements Serializable
 		System.arraycopy( blockSize, 0, extendedBlockSize, 0, blockSize.length );
 		extendedBlockSize[ blockSize.length ] = bins;
 
-		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		final N5Writer n5 = dataProvider.createN5Writer( histogramsN5BasePath );
 		if ( !n5.datasetExists( histogramsDataset ) )
 		{
 			n5.createDataset(
@@ -249,7 +249,7 @@ public class HistogramsProvider implements Serializable
 					cellMax[ d ] = cellMin[ d ] + cellDimensions[ d ] - 1;
 				final Interval blockInterval = new FinalInterval( cellMin, cellMax );
 
-				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
+				final DataProvider dataProviderLocal = DataProviderFactory.create( dataProviderType );
 
 				// loop over tile images and populate the histograms using the corresponding part of each tile image
 				int done = 0;
@@ -315,7 +315,7 @@ public class HistogramsProvider implements Serializable
 
 				System.out.println( "Block min=" + Arrays.toString( Intervals.minAsLongArray( blockInterval ) ) + ", max=" + Arrays.toString( Intervals.maxAsLongArray( blockInterval ) ) + ": populated histograms" );
 
-				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsN5BasePath ) );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( histogramsN5BasePath );
 				N5Utils.saveBlock( histogramsStorageBlockImg, n5Local, histogramsDataset, extendedBlockPosition );
 			} );
 
@@ -330,7 +330,7 @@ public class HistogramsProvider implements Serializable
 		if ( referenceHistogram == null )
 		{
 			// try to load cached reference histogram from the attributes
-			final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+			final N5Writer n5 = dataProvider.createN5Writer( histogramsN5BasePath );
 			final double[] referenceHistogramAttribute = n5.getAttribute( histogramsDataset, REFERENCE_HISTOGRAM_KEY, double[].class );
 			if ( referenceHistogramAttribute != null )
 			{
@@ -374,8 +374,8 @@ public class HistogramsProvider implements Serializable
 			// compute mean value for each histogram
 			.flatMapToPair( blockPosition ->
 				{
-					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
-					final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( histogramsN5BasePath ) );
+					final DataProvider dataProviderLocal = DataProviderFactory.create( dataProviderType );
+					final N5Reader n5Local = dataProviderLocal.createN5Reader( histogramsN5BasePath );
 					final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, histogramsDataset );
 					final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
 
@@ -441,8 +441,8 @@ public class HistogramsProvider implements Serializable
 			.map( tuple ->
 				{
 					final Iterable< long[] > pixelPositions = tuple._2();
-					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
-					final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( histogramsN5BasePath ) );
+					final DataProvider dataProviderLocal = DataProviderFactory.create( dataProviderType );
+					final N5Reader n5Local = dataProviderLocal.createN5Reader( histogramsN5BasePath );
 					final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, histogramsDataset );
 					final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
 					final RandomAccess< RealComposite< T > > histogramsImgRandomAccess = histogramsImg.randomAccess();
@@ -492,7 +492,7 @@ public class HistogramsProvider implements Serializable
 	{
 		// check if histograms exist in old slice-based format
 		for ( int slice = 1; slice <= getNumSlices(); slice++ )
-			if ( !dataProvider.fileExists( dataProvider.getUri( generateSliceHistogramsPath( 0, slice ) ) ) )
+			if ( !dataProvider.fileExists( generateSliceHistogramsPath( 0, slice ) ) )
 				return false;
 		return true;
 	}

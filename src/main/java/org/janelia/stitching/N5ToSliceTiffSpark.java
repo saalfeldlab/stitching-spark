@@ -1,7 +1,6 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Paths;
 
 import org.apache.spark.SparkConf;
@@ -62,10 +61,10 @@ public class N5ToSliceTiffSpark
 
 		System.out.println( requestedChannel != null ? "Processing channel " + requestedChannel : "Processing all channels" );
 
-		final DataProvider dataProvider = DataProviderFactory.createByURI( URI.create( n5Path ) );
+		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( n5Path ) );
 		final DataProviderType dataProviderType = dataProvider.getType();
 
-		final N5Reader n5 = dataProvider.createN5Reader( URI.create( n5Path ), N5ExportMetadata.getGsonBuilder() );
+		final N5Reader n5 = dataProvider.createN5Reader( n5Path, N5ExportMetadata.getGsonBuilder() );
 
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf().setAppName( "ConvertN5ToSliceTIFF" ) ) )
 		{
@@ -81,7 +80,7 @@ public class N5ToSliceTiffSpark
 						sparkContext,
 						() -> {
 							try {
-								return DataProviderFactory.createByType( dataProviderType ).createN5Reader( URI.create( n5Path ), N5ExportMetadata.getGsonBuilder() );
+								return DataProviderFactory.create( dataProviderType ).createN5Reader( n5Path, N5ExportMetadata.getGsonBuilder() );
 							} catch ( final IOException e ) {
 								throw new RuntimeException( e );
 							}

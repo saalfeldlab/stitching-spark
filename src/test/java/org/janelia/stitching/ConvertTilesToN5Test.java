@@ -3,7 +3,6 @@ package org.janelia.stitching;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -100,7 +99,7 @@ public class ConvertTilesToN5Test
 
 		System.out.println( "Loading N5 cell export from:" + Paths.get( n5Path, datasetPath ).toString() );
 
-		final RandomAccessibleInterval< UnsignedShortType > rai = TileLoader.loadTile( newTile, DataProviderFactory.createByURI( URI.create( newTile.getFilePath() ) ) );
+		final RandomAccessibleInterval< UnsignedShortType > rai = TileLoader.loadTile( newTile, DataProviderFactory.create( DataProviderFactory.detectType( newTile.getFilePath() ) ) );
 		final Cursor< UnsignedShortType > raiCursor = Views.iterable( rai ).localizingCursor();
 		final RandomAccess< UnsignedShortType > imgRandomAccess = img.randomAccess();
 		int pixelsProcessed = 0;
@@ -192,7 +191,7 @@ public class ConvertTilesToN5Test
 
 		System.out.println( "Loading N5 cell export from:" + PathResolver.get( s3Link, datasetPath ) );
 
-		final RandomAccessibleInterval< UnsignedShortType > rai = TileLoader.loadTile( newTile, DataProviderFactory.createByURI( URI.create( newTile.getFilePath() ) ) );
+		final RandomAccessibleInterval< UnsignedShortType > rai = TileLoader.loadTile( newTile, DataProviderFactory.create( DataProviderFactory.detectType( newTile.getFilePath() ) ) );
 		final Cursor< UnsignedShortType > raiCursor = Views.iterable( rai ).localizingCursor();
 		final RandomAccess< UnsignedShortType > imgRandomAccess = img.randomAccess();
 		int pixelsProcessed = 0;

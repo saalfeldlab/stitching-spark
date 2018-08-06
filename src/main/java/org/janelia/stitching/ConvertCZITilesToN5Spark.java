@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -226,7 +225,7 @@ public class ConvertCZITilesToN5Spark
 			final String channelName = tilesChannel.getKey();
 			final TileInfo[] newChannelTiles = tilesChannel.getValue();
 			final String newConfigPath = PathResolver.get( n5Path, channelName + "_" + Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-converted-n5" ) );
-			TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, dataProvider.getJsonWriter( URI.create( newConfigPath ) ) );
+			TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, dataProvider.getJsonWriter( newConfigPath ) );
 		}
 	}
 
@@ -236,8 +235,8 @@ public class ConvertCZITilesToN5Spark
 		if ( !parsedArgs.parsedSuccessfully )
 			System.exit( 1 );
 
-		final DataProvider inputDataProvider = DataProviderFactory.createByURI( URI.create( parsedArgs.inputPath ) );
-		final TileInfo[] inputTiles = TileInfoJSONProvider.loadTilesConfiguration( inputDataProvider.getJsonReader( URI.create( parsedArgs.inputPath ) ) );
+		final DataProvider inputDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( parsedArgs.inputPath ) );
+		final TileInfo[] inputTiles = TileInfoJSONProvider.loadTilesConfiguration( inputDataProvider.getJsonReader( parsedArgs.inputPath ) );
 
 		final CloudN5WriterSupplier cloudN5WriterSupplier = new CloudN5WriterSupplier( parsedArgs.n5OutputPath );
 

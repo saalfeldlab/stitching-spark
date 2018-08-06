@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -110,7 +109,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 			{
 				job.setTiles( transformedTiles, channel );
 				final String outputPath = Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "_transformed" );
-				TileInfoJSONProvider.saveTilesConfiguration( transformedTiles, dataProvider.getJsonWriter( URI.create( outputPath ) ) );
+				TileInfoJSONProvider.saveTilesConfiguration( transformedTiles, dataProvider.getJsonWriter( outputPath ) );
 			}
 			catch ( final IOException e )
 			{
@@ -248,7 +247,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 				tile.setFilePath( destFolder + "/transformed_" + PathResolver.getFileName( tile.getFilePath() ) );
 				final ImagePlus transformed = dst.getImagePlus();
 				Utils.workaroundImagePlusNSlices( transformed );
-				dataProviderLocal.saveImage( transformed, URI.create( tile.getFilePath() ) );
+				dataProviderLocal.saveImage( transformed, tile.getFilePath() );
 				return tile;
 			} );
 		final List< TileInfo > resultingTiles = taskTiles.collect();

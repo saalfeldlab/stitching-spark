@@ -1,7 +1,6 @@
 package org.janelia.flatfield;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,7 +48,7 @@ public class ReferenceHistogramTest
 		sparkContext.close();
 
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
-		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		final N5Writer n5 = dataProvider.createN5Writer( histogramsN5BasePath );
 		n5.remove();
 	}
 
@@ -180,7 +179,7 @@ public class ReferenceHistogramTest
 			for ( int i = 0; i < histograms.size(); ++i )
 				histogramsHelperArray[ helperArrayIndex++ ] = histograms.get( i )[ bin ];
 
-		final N5Writer n5 = dataProvider.createN5Writer( URI.create( histogramsN5BasePath ) );
+		final N5Writer n5 = dataProvider.createN5Writer( histogramsN5BasePath );
 		final RandomAccessibleInterval< DoubleType > source = ArrayImgs.doubles( histogramsHelperArray, extendedDimensions );
 		N5Utils.save( source, n5, histogramsDataset, extendedBlockSize, new GzipCompression() );
 

@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Serializable;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
@@ -100,14 +99,14 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		System.out.println( "  " + scalingTermPath );
 		System.out.println( "  " + translationTermPath );
 
-		if ( !dataProvider.fileExists( URI.create( scalingTermPath ) ) || !dataProvider.fileExists( URI.create( translationTermPath ) ) )
+		if ( !dataProvider.fileExists( scalingTermPath ) || !dataProvider.fileExists( translationTermPath ) )
 		{
 			System.out.println( "  -- Flat-field images do not exist" );
 			return null;
 		}
 
-		final ImagePlus scalingTermImp = dataProvider.loadImage( URI.create( scalingTermPath ) );
-		final ImagePlus translationTermImp = dataProvider.loadImage( URI.create( translationTermPath ) );
+		final ImagePlus scalingTermImp = dataProvider.loadImage( scalingTermPath );
+		final ImagePlus translationTermImp = dataProvider.loadImage( translationTermPath );
 
 		final RandomAccessibleInterval< U > scalingTermImg = ImagePlusImgs.from( scalingTermImp );
 		final RandomAccessibleInterval< U > translationTermImg = ImagePlusImgs.from( translationTermImp );
@@ -138,13 +137,13 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 
 
-	public FlatfieldCorrection( final FlatfieldCorrectionArguments args ) throws IOException, URISyntaxException
+	public FlatfieldCorrection( final FlatfieldCorrectionArguments args ) throws IOException
 	{
 		this.args = args;
 
-		this.dataProvider = DataProviderFactory.createByURI( new URI( args.inputFilePath() ) );
+		this.dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.inputFilePath() ) );
 
-		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args.inputFilePath() ) ) );
+		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args.inputFilePath() ) );
 		fullTileSize = getMinTileSize( tiles );
 		workingInterval = args.cropMinMaxInterval( args.use2D() ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize );
 
@@ -237,7 +236,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 		// save the reference histogram to file so one can plot it
 		final String referenceHistogramFilepath = PathResolver.get( basePath, "referenceHistogram-min_" + ( int ) Math.round( args.histMinValue().doubleValue() ) + ",max_" + ( int ) Math.round( args.histMaxValue().doubleValue() ) + ".txt" );
-		try ( final OutputStream out = dataProvider.getOutputStream( URI.create( referenceHistogramFilepath ) ) )
+		try ( final OutputStream out = dataProvider.getOutputStream( referenceHistogramFilepath ) )
 		{
 			final Real1dBinMapper< DoubleType > binMapper = new Real1dBinMapper<>(
 					histogramsProvider.getHistogramMinValue(),
@@ -381,13 +380,13 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		{
 			final ImagePlus sImp = ImageJFunctions.wrap( unpivotedSolution.getA(), scalingTermFilename );
 			final String sImpPath = PathResolver.get( basePath, scalingTermFilename );
-			dataProvider.saveImage( sImp, URI.create( sImpPath ) );
+			dataProvider.saveImage( sImp, sImpPath );
 		}
 
 		{
 			final ImagePlus tImp = ImageJFunctions.wrap( unpivotedSolution.getB(), translationTermFilename );
 			final String tImpPath = PathResolver.get( basePath, translationTermFilename );
-			dataProvider.saveImage( tImp, URI.create( tImpPath ) );
+			dataProvider.saveImage( tImp, tImpPath );
 		}
 
 
@@ -395,7 +394,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		// TODO: add cmd switch to disable this behavior if needed to inspect individual steps
 		System.out.println( "Cleaning up temporary files..." );
 		final String folderToDelete = PathResolver.getParent( solutionPath );
-		dataProvider.deleteFolder( URI.create( folderToDelete ) );
+		dataProvider.deleteFolder( folderToDelete );
 
 		// cleanup intermediate N5 exports
 		solver.cleanupFlatfieldSolutionExports( dataProvider, histogramsProvider.getHistogramsN5BasePath() );
@@ -464,7 +463,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	{
 		final ImagePlus imp = ImageJFunctions.wrap( solutionComponent, filename );
 		final String path = PathResolver.get( solutionPath, "iter" + iteration, Integer.toString( scale ), filename );
-		dataProvider.saveImage( imp, URI.create( path ) );
+		dataProvider.saveImage( imp, path );
 	}
 
 

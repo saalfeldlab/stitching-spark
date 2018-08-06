@@ -124,13 +124,13 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		final String n5ExportPath = baseExportPath;
 
-		if ( dataProvider.createN5Reader( URI.create( n5ExportPath ) ).exists( "/" ) )
+		if ( dataProvider.createN5Reader( n5ExportPath ).exists( "/" ) )
 		{
 			throw new PipelineExecutionException( "Export path already exists: " + n5ExportPath + System.lineSeparator() +
 					"Aborting to prevent possible overwriting of useful data. Please make sure everything is correct, and in case it was intended, delete the existing export first and run it again." );
 		}
 
-		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ), N5ExportMetadata.getGsonBuilder() );
+		final N5Writer n5 = dataProvider.createN5Writer( n5ExportPath, N5ExportMetadata.getGsonBuilder() );
 
 		List< String > downsampledDatasets = null;
 
@@ -175,7 +175,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// Generate lower scale levels
 			downsampledDatasets = N5NonIsotropicScalePyramidSpark3D.downsampleNonIsotropicScalePyramid(
 					sparkContext,
-					() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( n5ExportPath ) ),
+					() -> DataProviderFactory.create( dataProviderType ).createN5Writer( n5ExportPath ),
 					fullScaleOutputPath,
 					voxelDimensions
 				);
@@ -229,7 +229,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		final List< TileInfo > biggerCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );
 
-		final N5Writer n5 = dataProvider.createN5Writer( URI.create( n5ExportPath ) );
+		final N5Writer n5 = dataProvider.createN5Writer( n5ExportPath );
 		n5.createDataset(
 				fullScaleOutputPath,
 				Intervals.dimensionsAsLongArray( boundingBox ),
@@ -262,7 +262,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 						broadcastedFlatfieldCorrection.value(),
 						broadcastedPairwiseConnectionsMap.value()
 					);
-				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( n5ExportPath ) );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( n5ExportPath );
 				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridPosition );
 			}
 		);
@@ -278,7 +278,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		try
 		{
 			final String pairwiseShiftsPath = PathResolver.get( PathResolver.getParent( channelPath ), "pairwise-stitched.json" );
-			final List< SerializablePairWiseStitchingResult[] > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( URI.create( pairwiseShiftsPath ) ) );
+			final List< SerializablePairWiseStitchingResult[] > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShiftsMulti( dataProvider.getJsonReader( pairwiseShiftsPath ) );
 			for ( final SerializablePairWiseStitchingResult[] pairwiseShiftMulti : pairwiseShifts )
 			{
 				final SerializablePairWiseStitchingResult pairwiseShift = pairwiseShiftMulti[ 0 ];

@@ -3,7 +3,6 @@ package org.janelia.stitching;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Serializable;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -100,15 +99,15 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		this.args = args;
 
 		targetImagesLocation = PathResolver.get( args.targetLocation, "tile-images-retiled-in-" + AxisMapping.getAxisStr( args.retileDimension ).toUpperCase() );
-		final DataProvider dataProviderTarget = DataProviderFactory.createByURI( URI.create( targetImagesLocation ) );
-		dataProviderTarget.createFolder( URI.create( targetImagesLocation ) );
+		final DataProvider dataProviderTarget = DataProviderFactory.create( DataProviderFactory.detectType( targetImagesLocation ) );
+		dataProviderTarget.createFolder( targetImagesLocation );
 
 		sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "ResaveSmallerTiles" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 			);
 
-		logWriter = new PrintWriter( dataProviderTarget.getOutputStream( URI.create( PathResolver.get( args.targetLocation, "retiling-log.txt" ) ) ) );
+		logWriter = new PrintWriter( dataProviderTarget.getOutputStream( PathResolver.get( args.targetLocation, "retiling-log.txt" ) ) );
 	}
 
 	private void run() throws IOException
@@ -119,8 +118,8 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 
 	private void processChannel( final String inputTileConfiguration ) throws IOException
 	{
-		final DataProvider sourceDataProvider = DataProviderFactory.createByURI( URI.create( inputTileConfiguration ) );
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( sourceDataProvider.getJsonReader( URI.create( inputTileConfiguration ) ) );
+		final DataProvider sourceDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputTileConfiguration ) );
+		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( sourceDataProvider.getJsonReader( inputTileConfiguration ) );
 
 		final long[] originalTileSize = tiles[ 0 ].getSize();
 		final long[] newTileSize = determineNewTileSize( originalTileSize );
@@ -143,19 +142,19 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			logWriter.println( "--------------------------------------------" );
 		}
 
-		final DataProvider targetDataProvider = DataProviderFactory.createByURI( URI.create( args.targetLocation ) );
+		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.targetLocation ) );
 		final String newTilesConfigurationFilename = Utils.addFilenameSuffix( PathResolver.getFileName( inputTileConfiguration ), "-retiled-in-" + AxisMapping.getAxisStr( args.retileDimension ).toUpperCase() );
 		final String newTilesConfigurationPath = PathResolver.get( args.targetLocation, newTilesConfigurationFilename );
-		TileInfoJSONProvider.saveTilesConfiguration( newTiles.toArray( new TileInfo[ 0 ] ), targetDataProvider.getJsonWriter( URI.create( newTilesConfigurationPath ) ) );
+		TileInfoJSONProvider.saveTilesConfiguration( newTiles.toArray( new TileInfo[ 0 ] ), targetDataProvider.getJsonWriter( newTilesConfigurationPath ) );
 	}
 
 	private < T extends NativeType< T > & RealType< T > > List< TileInfo > resaveTileAsSmallerTiles( final TileInfo tile, final List< Interval > newTilesIntervalsInSingleTile ) throws IOException, ImgLibException
 	{
-		final DataProvider sourceDataProvider = DataProviderFactory.createByURI( URI.create( tile.getFilePath() ) );
+		final DataProvider sourceDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( tile.getFilePath() ) );
 		final RandomAccessibleInterval< T > tileImg = TileLoader.loadTile( tile, sourceDataProvider );
 		final T tileImageType = Util.getTypeFromInterval( tileImg );
 
-		final DataProvider targetDataProvider = DataProviderFactory.createByURI( URI.create( targetImagesLocation ) );
+		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( targetImagesLocation ) );
 		final List< TileInfo > newTilesInSingleTile = new ArrayList<>();
 		for ( final Interval newTileInterval : newTilesIntervalsInSingleTile )
 		{
@@ -169,7 +168,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 
 			final String newTileImageFilename = Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "_retiled-" + newTilesInSingleTile.size() + AxisMapping.getAxisStr( args.retileDimension ) ) + ".tif";
 			final String newTileImagePath = PathResolver.get( targetImagesLocation, newTileImageFilename );
-			targetDataProvider.saveImage( newTileImagePlus, URI.create( newTileImagePath ) );
+			targetDataProvider.saveImage( newTileImagePlus, newTileImagePath );
 
 			final double[] newTilePosition = new double[ tile.numDimensions() ];
 			for ( int d = 0; d < newTilePosition.length; ++d )

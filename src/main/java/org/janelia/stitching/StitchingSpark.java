@@ -1,7 +1,6 @@
 package org.janelia.stitching;
 
 import java.io.Serializable;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -53,8 +52,8 @@ public class StitchingSpark implements Serializable, AutoCloseable
 		try {
 			final List< TileInfo[] > tilesMultichannel = new ArrayList<>();
 			for ( int channel = 0; channel < job.getChannels(); channel++ ) {
-				final URI tileConfigUri = URI.create( args.inputTileConfigurations().get( channel ) );
-				tilesMultichannel.add( TileInfoJSONProvider.loadTilesConfiguration( job.getDataProvider().getJsonReader( tileConfigUri ) ) );
+				final String tileConfigLink = args.inputTileConfigurations().get( channel );
+				tilesMultichannel.add( TileInfoJSONProvider.loadTilesConfiguration( job.getDataProvider().getJsonReader( tileConfigLink ) ) );
 			}
 
 			job.setTilesMultichannel( tilesMultichannel );

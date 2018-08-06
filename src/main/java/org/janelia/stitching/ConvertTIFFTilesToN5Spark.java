@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -212,8 +211,8 @@ public class ConvertTIFFTilesToN5Spark
 		for ( final String inputPath : inputChannelsPath )
 		{
 			final String channelName = getChannelName( inputPath );
-			final DataProvider inputDataProvider = DataProviderFactory.createByURI( URI.create( inputPath ) );
-			final TileInfo[] channelTiles = TileInfoJSONProvider.loadTilesConfiguration( inputDataProvider.getJsonReader( URI.create( inputPath ) ) );
+			final DataProvider inputDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputPath ) );
+			final TileInfo[] channelTiles = TileInfoJSONProvider.loadTilesConfiguration( inputDataProvider.getJsonReader( inputPath ) );
 			tilesChannels.put( channelName, channelTiles );
 		}
 		return tilesChannels;
@@ -235,7 +234,7 @@ public class ConvertTIFFTilesToN5Spark
 			final String channelName = getChannelName( inputPath );
 			final TileInfo[] newChannelTiles = newTiles.get( channelName );
 			final String newConfigPath = PathResolver.get( n5Path, Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-converted-n5" ) );
-			TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, dataProvider.getJsonWriter( URI.create( newConfigPath ) ) );
+			TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, dataProvider.getJsonWriter( newConfigPath ) );
 		}
 	}
 

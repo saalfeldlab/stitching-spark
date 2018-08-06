@@ -2,7 +2,6 @@ package org.janelia.flatfield;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.net.URI;
 import java.util.List;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -105,7 +104,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 
 		public FlatfieldSolution open( final DataProvider dataProvider, final String histogramsN5BasePath ) throws IOException
 		{
-			final N5Reader n5 = dataProvider.createN5Reader( URI.create( histogramsN5BasePath ) );
+			final N5Reader n5 = dataProvider.createN5Reader( histogramsN5BasePath );
 			final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > correctionFields = new ValuePair<>(
 					N5Utils.open( n5, scalingTermDataset ),
 					N5Utils.open( n5, translationTermDataset )
@@ -185,7 +184,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 		// TODO: make shifted downsampling Serializable (currently there is a required non-serializable field for affine transformation)
 		final Broadcast< ShiftedDownsampling< ? > > broadcastedShiftedDownsampling = sparkContext.broadcast( shiftedDownsampling );
 
-		final N5Writer n5 = histogramsProvider.getDataProvider().createN5Writer( URI.create( histogramsProvider.getHistogramsN5BasePath() ) );
+		final N5Writer n5 = histogramsProvider.getDataProvider().createN5Writer( histogramsProvider.getHistogramsN5BasePath() );
 		final DatasetAttributes currentScaleHistogramsDatasetAttributes = n5.getDatasetAttributes( currentScaleHistogramsDataset );
 		final long[] currentScaleHistogramsExtendedDimensions = currentScaleHistogramsDatasetAttributes.getDimensions();
 		final int[] currentScaleHistogramsExtendedBlockSize = currentScaleHistogramsDatasetAttributes.getBlockSize();
@@ -212,8 +211,8 @@ public class FlatfieldCorrectionSolver implements Serializable
 				final Interval cellInterval = new FinalInterval( cellMin, cellMax );
 
 				// open histograms dataset
-				final DataProvider dataProviderLocal = DataProviderFactory.createByType( histogramsProvider.getDataProviderType() );
-				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsProvider.getHistogramsN5BasePath() ) );
+				final DataProvider dataProviderLocal = DataProviderFactory.create( histogramsProvider.getDataProviderType() );
+				final N5Writer n5Local = dataProviderLocal.createN5Writer( histogramsProvider.getHistogramsN5BasePath() );
 				final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, currentScaleHistogramsDataset );
 				final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
 				final IntervalView< RealComposite< T > > histogramsBlockImg = Views.interval( histogramsImg, cellInterval );
@@ -407,7 +406,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 		final DataProviderType dataProviderType = dataProvider.getType();
 		N5RemoveSpark.remove(
 				sparkContext,
-				() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				() -> DataProviderFactory.create( dataProviderType ).createN5Writer( histogramsN5BasePath ),
 				INTERMEDIATE_EXPORTS_N5_GROUP
 			);
 	}

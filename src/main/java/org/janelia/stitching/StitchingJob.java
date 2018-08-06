@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -56,7 +55,7 @@ public class StitchingJob implements Serializable {
 	{
 		this.args = args;
 
-		dataProvider = DataProviderFactory.createByURI( URI.create( args.inputTileConfigurations().get( 0 ) ) );
+		dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.inputTileConfigurations().get( 0 ) ) );
 		dataProviderType = dataProvider.getType();
 
 		pipeline = setUpPipeline( args );
@@ -89,7 +88,7 @@ public class StitchingJob implements Serializable {
 	public synchronized DataProvider getDataProvider()
 	{
 		if ( dataProvider == null )
-			dataProvider = DataProviderFactory.createByType( dataProviderType );
+			dataProvider = DataProviderFactory.create( dataProviderType );
 		return dataProvider;
 	}
 
