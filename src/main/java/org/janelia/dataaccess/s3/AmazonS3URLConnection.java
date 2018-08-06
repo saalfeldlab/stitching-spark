@@ -2,8 +2,6 @@ package org.janelia.dataaccess.s3;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 
@@ -25,16 +23,7 @@ class AmazonS3URLConnection extends URLConnection
 	@Override
 	public void connect() throws IOException
 	{
-		final URI uri;
-		try
-		{
-			uri = url.toURI();
-		}
-		catch ( final URISyntaxException e )
-		{
-			throw new RuntimeException( e );
-		}
-		final AmazonS3URI s3Uri = AmazonS3DataProvider.decodeS3Uri( uri );
+		final AmazonS3URI s3Uri = AmazonS3DataProvider.decodeS3Uri( url.toString() );
 		s3Object = s3.getObject( s3Uri.getBucket(), s3Uri.getKey() );
 		connected = true;
 	}

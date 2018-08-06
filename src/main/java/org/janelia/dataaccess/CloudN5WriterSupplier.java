@@ -12,9 +12,9 @@ public class CloudN5WriterSupplier extends CloudN5ReaderSupplier implements N5Wr
 {
 	private static final long serialVersionUID = -1199787780776971335L;
 
-	public CloudN5WriterSupplier( final String n5Path ) throws IOException
+	public CloudN5WriterSupplier( final String n5Link ) throws IOException
 	{
-		super( n5Path, Arrays.asList(
+		super( n5Link, Arrays.asList(
 				GoogleCloudResourceManagerClient.ProjectsScope.READ_ONLY,
 				GoogleCloudStorageClient.StorageScope.READ_WRITE
 			) );
@@ -23,24 +23,6 @@ public class CloudN5WriterSupplier extends CloudN5ReaderSupplier implements N5Wr
 	@Override
 	public N5Writer get() throws IOException
 	{
-		if ( type == DataProviderType.GOOGLE_CLOUD )
-		{
-			final DataProvider googleCloudDataProvider = getDataProvider();
-			try
-			{
-				return googleCloudDataProvider.createN5Writer( n5Uri );
-			}
-			catch ( final Exception e )
-			{
-				if ( e instanceof IOException )
-					throw e;
-				else
-					throw new RuntimeException( "Please create the desired output Google Cloud bucket first." );
-			}
-		}
-		else
-		{
-			return getDataProvider().createN5Writer( n5Uri );
-		}
+		return getDataProvider().createN5Writer( n5Link );
 	}
 }

@@ -8,13 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
-import java.io.UnsupportedEncodingException;
 import java.io.Writer;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,40 +45,27 @@ public class FSDataProvider implements DataProvider
 	}
 
 	@Override
-	public URI getUri( final String path ) throws URISyntaxException
+	public boolean fileExists( final String link )
 	{
-		try
-		{
-			return new URI( URLEncoder.encode( path, StandardCharsets.UTF_8.name() ) );
-		}
-		catch ( final UnsupportedEncodingException e )
-		{
-			throw new IllegalArgumentException( e.getMessage(), e );
-		}
+		return Files.exists( Paths.get( link ) );
 	}
 
 	@Override
-	public boolean fileExists( final URI uri )
+	public void createFolder( final String link ) throws IOException
 	{
-		return Files.exists( getPath( uri ) );
+		createDirs( Paths.get( link ) );
 	}
 
 	@Override
-	public void createFolder( final URI uri ) throws IOException
+	public void deleteFile( final String link ) throws IOException
 	{
-		createDirs( getPath( uri ) );
+		Files.delete( Paths.get( link ) );
 	}
 
 	@Override
-	public void deleteFile( final URI uri ) throws IOException
+	public void deleteFolder( final String link ) throws IOException
 	{
-		Files.delete( getPath( uri ) );
-	}
-
-	@Override
-	public void deleteFolder( final URI uri ) throws IOException
-	{
-		Files.walkFileTree( getPath( uri ), new SimpleFileVisitor< Path >()
+		Files.walkFileTree( Paths.get( link ), new SimpleFileVisitor< Path >()
 			{
 			   @Override
 			   public FileVisitResult visitFile( final Path file, final BasicFileAttributes attrs ) throws IOException
@@ -104,110 +85,98 @@ public class FSDataProvider implements DataProvider
 	}
 
 	@Override
-	public void copyFile( final URI uriSrc, final URI uriDst ) throws IOException
+	public void copyFile( final String srcLink, final String dstLink ) throws IOException
 	{
 		Files.copy(
-				getPath( uriSrc ),
-				getPath( uriDst ),
+				Paths.get( srcLink ),
+				Paths.get( dstLink ),
 				StandardCopyOption.REPLACE_EXISTING
 			);
 	}
 
 	@Override
-	public void copyFolder( final URI uriSrc, final URI uriDst ) throws IOException
+	public void copyFolder( final String srcLink, final String dstLink ) throws IOException
 	{
-		copyFile( uriSrc, uriDst );
+		copyFile( srcLink, dstLink );
 	}
 
 	@Override
-	public void moveFile( final URI uriSrc, final URI uriDst ) throws IOException
+	public void moveFile( final String srcLink, final String dstLink ) throws IOException
 	{
 		Files.move(
-				getPath( uriSrc ),
-				getPath( uriDst )
+				Paths.get( srcLink ),
+				Paths.get( dstLink )
 			);
 	}
 
 	@Override
-	public void moveFolder( final URI uriSrc, final URI uriDst ) throws IOException
+	public void moveFolder( final String srcLink, final String dstLink ) throws IOException
 	{
-		moveFile( uriSrc, uriDst );
+		moveFile( srcLink, dstLink );
 	}
 
 	@Override
-	public InputStream getInputStream( final URI uri) throws IOException
+	public InputStream getInputStream( final String link ) throws IOException
 	{
-		return new FileInputStream( getPath( uri ).toFile() );
+		return new FileInputStream( link );
 	}
 
 	@Override
-	public OutputStream getOutputStream( final URI uri ) throws IOException
+	public OutputStream getOutputStream( final String link ) throws IOException
 	{
-		createDirs( getPath( uri ).getParent() );
-		return new FileOutputStream( getPath( uri ).toFile() );
+		createDirs( Paths.get( link ).getParent() );
+		return new FileOutputStream( link );
 	}
 
 	@Override
-	public ImagePlus loadImage( final URI uri ) throws IOException
+	public ImagePlus loadImage( final String link ) throws IOException
 	{
-		return ImageImporter.openImage( getCanonicalPathString( uri ) );
+		return ImageImporter.openImage( getCanonicalPathString( link ) );
 	}
 
 	@Override
-	public void saveImage( final ImagePlus imp, final URI uri ) throws IOException
+	public void saveImage( final ImagePlus imp, final String link ) throws IOException
 	{
-		createDirs( getPath( uri ).getParent() );
+		createDirs( Paths.get( link ).getParent() );
 		Utils.workaroundImagePlusNSlices( imp );
-		IJ.saveAsTiff( imp, getCanonicalPathString( uri ) );
+		IJ.saveAsTiff( imp, getCanonicalPathString( link ) );
 	}
 
 	@Override
-	public Reader getJsonReader( final URI uri ) throws IOException
+	public Reader getJsonReader( final String link ) throws IOException
 	{
-		return new FileReader( getPath( uri ).toFile() );
+		return new FileReader( link );
 	}
 
 	@Override
-	public Writer getJsonWriter( final URI uri ) throws IOException
+	public Writer getJsonWriter( final String link ) throws IOException
 	{
-		createDirs( getPath( uri ).getParent() );
-		return new FileWriter( getPath( uri ).toFile() );
+		createDirs( Paths.get( link ).getParent() );
+		return new FileWriter( link );
 	}
 
 	@Override
-	public N5Reader createN5Reader( final URI baseUri ) throws IOException
+	public N5Reader createN5Reader( final String baseLink ) throws IOException
 	{
-		return new N5FSReader( getCanonicalPathString( baseUri ) );
+		return new N5FSReader( getCanonicalPathString( baseLink ) );
 	}
 
 	@Override
-	public N5Writer createN5Writer( final URI baseUri ) throws IOException
+	public N5Writer createN5Writer( final String baseLink ) throws IOException
 	{
-		return new N5FSWriter( getCanonicalPathString( baseUri ) );
+		return new N5FSWriter( getCanonicalPathString( baseLink ) );
 	}
 
 	@Override
-	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
+	public N5Reader createN5Reader( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5FSReader( getCanonicalPathString( baseUri ), gsonBuilder );
+		return new N5FSReader( getCanonicalPathString( baseLink ), gsonBuilder );
 	}
 
 	@Override
-	public N5Writer createN5Writer( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
+	public N5Writer createN5Writer( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5FSWriter( getCanonicalPathString( baseUri ), gsonBuilder );
-	}
-
-	private static Path getPath( final URI uri )
-	{
-		try
-		{
-			return uri.getScheme() != null ? Paths.get( uri ) : Paths.get( URLDecoder.decode( uri.toString(), StandardCharsets.UTF_8.name() ) );
-		}
-		catch ( final UnsupportedEncodingException e )
-		{
-			throw new IllegalArgumentException( e.getMessage(), e );
-		}
+		return new N5FSWriter( getCanonicalPathString( baseLink ), gsonBuilder );
 	}
 
 	private static boolean createDirs( final Path path )
@@ -215,8 +184,8 @@ public class FSDataProvider implements DataProvider
 		return path.toFile().mkdirs();
 	}
 
-	private static String getCanonicalPathString( final URI uri ) throws IOException
+	private static String getCanonicalPathString( final String link ) throws IOException
 	{
-		return getPath( uri ).toFile().getCanonicalPath();
+		return Paths.get( link ).toFile().getCanonicalPath();
 	}
 }

@@ -1,7 +1,6 @@
 package org.janelia.dataaccess;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.Arrays;
 import java.util.Collection;
 
@@ -20,7 +19,7 @@ public class CloudN5ReaderSupplier implements N5ReaderSupplier
 {
 	private static final long serialVersionUID = -1199787780776971335L;
 
-	protected final URI n5Uri;
+	protected final String n5Link;
 	protected final DataProviderType type;
 
 	protected final AccessToken accessToken;
@@ -36,10 +35,10 @@ public class CloudN5ReaderSupplier implements N5ReaderSupplier
 			) );
 	}
 
-	protected CloudN5ReaderSupplier( final String n5Path, final Collection< ? extends Scope > googleCloudScopes ) throws IOException
+	protected CloudN5ReaderSupplier( final String n5Link, final Collection< ? extends Scope > googleCloudScopes ) throws IOException
 	{
-		n5Uri = URI.create( n5Path );
-		type = DataProviderFactory.getTypeByURI( n5Uri );
+		this.n5Link = n5Link;
+		type = DataProviderFactory.detectType( n5Link );
 
 		if ( type == DataProviderType.GOOGLE_CLOUD )
 		{
@@ -85,31 +84,13 @@ public class CloudN5ReaderSupplier implements N5ReaderSupplier
 		}
 		else
 		{
-			return DataProviderFactory.createByType( type );
+			return DataProviderFactory.create( type );
 		}
 	}
 
 	@Override
 	public N5Reader get() throws IOException
 	{
-		if ( type == DataProviderType.GOOGLE_CLOUD )
-		{
-			final DataProvider googleCloudDataProvider = getDataProvider();
-			try
-			{
-				return googleCloudDataProvider.createN5Writer( n5Uri );
-			}
-			catch ( final Exception e )
-			{
-				if ( e instanceof IOException )
-					throw e;
-				else
-					throw new RuntimeException( "Specified Google storage bucket was not found." );
-			}
-		}
-		else
-		{
-			return getDataProvider().createN5Writer( n5Uri );
-		}
+		return getDataProvider().createN5Reader( n5Link );
 	}
 }

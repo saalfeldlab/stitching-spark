@@ -3,8 +3,6 @@ package org.janelia.dataaccess.googlecloud;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 
@@ -28,16 +26,7 @@ class GoogleCloudURLConnection extends URLConnection
 	@Override
 	public void connect() throws IOException
 	{
-		final URI uri;
-		try
-		{
-			uri = url.toURI();
-		}
-		catch ( final URISyntaxException e )
-		{
-			throw new RuntimeException( e );
-		}
-		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( uri );
+		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( url.toString() );
 		blob = storage.get( BlobId.of( googleCloudUri.getBucket(), googleCloudUri.getKey() ) );
 		connected = true;
 	}

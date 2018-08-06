@@ -9,8 +9,6 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -100,38 +98,29 @@ public class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
-	public URI getUri( final String path ) throws URISyntaxException
+	public boolean fileExists( final String link ) throws IOException
 	{
-		final URI uri = new URI( path );
-		if ( s3Protocol.equalsIgnoreCase( uri.getScheme() ) )
-			return uri;
-		return new URI( s3Protocol, null, path );
-	}
-
-	@Override
-	public boolean fileExists( final URI uri ) throws IOException
-	{
-		final AmazonS3URI s3Uri = decodeS3Uri( uri );
+		final AmazonS3URI s3Uri = decodeS3Uri( link );
 		return s3.doesObjectExist( s3Uri.getBucket(), s3Uri.getKey() );
 	}
 
 	@Override
-	public void createFolder( final URI uri ) throws IOException
+	public void createFolder( final String link ) throws IOException
 	{
 		// folders are reflected by the object key structure, so no need to create them explicitly
 	}
 
 	@Override
-	public void deleteFile( final URI uri ) throws IOException
+	public void deleteFile( final String link ) throws IOException
 	{
-		final AmazonS3URI s3Uri = decodeS3Uri( uri );
+		final AmazonS3URI s3Uri = decodeS3Uri( link );
 		s3.deleteObject( s3Uri.getBucket(), s3Uri.getKey() );
 	}
 
 	@Override
-	public void deleteFolder( final URI uri ) throws IOException
+	public void deleteFolder( final String link ) throws IOException
 	{
-		final AmazonS3URI s3Uri = decodeS3Uri( uri );
+		final AmazonS3URI s3Uri = decodeS3Uri( link );
 		final String prefix = s3Uri.getKey().endsWith( "/" ) ? s3Uri.getKey() : s3Uri.getKey() + "/";
 		final ListObjectsV2Request listObjectsRequest = new ListObjectsV2Request()
 				.withBucketName( s3Uri.getBucket() )
@@ -156,25 +145,25 @@ public class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
-	public void copyFile( final URI uriSrc, final URI uriDst ) throws IOException
+	public void copyFile( final String srcLink, final String dstLink ) throws IOException
 	{
-		final AmazonS3URI s3UriSrc = decodeS3Uri( uriSrc );
-		final AmazonS3URI s3UriDst = decodeS3Uri( uriDst );
+		final AmazonS3URI srcS3Uri = decodeS3Uri( srcLink );
+		final AmazonS3URI dstS3Uri = decodeS3Uri( dstLink );
 		s3.copyObject(
-				s3UriSrc.getBucket(), s3UriSrc.getKey(),
-				s3UriDst.getBucket(), s3UriDst.getKey()
+				srcS3Uri.getBucket(), srcS3Uri.getKey(),
+				dstS3Uri.getBucket(), dstS3Uri.getKey()
 			);
 	}
 
 	@Override
-	public void copyFolder( final URI uriSrc, final URI uriDst ) throws IOException
+	public void copyFolder( final String srcLink, final String dstLink ) throws IOException
 	{
-		final AmazonS3URI s3UriSrc = decodeS3Uri( uriSrc );
-		final AmazonS3URI s3UriDst = decodeS3Uri( uriDst );
+		final AmazonS3URI srcS3Uri = decodeS3Uri( srcLink );
+		final AmazonS3URI dstS3Uri = decodeS3Uri( dstLink );
 
-		final String prefix = s3UriSrc.getKey().endsWith( "/" ) ? s3UriSrc.getKey() : s3UriSrc.getKey() + "/";
+		final String prefix = srcS3Uri.getKey().endsWith( "/" ) ? srcS3Uri.getKey() : srcS3Uri.getKey() + "/";
 		final ListObjectsV2Request listObjectsRequest = new ListObjectsV2Request()
-				.withBucketName( s3UriSrc.getBucket() )
+				.withBucketName( srcS3Uri.getBucket() )
 				.withPrefix( prefix );
 		ListObjectsV2Result objectsListing;
 		do
@@ -186,10 +175,10 @@ public class AmazonS3DataProvider implements DataProvider
 				if ( !objectPath.startsWith( prefix ) )
 					throw new RuntimeException( "requested prefix does not match with actual prefix" );
 				final String objectRelativePath = objectPath.substring( prefix.length() );
-				final String objectNewPath = PathResolver.get( s3UriDst.getKey(), objectRelativePath );
+				final String objectNewPath = PathResolver.get( dstS3Uri.getKey(), objectRelativePath );
 				s3.copyObject(
-						s3UriSrc.getBucket(), objectPath,
-						s3UriDst.getBucket(), objectNewPath
+						srcS3Uri.getBucket(), objectPath,
+						dstS3Uri.getBucket(), objectNewPath
 					);
 			}
 			listObjectsRequest.setContinuationToken( objectsListing.getNextContinuationToken() );
@@ -198,44 +187,43 @@ public class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
-	public void moveFile( final URI uriSrc, final URI uriDst ) throws IOException
+	public void moveFile( final String srcLink, final String dstLink ) throws IOException
 	{
-		copyFile( uriSrc, uriDst );
-		deleteFile( uriSrc );
+		copyFile( srcLink, dstLink );
+		deleteFile( srcLink );
 	}
 
 	@Override
-	public void moveFolder( final URI uriSrc, final URI uriDst ) throws IOException
+	public void moveFolder( final String srcLink, final String dstLink ) throws IOException
 	{
-		copyFolder( uriSrc, uriDst );
-		deleteFolder( uriSrc );
+		copyFolder( srcLink, dstLink );
+		deleteFolder( srcLink );
 	}
 
 	@Override
-	public InputStream getInputStream( final URI uri ) throws IOException
+	public InputStream getInputStream( final String link ) throws IOException
 	{
-		final AmazonS3URI s3Uri = decodeS3Uri( uri );
+		final AmazonS3URI s3Uri = decodeS3Uri( link );
 		return s3.getObject( s3Uri.getBucket(), s3Uri.getKey() ).getObjectContent();
 	}
 
 	@Override
-	public OutputStream getOutputStream( final URI uri ) throws IOException
+	public OutputStream getOutputStream( final String link ) throws IOException
 	{
-		final AmazonS3URI s3Uri = decodeS3Uri( uri );
+		final AmazonS3URI s3Uri = decodeS3Uri( link );
 		return new S3ObjectOutputStream( s3Uri );
 	}
 
 	@Override
-	public ImagePlus loadImage( final URI uri )
+	public ImagePlus loadImage( final String link )
 	{
-		final String uriStr = uri.toString();
-		if ( uriStr.endsWith( ".tif" ) || uriStr.endsWith( ".tiff" ) )
-			return ImageImporter.openImage( uriStr );
+		if ( link.endsWith( ".tif" ) || link.endsWith( ".tiff" ) )
+			return ImageImporter.openImage( link );
 		throw new NotImplementedException( "Only TIFF images are supported at the moment" );
 	}
 
 	@Override
-	public void saveImage( final ImagePlus imp, final URI uri ) throws IOException
+	public void saveImage( final ImagePlus imp, final String link ) throws IOException
 	{
 		Utils.workaroundImagePlusNSlices( imp );
 		// Need to save as a local TIFF file and then upload to S3. IJ does not provide a way to convert ImagePlus to TIFF byte array.
@@ -245,7 +233,7 @@ public class AmazonS3DataProvider implements DataProvider
 			tempPath = Files.createTempFile( null, ".tif" );
 			IJ.saveAsTiff( imp, tempPath.toString() );
 
-			final AmazonS3URI s3Uri = decodeS3Uri( uri );
+			final AmazonS3URI s3Uri = decodeS3Uri( link );
 			final Upload s3Upload = s3TransferManager.upload( s3Uri.getBucket(), s3Uri.getKey(), tempPath.toFile() );
 			try
 			{
@@ -264,51 +252,51 @@ public class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
-	public Reader getJsonReader( final URI uri ) throws IOException
+	public Reader getJsonReader( final String link ) throws IOException
 	{
-		return new InputStreamReader( getInputStream( uri ) );
+		return new InputStreamReader( getInputStream( link ) );
 	}
 
 	@Override
-	public Writer getJsonWriter( final URI uri ) throws IOException
+	public Writer getJsonWriter( final String link ) throws IOException
 	{
-		return new OutputStreamWriter( getOutputStream( uri ) );
+		return new OutputStreamWriter( getOutputStream( link ) );
 	}
 
 	@Override
-	public N5Reader createN5Reader( final URI baseUri ) throws IOException
+	public N5Reader createN5Reader( final String baseLink ) throws IOException
 	{
-		return new N5AmazonS3Reader( s3, getBucketName( baseUri ) );
+		return new N5AmazonS3Reader( s3, getBucketName( baseLink ) );
 	}
 
 	@Override
-	public N5Writer createN5Writer( final URI baseUri ) throws IOException
+	public N5Writer createN5Writer( final String baseLink ) throws IOException
 	{
-		return new N5AmazonS3Writer( s3, getBucketName( baseUri ) );
+		return new N5AmazonS3Writer( s3, getBucketName( baseLink ) );
 	}
 
 	@Override
-	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
+	public N5Reader createN5Reader( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5AmazonS3Reader( s3, getBucketName( baseUri ), gsonBuilder );
+		return new N5AmazonS3Reader( s3, getBucketName( baseLink ), gsonBuilder );
 	}
 
 	@Override
-	public N5Writer createN5Writer( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
+	public N5Writer createN5Writer( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5AmazonS3Writer( s3, getBucketName( baseUri ), gsonBuilder );
+		return new N5AmazonS3Writer( s3, getBucketName( baseLink ), gsonBuilder );
 	}
 
-	public static AmazonS3URI decodeS3Uri( final URI uri ) throws IOException
+	public static AmazonS3URI decodeS3Uri( final String link ) throws IOException
 	{
-		return new AmazonS3URI( URLDecoder.decode( uri.toString(), StandardCharsets.UTF_8.name() ) );
+		return new AmazonS3URI( URLDecoder.decode( link, StandardCharsets.UTF_8.name() ) );
 	}
 
-	private String getBucketName( final URI baseUri ) throws IOException
+	private String getBucketName( final String link ) throws IOException
 	{
-		final AmazonS3URI uri = decodeS3Uri( baseUri );
+		final AmazonS3URI uri = decodeS3Uri( link );
 		if ( uri.getKey() != null && !uri.getKey().isEmpty() )
-			throw new IllegalArgumentException( "baseUri should be a link to a bucket" );
+			throw new IllegalArgumentException( "expected link to a bucket" );
 		return uri.getBucket();
 	}
 }

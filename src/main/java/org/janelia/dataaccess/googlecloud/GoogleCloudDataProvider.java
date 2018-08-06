@@ -9,8 +9,6 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -86,48 +84,39 @@ public class GoogleCloudDataProvider implements DataProvider
 	}
 
 	@Override
-	public URI getUri( final String path ) throws URISyntaxException
+	public boolean fileExists( final String link ) throws IOException
 	{
-		final URI uri = new URI( path );
-		if ( googleCloudProtocol.equalsIgnoreCase( uri.getScheme() ) )
-			return uri;
-		return new URI( googleCloudProtocol, null, path );
-	}
-
-	@Override
-	public boolean fileExists( final URI uri ) throws IOException
-	{
-		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( uri );
+		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( link );
 		final Blob blob = storage.get( BlobId.of( googleCloudUri.getBucket(), googleCloudUri.getKey() ) );
 		return blob != null && blob.exists();
 	}
 
 	@Override
-	public void createFolder( final URI uri ) throws IOException
+	public void createFolder( final String link ) throws IOException
 	{
 		// folders are reflected by the object key structure, so no need to create them explicitly
 	}
 
 	@Override
-	public void copyFile( final URI uriSrc, final URI uriDst ) throws IOException
+	public void copyFile( final String srcLink, final String dstLink ) throws IOException
 	{
-		final GoogleCloudStorageURI googleCloudUriSrc = new GoogleCloudStorageURI( uriSrc );
-		final GoogleCloudStorageURI googleCloudUriDst = new GoogleCloudStorageURI( uriDst );
+		final GoogleCloudStorageURI srcGoogleCloudUri = new GoogleCloudStorageURI( srcLink );
+		final GoogleCloudStorageURI dstGoogleCloudUri = new GoogleCloudStorageURI( dstLink );
 		final CopyRequest request = CopyRequest.newBuilder()
-				.setSource( BlobId.of( googleCloudUriSrc.getBucket(), googleCloudUriSrc.getKey() ) )
-				.setTarget( BlobId.of( googleCloudUriDst.getBucket(), googleCloudUriDst.getKey() ) )
+				.setSource( BlobId.of( srcGoogleCloudUri.getBucket(), srcGoogleCloudUri.getKey() ) )
+				.setTarget( BlobId.of( dstGoogleCloudUri.getBucket(), dstGoogleCloudUri.getKey() ) )
 				.build();
 		storage.copy( request ).getResult();
 	}
 
 	@Override
-	public void copyFolder( final URI uriSrc, final URI uriDst ) throws IOException
+	public void copyFolder( final String srcLink, final String dstLink ) throws IOException
 	{
-		final GoogleCloudStorageURI googleCloudUriSrc = new GoogleCloudStorageURI( uriSrc );
-		final GoogleCloudStorageURI googleCloudUriDst = new GoogleCloudStorageURI( uriDst );
+		final GoogleCloudStorageURI srcGoogleCloudUri = new GoogleCloudStorageURI( srcLink );
+		final GoogleCloudStorageURI dstGoogleCloudUri = new GoogleCloudStorageURI( dstLink );
 
-		final String prefix = googleCloudUriSrc.getKey().endsWith( "/" ) ? googleCloudUriSrc.getKey() : googleCloudUriSrc.getKey() + "/";
-		final Page< Blob > blobListing = storage.list( googleCloudUriSrc.getBucket(), BlobListOption.prefix( prefix ) );
+		final String prefix = srcGoogleCloudUri.getKey().endsWith( "/" ) ? srcGoogleCloudUri.getKey() : srcGoogleCloudUri.getKey() + "/";
+		final Page< Blob > blobListing = storage.list( srcGoogleCloudUri.getBucket(), BlobListOption.prefix( prefix ) );
 		for ( final Iterator< Blob > blobIterator = blobListing.iterateAll().iterator(); blobIterator.hasNext(); )
 		{
 			final BlobId blobId = blobIterator.next().getBlobId();
@@ -136,41 +125,41 @@ public class GoogleCloudDataProvider implements DataProvider
 			if ( !objectPath.startsWith( prefix ) )
 				throw new RuntimeException( "requested prefix does not match with actual prefix" );
 			final String objectRelativePath = objectPath.substring( prefix.length() );
-			final String objectNewPath = PathResolver.get( googleCloudUriDst.getKey(), objectRelativePath );
+			final String objectNewPath = PathResolver.get( dstGoogleCloudUri.getKey(), objectRelativePath );
 
 			final CopyRequest request = CopyRequest.newBuilder()
 					.setSource( blobId )
-					.setTarget( BlobId.of( googleCloudUriDst.getBucket(), objectNewPath ) )
+					.setTarget( BlobId.of( dstGoogleCloudUri.getBucket(), objectNewPath ) )
 					.build();
 			storage.copy( request ).getResult();
 		}
 	}
 
 	@Override
-	public void moveFile( final URI uriSrc, final URI uriDst ) throws IOException
+	public void moveFile( final String srcLink, final String dstLink ) throws IOException
 	{
-		copyFile( uriSrc, uriDst );
-		deleteFile( uriSrc );
+		copyFile( srcLink, dstLink );
+		deleteFile( srcLink );
 	}
 
 	@Override
-	public void moveFolder( final URI uriSrc, final URI uriDst ) throws IOException
+	public void moveFolder( final String srcLink, final String dstLink ) throws IOException
 	{
-		copyFolder( uriSrc, uriDst );
-		deleteFolder( uriSrc );
+		copyFolder( srcLink, dstLink );
+		deleteFolder( srcLink );
 	}
 
 	@Override
-	public void deleteFile( final URI uri ) throws IOException
+	public void deleteFile( final String link ) throws IOException
 	{
-		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( uri );
+		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( link );
 		storage.delete( BlobId.of( googleCloudUri.getBucket(), googleCloudUri.getKey() ) );
 	}
 
 	@Override
-	public void deleteFolder( final URI uri ) throws IOException
+	public void deleteFolder( final String link ) throws IOException
 	{
-		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( uri );
+		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( link );
 		final String prefix = googleCloudUri.getKey().endsWith( "/" ) ? googleCloudUri.getKey() : googleCloudUri.getKey() + "/";
 		final List< BlobId > subBlobs = new ArrayList<>();
 		final Page< Blob > blobListing = storage.list( googleCloudUri.getBucket(), BlobListOption.prefix( prefix ) );
@@ -180,31 +169,30 @@ public class GoogleCloudDataProvider implements DataProvider
 	}
 
 	@Override
-	public InputStream getInputStream( final URI uri ) throws IOException
+	public InputStream getInputStream( final String link ) throws IOException
 	{
-		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( uri );
+		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( link );
 		final Blob blob = storage.get( BlobId.of( googleCloudUri.getBucket(), googleCloudUri.getKey() ) );
 		final byte[] bytes = blob.getContent();
 		return new ByteArrayInputStream( bytes );
 	}
 
 	@Override
-	public OutputStream getOutputStream( final URI uri ) throws IOException
+	public OutputStream getOutputStream( final String link ) throws IOException
 	{
-		return new BlobOutputStream( new GoogleCloudStorageURI( uri ) );
+		return new BlobOutputStream( new GoogleCloudStorageURI( link ) );
 	}
 
 	@Override
-	public ImagePlus loadImage( final URI uri ) throws IOException
+	public ImagePlus loadImage( final String link ) throws IOException
 	{
-		final String uriStr = uri.toString();
-		if ( uriStr.endsWith( ".tif" ) || uriStr.endsWith( ".tiff" ) )
-			return ImageImporter.openImage( uriStr );
+		if ( link.endsWith( ".tif" ) || link.endsWith( ".tiff" ) )
+			return ImageImporter.openImage( link );
 		throw new NotImplementedException( "Only TIFF images are supported at the moment" );
 	}
 
 	@Override
-	public void saveImage( final ImagePlus imp, final URI uri ) throws IOException
+	public void saveImage( final ImagePlus imp, final String link ) throws IOException
 	{
 		Utils.workaroundImagePlusNSlices( imp );
 		// Need to save as a local TIFF file and then upload to Google Cloud. IJ does not provide a way to convert ImagePlus to TIFF byte array.
@@ -214,7 +202,7 @@ public class GoogleCloudDataProvider implements DataProvider
 			tempPath = Files.createTempFile( null, ".tif" );
 			IJ.saveAsTiff( imp, tempPath.toString() );
 
-			final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( uri );
+			final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( link );
 			final BlobInfo blobInfo = BlobInfo.newBuilder( googleCloudUri.getBucket(), googleCloudUri.getKey() ).build();
 			final byte[] bytes = Files.readAllBytes( tempPath );
 			storage.create( blobInfo, bytes );
@@ -227,46 +215,46 @@ public class GoogleCloudDataProvider implements DataProvider
 	}
 
 	@Override
-	public Reader getJsonReader( final URI uri ) throws IOException
+	public Reader getJsonReader( final String link ) throws IOException
 	{
-		return new InputStreamReader( getInputStream( uri ) );
+		return new InputStreamReader( getInputStream( link ) );
 	}
 
 	@Override
-	public Writer getJsonWriter( final URI uri ) throws IOException
+	public Writer getJsonWriter( final String link ) throws IOException
 	{
-		return new OutputStreamWriter( getOutputStream( uri ) );
+		return new OutputStreamWriter( getOutputStream( link ) );
 	}
 
 	@Override
-	public N5Reader createN5Reader( final URI baseUri ) throws IOException
+	public N5Reader createN5Reader( final String baseLink ) throws IOException
 	{
-		return new N5GoogleCloudStorageReader( storage, getBucketName( baseUri ) );
+		return new N5GoogleCloudStorageReader( storage, getBucketName( baseLink ) );
 	}
 
 	@Override
-	public N5Writer createN5Writer( final URI baseUri ) throws IOException
+	public N5Writer createN5Writer( final String baseLink ) throws IOException
 	{
-		return new N5GoogleCloudStorageWriter( storage, getBucketName( baseUri ) );
+		return new N5GoogleCloudStorageWriter( storage, getBucketName( baseLink ) );
 	}
 
 	@Override
-	public N5Reader createN5Reader( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
+	public N5Reader createN5Reader( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5GoogleCloudStorageReader( storage, getBucketName( baseUri ), gsonBuilder );
+		return new N5GoogleCloudStorageReader( storage, getBucketName( baseLink ), gsonBuilder );
 	}
 
 	@Override
-	public N5Writer createN5Writer( final URI baseUri, final GsonBuilder gsonBuilder ) throws IOException
+	public N5Writer createN5Writer( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5GoogleCloudStorageWriter( storage, getBucketName( baseUri ), gsonBuilder );
+		return new N5GoogleCloudStorageWriter( storage, getBucketName( baseLink ), gsonBuilder );
 	}
 
-	private String getBucketName( final URI baseUri )
+	private String getBucketName( final String link )
 	{
-		final GoogleCloudStorageURI uri = new GoogleCloudStorageURI( baseUri );
+		final GoogleCloudStorageURI uri = new GoogleCloudStorageURI( link );
 		if ( uri.getKey() != null && !uri.getKey().isEmpty() )
-			throw new IllegalArgumentException( "baseUri should be a link to a bucket" );
+			throw new IllegalArgumentException( "expected link to a bucket" );
 		return uri.getBucket();
 	}
 }

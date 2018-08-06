@@ -80,32 +80,11 @@ public abstract class DataProviderFactory
 	}
 
 	/**
-	 * Constructs an appropriate {@link DataProvider} for the given link or path.
-	 *
-	 * @return
-	 */
-	public static DataProvider createByLink( final String link )
-	{
-		final DataProviderType type = CloudURI.isCloudURI( link ) ? getTypeByURI( URI.create( link ) ) : DataProviderType.FILESYSTEM;
-		return createByType( type );
-	}
-
-	/**
-	 * Constructs an appropriate {@link DataProvider} for the given {@link URI}.
-	 *
-	 * @return
-	 */
-	public static DataProvider createByURI( final URI uri )
-	{
-		return createByType( getTypeByURI( uri ) );
-	}
-
-	/**
 	 * Constructs a {@link DataProvider} of the given {@link DataProviderType}.
 	 *
 	 * @return
 	 */
-	public static DataProvider createByType( final DataProviderType type )
+	public static DataProvider create( final DataProviderType type )
 	{
 		switch ( type )
 		{
@@ -120,20 +99,12 @@ public abstract class DataProviderFactory
 		}
 	}
 
-	public static DataProviderType getTypeByURI( final URI uri )
+	public static DataProviderType detectType( final String link )
 	{
-		final String protocol = uri.getScheme();
-
-		if ( protocol == null || protocol.equalsIgnoreCase( localFileProtocol ) )
+		if ( CloudURI.isCloudURI( link ) )
+			return new CloudURI( URI.create( link ) ).getType();
+		else
 			return DataProviderType.FILESYSTEM;
-
-		if ( protocol.equalsIgnoreCase( s3Protocol ) )
-			return DataProviderType.AMAZON_S3;
-
-		if ( protocol.equalsIgnoreCase( googleCloudProtocol ) )
-			return DataProviderType.GOOGLE_CLOUD;
-
-		throw new NotImplementedException( "factory for protocol " + uri.getScheme() + " is not implemented" );
 	}
 
 	public static URI createBucketUri( final DataProviderType type, final String bucketName )
