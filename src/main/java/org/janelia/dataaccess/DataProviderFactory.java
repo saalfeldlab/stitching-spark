@@ -21,7 +21,7 @@ public abstract class DataProviderFactory
 	private static boolean initializedCustomURLStreamHandlerFactory;
 
 	/**
-	 * Constructs a filesystem-based data provider.
+	 * Constructs a filesystem-based {@link DataProvider}.
 	 *
 	 * @return
 	 */
@@ -32,8 +32,7 @@ public abstract class DataProviderFactory
 	}
 
 	/**
-	 * Constructs an Amazon Web Services S3-based data provider
-	 * using a given {@link AmazonS3} client.
+	 * Constructs an Amazon Web Services S3-based {@link DataProvider} using a given {@link AmazonS3} client.
 	 *
 	 * @param s3
 	 * @return
@@ -45,8 +44,7 @@ public abstract class DataProviderFactory
 	}
 
 	/**
-	 * Constructs an Amazon Web Services S3-based data provider
-	 * using the default {@link AmazonS3} client.
+	 * Constructs an Amazon Web Services S3-based {@link DataProvider} using the default {@link AmazonS3} client.
 	 *
 	 * @return
 	 */
@@ -56,8 +54,7 @@ public abstract class DataProviderFactory
 	}
 
 	/**
-	 * Constructs a Google Cloud Storage data provider
-	 * using a given {@link Storage} client.
+	 * Constructs a Google Cloud Storage {@link DataProvider} using a given {@link Storage} client.
 	 *
 	 * @param storage
 	 * @return
@@ -69,8 +66,7 @@ public abstract class DataProviderFactory
 	}
 
 	/**
-	 * Constructs a Google Cloud Storage data provider
-	 * using the default {@link Storage} client.
+	 * Constructs a Google Cloud Storage {@link DataProvider} using the default {@link Storage} client.
 	 *
 	 * @return
 	 */
@@ -80,7 +76,18 @@ public abstract class DataProviderFactory
 	}
 
 	/**
-	 * Constructs an appropriate data provider based on the scheme of a given {@link URI}.
+	 * Constructs an appropriate {@link DataProvider} for the given link or path.
+	 *
+	 * @return
+	 */
+	public static DataProvider createByLink( final String link )
+	{
+		final DataProviderType type = CloudURI.isCloudURI( link ) ? getTypeByURI( URI.create( link ) ) : DataProviderType.FILESYSTEM;
+		return createByType( type );
+	}
+
+	/**
+	 * Constructs an appropriate {@link DataProvider} for the given {@link URI}.
 	 *
 	 * @return
 	 */
@@ -90,7 +97,7 @@ public abstract class DataProviderFactory
 	}
 
 	/**
-	 * Constructs a data provider of a given {@link DataProviderType}.
+	 * Constructs a {@link DataProvider} of the given {@link DataProviderType}.
 	 *
 	 * @return
 	 */
