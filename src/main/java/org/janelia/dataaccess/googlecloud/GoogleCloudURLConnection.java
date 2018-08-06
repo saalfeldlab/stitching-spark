@@ -14,12 +14,12 @@ import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.Storage;
 
-class GoogleCloudStorageURLConnection extends URLConnection
+class GoogleCloudURLConnection extends URLConnection
 {
 	private final Storage storage;
 	private Blob blob;
 
-	public GoogleCloudStorageURLConnection( final Storage storage, final URL url )
+	public GoogleCloudURLConnection( final Storage storage, final URL url )
 	{
 		super( url );
 		this.storage = storage;

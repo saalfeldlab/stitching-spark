@@ -20,7 +20,7 @@ public class AmazonS3URLStreamHandlerFactory implements URLStreamHandlerFactory
 	public URLStreamHandler createURLStreamHandler( final String protocol )
 	{
 		if ( protocol.equalsIgnoreCase( s3Protocol ) )
-			return new S3URLStreamHandler( s3 );
+			return new AmazonS3URLStreamHandler( s3 );
 		else
 			return null;
 	}

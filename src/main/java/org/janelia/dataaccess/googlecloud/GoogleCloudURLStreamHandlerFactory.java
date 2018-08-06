@@ -20,7 +20,7 @@ public class GoogleCloudURLStreamHandlerFactory implements URLStreamHandlerFacto
 	public URLStreamHandler createURLStreamHandler( final String protocol )
 	{
 		if ( protocol.equalsIgnoreCase( googleCloudProtocol ) )
-			return new GoogleCloudStorageURLStreamHandler( googleCloudStorage );
+			return new GoogleCloudURLStreamHandler( googleCloudStorage );
 		else
 			return null;
 	}

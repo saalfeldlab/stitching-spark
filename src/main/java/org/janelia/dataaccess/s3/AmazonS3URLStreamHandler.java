@@ -7,11 +7,11 @@ import java.net.URLStreamHandler;
 
 import com.amazonaws.services.s3.AmazonS3;
 
-public class S3URLStreamHandler extends URLStreamHandler
+class AmazonS3URLStreamHandler extends URLStreamHandler
 {
 	private final AmazonS3 s3;
 
-	public S3URLStreamHandler( final AmazonS3 s3 )
+	public AmazonS3URLStreamHandler( final AmazonS3 s3 )
 	{
 		this.s3 = s3;
 	}
@@ -19,6 +19,6 @@ public class S3URLStreamHandler extends URLStreamHandler
 	@Override
 	protected URLConnection openConnection( final URL url ) throws IOException
 	{
-		return new S3URLConnection( s3, url );
+		return new AmazonS3URLConnection( s3, url );
 	}
 }

@@ -7,11 +7,11 @@ import java.net.URLStreamHandler;
 
 import com.google.cloud.storage.Storage;
 
-public class GoogleCloudStorageURLStreamHandler extends URLStreamHandler
+class GoogleCloudURLStreamHandler extends URLStreamHandler
 {
 	private final Storage storage;
 
-	public GoogleCloudStorageURLStreamHandler( final Storage storage )
+	public GoogleCloudURLStreamHandler( final Storage storage )
 	{
 		this.storage = storage;
 	}
@@ -19,6 +19,6 @@ public class GoogleCloudStorageURLStreamHandler extends URLStreamHandler
 	@Override
 	protected URLConnection openConnection( final URL url ) throws IOException
 	{
-		return new GoogleCloudStorageURLConnection( storage, url );
+		return new GoogleCloudURLConnection( storage, url );
 	}
 }

@@ -11,12 +11,12 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3URI;
 import com.amazonaws.services.s3.model.S3Object;
 
-class S3URLConnection extends URLConnection
+class AmazonS3URLConnection extends URLConnection
 {
 	private final AmazonS3 s3;
 	private S3Object s3Object;
 
-	public S3URLConnection( final AmazonS3 s3, final URL url )
+	public AmazonS3URLConnection( final AmazonS3 s3, final URL url )
 	{
 		super( url );
 		this.s3 = s3;
