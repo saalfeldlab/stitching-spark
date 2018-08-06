@@ -1,4 +1,4 @@
-package org.janelia.dataaccess;
+package org.janelia.dataaccess.fs;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -20,6 +20,8 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -37,7 +39,7 @@ import ij.ImagePlus;
  *
  * @author Igor Pisarev
  */
-class FSDataProvider implements DataProvider
+public class FSDataProvider implements DataProvider
 {
 	@Override
 	public DataProviderType getType()
