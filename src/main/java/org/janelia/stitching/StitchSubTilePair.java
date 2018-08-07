@@ -4,10 +4,10 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.janelia.dataaccess.DataProvider;
-import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
@@ -71,17 +71,16 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 		final SubTile[] subTiles = subTilePair.toArray();
 
 		// Get approximate transformations for the tile pair. If it is not the first iteration, they have already been estimated prior to pairwise matching.
-		final AffineGet[] estimatedTileTransforms = new AffineGet[ subTiles.length ];
+		final AffineGet[] estimatedFullTileTransforms = new AffineGet[ subTiles.length ];
 		for ( int i = 0; i < subTiles.length; ++i )
-			estimatedTileTransforms[ i ] = TransformedTileOperations.getTileTransform( subTiles[ i ].getFullTile(), offsetUncertaintyEstimator != null );
+			estimatedFullTileTransforms[ i ] = TransformedTileOperations.getTileTransform( subTiles[ i ].getFullTile(), offsetUncertaintyEstimator != null );
 
 		final ErrorEllipse movingSubTileSearchRadius;
 
 		if ( offsetUncertaintyEstimator != null )
 		{
-			for ( final AffineGet estimatedTileTransform : estimatedTileTransforms )
-				if ( estimatedTileTransform == null )
-					throw new RuntimeException( "expected non-null affine transform for tile" );
+			for ( final AffineGet estimatedFullTileTransform : estimatedFullTileTransforms )
+				Objects.requireNonNull( estimatedFullTileTransform, "expected non-null affine transform for tile" );
 
 //			try
 //			{
@@ -105,7 +104,6 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 				);
 			movingSubTileSearchRadius = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
 			System.out.println( "Create uncorrelated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingSubTileSearchRadius.estimateBoundingBox() ) ) ) + " (instead of estimating uncertainty for now)" );
-
 		}
 		else
 		{
@@ -127,14 +125,14 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 		if ( movingSubTileSearchRadius != null )
 		{
 			movingSubTileSearchRadius.setErrorEllipseTransform(
-					PairwiseTileOperations.getErrorEllipseTransform( subTiles, estimatedTileTransforms )
+					PairwiseTileOperations.getErrorEllipseTransform( subTiles, estimatedFullTileTransforms )
 				);
 		}
 
 		// Render both ROIs in the fixed space
 		final InvertibleRealTransform[] affinesToFixedTileSpace = new InvertibleRealTransform[] {
 				TransformUtils.createTransform( subTilePair.getA().numDimensions() ), // identity transform for fixed tile
-				PairwiseTileOperations.getMovingTileToFixedTileTransform( estimatedTileTransforms ) // moving tile to fixed tile
+				PairwiseTileOperations.getMovingTileToFixedTileTransform( estimatedFullTileTransforms ) // moving tile to fixed tile
 			};
 
 		// convert to fixed subtile space
@@ -168,17 +166,9 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 			return invalidPairwiseResult;
 		}
 
-		// Resulting offset is for the moving bounding box in the fixed subtile space.
-		// Convert it to the offset between the moving and fixed subtiles in the global translated space (where the linear affine component of each tile has been undone).
-		final double[] newStitchedOffset = PairwiseTileOperations.getNewStitchedOffset(
-				subTiles,
-				estimatedTileTransforms,
-				Conversions.toDoubleArray( pairwiseResult.getOffset() )
-			);
-
-		pairwiseResult.setOffset( Conversions.toFloatArray( newStitchedOffset ) );
 		pairwiseResult.setVariance( computeVariance( roiImps ) );
 		pairwiseResult.setSubTilePair( subTilePair );
+		pairwiseResult.setEstimatedFullTileTransformPair( new ValuePair<>( estimatedFullTileTransforms[ 0 ], estimatedFullTileTransforms[ 1 ] ) );
 
 		System.out.println( "Stitched subtile pair " + subTilePair );
 		return pairwiseResult;

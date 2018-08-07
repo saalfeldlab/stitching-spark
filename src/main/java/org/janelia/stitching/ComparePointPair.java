@@ -3,17 +3,20 @@ package org.janelia.stitching;
 import ij.ImagePlus;
 import mpicbg.models.Model;
 import mpicbg.stitching.ImagePlusTimePoint;
+import net.imglib2.realtransform.AffineGet;
+import net.imglib2.util.Pair;
 
 public class ComparePointPair
 {
-	final ImagePlusTimePoint impA, impB;
-	float crossCorrelation;
-	boolean validOverlap;
+	private final ImagePlusTimePoint impA, impB;
+	private float crossCorrelation;
+	private boolean validOverlap;
 
 	// the local shift of impB relative to impA
-	float[] relativeShift;
+	private float[] relativeShift;
 
-	SubTilePair subTilePair;
+	private SubTilePair subTilePair;
+	private Pair< AffineGet, AffineGet > estimatedFullTileTransformPair;
 
 	public ComparePointPair( final ImagePlusTimePoint impA, final ImagePlusTimePoint impB )
 	{
@@ -45,4 +48,7 @@ public class ComparePointPair
 
 	public void setSubTilePair( final SubTilePair subTilePair ) { this.subTilePair = subTilePair; }
 	public SubTilePair getSubTilePair() { return subTilePair; }
+
+	public void setEstimatedFullTileTransformPair( final Pair< AffineGet, AffineGet > estimatedFullTileTransformPair ) { this.estimatedFullTileTransformPair = estimatedFullTileTransformPair; }
+	public Pair< AffineGet, AffineGet > getEstimatedFullTileTransformPair() { return estimatedFullTileTransformPair; }
 }

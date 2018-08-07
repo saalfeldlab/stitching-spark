@@ -369,6 +369,7 @@ public class StitchingOptimizer implements Serializable
 					);
 
 				comparePointPair.setSubTilePair( subTilePairwiseResult.getSubTilePair() );
+				comparePointPair.setEstimatedFullTileTransformPair( subTilePairwiseResult.getEstimatedFullTileTransformPair() );
 				comparePointPair.setRelativeShift( subTilePairwiseResult.getOffset() );
 				comparePointPair.setCrossCorrelation( subTilePairwiseResult.getCrossCorrelation() );
 				comparePointPair.setIsValidOverlap(
