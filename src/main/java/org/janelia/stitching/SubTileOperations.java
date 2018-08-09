@@ -304,20 +304,4 @@ public class SubTileOperations
 		}
 		return new FinalRealInterval( min, max );
 	}
-
-	/**
-	 * Returns the offset between full tiles based on the offset between the subtiles.
-	 *
-	 * @param subTilePair
-	 * @param subTileOffset
-	 * @return
-	 */
-	public static double[] getFullTileOffset( final SubTilePair subTilePair, final double[] subTileOffset )
-	{
-		final double[] fullTileOffset = new double[ subTileOffset.length ];
-		final SubTile fixedSubTile = subTilePair.getA(), movingSubTile = subTilePair.getB();
-		for ( int d = 0; d < fullTileOffset.length; ++d )
-			fullTileOffset[ d ] = subTileOffset[ d ] + fixedSubTile.min( d ) - movingSubTile.min( d );
-		return fullTileOffset;
-	}
 }

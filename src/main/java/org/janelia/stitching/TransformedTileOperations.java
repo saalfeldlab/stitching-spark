@@ -1,24 +1,16 @@
 package org.janelia.stitching;
 
 import java.util.Arrays;
-import java.util.Set;
-
-import org.janelia.stitching.OffsetUncertaintyEstimator.EstimatedWorldSearchRadius;
-import org.janelia.stitching.OffsetUncertaintyEstimator.NotEnoughNeighboringTilesException;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
-import net.imglib2.concatenate.Concatenable;
-import net.imglib2.concatenate.PreConcatenable;
 import net.imglib2.iterator.IntervalIterator;
 import net.imglib2.realtransform.AffineGet;
-import net.imglib2.realtransform.AffineSet;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.Translation;
-import net.imglib2.realtransform.TranslationGet;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
@@ -104,67 +96,6 @@ public class TransformedTileOperations
 		}
 
 		return new FinalRealInterval( transformedMin, transformedMax );
-	}
-
-	/**
-	 * Estimates an expected affine transformation for a given tile based on offset statistics selected from local neighborhood.
-	 * The estimated transformation performs the following mapping: local tile coordinates -> expected world coordinates.
-	 *
-	 * @param estimatedAffineLinearComponent
-	 * @param estimatedAffineTranslationComponent
-	 * @return
-	 * @throws PipelineExecutionException
-	 */
-	public static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > AffineGet estimateAffineTransformation(
-			final Pair< AffineGet, TranslationGet > estimatedAffineLinearAndTranslationComponents ) throws PipelineExecutionException
-	{
-		final int dim = estimatedAffineLinearAndTranslationComponents.getA().numDimensions();
-		final A estimatedAffine = TransformUtils.createTransform( dim );
-		// Combine the transformations in an 'inverse' way: A=LT.
-		// This is because the translational component is estimated in the 'offset' space where the linear component has been undone,
-		// so the resulting transformation is built by applying the linear part to the translational part
-		estimatedAffine.concatenate( estimatedAffineLinearAndTranslationComponents.getA() );
-		estimatedAffine.concatenate( estimatedAffineLinearAndTranslationComponents.getB() );
-		return estimatedAffine;
-	}
-
-	/**
-	 * Estimates linear and translation components of the expected affine transformation for a given tile
-	 * based on offset statistics selected from local neighborhood.
-	 *
-	 * @param tile
-	 * @param searchRadiusEstimator
-	 * @return
-	 * @throws PipelineExecutionException
-	 * @throws NotEnoughNeighboringTilesException
-	 */
-	public static Pair< AffineGet, TranslationGet > estimateLinearAndTranslationAffineComponents(
-			final TileInfo tile,
-			final OffsetUncertaintyEstimator offsetUncertaintyEstimator ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
-	{
-		final EstimatedWorldSearchRadius estimatedSearchRadius = offsetUncertaintyEstimator.estimateSearchRadiusWithinWindow( tile );
-		final Set< TileInfo > neighboringTiles = estimatedSearchRadius.neighboringTiles;
-
-		final double[][] expectedLinearAffineMatrix = new double[ tile.numDimensions() ][ tile.numDimensions() + 1 ];
-		for ( final TileInfo neighboringTile : neighboringTiles )
-		{
-			final AffineGet neighboringTileTransform = getTileTransform( neighboringTile, true );
-			for ( int dRow = 0; dRow < tile.numDimensions(); ++dRow )
-				for ( int dCol = 0; dCol < tile.numDimensions(); ++dCol )
-					expectedLinearAffineMatrix[ dRow ][ dCol ] += neighboringTileTransform.get( dRow, dCol );
-		}
-		for ( int dRow = 0; dRow < tile.numDimensions(); ++dRow )
-			for ( int dCol = 0; dCol < tile.numDimensions(); ++dCol )
-				expectedLinearAffineMatrix[ dRow ][ dCol ] /= neighboringTiles.size();
-
-		final double[] expectedTranslationComponentVector = new double[ tile.numDimensions() ];
-		for ( int d = 0; d < tile.numDimensions(); ++d )
-			expectedTranslationComponentVector[ d ] = tile.getStagePosition( d ) + estimatedSearchRadius.errorEllipse.getOffsetsMeanValues()[ d ];
-
-		return new ValuePair<>(
-				TransformUtils.createTransform( expectedLinearAffineMatrix ),
-				new Translation( expectedTranslationComponentVector )
-			);
 	}
 
 	/**
