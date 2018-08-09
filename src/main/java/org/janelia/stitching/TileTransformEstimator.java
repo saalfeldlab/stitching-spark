@@ -83,15 +83,30 @@ public class TileTransformEstimator
 		}
 
 		// (2) Find affine transformation for the given tile by fitting it to stage->transformed points of its subtiles using the transformations estimated in (1)
+		return estimateTransformForTile( tile, estimatedSubTileTransforms );
+	}
+
+	/**
+	 * Estimates an expected affine transformation for a given tile with known affine transformations for each subtile.
+	 * The estimated transformation performs the following mapping: local tile coordinates -> expected world coordinates.
+	 *
+	 * @param tile
+	 * @param subTileTransforms
+	 * @return
+	 */
+	public static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > AffineGet estimateTransformForTile(
+			final TileInfo tile,
+			final Map< SubTile, AffineGet > subTileTransforms ) throws PipelineExecutionException
+	{
 		final List< PointMatch > pointMatches = new ArrayList<>();
-		for ( final Entry< SubTile, AffineGet > subTileWithEstimatedTransform : estimatedSubTileTransforms.entrySet() )
+		for ( final Entry< SubTile, AffineGet > subTileAndTransform : subTileTransforms.entrySet() )
 		{
-			final SubTile subTile = subTileWithEstimatedTransform.getKey();
-			final AffineGet estimatedStageToWorldSubTileTransform = subTileWithEstimatedTransform.getValue();
+			final SubTile subTile = subTileAndTransform.getKey();
+			final AffineGet stageToWorldSubTileTransform = subTileAndTransform.getValue();
 
 			final double[] subTileMiddlePointStagePosition = SubTileOperations.getSubTileMiddlePointStagePosition( subTile );
 			final double[] subTileMiddlePointEstimatedWorldPosition = new double[ subTileMiddlePointStagePosition.length ];
-			estimatedStageToWorldSubTileTransform.apply( subTileMiddlePointStagePosition, subTileMiddlePointEstimatedWorldPosition );
+			stageToWorldSubTileTransform.apply( subTileMiddlePointStagePosition, subTileMiddlePointEstimatedWorldPosition );
 
 			final PointMatch pointMatch = new PointMatch(
 					new Point( subTileMiddlePointStagePosition ),

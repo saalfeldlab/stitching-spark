@@ -168,7 +168,7 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 
 		pairwiseResult.setVariance( computeVariance( roiImps ) );
 		pairwiseResult.setSubTilePair( subTilePair );
-		pairwiseResult.setEstimatedFullTileTransformPair( new ValuePair<>( estimatedFullTileTransforms[ 0 ], estimatedFullTileTransforms[ 1 ] ) );
+		pairwiseResult.setEstimatedFullTileTransformPair( new AffineTransformPair( estimatedFullTileTransforms[ 0 ], estimatedFullTileTransforms[ 1 ] ) );
 
 		System.out.println( "Stitched subtile pair " + subTilePair );
 		return pairwiseResult;

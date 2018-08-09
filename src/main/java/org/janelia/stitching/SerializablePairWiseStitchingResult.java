@@ -2,15 +2,12 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 
-import net.imglib2.realtransform.AffineGet;
-import net.imglib2.util.Pair;
-
 public class SerializablePairWiseStitchingResult implements Serializable {
 
 	private static final long serialVersionUID = -8084090265269616284L;
 
 	private SubTilePair subTilePair;
-	private Pair< AffineGet, AffineGet > estimatedFullTileTransformPair;
+	private AffineTransformPair estimatedFullTileTransformPair;
 	private float[] offset;
 	private float crossCorrelation;
 	private Float phaseCorrelation;
@@ -53,8 +50,8 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 	public SubTilePair getSubTilePair() { return subTilePair; }
 	public void setSubTilePair( final SubTilePair subTilePair ) { this.subTilePair = subTilePair; }
 
-	public Pair< AffineGet, AffineGet > getEstimatedFullTileTransformPair() { return estimatedFullTileTransformPair; }
-	public void setEstimatedFullTileTransformPair( final Pair< AffineGet, AffineGet > estimatedFullTileTransformPair ) { this.estimatedFullTileTransformPair = estimatedFullTileTransformPair; }
+	public AffineTransformPair getEstimatedFullTileTransformPair() { return estimatedFullTileTransformPair; }
+	public void setEstimatedFullTileTransformPair( final AffineTransformPair estimatedFullTileTransformPair ) { this.estimatedFullTileTransformPair = estimatedFullTileTransformPair; }
 
 	public Double getVariance() { return variance; }
 	public void setVariance( final Double variance ) { this.variance = variance; }

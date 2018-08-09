@@ -31,7 +31,6 @@ import mpicbg.stitching.ImagePlusTimePoint;
 import net.imglib2.Interval;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.InvertibleRealTransform;
-import net.imglib2.util.Pair;
 
 // based on the GlobalOptimization class from the original Fiji's Stitching plugin repository
 public class GlobalOptimizationPerformer
@@ -39,8 +38,8 @@ public class GlobalOptimizationPerformer
 	private static final double POINT_MATCH_MAX_OFFSET = 10;
 	private static final double DAMPNESS_FACTOR = 0.9;
 
-	private static final int localSubTileIndex = 0;
-	private static final int mappingSubTileIndex = 1;
+	private static final int fixedIndex = 0;
+	private static final int movingIndex = 1;
 
 	public Map< Integer, Tile< ? > > lostTiles = null;
 
@@ -124,13 +123,9 @@ public class GlobalOptimizationPerformer
 			{
 				++pairsAdded;
 
-				final SubTilePair subTilePair = comparePointPair.getSubTilePair();
-				final SubTile[] subTiles = subTilePair.toArray();
-
-				final Pair< AffineGet, AffineGet > estimatedFullTileTransformPair = comparePointPair.getEstimatedFullTileTransformPair();
-				final AffineGet[] estimatedFullTileTransforms = new AffineGet[] { estimatedFullTileTransformPair.getA(), estimatedFullTileTransformPair.getB() };
+				final SubTile[] subTiles = comparePointPair.getSubTilePair().toArray();
+				final AffineGet[] estimatedFullTileTransforms = comparePointPair.getEstimatedFullTileTransformPair().toArray();
 				final Tile< ? >[] tileModels = new Tile< ? >[] { comparePointPair.getTile1(), comparePointPair.getTile2() };
-				final float pointMatchWeight = comparePointPair.getCrossCorrelation();
 
 				// add empty collections if not present
 				for ( int i = 0; i < 2; ++i )
@@ -142,30 +137,15 @@ public class GlobalOptimizationPerformer
 						connectedTilesMap.get( tileModels[ i ] ).put( tileModels[ ( i + 1 ) % 2 ], new ArrayList<>() );
 				}
 
-				// TODO: validate usage of direct vs. inverse transformations
+				// create point match to map the middle point of the moving subtile into its new position in the fixed tile space
+				final PointMatch movingIntoFixedPointMatch = createMovingIntoFixedPointMatch(
+						subTiles,
+						estimatedFullTileTransforms,
+						comparePointPair.getRelativeShift(),
+						comparePointPair.getCrossCorrelation()
+					);
 
-				// add two matches:
-				// 1) new middle point of the moving subtile in the fixed subtile space -> world (using fixed tile transform)
-				// 2) new middle point of the fixed subtile in the moving subtile space -> world (using moving tile transform)
-				for ( int i = 0; i < 2; ++i )
-				{
-					final SubTile localSubTile = subTiles[ i ], mappingSubTile = subTiles[ ( i + 1 ) % 2 ];
-					final AffineGet localFullTileEstimatedTransform = estimatedFullTileTransforms[ i ], mappingFullTileEstimatedTransform = estimatedFullTileTransforms[ ( i + 1 ) % 2 ];
-
-					final double[] localToMappingOffset = new double[ comparePointPair.getRelativeShift().length ];
-					for ( int d = 0; d < localToMappingOffset.length; ++d )
-						localToMappingOffset[ d ] = ( i == 0 ? 1 : -1 ) * comparePointPair.getRelativeShift()[ d ];
-
-					final PointMatch pointMatch = createLocalSubTileIntoWorldPointMatch(
-							new SubTile[] { localSubTile, mappingSubTile },
-							new AffineGet[] { localFullTileEstimatedTransform, mappingFullTileEstimatedTransform },
-							localToMappingOffset,
-							pointMatchWeight
-						);
-
-					final Tile< ? > localTileModel = tileModels[ i ], mappingTileModel = tileModels[ ( i + 1 ) % 2 ];
-					connectedTilesMap.get( localTileModel ).get( mappingTileModel ).add( pointMatch );
-				}
+				connectedTilesMap.get( tileModels[ movingIndex ] ).get( tileModels[ fixedIndex ] ).add( movingIntoFixedPointMatch );
 			}
 		}
 
@@ -315,31 +295,31 @@ public class GlobalOptimizationPerformer
 		return imageInformationList;
 	}
 
-	private PointMatch createLocalSubTileIntoWorldPointMatch(
-			final SubTile[] localAndMappingSubTiles,
-			final AffineGet[] localAndMappingFullTileEstimatedTransforms,
-			final double[] localToMappingOffset,
+	private PointMatch createMovingIntoFixedPointMatch(
+			final SubTile[] subTiles,
+			final AffineGet[] estimatedFullTileTransforms,
+			final float[] subTilesOffset,
 			final double pointMatchWeight )
 	{
-		// build the transform to convert from the 'mapping' full tile into the 'local' subtile
-		final InvertibleRealTransform mappingFullTileToLocalSubTileTransform = PairwiseTileOperations.getMovingTileToFixedSubTileTransform( localAndMappingSubTiles, localAndMappingFullTileEstimatedTransforms );
+		// get the middle point of the moving subtile in the local (moving) tile space
+		final Point movingSubTileMiddlePoint = new Point( SubTileOperations.getSubTileMiddlePoint( subTiles[ movingIndex ] ) );
 
-		// transform the 'mapping' subtile into the coordinate space of the 'local' subtile and find its bounding box
-		final Interval transformedMappingSubTileBoundingBox = TransformedTileOperations.getTransformedBoundingBox( localAndMappingSubTiles[ mappingSubTileIndex ], mappingFullTileToLocalSubTileTransform );
+		// build the transform to convert from the 'moving' tile into the 'fixed' tile
+		final InvertibleRealTransform movingTileToFixedTileTransform = PairwiseTileOperations.getMovingTileToFixedTileTransform( estimatedFullTileTransforms );
 
-		// calculate the new middle point position of the 'mapping' subtile in the coordinate space of the 'local' subtile
-		final double[] newTransformedMappingSubTileMiddlePoint = new double[ transformedMappingSubTileBoundingBox.numDimensions() ];
-		for ( int d = 0; d < transformedMappingSubTileBoundingBox.numDimensions(); ++d )
-			newTransformedMappingSubTileMiddlePoint[ d ] = localToMappingOffset[ d ] + transformedMappingSubTileBoundingBox.dimension( d ) / 2.;
+		// transform the 'moving' subtile into the coordinate space of the 'fixed' tile and find its bounding box
+		final Interval transformedMovingSubTileBoundingBox = TransformedTileOperations.getTransformedBoundingBox( subTiles[ movingIndex ], movingTileToFixedTileTransform );
 
-		// map the new middle point position into the world
-		final double[] newWorldMappingSubTileMiddlePoint = new double[ transformedMappingSubTileBoundingBox.numDimensions() ];
-		final AffineGet worldToLocalFullTileTransform = localAndMappingFullTileEstimatedTransforms[ localSubTileIndex ].inverse();
-		final InvertibleRealTransform worldToLocalSubTileTransform = PairwiseTileOperations.getFixedSubTileTransform( localAndMappingSubTiles, worldToLocalFullTileTransform );
-		worldToLocalSubTileTransform.inverse().apply( newTransformedMappingSubTileMiddlePoint, newWorldMappingSubTileMiddlePoint );
+		// calculate the new middle point position of the 'moving' subtile in the coordinate space of the 'fixed' tile
+		final double[] newTransformedMovingSubTileMiddlePointPosition = new double[ transformedMovingSubTileBoundingBox.numDimensions() ];
+		for ( int d = 0; d < transformedMovingSubTileBoundingBox.numDimensions(); ++d )
+			newTransformedMovingSubTileMiddlePointPosition[ d ] = subTiles[ fixedIndex ].realMin( d ) + subTilesOffset[ d ] + transformedMovingSubTileBoundingBox.dimension( d ) / 2.;
+		final Point newTransformedMovingSubTileMiddlePoint = new Point( newTransformedMovingSubTileMiddlePointPosition );
 
-		// create a point match between the local position and the corresponding world position
-		return new PointMatch( new Point( newTransformedMappingSubTileMiddlePoint ), new Point( newWorldMappingSubTileMiddlePoint ), pointMatchWeight );
+		// slightly change the matched positions to avoid IllDefinedDataPointsException when fitting models
+		shiftPoints( movingSubTileMiddlePoint, newTransformedMovingSubTileMiddlePoint );
+
+		return new PointMatch( movingSubTileMiddlePoint, newTransformedMovingSubTileMiddlePoint, pointMatchWeight );
 	}
 
 	/**
@@ -370,10 +350,8 @@ public class GlobalOptimizationPerformer
 		{
 			if ( tile.getMatches().isEmpty() )
 				throw new RuntimeException( "tile does not have any point matches" );
-			else if ( tile.getMatches().size() % 2 != 0 )
-				throw new RuntimeException( "tile has odd number of point matches: inconsistent with current scheme of generating them both ways" );
 
-			if ( tile.getMatches().size() < 2 * tile.getModel().getMinNumMatches() ) // x2 because each tile pair is matched both ways
+			if ( tile.getMatches().size() < tile.getModel().getMinNumMatches() )
 			{
 				final int dim = tile.getMatches().iterator().next().getP1().getL().length;
 				final Model< ? > replacementModel = dim == 2 ? new TranslationModel2D() : new TranslationModel3D();
@@ -389,7 +367,7 @@ public class GlobalOptimizationPerformer
 				replacementTile.addMatches( tile.getMatches() );
 				for ( final Tile< ? > connectedTile : tile.getConnectedTiles() )
 				{
-					// do not use removeConnectedTile() because it tries too hard and removes point matches from both sides which we would like to preserve
+					// do not use removeConnectedTile() because it also removes corresponding point matches from both sides which we need to keep
 					connectedTile.getConnectedTiles().remove( tile );
 					connectedTile.addConnectedTile( replacementTile );
 					replacementTile.addConnectedTile( connectedTile );

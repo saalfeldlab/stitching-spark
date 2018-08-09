@@ -331,14 +331,14 @@ public class StitchingOptimizer implements Serializable
 			final OptimizerMode optimizerMode )
 	{
 		// create tile models
-		final TreeMap< Integer, ImagePlusTimePoint > fakeTileImagesMap = new TreeMap<>();
+		final TreeMap< Integer, ImagePlusTimePoint > tileModelsMap = new TreeMap<>();
 		for ( final SerializablePairWiseStitchingResult subTilePairwiseResult : subTilePairwiseResults )
 		{
 			if ( subTilePairwiseResult != null )
 			{
 				for ( final TileInfo originalTileInfo : subTilePairwiseResult.getSubTilePair().getFullTilePair().toArray() )
 				{
-					if ( !fakeTileImagesMap.containsKey( originalTileInfo.getIndex() ) )
+					if ( !tileModelsMap.containsKey( originalTileInfo.getIndex() ) )
 					{
 						final Model< ? > tileModel = createTileModel(
 								originalTileInfo.numDimensions(),
@@ -349,9 +349,9 @@ public class StitchingOptimizer implements Serializable
 
 						final ImageCollectionElement el = Utils.createElementCollectionElementModel( originalTileInfo, tileModel );
 						final ImagePlus fakeImage = new ImagePlus( originalTileInfo.getIndex().toString(), ( java.awt.Image ) null );
-						final ImagePlusTimePoint fakeTile = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
+						final ImagePlusTimePoint indexedTileModel = new ImagePlusTimePoint( fakeImage, el.getIndex(), 1, el.getModel(), el );
 
-						fakeTileImagesMap.put( originalTileInfo.getIndex(), fakeTile );
+						tileModelsMap.put( originalTileInfo.getIndex(), indexedTileModel );
 					}
 				}
 			}
@@ -364,8 +364,8 @@ public class StitchingOptimizer implements Serializable
 			if ( subTilePairwiseResult != null )
 			{
 				final ComparePointPair comparePointPair = new ComparePointPair(
-						fakeTileImagesMap.get( subTilePairwiseResult.getSubTilePair().getFullTilePair().getA().getIndex() ),
-						fakeTileImagesMap.get( subTilePairwiseResult.getSubTilePair().getFullTilePair().getB().getIndex() )
+						tileModelsMap.get( subTilePairwiseResult.getSubTilePair().getFullTilePair().getA().getIndex() ),
+						tileModelsMap.get( subTilePairwiseResult.getSubTilePair().getFullTilePair().getB().getIndex() )
 					);
 
 				comparePointPair.setSubTilePair( subTilePairwiseResult.getSubTilePair() );
