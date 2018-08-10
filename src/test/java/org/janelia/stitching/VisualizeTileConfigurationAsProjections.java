@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -39,23 +40,81 @@ public class VisualizeTileConfigurationAsProjections
 		public final Integer index;
 		public final Dimensions size;
 		public final AffineGet transform;
+		public final ARGBType color;
 
-		public TileForDrawing( final Integer index, final Dimensions size, final AffineGet transform )
+		public TileForDrawing(
+				final Integer index,
+				final Dimensions size,
+				final AffineGet transform,
+				final ARGBType color )
 		{
 			this.index = index;
 			this.size = size;
 			this.transform = transform;
+			this.color = color.copy();
+		}
+	}
+
+	private static class TileForInspection
+	{
+		public final Integer inspectedTileIndex;
+		public final ARGBType inspectedTileColor;
+		public final Set< Integer > neighboringTileIndexes;
+		public final ARGBType neighboringTilesColor;
+
+		public TileForInspection(
+				final Integer inspectedTileIndex,
+				final ARGBType inspectedTileColor,
+				final Set< Integer > neighboringTileIndexes,
+				final ARGBType neighboringTilesColor )
+		{
+			this.inspectedTileIndex = inspectedTileIndex;
+			this.inspectedTileColor = inspectedTileColor.copy();
+			this.neighboringTileIndexes = neighboringTileIndexes;
+			this.neighboringTilesColor = neighboringTilesColor.copy();
 		}
 	}
 
 	private static final long[] displaySize = new long[] { 4000, 4000 };
 	private static final boolean projectOnlyMiddleSlab = true;
 
+	private static ARGBType stageTilesColor = new ARGBType( ARGBType.rgba( 255, 0, 0, 255 ) );
+	private static ARGBType groundtruthTilesColor = new ARGBType( ARGBType.rgba( 0, 255, 0, 255 ) );
+	private static ARGBType stitchedTilesColor = new ARGBType( ARGBType.rgba( 0, 0, 255, 255 ) );
+
+	private static ARGBType inspectedTileColor = new ARGBType( ARGBType.rgba( 255, 255, 255, 255 ) );
+	private static ARGBType inspectedTileNeighborsColor = new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) );
+
 	public static void main( final String[] args ) throws Exception
 	{
 		final DataProvider dataProvider = DataProviderFactory.createByURI( URI.create( args[ 0 ] ) );
 		final TileInfo[] groundtruthTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
 		final TileInfo[] stitchedTiles = args.length > 1 ? TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) ) : null;
+
+		final Optional< TileForInspection > tileForInspection;
+		if ( args.length > 2 )
+		{
+			final String usedPairwiseShiftsPath = args[ 2 ];
+			final Integer tileToInspect = Integer.parseInt( args[ 3 ] );
+
+			final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( usedPairwiseShiftsPath ) ) );
+			final Set< Integer > inspectedTileNeighbors = new HashSet<>();
+			for ( final SerializablePairWiseStitchingResult usedPairwiseShift : usedPairwiseShifts )
+				for ( int i = 0; i < 2; ++i )
+					if ( usedPairwiseShift.getSubTilePair().getFullTilePair().toArray()[ i ].getIndex().intValue() == tileToInspect.intValue() )
+						inspectedTileNeighbors.add( usedPairwiseShift.getSubTilePair().getFullTilePair().toArray()[ ( i + 1 ) % 2 ].getIndex() );
+
+			tileForInspection = Optional.of( new TileForInspection(
+					tileToInspect,
+					inspectedTileColor,
+					inspectedTileNeighbors,
+					inspectedTileNeighborsColor
+				) );
+		}
+		else
+		{
+			tileForInspection = Optional.empty();
+		}
 
 		new ImageJ();
 
@@ -64,19 +123,25 @@ public class VisualizeTileConfigurationAsProjections
 		final List< TileForDrawing > stageTilesForDrawing = new ArrayList<>(), groundtruthTilesForDrawing = new ArrayList<>();
 		for ( final TileInfo tile : groundtruthTiles )
 		{
-			stageTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), new Translation( tile.getStagePosition() ) ) );
-			groundtruthTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), tile.getTransform() ) );
+			stageTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), new Translation( tile.getStagePosition() ), stageTilesColor ) );
+			groundtruthTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), tile.getTransform(), groundtruthTilesColor ) );
 		}
 
-		drawTiles( stageTilesForDrawing, new ARGBType( ARGBType.rgba( 255, 0, 0, 255 ) ), "stage", tileIndexesProjectionsWhitelist );
-		drawTiles( groundtruthTilesForDrawing, new ARGBType( ARGBType.rgba( 0, 255, 0, 255 ) ), "groundtruth", tileIndexesProjectionsWhitelist );
+		drawTiles( stageTilesForDrawing, "stage", tileIndexesProjectionsWhitelist );
+		drawTiles( groundtruthTilesForDrawing, "groundtruth", tileIndexesProjectionsWhitelist );
 
 		if ( stitchedTiles != null )
 		{
 			final List< TileForDrawing > stitchedTilesForDrawing = new ArrayList<>();
 			for ( final TileInfo tile : stitchedTiles )
-				stitchedTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), tile.getTransform() ) );
-			drawTiles( stitchedTilesForDrawing, new ARGBType( ARGBType.rgba( 0, 0, 255, 255 ) ), "stitch", tileIndexesProjectionsWhitelist );
+				stitchedTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), tile.getTransform(), stitchedTilesColor ) );
+
+			drawTiles(
+					stitchedTilesForDrawing,
+					"stitch",
+					tileIndexesProjectionsWhitelist,
+					tileForInspection
+				);
 		}
 
 		System.out.println( groundtruthTiles.length + " input/groundtruth tiles" );
@@ -103,18 +168,25 @@ public class VisualizeTileConfigurationAsProjections
 
 			for ( int d = 0; d < 3; ++d )
 			{
-				int includedStitchedTiles = 0;
+				final Set< Integer > includedStitchedTiles = new LinkedHashSet<>();
 				for ( final TileInfo stitchedTile : stitchedTiles )
 					if ( tileIndexesProjectionsWhitelist.get().get( d ).contains( stitchedTile.getIndex() ) )
-						++includedStitchedTiles;
+						includedStitchedTiles.add( stitchedTile.getIndex() );
 
 				final List< Integer > projectionDims = new ArrayList<>();
 				for ( int k = 0; k < 3; ++k )
 					if ( k != d )
 						projectionDims.add( k );
 				final String projectionAxesStr = projectionDims.stream().map( k -> AxisMapping.getAxisStr( k ) ).collect( Collectors.joining() );
-				System.out.println( "  " + projectionAxesStr + ": " + includedStitchedTiles );
+				System.out.println( "  " + projectionAxesStr + ": " + includedStitchedTiles.size() + "  " + includedStitchedTiles );
 			}
+		}
+
+		if ( tileForInspection.isPresent() )
+		{
+			System.out.println();
+			System.out.println( "Tile to inspect: " + tileForInspection.get().inspectedTileIndex );
+			System.out.println( "Its neighbors used for optimization: " + tileForInspection.get().neighboringTileIndexes );
 		}
 	}
 
@@ -159,15 +231,34 @@ public class VisualizeTileConfigurationAsProjections
 
 	private static void drawTiles(
 			final List< TileForDrawing > tilesForDrawing,
-			final ARGBType color,
 			final String caption,
 			final Optional< List< Set< Integer > > > tileIndexesProjectionsWhitelist ) throws ImgLibException
 	{
+		drawTiles( tilesForDrawing, caption, tileIndexesProjectionsWhitelist, Optional.empty() );
+	}
+
+	private static void drawTiles(
+			final List< TileForDrawing > tilesForDrawing,
+			final String caption,
+			final Optional< List< Set< Integer > > > tileIndexesProjectionsWhitelist,
+			final Optional< TileForInspection > tileForInspection ) throws ImgLibException
+	{
+		if ( tileForInspection.isPresent() )
+		{
+			for ( final TileForDrawing tileForDrawing : tilesForDrawing )
+			{
+				if ( tileForDrawing.index.intValue() == tileForInspection.get().inspectedTileIndex.intValue() )
+					tileForDrawing.color.set( tileForInspection.get().inspectedTileColor );
+				else if ( tileForInspection.get().neighboringTileIndexes.contains( tileForDrawing.index ) )
+					tileForDrawing.color.set( tileForInspection.get().neighboringTilesColor );
+			}
+		}
+
 		if ( tilesForDrawing.iterator().next().size.numDimensions() == 2 )
 		{
 			if ( tileIndexesProjectionsWhitelist.isPresent() )
 				throw new RuntimeException( "whitelist is expected to be null for 2d, as all tiles should be included" );
-			drawTilesProjection( tilesForDrawing, color, caption );
+			drawTilesProjection( tilesForDrawing, caption );
 		}
 		else if ( tilesForDrawing.iterator().next().size.numDimensions() == 3 )
 		{
@@ -201,11 +292,11 @@ public class VisualizeTileConfigurationAsProjections
 					final double[][] projectedTileTransformMatrixPrimitive = projectedTileTransformMatrix.stream().map( vals -> vals.stream().mapToDouble( Double::doubleValue ).toArray() ).toArray( double[][]::new );
 					final AffineGet projectedTileTransform = TransformUtils.createTransform( projectedTileTransformMatrixPrimitive );
 
-					projectedTilesForDrawing.add( new TileForDrawing( tileForDrawing.index, projectedTileDimensions, projectedTileTransform ) );
+					projectedTilesForDrawing.add( new TileForDrawing( tileForDrawing.index, projectedTileDimensions, projectedTileTransform, tileForDrawing.color ) );
 				}
 
 				final String projectionAxesStr = projectionDims.stream().map( k -> AxisMapping.getAxisStr( k ) ).collect( Collectors.joining() );
-				drawTilesProjection( projectedTilesForDrawing, color, caption + "-" + projectionAxesStr );
+				drawTilesProjection( projectedTilesForDrawing, caption + "-" + projectionAxesStr );
 			}
 		}
 		else
@@ -214,7 +305,7 @@ public class VisualizeTileConfigurationAsProjections
 		}
 	}
 
-	private static void drawTilesProjection( final List< TileForDrawing > projectedTilesForDrawing, final ARGBType color, final String caption ) throws ImgLibException
+	private static void drawTilesProjection( final List< TileForDrawing > projectedTilesForDrawing, final String caption ) throws ImgLibException
 	{
 		final IntImagePlus< ARGBType > img = ImagePlusImgs.argbs( displaySize );
 		final RandomAccess< ARGBType > imgRandomAccess = img.randomAccess();
@@ -241,7 +332,7 @@ public class VisualizeTileConfigurationAsProjections
 					projectedTileDisplayTransform,
 					Intervals.dimensionsAsIntArray( img ),
 					imgRandomAccess,
-					color
+					projectedTileForDrawing.color
 				);
 		}
 
