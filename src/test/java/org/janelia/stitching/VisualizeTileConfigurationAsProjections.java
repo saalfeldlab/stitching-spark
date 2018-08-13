@@ -80,10 +80,10 @@ public class VisualizeTileConfigurationAsProjections
 
 	private static ARGBType stageTilesColor = new ARGBType( ARGBType.rgba( 255, 0, 0, 255 ) );
 	private static ARGBType groundtruthTilesColor = new ARGBType( ARGBType.rgba( 0, 255, 0, 255 ) );
-	private static ARGBType stitchedTilesColor = new ARGBType( ARGBType.rgba( 0, 0, 255, 255 ) );
+	private static ARGBType stitchedTilesColor = new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) );
 
 	private static ARGBType inspectedTileColor = new ARGBType( ARGBType.rgba( 255, 255, 255, 255 ) );
-	private static ARGBType inspectedTileNeighborsColor = new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) );
+	private static ARGBType inspectedTileNeighborsColor = new ARGBType( ARGBType.rgba( 0, 0, 255, 255 ) );
 
 	public static void main( final String[] args ) throws Exception
 	{
