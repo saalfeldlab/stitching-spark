@@ -1,5 +1,6 @@
 package org.janelia.stitching;
 
+import java.io.Serializable;
 import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -10,6 +11,8 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -43,6 +46,7 @@ import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.Util;
 import net.imglib2.view.Views;
+import scala.Tuple2;
 
 public class StitchingTestGenerator
 {
@@ -86,11 +90,15 @@ public class StitchingTestGenerator
 		}
 
 		testGen.run();
+		testGen.close();
+
 		System.out.println( "Done" );
 	}
 
-	private static abstract class AbstractTestGenerator< T extends NativeType< T > & RealType< T > >
+	private static abstract class AbstractTestGenerator< T extends NativeType< T > & RealType< T > > implements Serializable, AutoCloseable
 	{
+		protected static final long serialVersionUID = -7589850026941855903L;
+
 		protected static final Dimensions tileDimensions = new FinalDimensions( 500, 400, 350 );
 		protected static final double overlapRatio = 0.2;
 		protected static final double cropRatio = 0.25;
@@ -98,6 +106,8 @@ public class StitchingTestGenerator
 		protected final String n5Path;
 		protected final String datasetPath;
 		protected final String outputPath;
+
+		protected transient final JavaSparkContext sparkContext;
 
 		AbstractTestGenerator(
 				final String n5Path,
@@ -107,6 +117,17 @@ public class StitchingTestGenerator
 			this.n5Path = n5Path;
 			this.datasetPath = datasetPath;
 			this.outputPath = outputPath;
+
+			sparkContext = new JavaSparkContext( new SparkConf()
+					.setAppName( "StitchingTestGenerator" )
+					.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
+				);
+		}
+
+		@Override
+		public void close() throws Exception
+		{
+			sparkContext.close();
 		}
 
 		abstract void run() throws Exception;
@@ -615,10 +636,8 @@ public class StitchingTestGenerator
 	private static class RotatingTestGenerator< T extends NativeType< T > & RealType< T > > extends AbstractTestGenerator< T >
 	{
 		protected static final double overlapRatio = 0.3;
-		protected static final double[] cropRatio = new double[] { 0.85, 0.5, 0.5 };
-		protected static final double maxColumnRotation = 90.;
-
-		private final Random rnd = new Random( 69997 ); // repeatable results
+		protected static final double[] cropRatio = new double[] { 0.5, 0.5, 0.5 };
+		protected static final double maxColumnRotation = 15.;
 
 		RotatingTestGenerator(
 				final String n5Path,
@@ -670,11 +689,15 @@ public class StitchingTestGenerator
 			for ( int i = 0; i < columnRotation.length; ++i )
 				columnRotation[ i ] = i * columnRotationStep;
 
-			for ( final Interval nonOverlappingInterval : nonOverlappingIntervals )
+			final long[] cropIntervalMin = Intervals.minAsLongArray( cropInterval );
+
+			final List< Tuple2< TileInfo, TileInfo > > tilesAndGroundtruthTiles = sparkContext.parallelize( nonOverlappingIntervals, nonOverlappingIntervals.size() ).zipWithIndex().map( nonOverlappingIntervalAndIndex ->
 			{
+				final Interval nonOverlappingInterval = nonOverlappingIntervalAndIndex._1();
+
 				final int[] gridIndex = new int[ nonOverlappingInterval.numDimensions() ];
 				for ( int d = 0; d < gridIndex.length; ++d )
-					gridIndex[ d ] = ( int ) ( ( nonOverlappingInterval.min( d ) - cropInterval.min( d ) ) / tileDimensions.dimension( d ) );
+					gridIndex[ d ] = ( int ) ( ( nonOverlappingInterval.min( d ) - cropIntervalMin[ d ] ) / tileDimensions.dimension( d ) );
 
 //				final double[] scalingCoeffs = new double[ nonOverlappingInterval.numDimensions() ];
 //				for ( int d = 0; d < scalingCoeffs.length; ++d )
@@ -720,7 +743,7 @@ public class StitchingTestGenerator
 
 				final long[] offset = new long[ nonOverlappingInterval.numDimensions() ];
 				for ( int d = 0; d < offset.length; ++d )
-					offset[ d ] = Math.round( ( ( nonOverlappingInterval.min( d ) - cropInterval.min( d ) ) / tileDimensions.dimension( d ) ) * tileDimensions.dimension( d ) * overlapRatio );
+					offset[ d ] = Math.round( ( ( nonOverlappingInterval.min( d ) - cropIntervalMin[ d ] ) / tileDimensions.dimension( d ) ) * tileDimensions.dimension( d ) * overlapRatio );
 
 //				final long[] shift = new long[ nonOverlappingInterval.numDimensions() ];
 //				for ( int d = 0; d < shift.length; ++d )
@@ -728,7 +751,7 @@ public class StitchingTestGenerator
 //					final int maxShiftPixels = ( int ) Math.round( tileDimensions.dimension( d ) * shiftRatio );
 //					shift[ d ] = rnd.nextInt( maxShiftPixels + 1 ) - maxShiftPixels / 2 + shiftStep[ d ] * gridIndex[ d ];
 //				}
-				System.out.println( "tile " + tiles.size() + ", gridIndex=" + Arrays.toString( gridIndex ) + ", rotation=" + Math.round( Math.toDegrees( zRotationAngle ) ) );
+				System.out.println( "gridIndex=" + Arrays.toString( gridIndex ) + ", rotation=" + Math.round( Math.toDegrees( zRotationAngle ) ) );
 
 				final Interval overlappingInterval = IntervalsHelper.offset( nonOverlappingInterval, offset );
 
@@ -739,12 +762,15 @@ public class StitchingTestGenerator
 
 
 				final TileInfo tile = new TileInfo( 3 );
-				tile.setIndex( tiles.size() );
+				tile.setIndex( nonOverlappingIntervalAndIndex._2().intValue() );
 
 				tile.setStagePosition( Intervals.minAsDoubleArray( overlappingInterval ) );
 				tile.setSize( Intervals.dimensionsAsLongArray( overlappingInterval ) );
 
-				final RandomAccessible< T > extendedSource = Views.extendZero( img );
+				final DataProvider dataProviderLocal = DataProviderFactory.createByURI( URI.create( n5Path ) );
+				final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( n5Path ), N5ExportMetadata.getGsonBuilder() );
+				final RandomAccessibleInterval< T > source = N5Utils.open( n5Local, datasetPath );
+				final RandomAccessible< T > extendedSource = Views.extendZero( source );
 				final RealRandomAccessible< T > interpolatedSource = Views.interpolate( extendedSource, new ClampingNLinearInterpolatorFactory<>() );
 				final RandomAccessible< T > transformedSource = RealViews.transform( interpolatedSource, transformAroundMiddlePoint );
 				final RandomAccessibleInterval< T > transformedCropImg = Views.interval( transformedSource, overlappingInterval );
@@ -757,14 +783,23 @@ public class StitchingTestGenerator
 				tile.setType( ImageType.valueOf( tileImp.getType() ) );
 				tile.setPixelResolution( pixelResolution.clone() );
 
-				tiles.add( tile );
+//				tiles.add( tile );
 
 				final TileInfo groundtruthTile = tile.clone();
 				final AffineTransform3D groundtruthTransform = new AffineTransform3D();
 				groundtruthTransform.preConcatenate( new Translation( Intervals.minAsDoubleArray( overlappingInterval ) ) );
 				groundtruthTransform.preConcatenate( transformAroundMiddlePoint.inverse() );
 				groundtruthTile.setTransform( groundtruthTransform );
-				groundtruthTiles.add( groundtruthTile );
+//				groundtruthTiles.add( groundtruthTile );
+
+				return new Tuple2<>( tile, groundtruthTile );
+			}
+			).collect();
+
+			for ( final Tuple2< TileInfo, TileInfo > tileAndGroundtruthTile : tilesAndGroundtruthTiles )
+			{
+				tiles.add( tileAndGroundtruthTile._1() );
+				groundtruthTiles.add( tileAndGroundtruthTile._2() );
 			}
 
 			System.out.println( "Tiles: " + tiles.size() );
