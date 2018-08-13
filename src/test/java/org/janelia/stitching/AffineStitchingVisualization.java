@@ -316,40 +316,40 @@ public class AffineStitchingVisualization
 
 
 		// map the new offset back to the global space
-		final AffineGet newMovingTileTransform = PairwiseTileOperations.getNewMovingTileTransform(
-				tileBoxPair.toArray(),
-				estimatedTileTransforms,
-				simulatedMovingBoundingBoxOffset
-			);
+//		final AffineGet newMovingTileTransform = PairwiseTileOperations.getNewMovingTileTransform(
+//				tileBoxPair.toArray(),
+//				estimatedTileTransforms,
+//				simulatedMovingBoundingBoxOffset
+//			);
 
 		// draw moving tile at its new world position
-		drawTransformedRectangle(
-				getLocalRealIntervalCorners( tilePair.getB().getStageInterval() ),
-				newMovingTileTransform,
-				worldDisplaySize,
-				imgWorldRandomAccess,
-				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
-			);
+//		drawTransformedRectangle(
+//				getLocalRealIntervalCorners( tilePair.getB().getStageInterval() ),
+//				newMovingTileTransform,
+//				worldDisplaySize,
+//				imgWorldRandomAccess,
+//				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
+//			);
 
 		// draw moving tile box at its new world position
-		drawTransformedRectangle(
-				getRealIntervalCorners( tileBoxPair.getB() ),
-				newMovingTileTransform,
-				worldDisplaySize,
-				imgWorldRandomAccess,
-				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
-			);
+//		drawTransformedRectangle(
+//				getRealIntervalCorners( tileBoxPair.getB() ),
+//				newMovingTileTransform,
+//				worldDisplaySize,
+//				imgWorldRandomAccess,
+//				new ARGBType( ARGBType.rgba( 64, 64, 0, 64 ) )
+//			);
 
 		impWorld.updateAndDraw();
 
 
 		// find offset between the fixed and moving tiles in the offset space
-		final double[] newTranslatedOffset = PairwiseTileOperations.getNewStitchedOffset(
-				tileBoxPair.toArray(),
-				estimatedTileTransforms,
-				simulatedMovingBoundingBoxOffset
-			);
-		System.out.println( System.lineSeparator() + "New offset in translated space: " + Arrays.toString( newTranslatedOffset ) );
+//		final double[] newTranslatedOffset = PairwiseTileOperations.getNewStitchedOffset(
+//				tileBoxPair.toArray(),
+//				estimatedTileTransforms,
+//				simulatedMovingBoundingBoxOffset
+//			);
+//		System.out.println( System.lineSeparator() + "New offset in translated space: " + Arrays.toString( newTranslatedOffset ) );
 
 		System.out.println( System.lineSeparator() + "OK" );
 	}
