@@ -9,6 +9,8 @@ import org.kohsuke.args4j.Option;
 
 import net.imglib2.Interval;
 import net.imglib2.SerializableFinalInterval;
+import net.imglib2.util.Pair;
+import net.imglib2.util.ValuePair;
 
 /**
  * Command line arguments parser for flatfield correction.
@@ -46,6 +48,16 @@ public class FlatfieldCorrectionArguments
 			usage = "Estimate 2D flatfield (slices are used as additional data points)")
 	private boolean use2D = false;
 
+	@Option(name = "--qmin", aliases = { "--minQuantile" }, required = false,
+			usage = "Quantile to determine min histogram value")
+	private Double histMinQuantile;
+
+	@Option(name = "--qmax", aliases = { "--maxQuantile" }, required = false,
+			usage = "Quantile to determine max histogram value")
+	private Double histMaxQuantile;
+
+	private static final double defaultHistMinQuantile = 0.05;
+	private static final double defaultHistMaxQuantile = 0.95;
 
 	private boolean parsedSuccessfully = false;
 
@@ -63,8 +75,23 @@ public class FlatfieldCorrectionArguments
 			parser.printUsage( System.err );
 		}
 
+		// validate min/max pair args
 		if ( ( histMinValue == null ) != ( histMaxValue == null ) )
-			throw new IllegalArgumentException( "histogram min/max intensity should be either both specified or omitted (will be estimated in this case)" );
+			throw new IllegalArgumentException( "histogram min/max values should be either both specified or omitted (will be estimated in this case)" );
+
+		if ( ( histMinQuantile == null ) != ( histMaxQuantile == null ) )
+			throw new IllegalArgumentException( "histogram min/max quantiles should be either both specified or omitted (default values <0.05, 0.95> will be used in this case)" );
+
+		if ( histMinValue != null && histMaxValue != null )
+		{
+			if ( histMinQuantile != null && histMaxQuantile != null )
+				throw new IllegalArgumentException( "histogram min/max quantiles should not be specified when histogram min/max values are explicitly provided" );
+		}
+		else if ( histMinQuantile == null && histMaxQuantile == null )
+		{
+			histMinQuantile = defaultHistMinQuantile;
+			histMaxQuantile = defaultHistMaxQuantile;
+		}
 
 		// make sure that inputTileConfigurations contains absolute file paths if running on a traditional filesystem
 		if ( !CloudURI.isCloudURI( inputFilePath ) )
@@ -77,6 +104,7 @@ public class FlatfieldCorrectionArguments
 	public String cropMinMaxIntervalStr() { return cropMinMaxInterval; };
 	public boolean use2D() { return use2D; }
 	public Double pivotValue() { return pivotValue; }
+	public Pair< Double, Double > getMinMaxQuantiles() { return new ValuePair<>( histMinQuantile, histMaxQuantile ); }
 	public HistogramSettings getHistogramSettings()
 	{
 		return new HistogramSettings(

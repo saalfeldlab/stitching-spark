@@ -22,7 +22,6 @@ import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
-import org.janelia.util.ImageImporter;
 import org.kohsuke.args4j.CmdLineException;
 
 import ij.ImagePlus;
@@ -191,25 +190,6 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		}
 	}
 
-	private < T extends NativeType< T > & RealType< T > > Tuple2< Double, Double > getStackMinMax( final TileInfo[] tiles )
-	{
-		return sparkContext.parallelize( Arrays.asList( tiles ) ).map( tile ->
-			{
-				final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
-				final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
-				final Cursor< T > cursor = Views.iterable( img ).cursor();
-				double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
-				while ( cursor.hasNext() )
-				{
-					final double val = cursor.next().getRealDouble();
-					min = Math.min( val, min );
-					max = Math.max( val, max );
-				}
-				return new Tuple2<>( min, max );
-			} )
-		.reduce( ( a, b ) -> new Tuple2<>( Math.min( a._1(), b._1() ), Math.max( a._2(), b._2() ) ) );
-	}
-
 
 	public < A extends AffineGet & AffineSet, T extends NativeType< T > & RealType< T >, V extends TreeMap< Short, Integer > >
 	void run() throws IOException, URISyntaxException
@@ -221,6 +201,24 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 		System.out.println( "Running flatfield correction script in " + ( args.use2D() ? "2D" : "3D" ) + " mode" );
 
+		final HistogramSettings histogramSettings;
+		final Double pivotValue;
+		if ( !args.getHistogramSettings().isValid() || args.pivotValue() == null )
+		{
+			final StackHistogram stackHistogram = StackHistogram.getStackHistogram( sparkContext, tiles );
+			final Pair< Double, Double > intensityRange = stackHistogram.getIntensityRange( args.getMinMaxQuantiles() );
+			histogramSettings = new HistogramSettings( Math.floor( intensityRange.getA() ), Math.ceil( intensityRange.getB() ), args.getHistogramSettings().bins );
+			pivotValue = ( double ) Math.round( stackHistogram.getPivotValue() );
+		}
+		else
+		{
+			histogramSettings = args.getHistogramSettings();
+			pivotValue = args.pivotValue();
+		}
+
+		System.out.println( "Histogram intensity range: min=" + histogramSettings.histMinValue + ", max=" + histogramSettings.histMaxValue );
+		System.out.println( "Pivot value: " + pivotValue );
+
 		final HistogramsProvider histogramsProvider = new HistogramsProvider(
 				sparkContext,
 				dataProvider,
@@ -228,11 +226,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				basePath,
 				tiles,
 				fullTileSize,
-				args.getHistogramSettings()
+				histogramSettings
 			);
-
-		System.out.println( "Loading histograms.." );
-		System.out.println( "Specified intensity range: min=" + args.getHistogramSettings().histMinValue + ", max=" + args.getHistogramSettings().histMaxValue );
 
 		final double[] referenceHistogram = histogramsProvider.getReferenceHistogram();
 		System.out.println( "Obtained reference histogram of size " + referenceHistogram.length + " (first and last bins are tail bins)" );
@@ -241,13 +236,13 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		System.out.println();
 
 		// save the reference histogram to file so one can plot it
-		final String referenceHistogramFilepath = PathResolver.get( basePath, "referenceHistogram-min_" + ( int ) Math.round( args.getHistogramSettings().histMinValue ) + ",max_" + ( int ) Math.round( args.getHistogramSettings().histMaxValue ) + ".txt" );
+		final String referenceHistogramFilepath = PathResolver.get( basePath, "referenceHistogram-min_" + histogramSettings.histMinValue + ",max_" + histogramSettings.histMaxValue + ".txt" );
 		try ( final OutputStream out = dataProvider.getOutputStream( referenceHistogramFilepath ) )
 		{
 			final Real1dBinMapper< DoubleType > binMapper = new Real1dBinMapper<>(
-					args.getHistogramSettings().histMinValue,
-					args.getHistogramSettings().histMaxValue,
-					args.getHistogramSettings().bins,
+					histogramSettings.histMinValue,
+					histogramSettings.histMaxValue,
+					histogramSettings.bins,
 					true
 				);
 			final DoubleType binCenterValue = new DoubleType();
@@ -261,6 +256,10 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				}
 			}
 		}
+
+		// log estimated pivot point value
+		final String pivotPointLogFilepath = PathResolver.get( basePath, "pivotPoint_" + pivotValue );
+		try ( final OutputStream out = dataProvider.getOutputStream( pivotPointLogFilepath ) ) { }
 
 		// Generate downsampled histograms with half-pixel offset
 		final ShiftedDownsampling< A > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, histogramsProvider );
@@ -330,8 +329,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 						shiftedDownsampling,
 						modelType,
 						regularizerModelType,
-						args.getHistogramSettings(),
-						args.pivotValue()
+						histogramSettings,
+						pivotValue
 					);
 
 				// keep older scale of the fixed-component solution to avoid unnecessary chain of upscaling operations which reduces contrast
@@ -343,14 +342,14 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 						downsampledSolutionMetadata = new FlatfieldSolutionMetadata(
 								downsampledSolutionMetadata.scalingTermDataset,
 								currentSolutionMetadata.translationTermDataset,
-								args.pivotValue()
+								pivotValue
 							);
 						break;
 					case FixedTranslationAffineModel:
 						downsampledSolutionMetadata = new FlatfieldSolutionMetadata(
 								currentSolutionMetadata.scalingTermDataset,
 								downsampledSolutionMetadata.translationTermDataset,
-								args.pivotValue()
+								pivotValue
 							);
 						break;
 					default:
