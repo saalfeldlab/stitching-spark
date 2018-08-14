@@ -74,8 +74,7 @@ public class HistogramsProvider implements Serializable
 	private final String histogramsN5BasePath;
 	private final String histogramsDataset;
 
-	private final double histMinValue, histMaxValue;
-	private final int bins;
+	private final HistogramSettings histogramSettings;
 
 	private final long[] fieldOfViewSize;
 	private final int[] blockSize;
@@ -89,16 +88,14 @@ public class HistogramsProvider implements Serializable
 			final String basePath,
 			final TileInfo[] tiles,
 			final long[] fullTileSize,
-			final double histMinValue, final double histMaxValue, final int innerBins ) throws IOException, URISyntaxException
+			final HistogramSettings histogramSettings ) throws IOException, URISyntaxException
 	{
 		this.sparkContext = sparkContext;
 		this.dataProvider = dataProvider;
 		this.workingInterval = workingInterval;
 		this.tiles = tiles;
 
-		this.histMinValue = histMinValue;
-		this.histMaxValue = histMaxValue;
-		this.bins = innerBins + 2; // add two extra bins to store tails of the distribution
+		this.histogramSettings = histogramSettings;
 
 		dataProviderType = dataProvider.getType();
 
@@ -165,21 +162,17 @@ public class HistogramsProvider implements Serializable
 	public String getHistogramsN5BasePath() { return histogramsN5BasePath; }
 	public String getHistogramsDataset() { return histogramsDataset; }
 
-	public double getHistogramMinValue() { return histMinValue; }
-	public double getHistogramMaxValue() { return histMaxValue; }
-	public int getHistogramBins() { return bins; }
-
 	private < T extends NativeType< T > & RealType< T >, R extends RealType< R > > void populateHistogramsN5() throws IOException, URISyntaxException
 	{
 		System.out.println( "Binning the input stack and saving as N5 blocks..." );
 
 		final long[] extendedDimensions = new long[ fieldOfViewSize.length + 1 ];
 		System.arraycopy( fieldOfViewSize, 0, extendedDimensions, 0, fieldOfViewSize.length );
-		extendedDimensions[ fieldOfViewSize.length ] = bins;
+		extendedDimensions[ fieldOfViewSize.length ] = histogramSettings.bins;
 
 		final int[] extendedBlockSize = new int[ blockSize.length + 1 ];
 		System.arraycopy( blockSize, 0, extendedBlockSize, 0, blockSize.length );
-		extendedBlockSize[ blockSize.length ] = bins;
+		extendedBlockSize[ blockSize.length ] = histogramSettings.bins;
 
 		final N5Writer n5 = dataProvider.createN5Writer( histogramsN5BasePath );
 		if ( !n5.datasetExists( histogramsDataset ) )
@@ -199,11 +192,11 @@ public class HistogramsProvider implements Serializable
 				throw new RuntimeException( "histograms-n5 has different dimensionality than the field of view" );
 
 			if (
-					!Util.isApproxEqual( n5.getAttribute( histogramsDataset, HISTOGRAM_MIN_VALUE_KEY, Double.class ), histMinValue, 1e-10 ) ||
-					!Util.isApproxEqual( n5.getAttribute( histogramsDataset, HISTOGRAM_MAX_VALUE_KEY, Double.class ), histMaxValue, 1e-10 ) )
+					!Util.isApproxEqual( n5.getAttribute( histogramsDataset, HISTOGRAM_MIN_VALUE_KEY, Double.class ), histogramSettings.histMinValue, 1e-10 ) ||
+					!Util.isApproxEqual( n5.getAttribute( histogramsDataset, HISTOGRAM_MAX_VALUE_KEY, Double.class ), histogramSettings.histMaxValue, 1e-10 ) )
 				throw new RuntimeException( "histograms-n5 has different value range" );
 
-			if ( n5.getAttribute( histogramsDataset, HISTOGRAM_NUM_BINS_KEY, Integer.class ) != bins )
+			if ( n5.getAttribute( histogramsDataset, HISTOGRAM_NUM_BINS_KEY, Integer.class ) != histogramSettings.bins )
 				throw new RuntimeException( "histograms-n5 has different number of bins" );
 
 			// skip this step if the flag 'allHistogramsExist' is set
@@ -213,9 +206,9 @@ public class HistogramsProvider implements Serializable
 		}
 
 		final Map< String, Object > histogramAttributes = new HashMap<>();
-		histogramAttributes.put( HISTOGRAM_MIN_VALUE_KEY, new Double( histMinValue ) );
-		histogramAttributes.put( HISTOGRAM_MAX_VALUE_KEY, new Double( histMaxValue ) );
-		histogramAttributes.put( HISTOGRAM_NUM_BINS_KEY, new Integer( bins ) );
+		histogramAttributes.put( HISTOGRAM_MIN_VALUE_KEY, histogramSettings.histMinValue );
+		histogramAttributes.put( HISTOGRAM_MAX_VALUE_KEY, histogramSettings.histMaxValue );
+		histogramAttributes.put( HISTOGRAM_NUM_BINS_KEY, histogramSettings.bins );
 		n5.setAttributes( histogramsDataset, histogramAttributes );
 
 		final Broadcast< TileInfo[] > broadcastedTiles = sparkContext.broadcast( tiles );
@@ -238,7 +231,7 @@ public class HistogramsProvider implements Serializable
 				final RandomAccessibleInterval< DoubleType > histogramsStorageBlockImg = ArrayImgs.doubles( Intervals.dimensionsAsLongArray( extendedBlockInterval ) );
 				final RandomAccessibleInterval< R > histogramsGenericStorageBlockImg = ( RandomAccessibleInterval< R > ) histogramsStorageBlockImg;
 				final RandomAccessibleInterval< RealComposite< R > > histogramsBlockImg = Views.collapseReal( histogramsGenericStorageBlockImg );
-				final Real1dBinMapper< R > binMapper = new Real1dBinMapper<>( histMinValue, histMaxValue, bins, true );
+				final Real1dBinMapper< R > binMapper = new Real1dBinMapper<>( histogramSettings.histMinValue, histogramSettings.histMaxValue, histogramSettings.bins, true );
 
 				// create an interval to be processed in each tile image
 				final CellGrid cellGrid = new CellGrid( fieldOfViewSize, blockSize );
@@ -334,7 +327,7 @@ public class HistogramsProvider implements Serializable
 			final double[] referenceHistogramAttribute = n5.getAttribute( histogramsDataset, REFERENCE_HISTOGRAM_KEY, double[].class );
 			if ( referenceHistogramAttribute != null )
 			{
-				if ( referenceHistogramAttribute.length != bins )
+				if ( referenceHistogramAttribute.length != histogramSettings.bins )
 					throw new RuntimeException( "reference histogram has different number of bins" );
 
 				referenceHistogram = referenceHistogramAttribute;
@@ -347,7 +340,7 @@ public class HistogramsProvider implements Serializable
 						histogramsN5BasePath, histogramsDataset,
 						fieldOfViewSize, blockSize,
 						REFERENCE_HISTOGRAM_POINTS_PERCENT,
-						histMinValue, histMaxValue, bins
+						histogramSettings
 					);
 
 				// cache reference histogram in the attributes
@@ -362,7 +355,7 @@ public class HistogramsProvider implements Serializable
 			final String histogramsN5BasePath, final String histogramsDataset,
 			final long[] fieldOfViewSize, final int[] blockSize,
 			final double medianPointsPercent,
-			final double histMinValue, final double histMaxValue, final int bins )
+			final HistogramSettings histogramSettings )
 	{
 		final long numPixels = Intervals.numElements( fieldOfViewSize );
 		final long numMedianPoints = Math.round( numPixels * medianPointsPercent );
@@ -379,7 +372,7 @@ public class HistogramsProvider implements Serializable
 					final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, histogramsDataset );
 					final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
 
-					final Real1dBinMapper< T > binMapper = new Real1dBinMapper<>( histMinValue, histMaxValue, bins, true );
+					final Real1dBinMapper< T > binMapper = new Real1dBinMapper<>( histogramSettings.histMinValue, histogramSettings.histMaxValue, histogramSettings.bins, true );
 					final T binCenterValue = ( T ) new DoubleType();
 
 					final CellGrid cellGrid = new CellGrid( fieldOfViewSize, blockSize );
@@ -400,7 +393,7 @@ public class HistogramsProvider implements Serializable
 
 						// compute mean value of the histogram (excluding tail bins)
 						double histogramValueSum = 0, histogramQuantitySum = 0;
-						for ( long bin = 1; bin < bins - 1; ++bin )
+						for ( long bin = 1; bin < histogramSettings.bins - 1; ++bin )
 						{
 							final double binQuantity = histogram.get( bin ).getRealDouble();
 							binMapper.getCenterValue( bin, binCenterValue );
@@ -447,13 +440,13 @@ public class HistogramsProvider implements Serializable
 					final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
 					final RandomAccess< RealComposite< T > > histogramsImgRandomAccess = histogramsImg.randomAccess();
 
-					final double[] accumulatedFilteredBlockHistogram = new double[ bins ];
+					final double[] accumulatedFilteredBlockHistogram = new double[ histogramSettings.bins ];
 					for ( final Iterator< long[] > it = pixelPositions.iterator(); it.hasNext(); )
 					{
 						final long[] pixelPosition = it.next();
 						histogramsImgRandomAccess.setPosition( pixelPosition );
 						final RealComposite< T > histogram = histogramsImgRandomAccess.get();
-						for ( int bin = 0; bin < bins; ++bin )
+						for ( int bin = 0; bin < histogramSettings.bins; ++bin )
 							accumulatedFilteredBlockHistogram[ bin ] += histogram.get( bin ).getRealDouble();
 					}
 					return accumulatedFilteredBlockHistogram;
@@ -461,7 +454,7 @@ public class HistogramsProvider implements Serializable
 			)
 			.treeReduce( ( histogram, other ) ->
 				{
-					for ( int bin = 0; bin < bins; ++bin )
+					for ( int bin = 0; bin < histogramSettings.bins; ++bin )
 						histogram[ bin ] += other[ bin ];
 					return histogram;
 				},
@@ -469,7 +462,7 @@ public class HistogramsProvider implements Serializable
 			);
 
 		// average the accumulated histogram
-		for ( int bin = 0; bin < bins; ++bin )
+		for ( int bin = 0; bin < histogramSettings.bins; ++bin )
 			accumulatedFilteredHistogram[ bin ] /= numMedianPoints;
 
 		return accumulatedFilteredHistogram;

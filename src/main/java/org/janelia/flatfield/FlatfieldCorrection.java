@@ -152,15 +152,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		basePath = args.inputFilePath().substring( 0, args.inputFilePath().lastIndexOf( "." ) ) + flatfieldFolderSuffix;
 		solutionPath = PathResolver.get( basePath, args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr(), "solution" );
 
-		// check if all tiles have the same size
-		for ( final TileInfo tile : tiles )
-			for ( int d = 0; d < tile.numDimensions(); d++ )
-				if ( tile.getSize(d) != fullTileSize[ d ] )
-				{
-					System.out.println("Assumption failed: not all the tiles are of the same size");
-					System.exit(1);
-				}
-
+		checkSameSizeForAllTiles();
 
 		sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "FlatfieldCorrection" )
@@ -183,7 +175,21 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-
+	private void checkSameSizeForAllTiles()
+	{
+		// make sure that all tiles are of the same size
+		for ( final TileInfo tile : tiles )
+		{
+			for ( int d = 0; d < tile.numDimensions(); d++ )
+			{
+				if ( tile.getSize(d) != fullTileSize[ d ] )
+				{
+					System.out.println("Assumption failed: not all the tiles are of the same size");
+					System.exit(1);
+				}
+			}
+		}
+	}
 
 	private < T extends NativeType< T > & RealType< T > > Tuple2< Double, Double > getStackMinMax( final TileInfo[] tiles )
 	{
@@ -222,11 +228,11 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				basePath,
 				tiles,
 				fullTileSize,
-				args.histMinValue(), args.histMaxValue(), args.bins()
+				args.getHistogramSettings()
 			);
 
 		System.out.println( "Loading histograms.." );
-		System.out.println( "Specified intensity range: min=" + args.histMinValue() + ", max=" + args.histMaxValue() );
+		System.out.println( "Specified intensity range: min=" + args.getHistogramSettings().histMinValue + ", max=" + args.getHistogramSettings().histMaxValue );
 
 		final double[] referenceHistogram = histogramsProvider.getReferenceHistogram();
 		System.out.println( "Obtained reference histogram of size " + referenceHistogram.length + " (first and last bins are tail bins)" );
@@ -235,13 +241,13 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		System.out.println();
 
 		// save the reference histogram to file so one can plot it
-		final String referenceHistogramFilepath = PathResolver.get( basePath, "referenceHistogram-min_" + ( int ) Math.round( args.histMinValue().doubleValue() ) + ",max_" + ( int ) Math.round( args.histMaxValue().doubleValue() ) + ".txt" );
+		final String referenceHistogramFilepath = PathResolver.get( basePath, "referenceHistogram-min_" + ( int ) Math.round( args.getHistogramSettings().histMinValue ) + ",max_" + ( int ) Math.round( args.getHistogramSettings().histMaxValue ) + ".txt" );
 		try ( final OutputStream out = dataProvider.getOutputStream( referenceHistogramFilepath ) )
 		{
 			final Real1dBinMapper< DoubleType > binMapper = new Real1dBinMapper<>(
-					histogramsProvider.getHistogramMinValue(),
-					histogramsProvider.getHistogramMaxValue(),
-					histogramsProvider.getHistogramBins(),
+					args.getHistogramSettings().histMinValue,
+					args.getHistogramSettings().histMaxValue,
+					args.getHistogramSettings().bins,
 					true
 				);
 			final DoubleType binCenterValue = new DoubleType();
@@ -322,7 +328,9 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 						shiftedDownsampling.getDatasetAtScale( scale ),
 						regularizerMetadata,
 						shiftedDownsampling,
-						modelType, regularizerModelType,
+						modelType,
+						regularizerModelType,
+						args.getHistogramSettings(),
 						args.pivotValue()
 					);
 

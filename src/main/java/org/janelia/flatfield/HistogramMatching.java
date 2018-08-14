@@ -13,12 +13,12 @@ import net.imglib2.view.composite.RealComposite;
 
 public class HistogramMatching
 {
-	public static double[] getBinValues( final double histMinValue, final double histMaxValue, final int bins )
+	public static double[] getBinValues( final HistogramSettings histogramSettings )
 	{
-		final Real1dBinMapper< DoubleType > binMapper = new Real1dBinMapper<>( histMinValue, histMaxValue, bins, true );
-		final double[] binValues = new double[ bins ];
+		final Real1dBinMapper< DoubleType > binMapper = new Real1dBinMapper<>( histogramSettings.histMinValue, histogramSettings.histMaxValue, histogramSettings.bins, true );
+		final double[] binValues = new double[ histogramSettings.bins ];
 		final DoubleType binCenterValue = new DoubleType();
-		for ( int bin = 0; bin < bins; ++bin )
+		for ( int bin = 0; bin < histogramSettings.bins; ++bin )
 		{
 			binMapper.getCenterValue( bin, binCenterValue );
 			binValues[ bin ] = binCenterValue.get();

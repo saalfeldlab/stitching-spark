@@ -31,7 +31,7 @@ public class ReferenceHistogramTest
 
 	private transient JavaSparkContext sparkContext;
 
-	private final int histMinValue = 0, histMaxValue = 100;
+	private final double histMinValue = 0, histMaxValue = 100;
 
 	@Before
 	public void setUp()
@@ -189,7 +189,7 @@ public class ReferenceHistogramTest
 				histogramsN5BasePath, histogramsDataset,
 				dimensions, blockSize,
 				REFERENCE_HISTOGRAM_POINTS_PERCENT,
-				histMinValue, histMaxValue, bins
+				new HistogramSettings( histMinValue, histMaxValue, bins )
 			);
 
 		Assert.assertTrue( n5.remove() );

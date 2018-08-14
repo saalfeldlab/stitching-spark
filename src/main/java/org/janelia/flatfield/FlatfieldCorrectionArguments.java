@@ -27,20 +27,20 @@ public class FlatfieldCorrectionArguments
 	private String cropMinMaxInterval = null;
 
 	@Option(name = "-b", aliases = { "--bins" }, required = false,
-			usage = "Number of bins to use")
-	private int bins = 256;
+			usage = "Number of inner bins to use (two extra outer bins will be added to store the tails of the distribution)")
+	private int innerBins = 256;
 
 	@Option(name = "-p", aliases = { "--pivot" }, required = false,
 			usage = "Pivot value which is to subtract from all histograms (usually the background intensity value)")
-	private double pivotValue = 101;
+	private Double pivotValue = null;
 
 	@Option(name = "--min", required = false,
 			usage = "Min value of a histogram")
-	private double histMinValue = 80;
+	private Double histMinValue = null;
 
 	@Option(name = "--max", required = false,
 			usage = "Max value of a histogram")
-	private double histMaxValue = 500;
+	private Double histMaxValue = null;
 
 	@Option(name = "--2d", required = false,
 			usage = "Estimate 2D flatfield (slices are used as additional data points)")
@@ -63,6 +63,9 @@ public class FlatfieldCorrectionArguments
 			parser.printUsage( System.err );
 		}
 
+		if ( ( histMinValue == null ) != ( histMaxValue == null ) )
+			throw new IllegalArgumentException( "histogram min/max intensity should be either both specified or omitted (will be estimated in this case)" );
+
 		// make sure that inputTileConfigurations contains absolute file paths if running on a traditional filesystem
 		if ( !CloudURI.isCloudURI( inputFilePath ) )
 			inputFilePath = Paths.get( inputFilePath ).toAbsolutePath().toString();
@@ -71,12 +74,17 @@ public class FlatfieldCorrectionArguments
 	public boolean parsedSuccessfully() { return parsedSuccessfully; }
 
 	public String inputFilePath() { return inputFilePath; }
-	public int bins() { return bins; }
-	public double pivotValue() { return pivotValue; }
-	public Double histMinValue() { return histMinValue; }
-	public Double histMaxValue() { return histMaxValue; }
 	public String cropMinMaxIntervalStr() { return cropMinMaxInterval; };
 	public boolean use2D() { return use2D; }
+	public Double pivotValue() { return pivotValue; }
+	public HistogramSettings getHistogramSettings()
+	{
+		return new HistogramSettings(
+				histMinValue,
+				histMaxValue,
+				innerBins + 2  // add two extra bins for tails of the distribution
+			);
+	}
 
 	public Interval cropMinMaxInterval( final long[] fullTileSize )
 	{

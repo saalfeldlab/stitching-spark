@@ -187,7 +187,7 @@ public class ShiftedDownsamplingTest
 		Assert.assertEquals( bins - 2, binElements.length );
 		final double[] histogram = new double[ bins ];
 		final Real1dBinMapper< DoubleType > binMapper = new Real1dBinMapper<>( histMinValue, histMaxValue, bins, true );
-		final double[] binValues = HistogramMatching.getBinValues( histMinValue, histMaxValue, bins );
+		final double[] binValues = HistogramMatching.getBinValues( new HistogramSettings( histMinValue, histMaxValue, bins ) );
 		for ( int bin = 1; bin < bins - 1; ++bin )
 			histogram[ ( int ) binMapper.map( new DoubleType( binValues[ bin ] ) ) ] = binElements[ bin - 1 ];
 		return histogram;
@@ -230,7 +230,7 @@ public class ShiftedDownsamplingTest
 					histogramsN5BasePath,
 					new TileInfo[] { tile },
 					tile.getSize().clone(),
-					histMinValue, histMaxValue, bins
+					new HistogramSettings( histMinValue, histMaxValue, bins )
 				);
 
 			final ShiftedDownsampling< ? > downsampler = new ShiftedDownsampling<>( sparkContext, histogramsProvider );

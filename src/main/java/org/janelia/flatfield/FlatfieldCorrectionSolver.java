@@ -32,6 +32,7 @@ import mpicbg.models.PointMatch;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgs;
@@ -169,17 +170,12 @@ public class FlatfieldCorrectionSolver implements Serializable
 			final String currentScaleHistogramsDataset,
 			final FlatfieldRegularizerMetadata regularizerMetadata,
 			final ShiftedDownsampling< ? > shiftedDownsampling,
-			final ModelType modelType, final RegularizerModelType regularizerModelType,
+			final ModelType modelType,
+			final RegularizerModelType regularizerModelType,
+			final HistogramSettings histogramSettings,
 			final double pivotValue ) throws IOException
 	{
-//		final double referenceHistogramOffset = getMedianValue( referenceHistogram );
-		final double referenceHistogramOffset = pivotValue;
-
-		final double[] binValues = HistogramMatching.getBinValues(
-				histogramsProvider.getHistogramMinValue(),
-				histogramsProvider.getHistogramMaxValue(),
-				histogramsProvider.getHistogramBins()
-			);
+		final double[] binValues = HistogramMatching.getBinValues( histogramSettings );
 
 		// TODO: make shifted downsampling Serializable (currently there is a required non-serializable field for affine transformation)
 		final Broadcast< ShiftedDownsampling< ? > > broadcastedShiftedDownsampling = sparkContext.broadcast( shiftedDownsampling );
@@ -262,9 +258,9 @@ public class FlatfieldCorrectionSolver implements Serializable
 				final Cursor< DoubleType > translationTermBlockImgCursor = Views.flatIterable( translationTermBlockImg ).cursor();
 				final Cursor< DoubleType > pivotValuesBlockImgCursor = Views.flatIterable( pivotValuesBlockImg ).cursor();
 
-				final RealComposite< T > referenceHistogram = ( RealComposite< T > ) new RealComposite<>(
-						ArrayImgs.doubles( histogramsProvider.getReferenceHistogram(), histogramsProvider.getHistogramBins() ).randomAccess(),
-						histogramsProvider.getHistogramBins()
+				final RealComposite< T > referenceHistogram = new RealComposite<>(
+						( RandomAccess< T > ) ArrayImgs.doubles( histogramsProvider.getReferenceHistogram(), histogramSettings.bins ).randomAccess(),
+						histogramSettings.bins
 					);
 
 				final long[] position = new long[ cellGrid.numDimensions() ];
@@ -284,8 +280,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 						);
 
 					// apply the offsets to the pointmatch values
-//					final double[] offset = new double[] { getMedianValue( tuple._2() ), referenceHistogramOffset };
-					final double[] offset = new double[] { pivotValue, referenceHistogramOffset };
+					final double[] offset = new double[] { pivotValue, pivotValue };
 					for ( final PointMatch match : matches )
 					{
 						final Point[] points = new Point[] { match.getP1(), match.getP2() };

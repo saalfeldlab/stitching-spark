@@ -19,8 +19,8 @@ public class HistogramMatchingTest
 	@Test
 	public void testBinValues()
 	{
-		Assert.assertArrayEquals( new double[] { Double.NEGATIVE_INFINITY, 11, 13, 15, 17, 19, Double.POSITIVE_INFINITY }, HistogramMatching.getBinValues( 10, 20, 7 ), EPSILON );
-		Assert.assertArrayEquals( new double[] { Double.NEGATIVE_INFINITY, 10.5, 11.5, 12.5, 13.5, 14.5, Double.POSITIVE_INFINITY }, HistogramMatching.getBinValues( 10, 15, 7 ), EPSILON );
+		Assert.assertArrayEquals( new double[] { Double.NEGATIVE_INFINITY, 11, 13, 15, 17, 19, Double.POSITIVE_INFINITY }, HistogramMatching.getBinValues( new HistogramSettings( 10., 20., 7 ) ), EPSILON );
+		Assert.assertArrayEquals( new double[] { Double.NEGATIVE_INFINITY, 10.5, 11.5, 12.5, 13.5, 14.5, Double.POSITIVE_INFINITY }, HistogramMatching.getBinValues( new HistogramSettings( 10., 15., 7 ) ), EPSILON );
 	}
 
 	@Test
@@ -47,7 +47,7 @@ public class HistogramMatchingTest
 		for ( int i = 0; i < 2; ++i )
 			wrappedHistograms[ i ] = new RealComposite<>( ArrayImgs.doubles( histograms[ i ], histograms[ i ].length ).randomAccess(), histograms[ i ].length );
 
-		final double[] binValues = HistogramMatching.getBinValues( minVal, maxVal, bins );
+		final double[] binValues = HistogramMatching.getBinValues( new HistogramSettings( minVal, maxVal, bins ) );
 		final double binWidth = 16. / 6;
 		final double[] expectedBinValues = new double[ bins ];
 		for ( int bin = 1; bin < bins - 1; ++bin )
@@ -89,7 +89,7 @@ public class HistogramMatchingTest
 		for ( int i = 0; i < 2; ++i )
 			wrappedHistograms[ i ] = new RealComposite<>( ArrayImgs.doubles( histograms[ i ], histograms[ i ].length ).randomAccess(), histograms[ i ].length );
 
-		final double[] binValues = HistogramMatching.getBinValues( minVal, maxVal, bins );
+		final double[] binValues = HistogramMatching.getBinValues( new HistogramSettings( minVal, maxVal, bins ) );
 
 		final List< PointMatch > matches = HistogramMatching.generateHistogramMatches(
 				wrappedHistograms[ 0 ],
@@ -124,7 +124,7 @@ public class HistogramMatchingTest
 		for ( int i = 0; i < 2; ++i )
 			wrappedHistograms[ i ] = new RealComposite<>( ArrayImgs.doubles( histograms[ i ], histograms[ i ].length ).randomAccess(), histograms[ i ].length );
 
-		final double[] binValues = HistogramMatching.getBinValues( minVal, maxVal, bins );
+		final double[] binValues = HistogramMatching.getBinValues( new HistogramSettings( minVal, maxVal, bins ) );
 
 		final List< PointMatch > matches = HistogramMatching.generateHistogramMatches(
 				wrappedHistograms[ 0 ],
@@ -150,7 +150,7 @@ public class HistogramMatchingTest
 		for ( int i = 0; i < 2; ++i )
 			wrappedHistograms[ i ] = new RealComposite<>( ArrayImgs.doubles( histograms[ i ], histograms[ i ].length ).randomAccess(), histograms[ i ].length );
 
-		final double[] binValues = HistogramMatching.getBinValues( minVal, maxVal, bins );
+		final double[] binValues = HistogramMatching.getBinValues( new HistogramSettings( minVal, maxVal, bins ) );
 
 		final List< PointMatch > matches = HistogramMatching.generateHistogramMatches(
 				wrappedHistograms[ 0 ],
@@ -182,7 +182,7 @@ public class HistogramMatchingTest
 		for ( int i = 0; i < 2; ++i )
 			wrappedHistograms[ i ] = new RealComposite<>( ArrayImgs.doubles( histograms[ i ], histograms[ i ].length ).randomAccess(), histograms[ i ].length );
 
-		final double[] binValues = HistogramMatching.getBinValues( minVal, maxVal, bins );
+		final double[] binValues = HistogramMatching.getBinValues( new HistogramSettings( minVal, maxVal, bins ) );
 
 		final List< PointMatch > matches = HistogramMatching.generateHistogramMatches(
 				wrappedHistograms[ 0 ],
@@ -214,7 +214,7 @@ public class HistogramMatchingTest
 		for ( int i = 0; i < 2; ++i )
 			wrappedHistograms[ i ] = new RealComposite<>( ArrayImgs.doubles( histograms[ i ], histograms[ i ].length ).randomAccess(), histograms[ i ].length );
 
-		final double[] binValues = HistogramMatching.getBinValues( minVal, maxVal, bins );
+		final double[] binValues = HistogramMatching.getBinValues( new HistogramSettings( minVal, maxVal, bins ) );
 
 		final List< PointMatch > matches = HistogramMatching.generateHistogramMatches(
 				wrappedHistograms[ 0 ],
@@ -249,7 +249,7 @@ public class HistogramMatchingTest
 		for ( int i = 0; i < 2; ++i )
 			wrappedHistograms[ i ] = new RealComposite<>( ArrayImgs.doubles( histograms[ i ], histograms[ i ].length ).randomAccess(), histograms[ i ].length );
 
-		final double[] binValues = HistogramMatching.getBinValues( minVal, maxVal, bins );
+		final double[] binValues = HistogramMatching.getBinValues( new HistogramSettings( minVal, maxVal, bins ) );
 
 		final List< PointMatch > matches = HistogramMatching.generateHistogramMatches(
 				wrappedHistograms[ 0 ],
