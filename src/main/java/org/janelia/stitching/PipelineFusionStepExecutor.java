@@ -49,6 +49,7 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.IntType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.IntervalsHelper;
+import net.imglib2.util.Util;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
@@ -337,12 +338,12 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 					);
 
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( n5ExportPath ) );
-				N5Utils.saveBlock( fusionResult.getOutImage(), n5Local, exportDataset, biggerCellGridOffsetPosition );
+				N5Utils.saveNonEmptyBlock( fusionResult.getOutImage(), n5Local, exportDataset, biggerCellGridOffsetPosition, Util.getTypeFromInterval( fusionResult.getOutImage() ).createVariable() );
 
 				if ( job.getArgs().fusionMode() == FusionMode.DEBUG_OVERLAPS )
 				{
 					final DebugOverlapsFusionResult< T > debugOverlapsFusionResult = ( DebugOverlapsFusionResult< T > ) fusionResult;
-					N5Utils.saveBlock( debugOverlapsFusionResult.getTileIndexesImage(), n5Local, debugOverlapsTileIndexesDataset, biggerCellGridOffsetPosition );
+					N5Utils.saveNonEmptyBlock( debugOverlapsFusionResult.getTileIndexesImage(), n5Local, debugOverlapsTileIndexesDataset, biggerCellGridOffsetPosition, Util.getTypeFromInterval( debugOverlapsFusionResult.getTileIndexesImage() ).createVariable() );
 				}
 			}
 		);
@@ -403,7 +404,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final RandomAccessibleInterval< T > dataBlockWithTransitions = DebugOverlapsFusionStrategy.< T >fillTileTransitions( dataBlock, tileIndexes );
 
 			final N5Writer n5WriterLocal = dataProviderLocal.createN5Writer( URI.create( n5ExportPath ) );
-			N5Utils.saveBlock( dataBlockWithTransitions, n5WriterLocal, dstDataset, blockGridPosition );
+			N5Utils.saveNonEmptyBlock( dataBlockWithTransitions, n5WriterLocal, dstDataset, blockGridPosition, Util.getTypeFromInterval( dataBlockWithTransitions ).createVariable() );
 		} );
 	}
 
