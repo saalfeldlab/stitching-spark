@@ -3,6 +3,7 @@ package org.janelia.stitching;
 import java.io.File;
 import java.io.Serializable;
 import java.net.URI;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -47,6 +48,7 @@ public class StitchingJob implements Serializable {
 	public StitchingJob( final StitchingArguments args )
 	{
 		this.args = args;
+		ensureAbsolutePaths();
 
 		dataProvider = DataProviderFactory.createByURI( URI.create( args.inputTileConfigurations().get( 0 ) ) );
 		dataAccessType = dataProvider.getType();
@@ -151,8 +153,29 @@ public class StitchingJob implements Serializable {
 			params.dimensionality = dimensionality;
 	}
 
+	private void ensureAbsolutePaths()
+	{
+		// input configuration paths
+		for ( int ch = 0; ch < args.inputTileConfigurations().size(); ++ch )
+			if ( !Paths.get( args.inputTileConfigurations().get( ch ) ).isAbsolute() )
+				args.inputTileConfigurations().set( ch, Paths.get( args.inputTileConfigurations().get( ch ) ).toAbsolutePath().toString() );
+
+		// tile image paths
+		if ( tilesMultichannel != null )
+		{
+			for ( int ch = 0; ch < tilesMultichannel.size(); ++ch )
+			{
+				for ( final TileInfo tile : tilesMultichannel.get( ch ) )
+					if ( !Paths.get( tile.getFilePath() ).isAbsolute() )
+						tile.setFilePath( Paths.get( args.inputTileConfigurations().get( ch ) ).getParent().resolve( tile.getFilePath() ).toString() );
+			}
+		}
+	}
+
 	private void checkTilesConfiguration() throws Exception
 	{
+		ensureAbsolutePaths();
+
 		for ( final TileInfo[] tiles : tilesMultichannel )
 		{
 			boolean malformed = ( tiles == null );
