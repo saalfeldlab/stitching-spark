@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Paths;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -23,7 +24,7 @@ public class N5ToSliceTiffSpark
 	public static void main( final String[] args ) throws Exception
 	{
 		int lastArg = 0;
-		final String n5Path = args[ lastArg++ ];
+		final String n5Path = ensureAbsolutePath( args[ lastArg++ ] );
 
 		final Integer requestedChannel;
 		{
@@ -91,5 +92,13 @@ public class N5ToSliceTiffSpark
 					);
 			}
 		}
+	}
+
+	private static String ensureAbsolutePath( final String path )
+	{
+		if ( !Paths.get( path ).isAbsolute() )
+			return Paths.get( path ).toAbsolutePath().toString();
+		else
+			return path;
 	}
 }

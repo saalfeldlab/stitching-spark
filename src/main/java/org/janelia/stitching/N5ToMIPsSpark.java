@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,7 +26,7 @@ public class N5ToMIPsSpark
 	public static void main( final String[] args ) throws Exception
 	{
 		int argCounter = 0;
-		final String n5Path = args[ argCounter++ ];
+		final String n5Path = ensureAbsolutePath( args[ argCounter++ ] );
 
 		final boolean binned;
 		final long[] slicing;
@@ -142,5 +143,13 @@ public class N5ToMIPsSpark
 		for ( final long val : arr )
 			sb.append( sb.length() > 0 ? "," : "" ).append( val );
 		return sb.toString();
+	}
+
+	private static String ensureAbsolutePath( final String path )
+	{
+		if ( !Paths.get( path ).isAbsolute() )
+			return Paths.get( path ).toAbsolutePath().toString();
+		else
+			return path;
 	}
 }
