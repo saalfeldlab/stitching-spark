@@ -197,16 +197,6 @@ public class GlobalOptimizationPerformer
 		final TileConfiguration tc = new TileConfiguration();
 		tc.addTiles( tilesSet );
 
-		// find a useful fixed tile
-		for ( final Tile< ? > tile : tilesSet )
-		{
-			if ( tile.getConnectedTiles().size() > 0 )
-			{
-				tc.fixTile( tile );
-				break;
-			}
-		}
-
 		final int iterations = 5000;
 		long elapsed = System.nanoTime();
 
