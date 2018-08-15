@@ -42,9 +42,12 @@ public class StackHistogram
 			{
 				if ( minMaxRangeValues[ i ] == null && processedValuesCount >= Math.round( totalValuesCount * minMaxQuantilesValues[ i ] ) )
 				{
-					final DoubleType centerBinValue = new DoubleType();
-					binMapper.getCenterValue( bin, centerBinValue );
-					minMaxRangeValues[ i ] = centerBinValue.get();
+					final DoubleType binValue = new DoubleType();
+					if ( i == 0 )
+						binMapper.getLowerBound( bin, binValue ); // use lower bound for the min value
+					else
+						binMapper.getUpperBound( bin, binValue ); // use upper bound for the max value
+					minMaxRangeValues[ i ] = binValue.get();
 				}
 			}
 		}
