@@ -1,4 +1,4 @@
-package org.janelia.stitching;
+package org.janelia.stitching.analysis;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -13,6 +13,12 @@ import java.util.stream.Collectors;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.stitching.AxisMapping;
+import org.janelia.stitching.SerializablePairWiseStitchingResult;
+import org.janelia.stitching.TileInfo;
+import org.janelia.stitching.TileInfoJSONProvider;
+import org.janelia.stitching.TransformUtils;
+import org.janelia.stitching.TransformedTileOperations;
 
 import ij.ImageJ;
 import ij.ImagePlus;
