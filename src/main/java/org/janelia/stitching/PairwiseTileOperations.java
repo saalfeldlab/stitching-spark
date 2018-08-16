@@ -4,6 +4,7 @@ import org.janelia.stitching.OffsetUncertaintyEstimator.EstimatedRelativeSearchR
 import org.janelia.stitching.OffsetUncertaintyEstimator.EstimatedWorldSearchRadius;
 import org.janelia.stitching.OffsetUncertaintyEstimator.NotEnoughNeighboringTilesException;
 
+import net.imglib2.Interval;
 import net.imglib2.RealInterval;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.InvertibleRealTransform;
@@ -168,5 +169,32 @@ public class PairwiseTileOperations
 		errorEllipseTransform.add( new Translation( transformedMovingSubTileToBoundingBoxOffset ).inverse() ); // transformed subtile top-left -> bounding box top-left
 
 		return errorEllipseTransform;
+	}
+
+	/**
+	 * Map the middle point of the moving subtile into the coordinate space of the full fixed tile (useful for point matching).
+	 *
+	 * @param subTiles
+	 * @param fullTileTransforms
+	 * @param subTilesOffset
+	 * @return
+	 */
+	public static double[] mapMovingSubTileMiddlePointIntoFixedTile(
+			final SubTile[] subTiles,
+			final AffineGet[] fullTileTransforms,
+			final double[] subTilesOffset )
+	{
+		// build the transform to convert from the 'moving' tile into the 'fixed' tile
+		final InvertibleRealTransform movingTileToFixedTileTransform = PairwiseTileOperations.getMovingTileToFixedTileTransform( fullTileTransforms );
+
+		// transform the 'moving' subtile into the coordinate space of the 'fixed' tile and find its bounding box
+		final Interval transformedMovingSubTileBoundingBox = TransformedTileOperations.getTransformedBoundingBox( subTiles[ movingIndex ], movingTileToFixedTileTransform );
+
+		// calculate the new middle point position of the 'moving' subtile in the coordinate space of the 'fixed' tile
+		final double[] newTransformedMovingSubTileMiddlePointPosition = new double[ transformedMovingSubTileBoundingBox.numDimensions() ];
+		for ( int d = 0; d < transformedMovingSubTileBoundingBox.numDimensions(); ++d )
+			newTransformedMovingSubTileMiddlePointPosition[ d ] = subTiles[ fixedIndex ].realMin( d ) + subTilesOffset[ d ] + transformedMovingSubTileBoundingBox.dimension( d ) / 2.;
+
+		return newTransformedMovingSubTileMiddlePointPosition;
 	}
 }

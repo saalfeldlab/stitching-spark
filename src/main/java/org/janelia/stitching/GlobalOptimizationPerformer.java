@@ -16,6 +16,8 @@ import java.util.TreeMap;
 import java.util.Vector;
 import java.util.concurrent.ExecutionException;
 
+import org.janelia.util.Conversions;
+
 import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.InterpolatedModel;
@@ -28,9 +30,7 @@ import mpicbg.models.TileConfiguration;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
 import mpicbg.stitching.ImagePlusTimePoint;
-import net.imglib2.Interval;
 import net.imglib2.realtransform.AffineGet;
-import net.imglib2.realtransform.InvertibleRealTransform;
 
 // based on the GlobalOptimization class from the original Fiji's Stitching plugin repository
 public class GlobalOptimizationPerformer
@@ -289,27 +289,28 @@ public class GlobalOptimizationPerformer
 			final SubTile[] subTiles,
 			final AffineGet[] estimatedFullTileTransforms,
 			final float[] subTilesOffset,
-			final double pointMatchWeight )
+			final float pointMatchWeight )
 	{
 		// get the middle point of the moving subtile in the local (moving) tile space
 		final Point movingSubTileMiddlePoint = new Point( SubTileOperations.getSubTileMiddlePoint( subTiles[ movingIndex ] ) );
 
-		// build the transform to convert from the 'moving' tile into the 'fixed' tile
-		final InvertibleRealTransform movingTileToFixedTileTransform = PairwiseTileOperations.getMovingTileToFixedTileTransform( estimatedFullTileTransforms );
-
-		// transform the 'moving' subtile into the coordinate space of the 'fixed' tile and find its bounding box
-		final Interval transformedMovingSubTileBoundingBox = TransformedTileOperations.getTransformedBoundingBox( subTiles[ movingIndex ], movingTileToFixedTileTransform );
-
-		// calculate the new middle point position of the 'moving' subtile in the coordinate space of the 'fixed' tile
-		final double[] newTransformedMovingSubTileMiddlePointPosition = new double[ transformedMovingSubTileBoundingBox.numDimensions() ];
-		for ( int d = 0; d < transformedMovingSubTileBoundingBox.numDimensions(); ++d )
-			newTransformedMovingSubTileMiddlePointPosition[ d ] = subTiles[ fixedIndex ].realMin( d ) + subTilesOffset[ d ] + transformedMovingSubTileBoundingBox.dimension( d ) / 2.;
-		final Point newTransformedMovingSubTileMiddlePoint = new Point( newTransformedMovingSubTileMiddlePointPosition );
+		// get the new middle point position of the 'moving' subtile in the coordinate space of the 'fixed' tile
+		final Point newTransformedMovingSubTileMiddlePoint = new Point( PairwiseTileOperations.mapMovingSubTileMiddlePointIntoFixedTile(
+				subTiles,
+				estimatedFullTileTransforms,
+				Conversions.toDoubleArray( subTilesOffset )
+			) );
 
 		// slightly change the matched positions to avoid IllDefinedDataPointsException when fitting models
 		shiftPoints( movingSubTileMiddlePoint, newTransformedMovingSubTileMiddlePoint );
 
-		return new PointMatch( movingSubTileMiddlePoint, newTransformedMovingSubTileMiddlePoint, pointMatchWeight );
+		final PointMatch movingIntoFixedPointMatch = new PointMatch(
+				movingSubTileMiddlePoint,
+				newTransformedMovingSubTileMiddlePoint,
+				pointMatchWeight
+			);
+
+		return movingIntoFixedPointMatch;
 	}
 
 	/**
