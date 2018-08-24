@@ -2,13 +2,9 @@ package org.janelia.dataaccess.fs;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.Reader;
-import java.io.Writer;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,7 +13,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 
-import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.AbstractJSONDataProvider;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
@@ -36,7 +32,7 @@ import ij.ImagePlus;
  *
  * @author Igor Pisarev
  */
-public class FSDataProvider implements DataProvider
+public class FSDataProvider extends AbstractJSONDataProvider
 {
 	@Override
 	public DataProviderType getType()
@@ -140,19 +136,6 @@ public class FSDataProvider implements DataProvider
 		createDirs( Paths.get( link ).getParent() );
 		Utils.workaroundImagePlusNSlices( imp );
 		IJ.saveAsTiff( imp, getCanonicalPathString( link ) );
-	}
-
-	@Override
-	public Reader getJsonReader( final String link ) throws IOException
-	{
-		return new FileReader( link );
-	}
-
-	@Override
-	public Writer getJsonWriter( final String link ) throws IOException
-	{
-		createDirs( Paths.get( link ).getParent() );
-		return new FileWriter( link );
 	}
 
 	@Override

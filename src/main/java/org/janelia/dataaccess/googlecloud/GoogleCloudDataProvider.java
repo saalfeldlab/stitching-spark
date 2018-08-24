@@ -4,11 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -16,7 +12,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
-import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.AbstractJSONDataProvider;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageURI;
@@ -39,7 +35,7 @@ import com.google.gson.GsonBuilder;
 import ij.IJ;
 import ij.ImagePlus;
 
-public class GoogleCloudDataProvider implements DataProvider
+public class GoogleCloudDataProvider extends AbstractJSONDataProvider
 {
 	private class BlobOutputStream extends ByteArrayOutputStream
 	{
@@ -67,8 +63,6 @@ public class GoogleCloudDataProvider implements DataProvider
 			}
 		}
 	}
-
-	private static final String googleCloudProtocol = "gs";
 
 	private final Storage storage;
 
@@ -212,18 +206,6 @@ public class GoogleCloudDataProvider implements DataProvider
 			if ( tempPath != null )
 				tempPath.toFile().delete();
 		}
-	}
-
-	@Override
-	public Reader getJsonReader( final String link ) throws IOException
-	{
-		return new InputStreamReader( getInputStream( link ) );
-	}
-
-	@Override
-	public Writer getJsonWriter( final String link ) throws IOException
-	{
-		return new OutputStreamWriter( getOutputStream( link ) );
 	}
 
 	@Override

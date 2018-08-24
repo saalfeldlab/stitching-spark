@@ -5,9 +5,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Writer;
+import java.util.List;
 
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.stitching.SerializablePairWiseStitchingResult;
+import org.janelia.stitching.TileInfo;
 
 import com.google.gson.GsonBuilder;
 
@@ -42,6 +45,12 @@ public interface DataProvider
 
 	public Reader getJsonReader( final String link ) throws IOException;
 	public Writer getJsonWriter( final String link ) throws IOException;
+
+	public TileInfo[] loadTiles( final String link ) throws IOException;
+	public void saveTiles( final TileInfo[] tiles, final String link ) throws IOException;
+
+	public List< SerializablePairWiseStitchingResult > loadPairwiseShifts( final String link ) throws IOException;
+	public void savePairwiseShifts( final List< SerializablePairWiseStitchingResult > pairwiseShifts, final String link ) throws IOException;
 
 	public N5Reader createN5Reader( final String baseLink ) throws IOException;
 	public N5Writer createN5Writer( final String baseLink ) throws IOException;

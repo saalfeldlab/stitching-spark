@@ -4,11 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.Writer;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
-import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.AbstractJSONDataProvider;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -47,7 +43,7 @@ import ij.ImagePlus;
  *
  * @author Igor Pisarev
  */
-public class AmazonS3DataProvider implements DataProvider
+public class AmazonS3DataProvider extends AbstractJSONDataProvider
 {
 	private class S3ObjectOutputStream extends ByteArrayOutputStream
 	{
@@ -79,8 +75,6 @@ public class AmazonS3DataProvider implements DataProvider
 			}
 		}
 	}
-
-	private static final String s3Protocol = "s3";
 
 	private final AmazonS3 s3;
 	private final TransferManager s3TransferManager;
@@ -249,18 +243,6 @@ public class AmazonS3DataProvider implements DataProvider
 			if ( tempPath != null )
 				tempPath.toFile().delete();
 		}
-	}
-
-	@Override
-	public Reader getJsonReader( final String link ) throws IOException
-	{
-		return new InputStreamReader( getInputStream( link ) );
-	}
-
-	@Override
-	public Writer getJsonWriter( final String link ) throws IOException
-	{
-		return new OutputStreamWriter( getOutputStream( link ) );
 	}
 
 	@Override
