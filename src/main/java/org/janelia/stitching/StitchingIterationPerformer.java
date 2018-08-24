@@ -83,6 +83,10 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 						!job.getArgs().useAllPairs(), // adjacent vs. all overlapping pairs
 						iteration > 0 // use stage coords on the first run, and only world transform (last stitched / estimated) on subsequent iterations
 					);
+
+				if ( job.getArgs().rematchOnlyExcludedTiles() )
+					retainPairsOnlyContainingExcludedTiles( overlappingSubTiles, logWriter );
+
 				preparePairwiseShifts( overlappingSubTiles, iteration, logWriter );
 			}
 		}
@@ -95,6 +99,20 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 				optimizer.optimize( iteration, logWriter );
 			}
 		}
+	}
+
+	private void retainPairsOnlyContainingExcludedTiles( final List< SubTilePair > overlappingSubTiles, final PrintWriter logWriter ) throws IOException
+	{
+		logWriter.println( System.lineSeparator() + "rematchOnlyExcludedTiles requested, retaining only overlapping pairs that contain at least one excluded tile on the previous stitched iteration" );
+		logWriter.println( "Overlapping pairs before filtering: " + overlappingSubTiles.size() );
+		final Map< Integer, TileInfo > previousStitchedTilesMap = Utils.createTilesMap( getStitchedTilesFromPreviousIteration() );
+		for ( final Iterator< SubTilePair > it = overlappingSubTiles.iterator(); it.hasNext(); )
+		{
+			final SubTilePair overlappingSubTilePair = it.next();
+			if ( previousStitchedTilesMap.containsKey( overlappingSubTilePair.getFullTilePair().getA().getIndex() ) && previousStitchedTilesMap.containsKey( overlappingSubTilePair.getFullTilePair().getB().getIndex() ) )
+				it.remove();
+		}
+		logWriter.println( "Overlapping pairs after filtering: " + overlappingSubTiles.size() + System.lineSeparator() );
 	}
 
 	private void printStats( final PrintWriter logWriter )

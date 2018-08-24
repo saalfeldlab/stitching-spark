@@ -84,6 +84,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Compute pairwise shifts between all pairs (by default only adjacent pairs are used)")
 	private boolean allPairs = false;
 
+	@Option(name = "--onlyexcluded", required = false,
+			usage = "If set along with the incremental rematching mode, only those overlapping pairs will be rematched where at least one of the tiles was excluded in the previous stitched configuration.")
+	private boolean rematchOnlyExcludedTiles = false;
+
 	@Option(name = "--noleaves", required = false,
 			usage = "Optimize tile configurations that don't contain any leaves (thus all edges are properly constrained)")
 	private boolean noLeaves = false;
@@ -153,6 +157,9 @@ public class StitchingArguments implements Serializable {
 
 		if ( !stitchOnly )
 			fusionMode = FusionMode.valueOf( fusionModeStr.replace( '-', '_' ).toUpperCase() );
+
+		if ( stitchingMode != StitchingMode.INCREMENTAL && rematchOnlyExcludedTiles )
+			throw new IllegalArgumentException( "--onlyexcluded is allowed only with the incremental rematching mode" );
 	}
 
 	protected StitchingArguments() { }
@@ -187,6 +194,7 @@ public class StitchingArguments implements Serializable {
 	public int subdivisionGridSize() { return subdivisionGridSize; }
 	public double blurSigma() { return blurSigma; }
 	public boolean useAllPairs() { return allPairs; }
+	public boolean rematchOnlyExcludedTiles() { return rematchOnlyExcludedTiles; }
 	public boolean noLeaves() { return noLeaves; }
 
 	public RegularizerType regularizerType() { return regularizerType; }
