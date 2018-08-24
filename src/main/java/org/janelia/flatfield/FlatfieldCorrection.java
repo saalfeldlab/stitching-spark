@@ -20,7 +20,6 @@ import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldSolutionMetadata
 import org.janelia.flatfield.FlatfieldCorrectionSolver.ModelType;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
 import org.janelia.stitching.TileInfo;
-import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 import org.kohsuke.args4j.CmdLineException;
 
@@ -142,7 +141,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 		this.dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.inputFilePath() ) );
 
-		tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args.inputFilePath() ) );
+		tiles = dataProvider.loadTiles( args.inputFilePath() );
 		fullTileSize = getMinTileSize( tiles );
 		workingInterval = args.cropMinMaxInterval( args.use2D() ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize );
 

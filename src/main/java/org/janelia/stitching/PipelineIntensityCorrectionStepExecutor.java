@@ -109,7 +109,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 			{
 				job.setTiles( transformedTiles, channel );
 				final String outputPath = Utils.addFilenameSuffix( job.getArgs().inputTileConfigurations().get( channel ), "_transformed" );
-				TileInfoJSONProvider.saveTilesConfiguration( transformedTiles, dataProvider.getJsonWriter( outputPath ) );
+				dataProvider.saveTiles( transformedTiles, outputPath );
 			}
 			catch ( final IOException e )
 			{

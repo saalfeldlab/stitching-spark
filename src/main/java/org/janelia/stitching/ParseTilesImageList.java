@@ -196,7 +196,7 @@ public class ParseTilesImageList
 		// finally save the configurations as JSON files
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 		for ( final int channel : tiles.keySet() )
-			TileInfoJSONProvider.saveTilesConfiguration( tiles.get( channel ).toArray( new TileInfo[ 0 ] ), dataProvider.getJsonWriter( Paths.get( baseOutputFolder, channel + "nm.json" ).toString() ) );
+			dataProvider.saveTiles( tiles.get( channel ).toArray( new TileInfo[ 0 ] ), Paths.get( baseOutputFolder, channel + "nm.json" ).toString() );
 
 		System.out.println( "Done" );
 	}

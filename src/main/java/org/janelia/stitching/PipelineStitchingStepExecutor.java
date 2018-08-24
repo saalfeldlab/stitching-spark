@@ -132,7 +132,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 
 					final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
-					final TileInfo[] previousStitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( previousStitchedTilesFilepath ) );
+					final TileInfo[] previousStitchedTiles = dataProvider.loadTiles( previousStitchedTilesFilepath );
 
 					final String usedPairsFilepath = PathResolver.get( basePath, iterationDirname, "pairwise-used.json" );
 					final String previousUsedPairsFilepath = PathResolver.get( basePath, previousIterationDirname, "pairwise-used.json" );

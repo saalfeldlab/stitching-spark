@@ -212,7 +212,7 @@ public class ConvertTIFFTilesToN5Spark
 		{
 			final String channelName = getChannelName( inputPath );
 			final DataProvider inputDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputPath ) );
-			final TileInfo[] channelTiles = TileInfoJSONProvider.loadTilesConfiguration( inputDataProvider.getJsonReader( inputPath ) );
+			final TileInfo[] channelTiles = inputDataProvider.loadTiles( inputPath );
 			tilesChannels.put( channelName, channelTiles );
 		}
 		return tilesChannels;
@@ -234,7 +234,7 @@ public class ConvertTIFFTilesToN5Spark
 			final String channelName = getChannelName( inputPath );
 			final TileInfo[] newChannelTiles = newTiles.get( channelName );
 			final String newConfigPath = PathResolver.get( n5Path, Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-converted-n5" ) );
-			TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, dataProvider.getJsonWriter( newConfigPath ) );
+			dataProvider.saveTiles( newChannelTiles, newConfigPath );
 		}
 	}
 

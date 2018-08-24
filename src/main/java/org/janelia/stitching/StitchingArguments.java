@@ -120,12 +120,8 @@ public class StitchingArguments implements Serializable {
 
 		// make sure that inputTileConfigurations contains absolute file paths if running on a traditional filesystem
 		for ( int i = 0; i < inputTileConfigurations.size(); ++i )
-		{
 			if ( !CloudURI.isCloudURI( inputTileConfigurations.get( i ) ) )
-			{
 				inputTileConfigurations.set( i, Paths.get( inputTileConfigurations.get( i ) ).toAbsolutePath().toString() );
-			}
-		}
 	}
 
 	protected StitchingArguments() { }

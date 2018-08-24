@@ -53,7 +53,7 @@ public class StitchingSpark implements Serializable, AutoCloseable
 			final List< TileInfo[] > tilesMultichannel = new ArrayList<>();
 			for ( int channel = 0; channel < job.getChannels(); channel++ ) {
 				final String tileConfigLink = args.inputTileConfigurations().get( channel );
-				tilesMultichannel.add( TileInfoJSONProvider.loadTilesConfiguration( job.getDataProvider().getJsonReader( tileConfigLink ) ) );
+				tilesMultichannel.add( job.getDataProvider().loadTiles( tileConfigLink ) );
 			}
 
 			job.setTilesMultichannel( tilesMultichannel );

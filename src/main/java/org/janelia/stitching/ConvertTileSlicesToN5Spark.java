@@ -122,7 +122,7 @@ public class ConvertTileSlicesToN5Spark implements Serializable, AutoCloseable
 	private void processChannel( final String inputTileConfiguration ) throws IOException
 	{
 		final DataProvider sourceDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputTileConfiguration ) );
-		final TileInfo[] patternTiles = TileInfoJSONProvider.loadTilesConfiguration( sourceDataProvider.getJsonReader( inputTileConfiguration ) );
+		final TileInfo[] patternTiles = sourceDataProvider.loadTiles( inputTileConfiguration );
 		final List< TileInfo > convertedTiles = sparkContext.parallelize( Arrays.asList( patternTiles ), patternTiles.length ).map(
 				patternTile -> convertTileToN5( patternTile )
 			).collect();
@@ -130,7 +130,7 @@ public class ConvertTileSlicesToN5Spark implements Serializable, AutoCloseable
 		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.outputLocation ) );
 		final String convertedTilesConfigurationFilename = Utils.addFilenameSuffix( PathResolver.getFileName( inputTileConfiguration ), "-converted-n5" );
 		final String convertedTilesConfigurationPath = PathResolver.get( args.outputLocation, convertedTilesConfigurationFilename );
-		TileInfoJSONProvider.saveTilesConfiguration( convertedTiles.toArray( new TileInfo[ 0 ] ), targetDataProvider.getJsonWriter( convertedTilesConfigurationPath ) );
+		targetDataProvider.saveTiles( convertedTiles.toArray( new TileInfo[ 0 ] ), convertedTilesConfigurationPath );
 	}
 
 	@SuppressWarnings( "unchecked" )

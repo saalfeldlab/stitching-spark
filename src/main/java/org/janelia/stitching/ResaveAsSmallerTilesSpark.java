@@ -119,7 +119,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 	private void processChannel( final String inputTileConfiguration ) throws IOException
 	{
 		final DataProvider sourceDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputTileConfiguration ) );
-		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( sourceDataProvider.getJsonReader( inputTileConfiguration ) );
+		final TileInfo[] tiles = sourceDataProvider.loadTiles( inputTileConfiguration );
 
 		final long[] originalTileSize = tiles[ 0 ].getSize();
 		final long[] newTileSize = determineNewTileSize( originalTileSize );
@@ -145,7 +145,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.targetLocation ) );
 		final String newTilesConfigurationFilename = Utils.addFilenameSuffix( PathResolver.getFileName( inputTileConfiguration ), "-retiled-in-" + AxisMapping.getAxisStr( args.retileDimension ).toUpperCase() );
 		final String newTilesConfigurationPath = PathResolver.get( args.targetLocation, newTilesConfigurationFilename );
-		TileInfoJSONProvider.saveTilesConfiguration( newTiles.toArray( new TileInfo[ 0 ] ), targetDataProvider.getJsonWriter( newTilesConfigurationPath ) );
+		targetDataProvider.saveTiles( newTiles.toArray( new TileInfo[ 0 ] ), newTilesConfigurationPath );
 	}
 
 	private < T extends NativeType< T > & RealType< T > > List< TileInfo > resaveTileAsSmallerTiles( final TileInfo tile, final List< Interval > newTilesIntervalsInSingleTile ) throws IOException, ImgLibException

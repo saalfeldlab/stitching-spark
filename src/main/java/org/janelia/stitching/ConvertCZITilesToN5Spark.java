@@ -225,7 +225,7 @@ public class ConvertCZITilesToN5Spark
 			final String channelName = tilesChannel.getKey();
 			final TileInfo[] newChannelTiles = tilesChannel.getValue();
 			final String newConfigPath = PathResolver.get( n5Path, channelName + "_" + Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-converted-n5" ) );
-			TileInfoJSONProvider.saveTilesConfiguration( newChannelTiles, dataProvider.getJsonWriter( newConfigPath ) );
+			dataProvider.saveTiles( newChannelTiles, newConfigPath );
 		}
 	}
 
@@ -236,7 +236,7 @@ public class ConvertCZITilesToN5Spark
 			System.exit( 1 );
 
 		final DataProvider inputDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( parsedArgs.inputPath ) );
-		final TileInfo[] inputTiles = TileInfoJSONProvider.loadTilesConfiguration( inputDataProvider.getJsonReader( parsedArgs.inputPath ) );
+		final TileInfo[] inputTiles = inputDataProvider.loadTiles( parsedArgs.inputPath );
 
 		final CloudN5WriterSupplier cloudN5WriterSupplier = new CloudN5WriterSupplier( parsedArgs.n5OutputPath );
 
