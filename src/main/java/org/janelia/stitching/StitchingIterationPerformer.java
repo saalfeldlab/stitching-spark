@@ -84,7 +84,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 						iteration > 0 // use stage coords on the first run, and only world transform (last stitched / estimated) on subsequent iterations
 					);
 
-				if ( job.getArgs().rematchOnlyExcludedTiles() )
+				if ( iteration > 0 && job.getArgs().rematchOnlyExcludedTiles() )
 					retainPairsOnlyContainingExcludedTiles( overlappingSubTiles, logWriter );
 
 				preparePairwiseShifts( overlappingSubTiles, iteration, logWriter );
