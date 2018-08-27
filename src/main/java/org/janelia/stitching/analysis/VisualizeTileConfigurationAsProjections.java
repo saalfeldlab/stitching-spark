@@ -98,6 +98,8 @@ public class VisualizeTileConfigurationAsProjections
 		final TileInfo[] stitchedTiles = args.length > 1 ? TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) ) : null;
 
 		final Optional< TileForInspection > tileForInspection;
+		final Optional< long[] > projectionGridCoords;
+
 		if ( args.length > 2 )
 		{
 			final String usedPairwiseShiftsPath = args[ 2 ];
@@ -110,6 +112,26 @@ public class VisualizeTileConfigurationAsProjections
 					if ( usedPairwiseShift.getSubTilePair().getFullTilePair().toArray()[ i ].getIndex().intValue() == tileToInspect.intValue() )
 						inspectedTileNeighbors.add( usedPairwiseShift.getSubTilePair().getFullTilePair().toArray()[ ( i + 1 ) % 2 ].getIndex() );
 
+			if ( groundtruthTiles[ 0 ].numDimensions() == 3 )
+			{
+				final long[] inspectedTileCoords = new long[ 3 ];
+				for ( final TileInfo tile : groundtruthTiles )
+				{
+					if ( tile.getIndex().intValue() == tileToInspect.intValue() )
+					{
+						for ( int d = 0; d < tile.numDimensions(); ++d )
+							inspectedTileCoords[ d ] = Math.round( tile.getStagePosition( d ) );
+						break;
+					}
+				}
+				projectionGridCoords = Optional.of( inspectedTileCoords );
+				System.out.println( "Coordinates used for projection: " + Arrays.toString( inspectedTileCoords ) );
+			}
+			else
+			{
+				projectionGridCoords = Optional.empty();
+			}
+
 			tileForInspection = Optional.of( new TileForInspection(
 					tileToInspect,
 					inspectedTileColor,
@@ -120,11 +142,12 @@ public class VisualizeTileConfigurationAsProjections
 		else
 		{
 			tileForInspection = Optional.empty();
+			projectionGridCoords = Optional.empty();
 		}
 
 		new ImageJ();
 
-		final Optional< List< Set< Integer > > > tileIndexesProjectionsWhitelist = Optional.ofNullable( getTileIndexesProjectionsWhitelist( groundtruthTiles ) );
+		final Optional< List< Set< Integer > > > tileIndexesProjectionsWhitelist = Optional.ofNullable( getTileIndexesProjectionsWhitelist( groundtruthTiles, projectionGridCoords ) );
 
 		final List< TileForDrawing > stageTilesForDrawing = new ArrayList<>(), groundtruthTilesForDrawing = new ArrayList<>();
 		for ( final TileInfo tile : groundtruthTiles )
@@ -196,7 +219,7 @@ public class VisualizeTileConfigurationAsProjections
 		}
 	}
 
-	private static List< Set< Integer > > getTileIndexesProjectionsWhitelist( final TileInfo[] tiles )
+	private static List< Set< Integer > > getTileIndexesProjectionsWhitelist( final TileInfo[] tiles, final Optional< long[] > projectionGridCoords )
 	{
 		final List< Set< Integer > > tileIndexesProjectionsWhitelist;
 		if ( projectOnlyMiddleSlab )
@@ -214,9 +237,17 @@ public class VisualizeTileConfigurationAsProjections
 							positionsInProjectionDimensionToTiles.put( positionInProjectDimension, new HashSet<>() );
 						positionsInProjectionDimensionToTiles.get( positionInProjectDimension ).add( tile.getIndex() );
 					}
-					final long middlePositionInProjectionDimension = positionsInProjectionDimensionToTiles.keySet().stream().mapToLong( Long::longValue ).toArray()[ positionsInProjectionDimensionToTiles.size() / 2 ];
-					final Set< Integer > tileIndexesAtMiddlePositionInProjectionDimension = positionsInProjectionDimensionToTiles.get( middlePositionInProjectionDimension );
-					tileIndexesProjectionsWhitelist.add( tileIndexesAtMiddlePositionInProjectionDimension );
+
+					if ( projectionGridCoords.isPresent() )
+					{
+						tileIndexesProjectionsWhitelist.add( positionsInProjectionDimensionToTiles.get( projectionGridCoords.get()[ d ] ) );
+					}
+					else
+					{
+						final long middlePositionInProjectionDimension = positionsInProjectionDimensionToTiles.keySet().stream().mapToLong( Long::longValue ).toArray()[ positionsInProjectionDimensionToTiles.size() / 2 ];
+						final Set< Integer > tileIndexesAtMiddlePositionInProjectionDimension = positionsInProjectionDimensionToTiles.get( middlePositionInProjectionDimension );
+						tileIndexesProjectionsWhitelist.add( tileIndexesAtMiddlePositionInProjectionDimension );
+					}
 				}
 			}
 			else if ( tiles[ 0 ].numDimensions() == 2 )
