@@ -84,9 +84,6 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 						iteration > 0 // use stage coords on the first run, and only world transform (last stitched / estimated) on subsequent iterations
 					);
 
-				if ( iteration > 0 && job.getArgs().rematchOnlyExcludedTiles() )
-					retainPairsOnlyContainingExcludedTiles( overlappingSubTiles, logWriter );
-
 				preparePairwiseShifts( overlappingSubTiles, iteration, logWriter );
 			}
 		}
@@ -101,9 +98,9 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		}
 	}
 
-	private void retainPairsOnlyContainingExcludedTiles( final List< SubTilePair > overlappingSubTiles, final PrintWriter logWriter ) throws IOException
+	private void retainPendingPairsOnlyContainingExcludedTiles( final List< SubTilePair > overlappingSubTiles, final PrintWriter logWriter ) throws IOException
 	{
-		logWriter.println( System.lineSeparator() + "rematchOnlyExcludedTiles requested, retaining only overlapping pairs that contain at least one excluded tile on the previous stitched iteration" );
+		logWriter.println( System.lineSeparator() + "rematchOnlyExcludedTiles requested, retaining only overlapping pending pairs that contain at least one excluded tile on the previous stitched iteration" );
 		logWriter.println( "Overlapping pairs before filtering: " + overlappingSubTiles.size() );
 		final Map< Integer, TileInfo > previousStitchedTilesMap = Utils.createTilesMap( getStitchedTilesFromPreviousIteration() );
 		for ( final Iterator< SubTilePair > it = overlappingSubTiles.iterator(); it.hasNext(); )
@@ -235,8 +232,8 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 		{
 			logWriter.println( numTilesWithoutTransformations + " out of " + tiles.length + " tiles required estimating their transformations" );
 			logWriter.println( "Estimated affine transformations for " + ( numTilesWithoutTransformations - numTilesWithInsufficientNeighborhood - numTilesWithIllDefinedDataPoints ) + " out of " + numTilesWithoutTransformations + " tiles" );
-			logWriter.println( "  Tiles with not enough data poitns: " + numTilesWithInsufficientNeighborhood );
-			logWriter.println( "  Tiles with ill-defined data poitns: " + numTilesWithIllDefinedDataPoints );
+			logWriter.println( "  Tiles with not enough data points: " + numTilesWithInsufficientNeighborhood );
+			logWriter.println( "  Tiles with ill-defined data points: " + numTilesWithIllDefinedDataPoints );
 		}
 
 		return tiles;
@@ -264,6 +261,9 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = tryLoadPrecomputedShifts( basePath );
 		final List< SubTilePair > pendingOverlappingBoxes = removePrecomputedPendingPairs( pairwisePath, overlappingBoxes, pairwiseShifts );
+
+		if ( iteration > 0 && job.getArgs().rematchOnlyExcludedTiles() )
+			retainPendingPairsOnlyContainingExcludedTiles( pendingOverlappingBoxes, logWriter );
 
 		if ( pendingOverlappingBoxes.isEmpty() && !pairwiseShifts.isEmpty() )
 		{
