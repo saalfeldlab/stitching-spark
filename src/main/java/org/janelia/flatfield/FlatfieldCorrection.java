@@ -31,7 +31,6 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.histogram.Real1dBinMapper;
 import net.imglib2.img.array.ArrayImg;
-import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.imageplus.ImagePlusImg;
@@ -57,17 +56,9 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	public static final String translationTermFilename = "T.tif";
 
 	private static final int SCALE_LEVEL_MIN_PIXELS = 1;
-	private static final int AVERAGE_SKIP_SLICES = 5;
-
-	private final String basePath, solutionPath;
+//	private static final int AVERAGE_SKIP_SLICES = 5;
 
 	private transient final JavaSparkContext sparkContext;
-	private transient final TileInfo[] tiles;
-
-	private final DataProvider dataProvider;
-
-	private final long[] fullTileSize;
-	private final Interval workingInterval;
 
 	private final FlatfieldCorrectionArguments args;
 
@@ -139,19 +130,6 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	{
 		this.args = args;
 
-		this.dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.inputFilePath() ) );
-
-		tiles = dataProvider.loadTiles( args.inputFilePath() );
-		fullTileSize = getMinTileSize( tiles );
-		workingInterval = args.cropMinMaxInterval( args.use2D() ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize );
-
-		System.out.println( "Working interval is at " + Arrays.toString( Intervals.minAsLongArray( workingInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsLongArray( workingInterval ) ) );
-
-		basePath = args.inputFilePath().substring( 0, args.inputFilePath().lastIndexOf( "." ) ) + flatfieldFolderSuffix;
-		solutionPath = PathResolver.get( basePath, args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr(), "solution" );
-
-		checkSameSizeForAllTiles();
-
 		sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "FlatfieldCorrection" )
 				//.set( "spark.driver.maxResultSize", "8g" )
@@ -172,27 +150,32 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 			sparkContext.close();
 	}
 
-
-	private void checkSameSizeForAllTiles()
+	public void run() throws IOException, URISyntaxException
 	{
-		// make sure that all tiles are of the same size
-		for ( final TileInfo tile : tiles )
-		{
-			for ( int d = 0; d < tile.numDimensions(); d++ )
-			{
-				if ( tile.getSize(d) != fullTileSize[ d ] )
-				{
-					System.out.println("Assumption failed: not all the tiles are of the same size");
-					System.exit(1);
-				}
-			}
-		}
+		for ( int channel = 0; channel < args.inputChannelsPaths().size(); ++channel )
+			run( channel );
 	}
 
-
 	public < A extends AffineGet & AffineSet, T extends NativeType< T > & RealType< T >, V extends TreeMap< Short, Integer > >
-	void run() throws IOException, URISyntaxException
+	void run( final int channel ) throws IOException, URISyntaxException
 	{
+		final String inputChannelPath = args.inputChannelsPaths().get( channel );
+		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputChannelPath ) );
+		final TileInfo[] tiles = dataProvider.loadTiles( inputChannelPath );
+
+		final String basePath = inputChannelPath.substring( 0, inputChannelPath.lastIndexOf( "." ) ) + flatfieldFolderSuffix;
+		final String solutionPath = PathResolver.get( basePath, args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr(), "solution" );
+
+		if ( !checkSameSizeForAllTiles( tiles ) )
+		{
+			System.out.println("Assumption failed: not all the tiles are of the same size");
+			System.exit(1);
+		}
+
+		final long[] fullTileSize = getMinTileSize( tiles );
+		final Interval workingInterval = args.cropMinMaxInterval( args.use2D() ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize );
+		System.out.println( "Working interval is at " + Arrays.toString( Intervals.minAsLongArray( workingInterval ) ) + " of size " + Arrays.toString( Intervals.dimensionsAsLongArray( workingInterval ) ) );
+
 		long elapsed = System.nanoTime();
 
 		System.out.println( "Working with stack of size " + tiles.length );
@@ -379,8 +362,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > unpivotedSolution = FlatfieldCorrectionSolver.unpivotSolution(
 				lastSolutionMetadata.open( dataProvider, histogramsProvider.getHistogramsN5BasePath() ) );
 
-		saveSolutionComponent( dataProvider, iterations - 1, 0, unpivotedSolution.getA(), Utils.addFilenameSuffix( scalingTermFilename, "_offset" ) );
-		saveSolutionComponent( dataProvider, iterations - 1, 0, unpivotedSolution.getB(), Utils.addFilenameSuffix( translationTermFilename, "_offset" ) );
+		saveSolutionComponent( dataProvider, solutionPath, iterations - 1, 0, unpivotedSolution.getA(), Utils.addFilenameSuffix( scalingTermFilename, "_offset" ) );
+		saveSolutionComponent( dataProvider, solutionPath, iterations - 1, 0, unpivotedSolution.getB(), Utils.addFilenameSuffix( translationTermFilename, "_offset" ) );
 
 		// save final solution to the main folder for this channel
 		{
@@ -420,7 +403,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	}
 
 
-	private RandomAccessibleInterval< DoubleType > averageSolutionComponent( final RandomAccessibleInterval< DoubleType > solutionComponent )
+	/*private RandomAccessibleInterval< DoubleType > averageSolutionComponent( final RandomAccessibleInterval< DoubleType > solutionComponent )
 	{
 		final RandomAccessibleInterval< DoubleType > dst = ArrayImgs.doubles( new long[] { solutionComponent.dimension( 0 ), solutionComponent.dimension( 1 ) } );
 
@@ -445,27 +428,30 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		}
 
 		return dst;
-	}
+	}*/
 
 
-	private void saveSolution(
+	/*private void saveSolution(
 			final DataProvider dataProvider,
+			final String solutionPath,
 			final int iteration,
 			final int scale,
 			final Pair< RandomAccessibleInterval< DoubleType >, RandomAccessibleInterval< DoubleType > > solution ) throws IOException
 	{
 		if ( solution.getA() != null )
-			saveSolutionComponent( dataProvider, iteration, scale, solution.getA(), scalingTermFilename );
+			saveSolutionComponent( dataProvider, solutionPath, iteration, scale, solution.getA(), scalingTermFilename );
 
 		if ( solution.getB() != null )
-			saveSolutionComponent( dataProvider, iteration, scale, solution.getB(), translationTermFilename );
-	}
+			saveSolutionComponent( dataProvider, solutionPath, iteration, scale, solution.getB(), translationTermFilename );
+	}*/
 
 	private void saveSolutionComponent(
 			final DataProvider dataProvider,
+			final String solutionPath,
 			final int iteration,
 			final int scale,
-			final RandomAccessibleInterval< DoubleType > solutionComponent, final String filename ) throws IOException
+			final RandomAccessibleInterval< DoubleType > solutionComponent,
+			final String filename ) throws IOException
 	{
 		final ImagePlus imp = ImageJFunctions.wrap( solutionComponent, filename );
 		final String path = PathResolver.get( solutionPath, "iter" + iteration, Integer.toString( scale ), filename );
@@ -484,5 +470,22 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 					System.out.println("  Tile min size: " + Arrays.toString( tile.getSize() ) + ", tile: " + tile.getFilePath() );
 				}
 		return minSize;
+	}
+
+	private static boolean checkSameSizeForAllTiles( final TileInfo[] tiles )
+	{
+		// make sure that all tiles are of the same size
+		final long[] fullTileSize = getMinTileSize( tiles );
+		for ( final TileInfo tile : tiles )
+		{
+			for ( int d = 0; d < tile.numDimensions(); d++ )
+			{
+				if ( tile.getSize(d) != fullTileSize[ d ] )
+				{
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 }

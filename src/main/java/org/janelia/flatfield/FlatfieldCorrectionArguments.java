@@ -1,6 +1,7 @@
 package org.janelia.flatfield;
 
 import java.nio.file.Paths;
+import java.util.List;
 
 import org.janelia.dataaccess.CloudURI;
 import org.kohsuke.args4j.CmdLineException;
@@ -21,8 +22,8 @@ import net.imglib2.util.ValuePair;
 public class FlatfieldCorrectionArguments
 {
 	@Option(name = "-i", aliases = { "--input" }, required = true,
-			usage = "Path/link to a tile configuration JSON file")
-	private String inputFilePath;
+			usage = "Path/link to a tile configuration JSON file. Multiple configuration (channels) can be passed at once.")
+	private List< String > inputChannelsPaths;
 
 	@Option(name = "--crop", required = false,
 			usage = "Crop interval in a form of xMin,yMin,zMin,xMax,yMax,zMax")
@@ -94,13 +95,14 @@ public class FlatfieldCorrectionArguments
 		}
 
 		// make sure that inputTileConfigurations contains absolute file paths if running on a traditional filesystem
-		if ( !CloudURI.isCloudURI( inputFilePath ) )
-			inputFilePath = Paths.get( inputFilePath ).toAbsolutePath().toString();
+		for ( int i = 0; i < inputChannelsPaths.size(); ++i )
+			if ( !CloudURI.isCloudURI( inputChannelsPaths.get( i ) ) )
+				inputChannelsPaths.set( i, Paths.get( inputChannelsPaths.get( i ) ).toAbsolutePath().toString() );
 	}
 
 	public boolean parsedSuccessfully() { return parsedSuccessfully; }
 
-	public String inputFilePath() { return inputFilePath; }
+	public List< String > inputChannelsPaths() { return inputChannelsPaths; }
 	public String cropMinMaxIntervalStr() { return cropMinMaxInterval; };
 	public boolean use2D() { return use2D; }
 	public Double pivotValue() { return pivotValue; }
