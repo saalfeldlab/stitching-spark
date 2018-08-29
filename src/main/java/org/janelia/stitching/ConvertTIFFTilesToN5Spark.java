@@ -170,7 +170,7 @@ public class ConvertTIFFTilesToN5Spark
 		{
 			final String channelName = getChannelName( inputPath );
 			final TileInfo[] newChannelTiles = newTiles.get( channelName );
-			final String newConfigPath = PathResolver.get( n5Path, Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-converted-n5" ) );
+			final String newConfigPath = PathResolver.get( n5Path, Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-n5" ) );
 			dataProvider.saveTiles( newChannelTiles, newConfigPath );
 		}
 	}

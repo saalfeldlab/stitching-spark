@@ -27,7 +27,7 @@ public abstract class ConvertTilesToN5Spark
 				usage = "Path to an input tile configuration file. Multiple configurations (channels) can be passed at once.")
 		private List< String > inputChannelsPaths;
 
-		@Option(name = "-o", aliases = { "--n5OutputPath" }, required = true,
+		@Option(name = "-o", aliases = { "--n5OutputPath" }, required = false,
 				usage = "Path to an N5 output container (can be a filesystem path, an Amazon S3 link, or a Google Cloud link).")
 		private String n5OutputPath;
 
@@ -56,9 +56,16 @@ public abstract class ConvertTilesToN5Spark
 				if ( !CloudURI.isCloudURI( inputChannelsPaths.get( i ) ) )
 					inputChannelsPaths.set( i, Paths.get( inputChannelsPaths.get( i ) ).toAbsolutePath().toString() );
 
-			// make sure that n5OutputPath is absolute if running on a traditional filesystem
-			if ( !CloudURI.isCloudURI( n5OutputPath ) )
-				n5OutputPath = Paths.get( n5OutputPath ).toAbsolutePath().toString();
+			if ( n5OutputPath != null )
+			{
+				// make sure that n5OutputPath is absolute if running on a traditional filesystem
+				if ( !CloudURI.isCloudURI( n5OutputPath ) )
+					n5OutputPath = Paths.get( n5OutputPath ).toAbsolutePath().toString();
+			}
+			else
+			{
+				n5OutputPath = PathResolver.get( PathResolver.getParent( inputChannelsPaths.iterator().next() ), "tiles.n5" );
+			}
 		}
 	}
 
