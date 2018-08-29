@@ -17,7 +17,7 @@ import org.kohsuke.args4j.Option;
 
 public class StitchingArguments implements Serializable {
 
-	public static enum RestitchingMode implements Serializable
+	public static enum RematchingMode implements Serializable
 	{
 		FULL,
 		INCREMENTAL
@@ -62,10 +62,10 @@ public class StitchingArguments implements Serializable {
 	private boolean allPairs = false;
 
 	@Option(name = "-m", aliases = { "--mode" }, required = false,
-			usage = "Mode for restitching ('restitching-full' or 'restitching-incremental')")
-	private String restitchingModeStr = "";
+			usage = "Rematching mode ('full' or 'incremental')")
+	private String rematchingModeStr = "incremental";
 
-	private RestitchingMode restitchingMode = null;
+	private RematchingMode rematchingMode = null;
 
 	@Option(name = "--noleaves", required = false,
 			usage = "Optimize tile configurations that don't contain any leaves (thus all edges are properly constrained)")
@@ -110,12 +110,12 @@ public class StitchingArguments implements Serializable {
 
 		if ( !fuseOnly )
 		{
-			if ( restitchingModeStr.equalsIgnoreCase( "restitching-full" ) )
-				restitchingMode = RestitchingMode.FULL;
-			else if ( restitchingModeStr.equalsIgnoreCase( "restitching-incremental" ) )
-				restitchingMode = RestitchingMode.INCREMENTAL;
+			if ( rematchingModeStr.equalsIgnoreCase( "full" ) )
+				rematchingMode = RematchingMode.FULL;
+			else if ( rematchingModeStr.equalsIgnoreCase( "incremental" ) )
+				rematchingMode = RematchingMode.INCREMENTAL;
 			else
-				throw new IllegalArgumentException( "Invalid restitching mode. Possible values are: 'restitching-full' or 'restitching-incremental'" );
+				throw new IllegalArgumentException( "Invalid rematching mode. Possible values are: 'full' or 'incremental'" );
 		}
 
 		// make sure that inputTileConfigurations contains absolute file paths if running on a traditional filesystem
@@ -154,7 +154,7 @@ public class StitchingArguments implements Serializable {
 	public boolean stitchOnly() { return stitchOnly; }
 	public boolean fuseOnly() { return fuseOnly; }
 
-	public RestitchingMode restitchingMode() { return restitchingMode; }
+	public RematchingMode rematchingMode() { return rematchingMode; }
 
 	private long[] parseArray( final String str )
 	{

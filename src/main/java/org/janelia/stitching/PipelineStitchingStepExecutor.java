@@ -20,7 +20,7 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 import org.janelia.flatfield.FlatfieldCorrection;
-import org.janelia.stitching.StitchingArguments.RestitchingMode;
+import org.janelia.stitching.StitchingArguments.RematchingMode;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.SameThreadExecutorService;
@@ -201,10 +201,10 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 		else
 		{
-			if ( job.getArgs().restitchingMode() == RestitchingMode.INCREMENTAL )
+			if ( job.getArgs().rematchingMode() == RematchingMode.INCREMENTAL )
 			{
-				System.out.println( "Restitching only excluded pairs" );
-				// use pairwise-used from the previous iteration, so they will not be restitched
+				System.out.println( "Rematching only excluded pairs" );
+				// use pairwise-used from the previous iteration, so they will not be rematched
 				if ( !dataProvider.fileExists( pairwisePath ) )
 					dataProvider.copyFile(
 							PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) ),
@@ -213,7 +213,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			}
 			else
 			{
-				System.out.println( "Full restitching" );
+				System.out.println( "Full rematching" );
 			}
 		}
 
