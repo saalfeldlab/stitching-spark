@@ -1,10 +1,12 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.nio.file.Paths;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
@@ -13,81 +15,100 @@ import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
 import org.janelia.saalfeldlab.n5.spark.N5SliceTiffConverter;
-import org.janelia.saalfeldlab.n5.spark.util.TiffUtils;
+import org.janelia.saalfeldlab.n5.spark.util.TiffUtils.TiffCompression;
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
+import org.kohsuke.args4j.Option;
 
 public class N5ToSliceTiffSpark
 {
-	private static final int SCALE_LEVEL = 0;
-	private static final int SCALE_LEVEL_BINNED = 3;
-
-	public static void main( final String[] args ) throws Exception
+	private static class N5ToSliceTiffCmdArgs implements Serializable
 	{
-		int lastArg = 0;
-		final String n5Path = Paths.get( args[ lastArg++ ] ).toAbsolutePath().toString();
+		private static final long serialVersionUID = 215043103837732209L;
 
-		final Integer requestedChannel;
+		@Option(name = "-i", aliases = { "--input" }, required = true,
+				usage = "Path to N5 export")
+		private String n5Path;
+
+		@Option(name = "-o", aliases = { "--outputPath" }, required = false,
+				usage = "Output path to store slice TIFFs.")
+		private String outputPath;
+
+		@Option(name = "-s", aliases = { "--scaleLevel" }, required = false,
+				usage = "Scale level to use for conversion.")
+		private int scaleLevel = 0;
+
+		@Option(name = "-c", aliases = { "--compress" }, required = false,
+				usage = "Compress generated TIFFs using LZW compression.")
+		private boolean compressTiffs = false;
+
+		private boolean parsedSuccessfully = false;
+
+		public N5ToSliceTiffCmdArgs( final String... args ) throws IllegalArgumentException
 		{
-			if ( args.length > lastArg )
+			final CmdLineParser parser = new CmdLineParser( this );
+			try
 			{
-				Integer requestedChannelParsed;
-				try
-				{
-					requestedChannelParsed = Integer.parseInt( args[ lastArg ] );
-					lastArg++;
-				}
-				catch ( final NumberFormatException e )
-				{
-					requestedChannelParsed = null;
-				}
-				requestedChannel = requestedChannelParsed;
+				parser.parseArgument( args );
+				parsedSuccessfully = true;
+			}
+			catch ( final CmdLineException e )
+			{
+				System.err.println( e.getMessage() );
+				parser.printUsage( System.err );
+			}
+
+			// make sure that input path is absolute if it's a filesystem path
+			if ( !CloudURI.isCloudURI( n5Path ) )
+				n5Path = Paths.get( n5Path ).toAbsolutePath().toString();
+
+			if ( outputPath != null )
+			{
+				// make sure that output path is absolute if it's a filesystem path
+				if ( !CloudURI.isCloudURI( outputPath ) )
+					outputPath = Paths.get( outputPath ).toAbsolutePath().toString();
 			}
 			else
 			{
-				requestedChannel = null;
+				outputPath = PathResolver.get( PathResolver.getParent( n5Path ), "slice-tiff-s" + scaleLevel );
 			}
 		}
+	}
 
-		final boolean binned = args.length > lastArg && args[ lastArg++ ].equalsIgnoreCase( "--binned" );
+	public static void main( final String[] args ) throws Exception
+	{
+		final N5ToSliceTiffCmdArgs parsedArgs = new N5ToSliceTiffCmdArgs( args );
+		if ( !parsedArgs.parsedSuccessfully )
+			System.exit( 1 );
 
-		final int scaleLevel = binned ? SCALE_LEVEL_BINNED : SCALE_LEVEL;
-		System.out.println( "Using scale level " + scaleLevel + " to generate slice TIFFs" );
+		final TiffCompression tiffCompression = parsedArgs.compressTiffs ? TiffCompression.LZW : TiffCompression.NONE;
+		System.out.println( "Output path: " + parsedArgs.outputPath );
+		System.out.println( "Tiff compression: " + tiffCompression );
 
-		// FIXME: does not really work with AWS/GoogleCloud because its parent will be null.
-		final String outBaseFolder = PathResolver.getParent( n5Path );
-		final String outFolder = "slice-tiff" + ( binned ? "-binned" : "" );
-		final String outputPath = PathResolver.get( outBaseFolder, outFolder );
-		System.out.println( "Output path: " + outputPath );
-		System.out.println( "Tiff compression: none" );
-
-		System.out.println( requestedChannel != null ? "Processing channel " + requestedChannel : "Processing all channels" );
-
-		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( n5Path ) );
+		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( parsedArgs.n5Path ) );
 		final DataProviderType dataProviderType = dataProvider.getType();
 
-		final N5Reader n5 = dataProvider.createN5Reader( n5Path, N5ExportMetadata.getGsonBuilder() );
+		final N5Reader n5 = dataProvider.createN5Reader( parsedArgs.n5Path, N5ExportMetadata.getGsonBuilder() );
 
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf().setAppName( "ConvertN5ToSliceTIFF" ) ) )
 		{
 			final N5ExportMetadataReader exportMetadata = N5ExportMetadata.openForReading( n5 );
 			for ( int channel = 0; channel < exportMetadata.getNumChannels(); ++channel )
 			{
-				if ( requestedChannel != null && channel != requestedChannel.intValue() )
-					continue;
-
-				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
-				final String outputChannelPath = PathResolver.get( outputPath, "ch" + channel );
+				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, parsedArgs.scaleLevel );
+				final String outputChannelPath = PathResolver.get( parsedArgs.outputPath, "ch" + channel );
 				N5SliceTiffConverter.convertToSliceTiff(
 						sparkContext,
 						() -> {
 							try {
-								return DataProviderFactory.create( dataProviderType ).createN5Reader( n5Path, N5ExportMetadata.getGsonBuilder() );
+								return DataProviderFactory.create( dataProviderType ).createN5Reader( parsedArgs.n5Path, N5ExportMetadata.getGsonBuilder() );
 							} catch ( final IOException e ) {
 								throw new RuntimeException( e );
 							}
 						},
 						n5DatasetPath,
 						outputChannelPath,
-						TiffUtils.TiffCompression.NONE,
+						tiffCompression,
 						2 // xy slices
 					);
 			}
