@@ -82,7 +82,7 @@ public class ConvertTilesToN5Test
 				.setAppName( "ConvertTilesToN5Test" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" ) ) )
 		{
-			newTiles = ConvertTIFFTilesToN5Spark.convertTiffToN5(
+			newTiles = ConvertTIFFTilesToN5Spark.convertTilesToN5(
 					sparkContext,
 					Collections.singletonMap( datasetPath, tiles ),
 					n5Path,
@@ -174,7 +174,7 @@ public class ConvertTilesToN5Test
 				.setAppName( "ConvertTilesToN5Test" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" ) ) )
 		{
-			newTiles = ConvertTIFFTilesToN5Spark.convertTiffToN5(
+			newTiles = ConvertTIFFTilesToN5Spark.convertTilesToN5(
 					sparkContext,
 					Collections.singletonMap( datasetPath, tiles ),
 					s3Link,

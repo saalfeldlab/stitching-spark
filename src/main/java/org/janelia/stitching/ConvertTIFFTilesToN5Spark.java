@@ -54,7 +54,7 @@ public class ConvertTIFFTilesToN5Spark
 		saveTilesChannels( inputChannelsPaths, outputTilesChannels, outputN5Path );
 	}
 
-	private static < T extends NumericType< T > & NativeType< T > > Map< String, TileInfo[] > convertTilesToN5(
+	public static < T extends NumericType< T > & NativeType< T > > Map< String, TileInfo[] > convertTilesToN5(
 			final JavaSparkContext sparkContext,
 			final Map< String, TileInfo[] > inputTilesChannels,
 			final String outputN5Path,
