@@ -3,6 +3,7 @@ package org.janelia.stitching;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.Serializable;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -124,7 +125,11 @@ public class ParseTilesImageList
 				if ( tileImagesFolder == null || tileImagesFolder.isEmpty() )
 				{
 					// base images dir is not provided, use the filepath column
-					filepath = Paths.get( columns[ 0 ] ).toAbsolutePath().toString();
+					final Path tileImagePath = Paths.get( columns[ 0 ] );
+					if ( tileImagePath.isAbsolute() )
+						filepath = tileImagePath.toString();
+					else
+						filepath = Paths.get( imageListFilepath ).getParent().resolve( tileImagePath ).toString();
 				}
 				else if ( columns.length >= NUM_COLUMNS_FULL )
 				{
