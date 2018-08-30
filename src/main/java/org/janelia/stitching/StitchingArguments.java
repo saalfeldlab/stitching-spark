@@ -29,19 +29,19 @@ public class StitchingArguments implements Serializable {
 			usage = "Path/link to a tile configuration JSON file. Multiple configurations can be passed at once.")
 	private List< String > inputTileConfigurations;
 
-	@Option(name = "-n", aliases = { "--neighbors" }, required = false,
+	@Option(name = "-n", aliases = { "--minNeighbors" }, required = false,
 			usage = "Min neighborhood for estimating confidence intervals using offset statistics")
 	private int minStatsNeighborhood = 5;
 
-	@Option(name = "-w", aliases = { "--searchwindow" }, required = false,
+	@Option(name = "-w", aliases = { "--searchWindow" }, required = false,
 			usage = "Search window size for local offset statistics in terms of number of tiles")
 	private String statsWindowSizeTiles = "3,3,3";
 
-	@Option(name = "-f", aliases = { "--fusioncell" }, required = false,
-			usage = "Size of an individual tile when fusing")
+	@Option(name = "-f", aliases = { "--n5BlockSize" }, required = false,
+			usage = "X/Y N5 block size in the exported volume")
 	private int fusionCellSize = 128;
 
-	@Option(name = "-b", aliases = { "--blursigma" }, required = false,
+	@Option(name = "-b", aliases = { "--blurSigma" }, required = false,
 			usage = "Sigma value of the gaussian blur preapplied to the images before stitching")
 	private double blurSigma = 2.0;
 
@@ -57,7 +57,7 @@ public class StitchingArguments implements Serializable {
 			usage = "Max coordinate for exporting")
 	private String maxCoord = null;
 
-	@Option(name = "--allpairs", required = false,
+	@Option(name = "--allPairs", required = false,
 			usage = "Compute pairwise shifts between all pairs (by default only adjacent pairs are used)")
 	private boolean allPairs = false;
 
@@ -67,7 +67,7 @@ public class StitchingArguments implements Serializable {
 
 	private RematchingMode rematchingMode = null;
 
-	@Option(name = "--noleaves", required = false,
+	@Option(name = "--noLeaves", required = false,
 			usage = "Optimize tile configurations that don't contain any leaves (thus all edges are properly constrained)")
 	private boolean noLeaves = false;
 
