@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.Serializable;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -11,48 +12,93 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.saalfeldlab.n5.spark.util.CmdUtils;
 import org.janelia.stitching.PipelineMetadataStepExecutor.NonExistingTilesException;
 import org.janelia.stitching.analysis.CheckConnectedGraphs;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
-import org.janelia.util.Conversions;
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
+import org.kohsuke.args4j.Option;
 
 public class ParseTilesImageList
 {
+	private static class ParseTilesImageListCmdArgs implements Serializable
+	{
+		private static final long serialVersionUID = 215043103837732209L;
+
+		@Option(name = "-i", aliases = { "--input" }, required = true,
+				usage = "Path to the ImageList file.")
+		private String imageListFilepath;
+
+		@Option(name = "-b", aliases = { "--basePath" }, required = false,
+				usage = "Path to the base folder containing input tile images.")
+		private String basePath = null;
+
+		@Option(name = "-r", aliases = { "--pixelResolution" }, required = true,
+				usage = "Physical pixel resolution in nm (comma-separated, for example, 0.097,0.097,0.18).")
+		private String pixelResolutionStr;
+
+		@Option(name = "-a", aliases = { "--axes" }, required = false,
+				usage = "Axis mapping for the objective->pixel coordinates conversion.")
+		private String axisMappingStr = "-y,x,z";
+
+		@Option(name = "-s", aliases = { "--skipMissingTiles" }, required = false,
+				usage = "Skip missing tiles instead of failing.")
+		private boolean skipMissingTiles = false;
+
+		private boolean parsedSuccessfully = false;
+
+		public ParseTilesImageListCmdArgs( final String... args )
+		{
+			final CmdLineParser parser = new CmdLineParser( this );
+			try
+			{
+				parser.parseArgument( args );
+				parsedSuccessfully = true;
+			}
+			catch ( final CmdLineException e )
+			{
+				System.err.println( e.getMessage() );
+				parser.printUsage( System.err );
+			}
+
+			// make sure that imageListFilepath is an absolute file path if it's pointing to a filesystem location
+			if ( !CloudURI.isCloudURI( imageListFilepath ) )
+				imageListFilepath = Paths.get( imageListFilepath ).toAbsolutePath().toString();
+
+			// make sure that basePath is an absolute file path if it's pointing to a filesystem location
+			if ( basePath != null && !CloudURI.isCloudURI( basePath ) )
+				basePath = Paths.get( basePath ).toAbsolutePath().toString();
+		}
+	}
+
 	private static final int NUM_COLUMNS_FULL = 8; // filepath,filename,stageX,stageY,stageZ,objectiveX,objectiveY,objectiveZ
 
 	public static void main( final String[] args ) throws Exception
 	{
-		final String imageListFilepath;
-		final String tileImagesFolder;
-		final double[] pixelResolution;
-		final String[] axisMappingStr;
-		final boolean skipNonExistingTiles;
-
-		try
-		{
-			imageListFilepath = Paths.get( args[ 0 ] ).toAbsolutePath().toString();
-			tileImagesFolder = args[ 1 ];
-			pixelResolution = Conversions.parseDoubleArray( args[ 2 ].trim().split( "," ) );
-			axisMappingStr = args[ 3 ].trim().split( "," );
-			skipNonExistingTiles = args.length > 4 && args[ 4 ].equalsIgnoreCase( "--skip" );
-		}
-		catch ( final Exception e )
-		{
-			System.err.println(
-					"Usage:" + System.lineSeparator() +
-					"python parse-imagelist.py " + System.lineSeparator() +
-					"  <path to ImageList.csv> " + System.lineSeparator() +
-					"  <path to tile images directory> " + System.lineSeparator() +
-					"  <pixel resolution, e.g. 0.097,0.097,0.18> " + System.lineSeparator() +
-					"  <objective to pixel coordinates axis mapping, e.g. -y,x,z>" + System.lineSeparator() +
-					"  [--skip, optional for skipping tiles that do not exist instead of failing]"
-				);
+		final ParseTilesImageListCmdArgs parsedArgs = new ParseTilesImageListCmdArgs( args );
+		if ( !parsedArgs.parsedSuccessfully )
 			System.exit( 1 );
-			return; // avoid initializing all final variables as null
-		}
 
+		run(
+				parsedArgs.imageListFilepath,
+				parsedArgs.basePath,
+				CmdUtils.parseDoubleArray( parsedArgs.pixelResolutionStr ),
+				parsedArgs.axisMappingStr.trim().split( "," ),
+				parsedArgs.skipMissingTiles
+			);
+	}
+
+	public static void run(
+			final String imageListFilepath,
+			final String tileImagesFolder,
+			final double[] pixelResolution,
+			final String[] axisMappingStr,
+			final boolean skipMissingTiles ) throws Exception
+	{
 		if ( pixelResolution.length != 3 && axisMappingStr.length != 3 )
 			throw new IllegalArgumentException( "expected three-dimensional pixelResolution and axisMapping" );
 
@@ -78,7 +124,7 @@ public class ParseTilesImageList
 				if ( tileImagesFolder == null || tileImagesFolder.isEmpty() )
 				{
 					// base images dir is not provided, use the filepath column
-					filepath = columns[ 0 ];
+					filepath = Paths.get( columns[ 0 ] ).toAbsolutePath().toString();
 				}
 				else if ( columns.length >= NUM_COLUMNS_FULL )
 				{
@@ -127,7 +173,7 @@ public class ParseTilesImageList
 		// run metadata step
 		try
 		{
-			PipelineMetadataStepExecutor.process( tiles, skipNonExistingTiles );
+			PipelineMetadataStepExecutor.process( tiles, skipMissingTiles );
 		}
 		catch ( final NonExistingTilesException e )
 		{
