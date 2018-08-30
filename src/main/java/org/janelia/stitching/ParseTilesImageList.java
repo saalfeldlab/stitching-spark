@@ -39,12 +39,12 @@ public class ParseTilesImageList
 		private String basePath = null;
 
 		@Option(name = "-r", aliases = { "--pixelResolution" }, required = true,
-				usage = "Physical pixel resolution in nm (comma-separated, for example, 0.097,0.097,0.18).")
+				usage = "Physical pixel resolution in nm (comma-separated, for example, '0.097,0.097,0.18').")
 		private String pixelResolutionStr;
 
-		@Option(name = "-a", aliases = { "--axes" }, required = false,
-				usage = "Axis mapping for the objective->pixel coordinates conversion.")
-		private String axisMappingStr = "-y,x,z";
+		@Option(name = "-a", aliases = { "--axes" }, required = true,
+				usage = "Axis mapping for the objective->pixel coordinates conversion (comma-separated axis specification with optional flips, for example, '-y,x,z').")
+		private String axisMappingStr;
 
 		@Option(name = "-s", aliases = { "--skipMissingTiles" }, required = false,
 				usage = "Skip missing tiles instead of failing.")
