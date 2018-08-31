@@ -15,6 +15,7 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileModelFactory;
+import org.janelia.stitching.TransformedTileOperations;
 import org.janelia.stitching.Utils;
 
 import mpicbg.models.Model;
@@ -30,14 +31,19 @@ public class EvaluateStitchingSolutionAgainstGroundtruth
 	{
 		final String groundtruthTilesPath = args[ 0 ], stitchedTilesPath = args[ 1 ];
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
-		final TileInfo[] groundtruthTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( groundtruthTilesPath ) ) );
+		final Map< Integer, TileInfo > groundtruthTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( groundtruthTilesPath ) ) ) );
 		final Map< Integer, TileInfo > stitchedTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( stitchedTilesPath ) ) ) );
-		final Set< TileInfo > groundtruthTilesSubset = new HashSet<>();
-		for ( final TileInfo groundtruthTile : groundtruthTiles )
-			if ( stitchedTilesMap.containsKey( groundtruthTile.getIndex() ) )
-				groundtruthTilesSubset.add( groundtruthTile );
 
-		System.out.println( String.format( "%d tiles out of %d are included in the stitched set", stitchedTilesMap.size(), groundtruthTiles.length ) );
+		final Set< Integer > intersection = new HashSet<>();
+		intersection.addAll( groundtruthTilesMap.keySet() );
+		intersection.retainAll( stitchedTilesMap.keySet() );
+
+		System.out.println( "groundtruth tiles: " + groundtruthTilesMap.size() );
+		System.out.println( "stitched tiles: " + stitchedTilesMap.size() );
+		System.out.println( "intersection: " + intersection.size() );
+
+		groundtruthTilesMap.keySet().retainAll( intersection );
+		stitchedTilesMap.keySet().retainAll( intersection );
 
 		final Dimensions tileDimensions = new FinalDimensions( stitchedTilesMap.values().iterator().next().getSize() );
 
@@ -45,7 +51,7 @@ public class EvaluateStitchingSolutionAgainstGroundtruth
 		Arrays.fill( sampledPointsCount, 5 );
 
 		final Map< Integer, Set< PointMatch > > tileToPointMatches = new TreeMap<>();
-		for ( final TileInfo groundtruthTile : groundtruthTilesSubset )
+		for ( final TileInfo groundtruthTile : groundtruthTilesMap.values() )
 		{
 			final TileInfo stitchedTile = stitchedTilesMap.get( groundtruthTile.getIndex() );
 			final IntervalIterator sampledPointsIterator = new IntervalIterator( sampledPointsCount );
@@ -61,7 +67,7 @@ public class EvaluateStitchingSolutionAgainstGroundtruth
 				stitchedTile.getTransform().apply( localTilePosition, transformedStitchedTilePoint );
 
 				final double[] transformedGroundtruthTilePoint = new double[ localTilePosition.length ];
-				groundtruthTile.getTransform().apply( localTilePosition, transformedGroundtruthTilePoint );
+				TransformedTileOperations.getTileTransform( groundtruthTile, false ).apply( localTilePosition, transformedGroundtruthTilePoint );
 
 				final PointMatch pointMatch = new PointMatch( new Point( transformedStitchedTilePoint ), new Point( transformedGroundtruthTilePoint ) );
 
