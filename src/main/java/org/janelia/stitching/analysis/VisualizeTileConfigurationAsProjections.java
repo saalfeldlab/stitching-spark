@@ -32,8 +32,10 @@ import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.img.imageplus.IntImagePlus;
 import net.imglib2.iterator.IntervalIterator;
 import net.imglib2.realtransform.AffineGet;
+import net.imglib2.realtransform.InvertibleRealTransform;
+import net.imglib2.realtransform.InvertibleRealTransformSequence;
 import net.imglib2.realtransform.RealTransform;
-import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.realtransform.Scale2D;
 import net.imglib2.realtransform.Translation;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.util.IntervalIndexer;
@@ -82,6 +84,8 @@ public class VisualizeTileConfigurationAsProjections
 	}
 
 	private static final long[] displaySize = new long[] { 4000, 4000 };
+	private static final double displayScale = 0.25;
+	private static final double displayPadding = 10;
 	private static final boolean projectOnlyMiddleSlab = true;
 
 	private static ARGBType stageTilesColor = new ARGBType( ARGBType.rgba( 255, 0, 0, 255 ) );
@@ -153,10 +157,10 @@ public class VisualizeTileConfigurationAsProjections
 		for ( final TileInfo tile : groundtruthTiles )
 		{
 			stageTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), new Translation( tile.getStagePosition() ), stageTilesColor ) );
-			groundtruthTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), tile.getTransform(), groundtruthTilesColor ) );
+			groundtruthTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), TransformedTileOperations.getTileTransform( tile, false ), groundtruthTilesColor ) );
 		}
 
-		drawTiles( stageTilesForDrawing, "stage", tileIndexesProjectionsWhitelist );
+//		drawTiles( stageTilesForDrawing, "stage", tileIndexesProjectionsWhitelist );
 		drawTiles( groundtruthTilesForDrawing, "groundtruth", tileIndexesProjectionsWhitelist );
 
 		if ( stitchedTiles != null )
@@ -351,17 +355,19 @@ public class VisualizeTileConfigurationAsProjections
 		Arrays.fill( displayOffset, Double.MAX_VALUE );
 		for ( final TileForDrawing projectedTileForDrawing : projectedTilesForDrawing )
 		{
-			final RealInterval transformedBoundingBox = TransformedTileOperations.getTransformedBoundingBox( new FinalInterval( projectedTileForDrawing.size ), projectedTileForDrawing.transform );
+			final RealInterval transformedBoundingBox = TransformedTileOperations.getTransformedBoundingBox(
+					new FinalInterval( projectedTileForDrawing.size ),
+					getDisplayTileTransform( projectedTileForDrawing.transform )
+				);
 			for ( int d = 0; d < displayOffset.length; ++d )
 				displayOffset[ d ] = Math.min( transformedBoundingBox.realMin( d ), displayOffset[ d ] );
 		}
 		for ( int d = 0; d < displayOffset.length; ++d )
-			displayOffset[ d ] -= 10;
+			displayOffset[ d ] -= displayPadding;
 
 		for ( final TileForDrawing projectedTileForDrawing : projectedTilesForDrawing )
 		{
-			final RealTransformSequence projectedTileDisplayTransform = new RealTransformSequence();
-			projectedTileDisplayTransform.add( projectedTileForDrawing.transform );
+			final InvertibleRealTransformSequence projectedTileDisplayTransform = getDisplayTileTransform( projectedTileForDrawing.transform );
 			projectedTileDisplayTransform.add( new Translation( displayOffset ).inverse() );
 
 			drawTransformedRectangle(
@@ -376,6 +382,14 @@ public class VisualizeTileConfigurationAsProjections
 		final ImagePlus imp = img.getImagePlus();
 		imp.setTitle( caption );
 		imp.show();
+	}
+
+	private static InvertibleRealTransformSequence getDisplayTileTransform( final InvertibleRealTransform tileTransform )
+	{
+		final InvertibleRealTransformSequence scaledTileTransform = new InvertibleRealTransformSequence();
+		scaledTileTransform.add( tileTransform );
+		scaledTileTransform.add( new Scale2D( displayScale, displayScale ) );
+		return scaledTileTransform;
 	}
 
 	private static Set< Integer > drawTransformedRectangle(
