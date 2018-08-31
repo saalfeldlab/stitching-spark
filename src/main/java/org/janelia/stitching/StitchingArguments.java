@@ -119,6 +119,18 @@ public class StitchingArguments implements Serializable {
 			usage = "Export overlaps channel based on which connections between tiles have been used for final stitching")
 	private boolean exportOverlaps = false;
 
+	@Option(name = "--maxErrorLimit", required = false,
+			usage = "Max allowed error limit for global optimization")
+	private double maxAllowedErrorLimit = 30;
+
+	@Option(name = "--maxErrorStart", required = false,
+			usage = "Initial max allowed error for global optimization")
+	private double initialMaxAllowedError = 5;
+
+	@Option(name = "--maxErrorStep", required = false,
+			usage = "Max allowed error step for global optimization (the max allowed error will be increased by the given step on every rematching iteration until it reaches the given limit)")
+	private double maxAllowedErrorStep = 5;
+
 	/**
 	 * Toggle pipeline stages. By default all stages are executed.
 	 */
@@ -199,6 +211,10 @@ public class StitchingArguments implements Serializable {
 
 	public RegularizerType regularizerType() { return regularizerType; }
 	public double regularizerLambda() { return regularizerLambda; }
+
+	public double maxAllowedErrorLimit() { return maxAllowedErrorLimit; }
+	public double initialMaxAllowedError() { return initialMaxAllowedError; }
+	public double maxAllowedErrorStep() { return maxAllowedErrorStep; }
 
 	// Fusion options
 	public int fusionCellSize() { return fusionCellSize; }

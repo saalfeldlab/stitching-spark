@@ -32,15 +32,6 @@ public class StitchingOptimizer implements Serializable
 {
 	private static final long serialVersionUID = -3873876669757549452L;
 
-	private static final double MAX_ALLOWED_ERROR_LIMIT = 30;
-	private static final double INITIAL_MAX_ALLOWED_ERROR = 5;
-	private static final double MAX_ALLOWED_ERROR_STEP = 5;
-
-	private static double getMaxAllowedError( final int iteration )
-	{
-		return Math.min( INITIAL_MAX_ALLOWED_ERROR + iteration * MAX_ALLOWED_ERROR_STEP, MAX_ALLOWED_ERROR_LIMIT );
-	}
-
 	public static enum OptimizerMode implements Serializable
 	{
 		TRANSLATION,
@@ -208,6 +199,11 @@ public class StitchingOptimizer implements Serializable
 		final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = usedPairwiseShiftsIndexes.filterPairwiseShifts( subTilePairwiseResults );
 		final String usedPairwiseShiftsPath = PathResolver.get( iterationDirPath, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) );
 		TileInfoJSONProvider.savePairwiseShifts( usedPairwiseShifts, dataProvider.getJsonWriter( URI.create( usedPairwiseShiftsPath ) ) );
+	}
+
+	private double getMaxAllowedError( final int iteration )
+	{
+		return Math.min( job.getArgs().initialMaxAllowedError() + iteration * job.getArgs().maxAllowedErrorStep(), job.getArgs().maxAllowedErrorLimit() );
 	}
 
 	private void printStats( final PrintWriter logWriter, final OptimizerMode optimizerMode, final double maxAllowedError )
