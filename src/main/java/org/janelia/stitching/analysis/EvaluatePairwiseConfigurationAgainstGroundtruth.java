@@ -3,6 +3,7 @@ package org.janelia.stitching.analysis;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -39,6 +40,22 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 		final Map< Integer, TileInfo > groundtruthTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( groundtruthTilesPath ) ) ) );
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseConfigurationPath ) ) );
+
+		int numShiftsRemovedNotInGroundtruth = 0;
+		for ( final Iterator< SerializablePairWiseStitchingResult > it = pairwiseShifts.iterator(); it.hasNext(); )
+		{
+			final SerializablePairWiseStitchingResult pairwiseShift = it.next();
+			for ( int i = 0; i < 2; ++i )
+			{
+				if ( !groundtruthTilesMap.containsKey( pairwiseShift.getSubTilePair().toArray()[ i ].getFullTile().getIndex() ) )
+				{
+					it.remove();
+					++numShiftsRemovedNotInGroundtruth;
+					break;
+				}
+			}
+		}
+		System.out.println( "Removed " + numShiftsRemovedNotInGroundtruth + " pairs where at least one tile is not contained in the groundtruth set" );
 
 		System.out.println( "Calculating errors using pairwise match configuration consisting of " + pairwiseShifts.size() + " elements" );
 
@@ -78,7 +95,7 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 
 			final AffineGet[] groundtruthFullTileTransforms = new AffineGet[ 2 ];
 			for ( int i = 0; i < groundtruthFullTileTransforms.length; ++i )
-				groundtruthFullTileTransforms[ i ] = groundtruthSubTiles[ i ].getFullTile().getTransform();
+				groundtruthFullTileTransforms[ i ] = TransformedTileOperations.getTileTransform( groundtruthSubTiles[ i ].getFullTile(), false );
 
 			final double[] groundtruthMovingSubTileMiddlePointInFixedTile = TransformedTileOperations.transformSubTileMiddlePoint(
 					groundtruthSubTiles[ movingIndex ],
