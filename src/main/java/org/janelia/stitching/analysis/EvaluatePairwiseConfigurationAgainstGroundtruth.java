@@ -1,11 +1,13 @@
 package org.janelia.stitching.analysis;
 
+import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.TreeMap;
 
 import org.janelia.dataaccess.DataProvider;
@@ -20,6 +22,9 @@ import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TransformedTileOperations;
 import org.janelia.stitching.Utils;
 import org.janelia.util.Conversions;
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
+import org.kohsuke.args4j.Option;
 
 import mpicbg.models.Model;
 import net.imglib2.RealPoint;
@@ -34,14 +39,84 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 	private static final int fixedIndex = 0;
 	private static final int movingIndex = 1;
 
+	private static class EvaluatePairwiseConfigurationCmdArgs implements Serializable
+	{
+		private static final long serialVersionUID = 215043103837732209L;
+
+		@Option(name = "-g", aliases = { "--groundtruthTilesPath" }, required = true,
+				usage = "Path to the grountruth tile configuration file.")
+		public String groundtruthTilesPath;
+
+		@Option(name = "-p", aliases = { "--pairwiseConfigurationPath" }, required = true,
+				usage = "Path to the pairwise file to be evaluated.")
+		public String pairwiseConfigurationPath;
+
+		@Option(name = "-t", aliases = { "--tileToInspect" }, required = false,
+				usage = "Tile to inspect (will print pairs containing this tile).")
+		public Integer tileToInspect;
+
+		@Option(name = "-c", aliases = { "--crossCorrelationThreshold" }, required = false,
+				usage = "Cross-correlation threshold to apply to filter the pairwise configuration.")
+		public Double crossCorrelationThreshold;
+
+		@Option(name = "-v", aliases = { "--varianceThreshold" }, required = false,
+				usage = "Intensity variance threshold to apply to filter the pairwise configuration.")
+		public Double varianceThreshold;
+
+		public boolean parsedSuccessfully = false;
+
+		public EvaluatePairwiseConfigurationCmdArgs( final String... args ) throws IllegalArgumentException
+		{
+			final CmdLineParser parser = new CmdLineParser( this );
+			try
+			{
+				parser.parseArgument( args );
+				parsedSuccessfully = true;
+			}
+			catch ( final CmdLineException e )
+			{
+				System.err.println( e.getMessage() );
+				parser.printUsage( System.err );
+			}
+
+			if ( ( crossCorrelationThreshold == null ) != ( varianceThreshold == null ) )
+				throw new IllegalArgumentException( "Either no thresholds or both thresholds should be specified" );
+
+			if ( crossCorrelationThreshold == null && varianceThreshold == null )
+				System.out.println( "do not threshold pairwise results" );
+			else
+				System.out.println( String.format( "thresholding pairwise results using min.cross.corr=%.2f and min.variance=%.2f", crossCorrelationThreshold, varianceThreshold ) );
+			System.out.println();
+		}
+	}
+
 	public static < M extends Model< M > > void main( final String[] args ) throws Exception
 	{
-		final String groundtruthTilesPath = args[ 0 ], pairwiseConfigurationPath = args[ 1 ];
-		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
-		final Map< Integer, TileInfo > groundtruthTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( groundtruthTilesPath ) ) ) );
-		final List< SerializablePairWiseStitchingResult > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( pairwiseConfigurationPath ) ) );
+		final EvaluatePairwiseConfigurationCmdArgs parsedArgs = new EvaluatePairwiseConfigurationCmdArgs( args );
+		if ( !parsedArgs.parsedSuccessfully )
+			System.exit( 1 );
 
-		int numShiftsRemovedNotInGroundtruth = 0;
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+		final Map< Integer, TileInfo > groundtruthTilesMap = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( parsedArgs.groundtruthTilesPath ) ) ) );
+		final List< SerializablePairWiseStitchingResult > pairwiseShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( parsedArgs.pairwiseConfigurationPath ) ) );
+
+		if ( parsedArgs.crossCorrelationThreshold != null || parsedArgs.varianceThreshold != null )
+		{
+			int numPairsBelowThresholds = 0;
+			for ( final Iterator< SerializablePairWiseStitchingResult > it = pairwiseShifts.iterator(); it.hasNext(); )
+			{
+				final SerializablePairWiseStitchingResult pairwiseShift = it.next();
+				if ( parsedArgs.crossCorrelationThreshold > pairwiseShift.getCrossCorrelation() || parsedArgs.varianceThreshold > pairwiseShift.getVariance() )
+				{
+					++numPairsBelowThresholds;
+					it.remove();
+				}
+			}
+			System.out.println( numPairsBelowThresholds + " pairs out of " + ( numPairsBelowThresholds + pairwiseShifts.size() ) + " were below the treshold" );
+			System.out.println();
+		}
+
+		final List< SerializablePairWiseStitchingResult > removedPairsNotInGroundtruth = new ArrayList<>();
 		for ( final Iterator< SerializablePairWiseStitchingResult > it = pairwiseShifts.iterator(); it.hasNext(); )
 		{
 			final SerializablePairWiseStitchingResult pairwiseShift = it.next();
@@ -49,13 +124,16 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 			{
 				if ( !groundtruthTilesMap.containsKey( pairwiseShift.getSubTilePair().toArray()[ i ].getFullTile().getIndex() ) )
 				{
+					removedPairsNotInGroundtruth.add( pairwiseShift );
 					it.remove();
-					++numShiftsRemovedNotInGroundtruth;
 					break;
 				}
 			}
 		}
-		System.out.println( "Removed " + numShiftsRemovedNotInGroundtruth + " pairs where at least one tile is not contained in the groundtruth set" );
+		System.out.println( "Removed " + removedPairsNotInGroundtruth.size() + " pairs where at least one tile is not contained in the groundtruth set:" );
+		for ( final SerializablePairWiseStitchingResult pairwiseShift : removedPairsNotInGroundtruth )
+			System.out.println( "  " + pairwiseShift.getSubTilePair() );
+		System.out.println();
 
 		System.out.println( "Calculating errors using pairwise match configuration consisting of " + pairwiseShifts.size() + " elements" );
 
@@ -72,6 +150,7 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 					Conversions.toDoubleArray( pairwiseShift.getOffset() )
 				);
 
+			// find corresponding subtiles in the groundtruth for the current pairwise item
 			final SubTile[] groundtruthSubTiles = new SubTile[ 2 ];
 			for ( int i = 0; i < groundtruthSubTiles.length; ++i )
 			{
@@ -93,6 +172,7 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 					throw new Exception( "no matching subtile" );
 			}
 
+			// find the pairwise error between the groundtruth offset and the estimated offset
 			final AffineGet[] groundtruthFullTileTransforms = new AffineGet[ 2 ];
 			for ( int i = 0; i < groundtruthFullTileTransforms.length; ++i )
 				groundtruthFullTileTransforms[ i ] = TransformedTileOperations.getTileTransform( groundtruthSubTiles[ i ].getFullTile(), false );
@@ -107,7 +187,7 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 					new RealPoint( groundtruthMovingSubTileMiddlePointInFixedTile )
 				);
 
-
+			// add calculated pairwise error into the fixed->moving error mapping
 			final SubTilePair subTilePair = pairwiseShift.getSubTilePair();
 			final int fixedTileIndex = subTilePair.getFullTilePair().toArray()[ fixedIndex ].getIndex(), movingTileIndex = subTilePair.getFullTilePair().toArray()[ movingIndex ].getIndex();
 
@@ -142,6 +222,42 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 
 		avgError /= numMatches;
 
-		System.out.println( System.lineSeparator() + String.format( "avg.error=%.2f, max.error=%.2f", avgError, maxError ) );
+		System.out.println( System.lineSeparator() + String.format( "avg.error=%.2fpx, max.error=%.2fpx", avgError, maxError ) );
+
+		if ( parsedArgs.tileToInspect != null )
+		{
+			System.out.println( System.lineSeparator() + "Tile to inspect: " + parsedArgs.tileToInspect + getTileGridCoordinatesOrEmptyString( groundtruthTilesMap.get( parsedArgs.tileToInspect ) ) );
+			for ( final Entry< Integer, Map< Integer, List< Pair< SubTilePair, Double > > > > fixedToMovingPairwiseErrorsEntry : fixedToMovingPairwiseErrors.entrySet() )
+			{
+				final int fixedTileIndex = fixedToMovingPairwiseErrorsEntry.getKey();
+				for ( final Entry< Integer, List< Pair< SubTilePair, Double > > > movingPairwiseErrorsEntry : fixedToMovingPairwiseErrorsEntry.getValue().entrySet() )
+				{
+					final int movingTileIndex = movingPairwiseErrorsEntry.getKey();
+					if ( fixedTileIndex == parsedArgs.tileToInspect.intValue() || movingTileIndex == parsedArgs.tileToInspect.intValue() )
+					{
+						System.out.println( movingPairwiseErrorsEntry.getValue().iterator().next().getA().getFullTilePair() + ":" );
+						for ( final Pair< SubTilePair, Double > movingPairwiseError : movingPairwiseErrorsEntry.getValue() )
+							System.out.println( String.format( "  %s: %.2fpx   %s,%s",
+									movingPairwiseError.getA(),
+									movingPairwiseError.getB(),
+									getTileGridCoordinatesOrEmptyString( groundtruthTilesMap.get( fixedTileIndex ) ),
+									getTileGridCoordinatesOrEmptyString( groundtruthTilesMap.get( movingTileIndex ) )
+								) );
+					}
+				}
+			}
+		}
+	}
+
+	private static String getTileGridCoordinatesOrEmptyString( final TileInfo tile )
+	{
+		try
+		{
+			return " (" + Utils.getTileCoordinatesString( tile ) + ")";
+		}
+		catch ( final Exception e )
+		{
+			return "";
+		}
 	}
 }
