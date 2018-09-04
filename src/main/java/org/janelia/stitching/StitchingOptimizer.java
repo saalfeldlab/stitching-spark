@@ -370,8 +370,8 @@ public class StitchingOptimizer implements Serializable
 				comparePointPair.setCrossCorrelation( subTilePairwiseResult.getCrossCorrelation() );
 				comparePointPair.setIsValidOverlap(
 						subTilePairwiseResult.getIsValidOverlap()
-						&& subTilePairwiseResult.getCrossCorrelation() > optimizationParameters.minCrossCorrelation
-						&& subTilePairwiseResult.getVariance() != null && subTilePairwiseResult.getVariance().doubleValue() > optimizationParameters.minVariance
+						&& subTilePairwiseResult.getCrossCorrelation() >= optimizationParameters.minCrossCorrelation
+						&& subTilePairwiseResult.getVariance() != null && subTilePairwiseResult.getVariance().doubleValue() >= optimizationParameters.minVariance
 					);
 
 				comparePairs.addElement( comparePointPair );
