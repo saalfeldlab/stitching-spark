@@ -19,6 +19,7 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TransformUtils;
 import org.janelia.stitching.TransformedTileOperations;
+import org.janelia.stitching.Utils;
 
 import ij.ImageJ;
 import ij.ImagePlus;
@@ -124,7 +125,7 @@ public class VisualizeTileConfigurationAsProjections
 					if ( tile.getIndex().intValue() == tileToInspect.intValue() )
 					{
 						for ( int d = 0; d < tile.numDimensions(); ++d )
-							inspectedTileCoords[ d ] = Math.round( tile.getStagePosition( d ) );
+							inspectedTileCoords[ d ] = getTileGridPositionInDimension( tile, d );
 						break;
 					}
 				}
@@ -236,7 +237,7 @@ public class VisualizeTileConfigurationAsProjections
 					final TreeMap< Long, Set< Integer > > positionsInProjectionDimensionToTiles = new TreeMap<>();
 					for ( final TileInfo tile : tiles )
 					{
-						final long positionInProjectDimension = Math.round( tile.getStagePosition( d ) );
+						final long positionInProjectDimension = getTileGridPositionInDimension( tile, d );
 						if ( !positionsInProjectionDimensionToTiles.containsKey( positionInProjectDimension ) )
 							positionsInProjectionDimensionToTiles.put( positionInProjectDimension, new HashSet<>() );
 						positionsInProjectionDimensionToTiles.get( positionInProjectDimension ).add( tile.getIndex() );
@@ -268,6 +269,21 @@ public class VisualizeTileConfigurationAsProjections
 			tileIndexesProjectionsWhitelist = null;
 		}
 		return tileIndexesProjectionsWhitelist;
+	}
+
+	private static long getTileGridPositionInDimension( final TileInfo tile, final int d )
+	{
+		try
+		{
+			final int[] gridCoordinates = Utils.getTileCoordinates( tile );
+			System.out.println( "  use grid coordinates for tile " + tile.getIndex() );
+			return gridCoordinates[ d ];
+		}
+		catch ( final Exception e )
+		{
+			System.out.println( "  use rounded stage position for tile " + tile.getIndex() );
+			return Math.round( tile.getStagePosition( d ) );
+		}
 	}
 
 	private static void drawTiles(
