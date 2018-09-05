@@ -137,7 +137,7 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 
 		System.out.println( "Calculating errors using pairwise match configuration consisting of " + pairwiseShifts.size() + " elements" );
 
-		final Map< Integer, Map< Integer, List< Pair< SubTilePair, Double > > > > fixedToMovingPairwiseErrors = new TreeMap<>();
+		final Map< Integer, Map< Integer, List< Pair< SerializablePairWiseStitchingResult, Double > > > > fixedToMovingPairwiseErrors = new TreeMap<>();
 
 		for ( final SerializablePairWiseStitchingResult pairwiseShift : pairwiseShifts )
 		{
@@ -197,17 +197,17 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 			if ( !fixedToMovingPairwiseErrors.get( fixedTileIndex ).containsKey( movingTileIndex ) )
 				fixedToMovingPairwiseErrors.get( fixedTileIndex ).put( movingTileIndex, new ArrayList<>() );
 
-			fixedToMovingPairwiseErrors.get( fixedTileIndex ).get( movingTileIndex ).add( new ValuePair<>( subTilePair, error ) );
+			fixedToMovingPairwiseErrors.get( fixedTileIndex ).get( movingTileIndex ).add( new ValuePair<>( pairwiseShift, error ) );
 		}
 
 
 		double avgError = 0, maxError = 0;
 		int numMatches = 0;
-		for ( final Map< Integer, List< Pair< SubTilePair, Double > > > movingTileErrors : fixedToMovingPairwiseErrors.values() )
+		for ( final Map< Integer, List< Pair< SerializablePairWiseStitchingResult, Double > > > movingTileErrors : fixedToMovingPairwiseErrors.values() )
 		{
-			for ( final List< Pair< SubTilePair, Double > > subTilePairsAndErrors : movingTileErrors.values() )
+			for ( final List< Pair< SerializablePairWiseStitchingResult, Double > > subTilePairsAndErrors : movingTileErrors.values() )
 			{
-				for ( final Pair< SubTilePair, Double > subTilePairAndError : subTilePairsAndErrors )
+				for ( final Pair< SerializablePairWiseStitchingResult, Double > subTilePairAndError : subTilePairsAndErrors )
 				{
 					final double error = subTilePairAndError.getB();
 					maxError = Math.max( error, maxError );
@@ -227,21 +227,23 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 		if ( parsedArgs.tileToInspect != null )
 		{
 			System.out.println( System.lineSeparator() + "Tile to inspect: " + parsedArgs.tileToInspect + getTileGridCoordinatesOrEmptyString( groundtruthTilesMap.get( parsedArgs.tileToInspect ) ) );
-			for ( final Entry< Integer, Map< Integer, List< Pair< SubTilePair, Double > > > > fixedToMovingPairwiseErrorsEntry : fixedToMovingPairwiseErrors.entrySet() )
+			for ( final Entry< Integer, Map< Integer, List< Pair< SerializablePairWiseStitchingResult, Double > > > > fixedToMovingPairwiseErrorsEntry : fixedToMovingPairwiseErrors.entrySet() )
 			{
 				final int fixedTileIndex = fixedToMovingPairwiseErrorsEntry.getKey();
-				for ( final Entry< Integer, List< Pair< SubTilePair, Double > > > movingPairwiseErrorsEntry : fixedToMovingPairwiseErrorsEntry.getValue().entrySet() )
+				for ( final Entry< Integer, List< Pair< SerializablePairWiseStitchingResult, Double > > > movingPairwiseErrorsEntry : fixedToMovingPairwiseErrorsEntry.getValue().entrySet() )
 				{
 					final int movingTileIndex = movingPairwiseErrorsEntry.getKey();
 					if ( fixedTileIndex == parsedArgs.tileToInspect.intValue() || movingTileIndex == parsedArgs.tileToInspect.intValue() )
 					{
-						System.out.println( movingPairwiseErrorsEntry.getValue().iterator().next().getA().getFullTilePair() + ":" );
-						for ( final Pair< SubTilePair, Double > movingPairwiseError : movingPairwiseErrorsEntry.getValue() )
-							System.out.println( String.format( "  %s: %.2fpx   %s,%s",
-									movingPairwiseError.getA(),
+						System.out.println( movingPairwiseErrorsEntry.getValue().iterator().next().getA().getSubTilePair().getFullTilePair() + ":" );
+						for ( final Pair< SerializablePairWiseStitchingResult, Double > movingPairwiseError : movingPairwiseErrorsEntry.getValue() )
+							System.out.println( String.format( "  %s: %.2fpx   %s,%s (cr.corr=%.2f, variance=%.2f)",
+									movingPairwiseError.getA().getSubTilePair(),
 									movingPairwiseError.getB(),
 									getTileGridCoordinatesOrEmptyString( groundtruthTilesMap.get( fixedTileIndex ) ),
-									getTileGridCoordinatesOrEmptyString( groundtruthTilesMap.get( movingTileIndex ) )
+									getTileGridCoordinatesOrEmptyString( groundtruthTilesMap.get( movingTileIndex ) ),
+									movingPairwiseError.getA().getCrossCorrelation(),
+									movingPairwiseError.getA().getVariance()
 								) );
 					}
 				}
