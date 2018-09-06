@@ -18,6 +18,7 @@ import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.InvertibleRealTransformSequence;
+import net.imglib2.util.Util;
 
 public class ErrorEllipse implements OffsetValidator
 {
@@ -151,18 +152,28 @@ public class ErrorEllipse implements OffsetValidator
         return TransformedTileOperations.getTransformedBoundingBoxReal( unitInterval, buildFullTransform() );
 	}
 
+	/**
+	 * Test whether the given offset is inside the error ellipse or not.
+	 *
+	 * The error ellipse is centered at {@code ellipseCenter} by default. If the given offset uses a different coordinate space,
+	 * you must first set the corresponding transformation by calling {@link #setErrorEllipseTransform(InvertibleRealTransform)}
+	 * that maps the error ellipse into the used coordinate space.
+	 *
+	 * @param offset
+	 */
 	@Override
 	public boolean testOffset( final double... offset )
 	{
-		return getUnitSphereCoordinates( offset ) <= 1;
+		final double offsetUnitLength = getOffsetUnitLength( offset );
+		return offsetUnitLength <= 1 || Util.isApproxEqual( offsetUnitLength, 1, 1e-1 );
 	}
 
-	double getUnitSphereCoordinates( final double... offset )
+	public double getOffsetUnitLength( final double... offset )
 	{
 		final double[] transformedOffset = offset.clone();
 		buildFullTransform().applyInverse( transformedOffset, transformedOffset );
 
-        // calculate unit sphere coordinates
+        // calculate unit length
         double coordsSumSquared = 0;
         for ( int d = 0; d < transformedOffset.length; ++d )
         	coordsSumSquared += Math.pow( transformedOffset[ d ], 2 );
@@ -211,6 +222,19 @@ public class ErrorEllipse implements OffsetValidator
 		return uncertaintyVectors;
 	}
 
+	public double[] getTransformedEllipseCenter()
+	{
+		final double[] transformedEllipseCenter = new double[ numDimensions() ];
+		buildFullTransform().apply( new double[ numDimensions() ], transformedEllipseCenter );
+		return transformedEllipseCenter;
+	}
+
+	/**
+	 * Set the transformation to map the error ellipse into a different coordinate space.
+	 * The transformation will be applied to the error ellipse centered at {@ellipseCenter}.
+	 *
+	 * @param errorEllipseTransform
+	 */
 	public void setErrorEllipseTransform( final InvertibleRealTransform errorEllipseTransform )
 	{
 		this.errorEllipseTransform = errorEllipseTransform;

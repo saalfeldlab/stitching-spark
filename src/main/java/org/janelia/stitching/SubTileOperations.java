@@ -304,4 +304,21 @@ public class SubTileOperations
 		}
 		return new FinalRealInterval( min, max );
 	}
+
+	/**
+	 * Returns an interval of the given subtile in the stage coordinate space.
+	 *
+	 * @param subTile
+	 * @return
+	 */
+	public static RealInterval getSubTileStageInterval( final SubTile subTile )
+	{
+		final double[] min = new double[ subTile.numDimensions() ], max = new double[ subTile.numDimensions() ];
+		for ( int d = 0; d < subTile.numDimensions(); ++d )
+		{
+			min[ d ] = subTile.getFullTile().getStagePosition( d ) + subTile.min( d );
+			max[ d ] = subTile.getFullTile().getStagePosition( d ) + subTile.max( d );
+		}
+		return new FinalRealInterval( min, max );
+	}
 }
