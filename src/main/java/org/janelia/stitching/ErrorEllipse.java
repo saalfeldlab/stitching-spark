@@ -18,7 +18,6 @@ import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.InvertibleRealTransformSequence;
-import net.imglib2.util.Util;
 
 public class ErrorEllipse implements OffsetValidator
 {
@@ -164,8 +163,7 @@ public class ErrorEllipse implements OffsetValidator
 	@Override
 	public boolean testOffset( final double... offset )
 	{
-		final double offsetUnitLength = getOffsetUnitLength( offset );
-		return offsetUnitLength <= 1 || Util.isApproxEqual( offsetUnitLength, 1, 1e-1 );
+		return getOffsetUnitLength( offset ) <= 1;
 	}
 
 	public double getOffsetUnitLength( final double... offset )

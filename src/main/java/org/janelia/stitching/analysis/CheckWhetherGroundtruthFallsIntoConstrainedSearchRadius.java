@@ -140,19 +140,16 @@ public class CheckWhetherGroundtruthFallsIntoConstrainedSearchRadius
 			final double[] stageSubTilePairwiseOffset = new double[ 3 ];
 			for ( int d = 0; d < groundtruthSubTilePairwiseOffset.length; ++d )
 				stageSubTilePairwiseOffset[ d ] = stageSubTilePositions[ movingIndex ][ d ] - stageSubTilePositions[ fixedIndex ][ d ];
-			if ( !movingSubTileSearchRadius.testOffset( stageSubTilePairwiseOffset ) )
+			if ( !testOffsetApprox( movingSubTileSearchRadius, stageSubTilePairwiseOffset ) )
 				throw new RuntimeException( "bug? the stage offset is reported to be outside the constrained search radius" );
 			if ( !Util.isApproxEqual( movingSubTileSearchRadius.getOffsetUnitLength( stageSubTilePairwiseOffset ), 0, 1e-8 ) )
 				throw new RuntimeException( String.format( "bug? the stage offset converted to unit sphere coordinates in the error ellipse space should be 0" ) );
 
-			if ( subTiles[ fixedIndex ].getIndex().intValue() == 640 && subTiles[ movingIndex ].getIndex().intValue() == 764 )
-				System.out.println( "problematic pair" );
-
-			if ( !movingSubTileSearchRadius.testOffset( Conversions.toDoubleArray( pairwiseShift.getOffset() ) ) )
+			if ( !testOffsetApprox( movingSubTileSearchRadius, Conversions.toDoubleArray( pairwiseShift.getOffset() ) ) )
 				++numPairsWhereEstimatedOffsetIsOutsideSearchRadius;
 //				throw new RuntimeException( "bug? the estimated offset is reported to be outside the constrained search radius" );
 
-			if ( movingSubTileSearchRadius.testOffset( groundtruthSubTilePairwiseOffset ) )
+			if ( testOffsetApprox( movingSubTileSearchRadius, groundtruthSubTilePairwiseOffset ) )
 			{
 				offsetDistancesInsideSearchRadius.add( Point.distance(
 						new Point( groundtruthSubTilePairwiseOffset ),
@@ -187,5 +184,11 @@ public class CheckWhetherGroundtruthFallsIntoConstrainedSearchRadius
 		System.out.println( String.format( "Groundtruth vs. estimated offset errors: avg=%.2f, max=%.2f", avgError, maxError ) );
 
 		System.out.println( "Number of pairs where estimated offset is outside the constrained search radius: " + numPairsWhereEstimatedOffsetIsOutsideSearchRadius );
+	}
+
+	private static boolean testOffsetApprox( final ErrorEllipse errorEllipse, final double... offset )
+	{
+		final double offsetUnitLength = errorEllipse.getOffsetUnitLength( offset );
+		return offsetUnitLength <= 1 || Util.isApproxEqual( offsetUnitLength, 1, 1e-1 );
 	}
 }
