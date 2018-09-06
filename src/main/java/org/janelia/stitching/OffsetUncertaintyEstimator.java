@@ -8,7 +8,6 @@ import java.util.Set;
 import net.imglib2.Interval;
 import net.imglib2.RealPoint;
 import net.imglib2.realtransform.AffineGet;
-import net.imglib2.realtransform.RealTransform;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
@@ -208,11 +207,14 @@ public class OffsetUncertaintyEstimator implements Serializable
 		{
 			// invert the linear part of the affine transformation
 			final AffineGet neighboringTileTransform = TransformedTileOperations.getTileTransform( neighboringTile, true );
-			final RealTransform neighboringTileLocalToOffsetTransform = TransformUtils.undoLinearComponent( neighboringTileTransform );
+//			final RealTransform neighboringTileLocalToOffsetTransform = TransformUtils.undoLinearComponent( neighboringTileTransform );
 
 			final double[] stagePosition = neighboringTile.getStagePosition();
 			final double[] transformedPosition = new double[ neighboringTile.numDimensions() ];
-			neighboringTileLocalToOffsetTransform.apply( new double[ neighboringTile.numDimensions() ], transformedPosition ); // (0,0,0) -> transformed
+			/*neighboringTileLocalToOffsetTransform*/neighboringTileTransform.apply( new double[ neighboringTile.numDimensions() ], transformedPosition ); // (0,0,0) -> transformed
+
+			if ( neighboringTileTransform != null )
+				throw new RuntimeException( "FIXME: check implementation" );
 
 			stageAndWorldCoordinates.add( new ValuePair<>( new RealPoint( stagePosition ), new RealPoint( transformedPosition ) ) );
 		}
