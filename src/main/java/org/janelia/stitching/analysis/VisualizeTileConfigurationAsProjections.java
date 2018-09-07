@@ -20,6 +20,7 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.AxisMapping;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.SubTile;
+import org.janelia.stitching.SubTileOperations;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TilePair;
@@ -378,7 +379,7 @@ public class VisualizeTileConfigurationAsProjections
 		{
 			if ( tileIndexesProjectionsWhitelist.isPresent() )
 				throw new RuntimeException( "whitelist is expected to be null for 2d, as all tiles should be included" );
-			drawTilesProjection( tilesForDrawing, caption, pairwiseConnections, tileForInspection );
+			drawTilesProjection( new int[] { 0, 1 }, tilesForDrawing, caption, pairwiseConnections, tileForInspection );
 		}
 		else if ( tilesForDrawing.iterator().next().size.numDimensions() == 3 )
 		{
@@ -417,6 +418,7 @@ public class VisualizeTileConfigurationAsProjections
 
 				final String projectionAxesStr = projectionDims.stream().map( k -> AxisMapping.getAxisStr( k ) ).collect( Collectors.joining() );
 				drawTilesProjection(
+						projectionDims.stream().mapToInt( Integer::intValue ).toArray(),
 						projectedTilesForDrawing,
 						caption + "-" + projectionAxesStr,
 						pairwiseConnections,
@@ -431,6 +433,7 @@ public class VisualizeTileConfigurationAsProjections
 	}
 
 	private static void drawTilesProjection(
+			final int[] projectionDimensions,
 			final List< TileForDrawing > projectedTilesForDrawing,
 			final String caption,
 			final Optional< List< SerializablePairWiseStitchingResult > > pairwiseConnections,
@@ -470,6 +473,7 @@ public class VisualizeTileConfigurationAsProjections
 		if ( pairwiseConnections.isPresent() )
 		{
 			drawPairwiseConnections(
+					projectionDimensions,
 					img,
 					projectedTilesForDrawing,
 					pairwiseConnections.get(),
@@ -483,6 +487,7 @@ public class VisualizeTileConfigurationAsProjections
 	}
 
 	private static void drawPairwiseConnections(
+			final int[] projectionDimensions,
 			final ARGBScreenImage screenImage,
 			final List< TileForDrawing > projectedTilesForDrawing,
 			final List< SerializablePairWiseStitchingResult > pairwiseConnections,
@@ -507,10 +512,16 @@ public class VisualizeTileConfigurationAsProjections
 					final InvertibleRealTransformSequence projectedTileDisplayTransform = scaleTransform( tilesForDrawingMap.get( subTiles[ i ].getFullTile().getIndex() ).transform );
 					projectedTileDisplayTransform.add( new Translation( displayOffset ).inverse() );
 
-					final double[] transformedDisplayPos = TransformedTileOperations.transformSubTileMiddlePoint( subTiles[ i ], projectedTileDisplayTransform );
+					final double[] subTileMiddlePointPos = SubTileOperations.getSubTileMiddlePoint( subTiles[ i ] );
+					final double[] subTileProjectionMiddlePointPos = new double[ projectionDimensions.length ];
+					for ( int d = 0; d < subTileProjectionMiddlePointPos.length; ++d )
+						subTileProjectionMiddlePointPos[ d ] = subTileMiddlePointPos[ projectionDimensions[ d ] ];
 
-					subTileMiddlePointDisplayPos[ i ] = new int[ displaySize.length ];
-					for ( int d = 0; d < subTileMiddlePointDisplayPos[ i ].length; ++d )
+					final double[] transformedDisplayPos = new double[ subTileProjectionMiddlePointPos.length ];
+					projectedTileDisplayTransform.apply( subTileProjectionMiddlePointPos, transformedDisplayPos );
+
+					subTileMiddlePointDisplayPos[ i ] = new int[ transformedDisplayPos.length ];
+					for ( int d = 0; d < transformedDisplayPos.length; ++d )
 						subTileMiddlePointDisplayPos[ i ][ d ] = ( int ) Math.round( transformedDisplayPos[ d ] );
 				}
 
