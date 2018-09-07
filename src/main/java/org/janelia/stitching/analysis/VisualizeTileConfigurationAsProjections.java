@@ -125,7 +125,7 @@ public class VisualizeTileConfigurationAsProjections
 		}
 	}
 
-	private static final long[] displaySize = new long[] { 4000, 4000 };
+	private static final int[] displaySize = new int[] { 4000, 4000 };
 	private static final double displayScale = 0.25;
 	private static final double displayPadding = 10;
 	private static final boolean projectOnlyMiddleSlab = true;
@@ -378,7 +378,7 @@ public class VisualizeTileConfigurationAsProjections
 		{
 			if ( tileIndexesProjectionsWhitelist.isPresent() )
 				throw new RuntimeException( "whitelist is expected to be null for 2d, as all tiles should be included" );
-			drawTilesProjection( tilesForDrawing, caption, pairwiseConnections );
+			drawTilesProjection( tilesForDrawing, caption, pairwiseConnections, tileForInspection );
 		}
 		else if ( tilesForDrawing.iterator().next().size.numDimensions() == 3 )
 		{
@@ -419,7 +419,8 @@ public class VisualizeTileConfigurationAsProjections
 				drawTilesProjection(
 						projectedTilesForDrawing,
 						caption + "-" + projectionAxesStr,
-						pairwiseConnections
+						pairwiseConnections,
+						tileForInspection
 					);
 			}
 		}
@@ -432,9 +433,10 @@ public class VisualizeTileConfigurationAsProjections
 	private static void drawTilesProjection(
 			final List< TileForDrawing > projectedTilesForDrawing,
 			final String caption,
-			final Optional< List< SerializablePairWiseStitchingResult > > pairwiseConnections ) throws ImgLibException
+			final Optional< List< SerializablePairWiseStitchingResult > > pairwiseConnections,
+			final Optional< TileForInspection > tileForInspection ) throws ImgLibException
 	{
-		final ARGBScreenImage img = new ARGBScreenImage( ( int ) displaySize[ 0 ], ( int ) displaySize[ 1 ] );
+		final ARGBScreenImage img = new ARGBScreenImage( displaySize[ 0 ], displaySize[ 1 ] );
 		final RandomAccess< ARGBType > imgRandomAccess = img.randomAccess();
 
 		final double[] displayOffset = new double[ displaySize.length ];
@@ -471,7 +473,8 @@ public class VisualizeTileConfigurationAsProjections
 					img,
 					projectedTilesForDrawing,
 					pairwiseConnections.get(),
-					displayOffset
+					displayOffset,
+					tileForInspection
 				);
 		}
 
@@ -483,10 +486,10 @@ public class VisualizeTileConfigurationAsProjections
 			final ARGBScreenImage screenImage,
 			final List< TileForDrawing > projectedTilesForDrawing,
 			final List< SerializablePairWiseStitchingResult > pairwiseConnections,
-			final double[] displayOffset )
+			final double[] displayOffset,
+			final Optional< TileForInspection > tileForInspection )
 	{
 		final Graphics graphics = screenImage.image().createGraphics();
-		graphics.setColor( argbToColor( pairwiseConnectionsColor ) );
 
 		final Map< Integer, TileForDrawing > tilesForDrawingMap = new TreeMap<>();
 		for ( final TileForDrawing tileForDrawing : projectedTilesForDrawing )
@@ -506,18 +509,26 @@ public class VisualizeTileConfigurationAsProjections
 
 					final double[] transformedDisplayPos = TransformedTileOperations.transformSubTileMiddlePoint( subTiles[ i ], projectedTileDisplayTransform );
 
-					subTileMiddlePointDisplayPos[ i ] = new int[ transformedDisplayPos.length ];
-					for ( int d = 0; d < transformedDisplayPos.length; ++d )
+					subTileMiddlePointDisplayPos[ i ] = new int[ displaySize.length ];
+					for ( int d = 0; d < subTileMiddlePointDisplayPos[ i ].length; ++d )
 						subTileMiddlePointDisplayPos[ i ][ d ] = ( int ) Math.round( transformedDisplayPos[ d ] );
 				}
 
-				graphics.drawLine(
-						subTileMiddlePointDisplayPos[ 0 ][ 0 ], subTileMiddlePointDisplayPos[ 0 ][ 1 ],
-						subTileMiddlePointDisplayPos[ 1 ][ 0 ], subTileMiddlePointDisplayPos[ 1 ][ 1 ]
-					);
+				if ( isInsideView( subTileMiddlePointDisplayPos[ 0 ], displaySize ) && isInsideView( subTileMiddlePointDisplayPos[ 1 ], displaySize ) )
+				{
+					if ( tileForInspection.isPresent() && ( tilePair.getA().getIndex().intValue() == tileForInspection.get().inspectedTileIndex.intValue() || tilePair.getB().getIndex().intValue() == tileForInspection.get().inspectedTileIndex.intValue() ) )
+						graphics.setColor( argbToColor( inspectedTileColor ) );
+					else
+						graphics.setColor( argbToColor( pairwiseConnectionsColor ) );
 
-				graphics.fillRect( subTileMiddlePointDisplayPos[ 0 ][ 0 ] - 2, subTileMiddlePointDisplayPos[ 0 ][ 1 ] - 2, 5, 5 );
-				graphics.fillRect( subTileMiddlePointDisplayPos[ 1 ][ 0 ] - 2, subTileMiddlePointDisplayPos[ 1 ][ 1 ] - 2, 5, 5 );
+					graphics.drawLine(
+							subTileMiddlePointDisplayPos[ 0 ][ 0 ], subTileMiddlePointDisplayPos[ 0 ][ 1 ],
+							subTileMiddlePointDisplayPos[ 1 ][ 0 ], subTileMiddlePointDisplayPos[ 1 ][ 1 ]
+						);
+
+					graphics.fillRect( subTileMiddlePointDisplayPos[ 0 ][ 0 ] - 2, subTileMiddlePointDisplayPos[ 0 ][ 1 ] - 2, 5, 5 );
+					graphics.fillRect( subTileMiddlePointDisplayPos[ 1 ][ 0 ] - 2, subTileMiddlePointDisplayPos[ 1 ][ 1 ] - 2, 5, 5 );
+				}
 			}
 		}
 	}
@@ -611,7 +622,7 @@ public class VisualizeTileConfigurationAsProjections
 		};
 	}
 
-	private static boolean isInsideView( final int[] displayPosition, final int[] displayView )
+	private static boolean isInsideView( final int[] displayPosition, final int[] displaySize )
 	{
 		boolean insideView = true;
 		for ( int d = 0; d < displayPosition.length; ++d )
