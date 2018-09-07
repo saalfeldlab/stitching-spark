@@ -1,5 +1,6 @@
 package org.janelia.stitching.analysis;
 
+import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.URI;
 import java.util.List;
@@ -72,19 +73,25 @@ public class CompareEstimatedShiftsConstrainedVsUnconstrained
 			) );
 
 
-		for ( final Entry< Integer, ? extends Map< Integer, SerializablePairWiseStitchingResult > > constrainedPairwiseShiftOuterEntry : constrainedPairwiseShiftsMap.entrySet() )
+		try ( final PrintWriter fileWriter = new PrintWriter( "constrained-vs-unconstrained.txt" ) )
 		{
-			for ( final Entry< Integer, SerializablePairWiseStitchingResult > constrainedPairwiseShiftInnerEntry : constrainedPairwiseShiftOuterEntry.getValue().entrySet() )
+			fileWriter.println( "constrained_cr.corr unconstrained_cr.corr constrained_ph.corr unconstrained_ph.corr" );
+			for ( final Entry< Integer, ? extends Map< Integer, SerializablePairWiseStitchingResult > > constrainedPairwiseShiftOuterEntry : constrainedPairwiseShiftsMap.entrySet() )
 			{
-				final SerializablePairWiseStitchingResult constrainedPairwiseShift = constrainedPairwiseShiftInnerEntry.getValue();
-				final SerializablePairWiseStitchingResult unconstrainedPairwiseShift = unconstrainedPairwiseShiftsMap.get( constrainedPairwiseShiftOuterEntry.getKey() ).get( constrainedPairwiseShiftInnerEntry.getKey() );
-				System.out.println( String.format(
-						"constrained cr.corr=%.2f, unconstrained cr.corr=%.2f       constrained phase corr=%.2f, unconstrained phase corr=%.2f",
-						constrainedPairwiseShift.getCrossCorrelation(), unconstrainedPairwiseShift.getCrossCorrelation(),
-						constrainedPairwiseShift.getPhaseCorrelation(), unconstrainedPairwiseShift.getPhaseCorrelation()
-					) );
+				for ( final Entry< Integer, SerializablePairWiseStitchingResult > constrainedPairwiseShiftInnerEntry : constrainedPairwiseShiftOuterEntry.getValue().entrySet() )
+				{
+					final SerializablePairWiseStitchingResult constrainedPairwiseShift = constrainedPairwiseShiftInnerEntry.getValue();
+					final SerializablePairWiseStitchingResult unconstrainedPairwiseShift = unconstrainedPairwiseShiftsMap.get( constrainedPairwiseShiftOuterEntry.getKey() ).get( constrainedPairwiseShiftInnerEntry.getKey() );
+					fileWriter.println( String.format(
+							"%.5f %.5f %.5f %.5f",
+							constrainedPairwiseShift.getCrossCorrelation(), unconstrainedPairwiseShift.getCrossCorrelation(),
+							constrainedPairwiseShift.getPhaseCorrelation(), unconstrainedPairwiseShift.getPhaseCorrelation()
+						) );
+				}
 			}
 		}
+
+		System.out.println( "Done" );
 	}
 
 	private static int countExtraPairsInA(
