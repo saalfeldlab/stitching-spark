@@ -1,11 +1,15 @@
 package org.janelia.stitching.analysis;
 
+import java.awt.Color;
+import java.awt.Graphics;
+import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -15,11 +19,16 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.AxisMapping;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
+import org.janelia.stitching.SubTile;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
+import org.janelia.stitching.TilePair;
 import org.janelia.stitching.TransformUtils;
 import org.janelia.stitching.TransformedTileOperations;
 import org.janelia.stitching.Utils;
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
+import org.kohsuke.args4j.Option;
 
 import ij.ImageJ;
 import ij.ImagePlus;
@@ -28,9 +37,9 @@ import net.imglib2.FinalDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RealInterval;
+import net.imglib2.display.screenimage.awt.ARGBScreenImage;
 import net.imglib2.exception.ImgLibException;
-import net.imglib2.img.imageplus.ImagePlusImgs;
-import net.imglib2.img.imageplus.IntImagePlus;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.iterator.IntervalIterator;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.InvertibleRealTransform;
@@ -44,6 +53,44 @@ import net.imglib2.util.Intervals;
 
 public class VisualizeTileConfigurationAsProjections
 {
+	private static class VisualizeTileConfigurationAsProjectionsCmdArgs implements Serializable
+	{
+		private static final long serialVersionUID = 215043103837732209L;
+
+		@Option(name = "-g", aliases = { "--groundtruthTilesPath" }, required = true,
+				usage = "Path to the grountruth tile configuration file.")
+		public String groundtruthTilesPath;
+
+		@Option(name = "-s", aliases = { "--stitchedTilesPath" }, required = false,
+				usage = "Path to the stitched tile configuration file.")
+		public String stitchedTilesPath;
+
+		@Option(name = "-p", aliases = { "--usedPairwiseConfigurationPath" }, required = false,
+				usage = "Path to the used pairwise configuration file (generated after optimization).")
+		public String usedPairwiseConfigurationPath;
+
+		@Option(name = "-t", aliases = { "--tileToInspect" }, required = false,
+				usage = "Tile to inspect.")
+		public Integer tileToInspect;
+
+		public boolean parsedSuccessfully = false;
+
+		public VisualizeTileConfigurationAsProjectionsCmdArgs( final String... args ) throws IllegalArgumentException
+		{
+			final CmdLineParser parser = new CmdLineParser( this );
+			try
+			{
+				parser.parseArgument( args );
+				parsedSuccessfully = true;
+			}
+			catch ( final CmdLineException e )
+			{
+				System.err.println( e.getMessage() );
+				parser.printUsage( System.err );
+			}
+		}
+	}
+
 	private static class TileForDrawing
 	{
 		public final Integer index;
@@ -68,19 +115,13 @@ public class VisualizeTileConfigurationAsProjections
 	{
 		public final Integer inspectedTileIndex;
 		public final ARGBType inspectedTileColor;
-		public final Set< Integer > neighboringTileIndexes;
-		public final ARGBType neighboringTilesColor;
 
 		public TileForInspection(
 				final Integer inspectedTileIndex,
-				final ARGBType inspectedTileColor,
-				final Set< Integer > neighboringTileIndexes,
-				final ARGBType neighboringTilesColor )
+				final ARGBType inspectedTileColor )
 		{
 			this.inspectedTileIndex = inspectedTileIndex;
 			this.inspectedTileColor = inspectedTileColor.copy();
-			this.neighboringTileIndexes = neighboringTileIndexes;
-			this.neighboringTilesColor = neighboringTilesColor.copy();
 		}
 	}
 
@@ -94,35 +135,28 @@ public class VisualizeTileConfigurationAsProjections
 	private static ARGBType stitchedTilesColor = new ARGBType( ARGBType.rgba( 255, 255, 0, 255 ) );
 
 	private static ARGBType inspectedTileColor = new ARGBType( ARGBType.rgba( 255, 255, 255, 255 ) );
-	private static ARGBType inspectedTileNeighborsColor = new ARGBType( ARGBType.rgba( 0, 0, 255, 255 ) );
+	private static ARGBType pairwiseConnectionsColor = new ARGBType( ARGBType.rgba( 128, 255, 128, 255 ) );
 
 	public static void main( final String[] args ) throws Exception
 	{
-		final DataProvider dataProvider = DataProviderFactory.createByURI( URI.create( args[ 0 ] ) );
-		final TileInfo[] groundtruthTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 0 ] ) ) );
-		final TileInfo[] stitchedTiles = args.length > 1 ? TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( args[ 1 ] ) ) ) : null;
+		final VisualizeTileConfigurationAsProjectionsCmdArgs parsedArgs = new VisualizeTileConfigurationAsProjectionsCmdArgs( args );
+		if ( !parsedArgs.parsedSuccessfully )
+			System.exit( 1 );
+
+		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+		final TileInfo[] groundtruthTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( parsedArgs.groundtruthTilesPath ) ) );
+		final TileInfo[] stitchedTiles = parsedArgs.stitchedTilesPath != null ? TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( parsedArgs.stitchedTilesPath ) ) ) : null;
 
 		final Optional< TileForInspection > tileForInspection;
 		final Optional< long[] > projectionGridCoords;
-
-		if ( args.length > 2 )
+		if ( parsedArgs.tileToInspect != null )
 		{
-			final String usedPairwiseShiftsPath = args[ 2 ];
-			final Integer tileToInspect = Integer.parseInt( args[ 3 ] );
-
-			final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( usedPairwiseShiftsPath ) ) );
-			final Set< Integer > inspectedTileNeighbors = new HashSet<>();
-			for ( final SerializablePairWiseStitchingResult usedPairwiseShift : usedPairwiseShifts )
-				for ( int i = 0; i < 2; ++i )
-					if ( usedPairwiseShift.getSubTilePair().getFullTilePair().toArray()[ i ].getIndex().intValue() == tileToInspect.intValue() )
-						inspectedTileNeighbors.add( usedPairwiseShift.getSubTilePair().getFullTilePair().toArray()[ ( i + 1 ) % 2 ].getIndex() );
-
 			if ( groundtruthTiles[ 0 ].numDimensions() == 3 )
 			{
 				final long[] inspectedTileCoords = new long[ 3 ];
 				for ( final TileInfo tile : groundtruthTiles )
 				{
-					if ( tile.getIndex().intValue() == tileToInspect.intValue() )
+					if ( tile.getIndex().intValue() == parsedArgs.tileToInspect.intValue() )
 					{
 						for ( int d = 0; d < tile.numDimensions(); ++d )
 							inspectedTileCoords[ d ] = getTileGridPositionInDimension( tile, d );
@@ -136,13 +170,7 @@ public class VisualizeTileConfigurationAsProjections
 			{
 				projectionGridCoords = Optional.empty();
 			}
-
-			tileForInspection = Optional.of( new TileForInspection(
-					tileToInspect,
-					inspectedTileColor,
-					inspectedTileNeighbors,
-					inspectedTileNeighborsColor
-				) );
+			tileForInspection = Optional.of( new TileForInspection( parsedArgs.tileToInspect, inspectedTileColor ) );
 		}
 		else
 		{
@@ -150,7 +178,15 @@ public class VisualizeTileConfigurationAsProjections
 			projectionGridCoords = Optional.empty();
 		}
 
-		new ImageJ();
+		final Optional< List< SerializablePairWiseStitchingResult > > pairwiseConnections;
+		if ( parsedArgs.usedPairwiseConfigurationPath != null )
+		{
+			pairwiseConnections = Optional.of( TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( URI.create( parsedArgs.usedPairwiseConfigurationPath ) ) ) );
+		}
+		else
+		{
+			pairwiseConnections = Optional.empty();
+		}
 
 		final Optional< List< Set< Integer > > > tileIndexesProjectionsWhitelist = Optional.ofNullable( getTileIndexesProjectionsWhitelist( groundtruthTiles, projectionGridCoords ) );
 
@@ -160,6 +196,8 @@ public class VisualizeTileConfigurationAsProjections
 			stageTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), new Translation( tile.getStagePosition() ), stageTilesColor ) );
 			groundtruthTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), TransformedTileOperations.getTileTransform( tile, false ), groundtruthTilesColor ) );
 		}
+
+		new ImageJ();
 
 //		drawTiles( stageTilesForDrawing, "stage", tileIndexesProjectionsWhitelist );
 		drawTiles( groundtruthTilesForDrawing, "groundtruth", tileIndexesProjectionsWhitelist );
@@ -174,7 +212,8 @@ public class VisualizeTileConfigurationAsProjections
 					stitchedTilesForDrawing,
 					"stitch",
 					tileIndexesProjectionsWhitelist,
-					tileForInspection
+					tileForInspection,
+					pairwiseConnections
 				);
 		}
 
@@ -220,7 +259,23 @@ public class VisualizeTileConfigurationAsProjections
 		{
 			System.out.println();
 			System.out.println( "Tile to inspect: " + tileForInspection.get().inspectedTileIndex );
-			System.out.println( "Its neighbors used for optimization: " + tileForInspection.get().neighboringTileIndexes );
+			if ( pairwiseConnections.isPresent() )
+			{
+				final Map< Integer, Integer > tileToInspectOptimizationNeighbors = new TreeMap<>();
+				for ( final SerializablePairWiseStitchingResult pairwiseConnection : pairwiseConnections.get() )
+				{
+					final SubTile[] subTiles = pairwiseConnection.getSubTilePair().toArray();
+					for ( int i = 0; i < 2; ++i )
+					{
+						if ( subTiles[ i ].getFullTile().getIndex().intValue() == parsedArgs.tileToInspect.intValue() )
+						{
+							final int neighboringTile = subTiles[ ( i + 1 ) % 2 ].getFullTile().getIndex();
+							tileToInspectOptimizationNeighbors.put( neighboringTile, tileToInspectOptimizationNeighbors.getOrDefault( neighboringTile, 0 ) + 1 );
+						}
+					}
+				}
+				System.out.println( "Its neighbors used for optimization (tile index -> count): " + tileToInspectOptimizationNeighbors );
+			}
 		}
 	}
 
@@ -298,7 +353,17 @@ public class VisualizeTileConfigurationAsProjections
 			final List< TileForDrawing > tilesForDrawing,
 			final String caption,
 			final Optional< List< Set< Integer > > > tileIndexesProjectionsWhitelist,
-			final Optional< TileForInspection > tileForInspection ) throws ImgLibException
+			final Optional< List< SerializablePairWiseStitchingResult > > pairwiseConnections ) throws ImgLibException
+	{
+		drawTiles( tilesForDrawing, caption, tileIndexesProjectionsWhitelist, Optional.empty(), pairwiseConnections );
+	}
+
+	private static void drawTiles(
+			final List< TileForDrawing > tilesForDrawing,
+			final String caption,
+			final Optional< List< Set< Integer > > > tileIndexesProjectionsWhitelist,
+			final Optional< TileForInspection > tileForInspection,
+			final Optional< List< SerializablePairWiseStitchingResult > > pairwiseConnections ) throws ImgLibException
 	{
 		if ( tileForInspection.isPresent() )
 		{
@@ -306,8 +371,6 @@ public class VisualizeTileConfigurationAsProjections
 			{
 				if ( tileForDrawing.index.intValue() == tileForInspection.get().inspectedTileIndex.intValue() )
 					tileForDrawing.color.set( tileForInspection.get().inspectedTileColor );
-				else if ( tileForInspection.get().neighboringTileIndexes.contains( tileForDrawing.index ) )
-					tileForDrawing.color.set( tileForInspection.get().neighboringTilesColor );
 			}
 		}
 
@@ -315,7 +378,7 @@ public class VisualizeTileConfigurationAsProjections
 		{
 			if ( tileIndexesProjectionsWhitelist.isPresent() )
 				throw new RuntimeException( "whitelist is expected to be null for 2d, as all tiles should be included" );
-			drawTilesProjection( tilesForDrawing, caption );
+			drawTilesProjection( tilesForDrawing, caption, pairwiseConnections );
 		}
 		else if ( tilesForDrawing.iterator().next().size.numDimensions() == 3 )
 		{
@@ -353,7 +416,11 @@ public class VisualizeTileConfigurationAsProjections
 				}
 
 				final String projectionAxesStr = projectionDims.stream().map( k -> AxisMapping.getAxisStr( k ) ).collect( Collectors.joining() );
-				drawTilesProjection( projectedTilesForDrawing, caption + "-" + projectionAxesStr );
+				drawTilesProjection(
+						projectedTilesForDrawing,
+						caption + "-" + projectionAxesStr,
+						pairwiseConnections
+					);
 			}
 		}
 		else
@@ -362,9 +429,12 @@ public class VisualizeTileConfigurationAsProjections
 		}
 	}
 
-	private static void drawTilesProjection( final List< TileForDrawing > projectedTilesForDrawing, final String caption ) throws ImgLibException
+	private static void drawTilesProjection(
+			final List< TileForDrawing > projectedTilesForDrawing,
+			final String caption,
+			final Optional< List< SerializablePairWiseStitchingResult > > pairwiseConnections ) throws ImgLibException
 	{
-		final IntImagePlus< ARGBType > img = ImagePlusImgs.argbs( displaySize );
+		final ARGBScreenImage img = new ARGBScreenImage( ( int ) displaySize[ 0 ], ( int ) displaySize[ 1 ] );
 		final RandomAccess< ARGBType > imgRandomAccess = img.randomAccess();
 
 		final double[] displayOffset = new double[ displaySize.length ];
@@ -373,7 +443,7 @@ public class VisualizeTileConfigurationAsProjections
 		{
 			final RealInterval transformedBoundingBox = TransformedTileOperations.getTransformedBoundingBox(
 					new FinalInterval( projectedTileForDrawing.size ),
-					getDisplayTileTransform( projectedTileForDrawing.transform )
+					scaleTransform( projectedTileForDrawing.transform )
 				);
 			for ( int d = 0; d < displayOffset.length; ++d )
 				displayOffset[ d ] = Math.min( transformedBoundingBox.realMin( d ), displayOffset[ d ] );
@@ -383,7 +453,7 @@ public class VisualizeTileConfigurationAsProjections
 
 		for ( final TileForDrawing projectedTileForDrawing : projectedTilesForDrawing )
 		{
-			final InvertibleRealTransformSequence projectedTileDisplayTransform = getDisplayTileTransform( projectedTileForDrawing.transform );
+			final InvertibleRealTransformSequence projectedTileDisplayTransform = scaleTransform( projectedTileForDrawing.transform );
 			projectedTileDisplayTransform.add( new Translation( displayOffset ).inverse() );
 
 			drawTransformedRectangle(
@@ -395,17 +465,69 @@ public class VisualizeTileConfigurationAsProjections
 				);
 		}
 
-		final ImagePlus imp = img.getImagePlus();
-		imp.setTitle( caption );
+		if ( pairwiseConnections.isPresent() )
+		{
+			drawPairwiseConnections(
+					img,
+					projectedTilesForDrawing,
+					pairwiseConnections.get(),
+					displayOffset
+				);
+		}
+
+		final ImagePlus imp = ImageJFunctions.wrap( img, caption );
 		imp.show();
 	}
 
-	private static InvertibleRealTransformSequence getDisplayTileTransform( final InvertibleRealTransform tileTransform )
+	private static void drawPairwiseConnections(
+			final ARGBScreenImage screenImage,
+			final List< TileForDrawing > projectedTilesForDrawing,
+			final List< SerializablePairWiseStitchingResult > pairwiseConnections,
+			final double[] displayOffset )
 	{
-		final InvertibleRealTransformSequence scaledTileTransform = new InvertibleRealTransformSequence();
-		scaledTileTransform.add( tileTransform );
-		scaledTileTransform.add( new Scale2D( displayScale, displayScale ) );
-		return scaledTileTransform;
+		final Graphics graphics = screenImage.image().createGraphics();
+		graphics.setColor( argbToColor( pairwiseConnectionsColor ) );
+
+		final Map< Integer, TileForDrawing > tilesForDrawingMap = new TreeMap<>();
+		for ( final TileForDrawing tileForDrawing : projectedTilesForDrawing )
+			tilesForDrawingMap.put( tileForDrawing.index, tileForDrawing );
+
+		for ( final SerializablePairWiseStitchingResult pairwiseConnection : pairwiseConnections )
+		{
+			final TilePair tilePair = pairwiseConnection.getSubTilePair().getFullTilePair();
+			if ( tilesForDrawingMap.containsKey( tilePair.getA().getIndex() ) && tilesForDrawingMap.containsKey( tilePair.getB().getIndex() ) )
+			{
+				final int[][] subTileMiddlePointDisplayPos = new int[ 2 ][];
+				final SubTile[] subTiles = pairwiseConnection.getSubTilePair().toArray();
+				for ( int i = 0; i < 2; ++i )
+				{
+					final InvertibleRealTransformSequence projectedTileDisplayTransform = scaleTransform( tilesForDrawingMap.get( subTiles[ i ].getFullTile().getIndex() ).transform );
+					projectedTileDisplayTransform.add( new Translation( displayOffset ).inverse() );
+
+					final double[] transformedDisplayPos = TransformedTileOperations.transformSubTileMiddlePoint( subTiles[ i ], projectedTileDisplayTransform );
+
+					subTileMiddlePointDisplayPos[ i ] = new int[ transformedDisplayPos.length ];
+					for ( int d = 0; d < transformedDisplayPos.length; ++d )
+						subTileMiddlePointDisplayPos[ i ][ d ] = ( int ) Math.round( transformedDisplayPos[ d ] );
+				}
+
+				graphics.drawLine(
+						subTileMiddlePointDisplayPos[ 0 ][ 0 ], subTileMiddlePointDisplayPos[ 0 ][ 1 ],
+						subTileMiddlePointDisplayPos[ 1 ][ 0 ], subTileMiddlePointDisplayPos[ 1 ][ 1 ]
+					);
+
+				graphics.fillRect( subTileMiddlePointDisplayPos[ 0 ][ 0 ] - 2, subTileMiddlePointDisplayPos[ 0 ][ 1 ] - 2, 5, 5 );
+				graphics.fillRect( subTileMiddlePointDisplayPos[ 1 ][ 0 ] - 2, subTileMiddlePointDisplayPos[ 1 ][ 1 ] - 2, 5, 5 );
+			}
+		}
+	}
+
+	private static InvertibleRealTransformSequence scaleTransform( final InvertibleRealTransform transform )
+	{
+		final InvertibleRealTransformSequence scaledTransform = new InvertibleRealTransformSequence();
+		scaledTransform.add( transform );
+		scaledTransform.add( new Scale2D( displayScale, displayScale ) );
+		return scaledTransform;
 	}
 
 	private static Set< Integer > drawTransformedRectangle(
@@ -475,11 +597,7 @@ public class VisualizeTileConfigurationAsProjections
 		for ( int d = 0; d < displayPosition.length; ++d )
 			displayPosition[ d ] = ( int ) Math.round( position[ d ] );
 
-		boolean insideView = true;
-		for ( int d = 0; d < displayPosition.length; ++d )
-			insideView &= ( displayPosition[ d ] >= 0 && displayPosition[ d ] < displaySize[ d ] );
-
-		if ( insideView )
+		if ( isInsideView( displayPosition, displaySize ) )
 		{
 			final int pixelIndex = IntervalIndexer.positionToIndex( displayPosition, displaySize );
 			if ( !visitedPixels.isPresent() || !visitedPixels.get().contains( pixelIndex ) )
@@ -493,6 +611,14 @@ public class VisualizeTileConfigurationAsProjections
 		};
 	}
 
+	private static boolean isInsideView( final int[] displayPosition, final int[] displayView )
+	{
+		boolean insideView = true;
+		for ( int d = 0; d < displayPosition.length; ++d )
+			insideView &= ( displayPosition[ d ] >= 0 && displayPosition[ d ] < displaySize[ d ] );
+		return insideView;
+	}
+
 	private static double[][] getLocalRealIntervalCorners( final RealInterval realInterval )
 	{
 		final double[] localMax = new double[ realInterval.numDimensions() ];
@@ -503,5 +629,15 @@ public class VisualizeTileConfigurationAsProjections
 				new double[ realInterval.numDimensions() ],
 				localMax
 		};
+	}
+
+	private static Color argbToColor( final ARGBType argb )
+	{
+		return new Color(
+				ARGBType.red( argb.get() ),
+				ARGBType.green( argb.get() ),
+				ARGBType.blue( argb.get() ),
+				ARGBType.alpha( argb.get() )
+			);
 	}
 }
