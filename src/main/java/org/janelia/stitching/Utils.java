@@ -16,13 +16,21 @@ import ij.IJ;
 import ij.ImagePlus;
 import mpicbg.models.Model;
 import mpicbg.stitching.ImageCollectionElement;
+import net.imglib2.Cursor;
+import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.img.Img;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.imageplus.ImagePlusImg;
+import net.imglib2.img.imageplus.ImagePlusImgFactory;
+import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
+import net.imglib2.type.numeric.RealType;
+import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
+import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
+import net.imglib2.view.Views;
 
 /**
  * Provides some useful methods for working with file paths
@@ -71,6 +79,18 @@ public class Utils {
 		return e;
 	}
 
+	public static < T extends NativeType< T > & RealType< T > > ImagePlus copyToImagePlus( final RandomAccessibleInterval< T > img ) throws ImgLibException
+	{
+		final ImagePlusImg< T, ? > imagePlusImg = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( img ), Util.getTypeFromInterval( img ) );
+		final Cursor< T > imgCursor = Views.flatIterable( img ).cursor();
+		final Cursor< T > imagePlusImgCursor = Views.flatIterable( imagePlusImg ).cursor();
+		while ( imagePlusImgCursor.hasNext() || imgCursor.hasNext() )
+			imagePlusImgCursor.next().set( imgCursor.next() );
+		final ImagePlus imp = imagePlusImg.getImagePlus();
+		workaroundImagePlusNSlices( imp );
+		return imp;
+	}
+
 	public static void workaroundImagePlusNSlices( final ImagePlus imp )
 	{
 		final int[] possible3rdDim = new int[] { imp.getNChannels(), imp.getNSlices(), imp.getNFrames() };
@@ -78,6 +98,7 @@ public class Utils {
 		if ( possible3rdDim[ 0 ] * possible3rdDim[ 1 ] == 1 )
 			imp.setDimensions( 1, possible3rdDim[ 2 ], 1 );
 	}
+
 	public static int[] getImagePlusDimensions( final ImagePlus imp )
 	{
 		final int[] dim3 = new int[] { imp.getNChannels(), imp.getNSlices(), imp.getNFrames() };
