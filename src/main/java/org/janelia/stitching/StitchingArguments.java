@@ -140,6 +140,9 @@ public class StitchingArguments implements Serializable {
 	@Option(name = "--fuse", required = false, usage = "Only fuse the tiles, i.e. export the image in the CellFileViewer format")
 	private boolean fuseOnly = false;
 
+	@Option(name = "--float", required = false, usage = "Use float images for phase correlation (do not convert back to input type after averaging & blurring)")
+	private boolean useFloatImagesForPhaseCorrelation = false;
+
 
 	private boolean parsedSuccessfully = false;
 
@@ -208,6 +211,7 @@ public class StitchingArguments implements Serializable {
 	public boolean useAllPairs() { return allPairs; }
 	public boolean rematchOnlyExcludedTiles() { return rematchOnlyExcludedTiles; }
 	public boolean noLeaves() { return noLeaves; }
+	public boolean useFloatImagesForPhaseCorrelation() { return useFloatImagesForPhaseCorrelation; }
 
 	public RegularizerType regularizerType() { return regularizerType; }
 	public double regularizerLambda() { return regularizerLambda; }

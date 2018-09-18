@@ -1,6 +1,7 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +9,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.janelia.dataaccess.DataProvider;
+import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
@@ -19,24 +21,26 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.converter.Converters;
+import net.imglib2.converter.RealConverter;
 import net.imglib2.converter.RealFloatConverter;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.exception.IncompatibleTypeException;
-import net.imglib2.img.imageplus.FloatImagePlus;
-import net.imglib2.img.imageplus.ImagePlusImg;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.InvertibleRealTransform;
+import net.imglib2.realtransform.Translation;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
-import net.imglib2.util.IntervalsHelper;
 import net.imglib2.util.Pair;
-import net.imglib2.util.ValuePair;
+import net.imglib2.util.Util;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
+import net.preibisch.stitcher.algorithm.PairwiseStitching;
+import net.preibisch.stitcher.algorithm.PairwiseStitchingParameters;
 
 public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > >
 {
@@ -65,8 +69,10 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 	 *
 	 * @param subTilePair
 	 * @throws PipelineExecutionException
+	 * @throws ImgLibException
+	 * @throws IOException
 	 */
-	public SerializablePairWiseStitchingResult stitchSubTilePair( final SubTilePair subTilePair ) throws PipelineExecutionException
+	public SerializablePairWiseStitchingResult stitchSubTilePair( final SubTilePair subTilePair ) throws PipelineExecutionException, ImgLibException, IOException
 	{
 		final SubTile[] subTiles = subTilePair.toArray();
 
@@ -140,24 +146,52 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 		for ( int i = 0; i < subTiles.length; ++i )
 			affinesToFixedSubTileSpace[ i ] = PairwiseTileOperations.getFixedSubTileTransform( subTiles, affinesToFixedTileSpace[ i ] );
 
-		// TODO: use smaller ROI instead of the whole subtile?
+		// TODO: use smaller ROI instead of the full subtile?
 		final ImagePlus[] roiImps = new ImagePlus[ subTiles.length ];
 		final Interval[] transformedRoiIntervals = new Interval[ subTiles.length ];
 		for ( int i = 0; i < subTiles.length; ++i )
 		{
-			final Pair< ImagePlus, Interval > roiAndBoundingBox = renderSubTile(
+			final List< TileInfo > channelTiles = new ArrayList<>();
+			for ( int ch = 0; ch < job.getChannels(); ++ch )
+			{
+				final TileInfo tile = tileMapsForChannels.get( ch ).get( subTiles[ i ].getFullTile().getIndex() );
+				channelTiles.add( tile );
+
+				// validate that all corresponding tiles have the same grid coordinates
+				// (or skip validation if unable to extract grid coordinates from tile filename)
+				validateGridCoordinates( subTiles[ i ], tile );
+			}
+
+			final RandomAccessibleInterval/*< T >*/ renderedRoiInFixedSubTileSpace = renderSubTile(
+					job.getDataProvider(),
 					subTiles[ i ],
 					affinesToFixedSubTileSpace[ i ],
-					flatfieldsForChannels
+					channelTiles,
+					Optional.of( flatfieldsForChannels ),
+					job.getArgs().blurSigma()
 				);
-			roiImps[ i ] = roiAndBoundingBox.getA();
-			transformedRoiIntervals[ i ] = roiAndBoundingBox.getB();
+
+			final RandomAccessibleInterval renderedRoiPossiblyConverted;
+			if ( job.getArgs().useFloatImagesForPhaseCorrelation() )
+			{
+				renderedRoiPossiblyConverted = renderedRoiInFixedSubTileSpace;
+			}
+			else
+			{
+				final RandomAccessibleInterval< FloatType > cast = renderedRoiInFixedSubTileSpace;
+				final RandomAccessibleInterval< T > converted = Converters.convert( cast, new RealConverter< FloatType, T >(), ( T ) subTiles[ i ].getFullTile().getType().getType().createVariable() );
+				renderedRoiPossiblyConverted = converted;
+			}
+
+			roiImps[ i ] = Utils.copyToImagePlus( renderedRoiPossiblyConverted );
+			transformedRoiIntervals[ i ] = new FinalInterval( renderedRoiInFixedSubTileSpace );
 		}
 		// ROIs are rendered in the fixed subtile space, validate that the fixed subtile has zero-min
 		if ( !Views.isZeroMin( transformedRoiIntervals[ 0 ] ) )
 			throw new PipelineExecutionException( "fixed subtile is expected to be zero-min" );
 
-		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImps, movingSubTileSearchRadius );
+//		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImps, movingSubTileSearchRadius );
+		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwiseUsingNewPhaseCorrelationCode( roiImps, job.getParams() );
 
 		if ( pairwiseResult == null )
 		{
@@ -181,63 +215,57 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 	 * @param subTile
 	 * @param fullTileTransform
 	 * @param flatfieldsForChannels
-	 * @return pair: (rendered image; its world bounding box)
-	 * @throws PipelineExecutionException
+	 * @return rendered subtile image in target space
+	 * @throws IOException
+	 * @throws IncompatibleTypeException
 	 */
-	private Pair< ImagePlus, Interval > renderSubTile(
-			final SubTile subTile,
+	public static < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > /*RandomAccessibleInterval< T >*/ RandomAccessibleInterval< FloatType > renderSubTile(
+			final DataProvider dataProvider,
+			final Interval subTileInterval,
 			final InvertibleRealTransform fullTileTransform,
-			final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels ) throws PipelineExecutionException
+			final List< TileInfo > channelTiles,
+			final Optional< List< RandomAccessiblePairNullable< U, U > > > optionalChannelFlatfields,
+			final double blurSigma ) throws IOException, IncompatibleTypeException
 	{
-		final DataProvider dataProvider = job.getDataProvider();
-		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( subTile.getFullTile().getPixelResolution() );
+		if ( optionalChannelFlatfields.isPresent() )
+			assert channelTiles.size() == optionalChannelFlatfields.get().size();
+
+		final double[] normalizedVoxelDimensions = Utils.normalizeVoxelDimensions( channelTiles.iterator().next().getPixelResolution() );
 		System.out.println( "Normalized voxel size = " + Arrays.toString( normalizedVoxelDimensions ) );
 		final double[] blurSigmas = new  double[ normalizedVoxelDimensions.length ];
 		for ( int d = 0; d < blurSigmas.length; d++ )
-			blurSigmas[ d ] = job.getArgs().blurSigma() / normalizedVoxelDimensions[ d ];
+			blurSigmas[ d ] = blurSigma / normalizedVoxelDimensions[ d ];
 
-		System.out.println( "Averaging corresponding tile images for " + job.getChannels() + " channels" );
+		System.out.println( "Averaging tile images for " + channelTiles.size() + " channels" );
 
-		FloatImagePlus< FloatType > avgChannelImg = null;
-		Interval roiBoundingBox = null;
-		int channelsUsed = 0;
+		RandomAccessibleInterval< FloatType > avgChannelImg = null;
+		T inputType = null;
 
-		for ( int channel = 0; channel < job.getChannels(); ++channel )
+		for ( int channel = 0; channel < channelTiles.size(); ++channel )
 		{
-			final TileInfo tile = tileMapsForChannels.get( channel ).get( subTile.getFullTile().getIndex() );
+			final TileInfo tile = channelTiles.get( channel );
 
-			// validate that all corresponding tiles have the same grid coordinates
-			// (or skip validation if unable to extract grid coordinates from tile filename)
-			validateGridCoordinates( subTile, tile );
-
-			// get ROI image
-			final RandomAccessibleInterval< T > roiImg;
-			try
-			{
-				roiImg = TransformedTileImageLoader.loadTile(
-						tile,
-						dataProvider,
-						Optional.ofNullable( flatfieldsForChannels.get( channel ) ),
-						fullTileTransform,
-						IntervalsHelper.roundRealInterval( subTile )
-					);
-			}
-			catch ( final IOException e )
-			{
-				throw new PipelineExecutionException( e );
-			}
+			// get input image ROI
+			final RandomAccessibleInterval< T > roiImg = TransformedTileImageLoader.loadTile(
+					tile,
+					dataProvider,
+					Optional.ofNullable( optionalChannelFlatfields.isPresent() ? optionalChannelFlatfields.get().get( channel ) : null ),
+					fullTileTransform,
+					subTileInterval
+				);
 
 			// allocate output image if needed
 			if ( avgChannelImg == null )
-				avgChannelImg = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( roiImg ) );
-			else if ( !Intervals.equalDimensions( avgChannelImg, roiImg ) )
-				throw new PipelineExecutionException( "different ROI dimensions for the same grid position " + Utils.getTileCoordinatesString( tile ) );
+			{
+				avgChannelImg = Views.translate(
+						ArrayImgs.floats( Intervals.dimensionsAsLongArray( roiImg ) ),
+						Intervals.minAsLongArray( roiImg )
+					);
+			}
 
-			// set transformed bounding box
-			if ( roiBoundingBox == null )
-				roiBoundingBox = new FinalInterval( roiImg );
-			else if ( !Intervals.equals( roiBoundingBox, roiImg ) )
-				throw new PipelineExecutionException( "different ROI coordinates for the same grid position " + Utils.getTileCoordinatesString( tile ) );
+			// store input type
+			if ( inputType == null )
+				inputType = Util.getTypeFromInterval( roiImg );
 
 			// accumulate data in the output image
 			final RandomAccessibleInterval< FloatType > srcImg = Converters.convert( roiImg, new RealFloatConverter<>(), new FloatType() );
@@ -245,67 +273,47 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 			final Cursor< FloatType > dstCursor = Views.flatIterable( avgChannelImg ).cursor();
 			while ( dstCursor.hasNext() || srcCursor.hasNext() )
 				dstCursor.next().add( srcCursor.next() );
-
-			++channelsUsed;
 		}
 
-		if ( channelsUsed == 0 )
-			throw new PipelineExecutionException( subTile.getFullTile().getIndex() + ": images are missing in all channels" );
-
 		// average output image over the number of accumulated channels
-		final FloatType denom = new FloatType( channelsUsed );
+		final FloatType denom = new FloatType( channelTiles.size() );
 		final Cursor< FloatType > dstCursor = Views.iterable( avgChannelImg ).cursor();
 		while ( dstCursor.hasNext() )
 			dstCursor.next().div( denom );
 
 		// blur with requested sigma
 		System.out.println( String.format( "Blurring the overlap area of size %s with sigmas=%s", Arrays.toString( Intervals.dimensionsAsLongArray( avgChannelImg ) ), Arrays.toString( blurSigmas ) ) );
-		try
-		{
-			blur( avgChannelImg, blurSigmas );
-		}
-		catch ( final IncompatibleTypeException e )
-		{
-			throw new PipelineExecutionException( e );
-		}
+		blur( avgChannelImg, blurSigmas );
 
-		final ImagePlus roiImp;
-		try
-		{
-			roiImp = avgChannelImg.getImagePlus();
-		}
-		catch ( final ImgLibException e )
-		{
-			throw new PipelineExecutionException( e );
-		}
+		// convert the output image to the input datatype
+//		final RandomAccessibleInterval< T > convertedOutputImgToInputType = Converters.convert( avgChannelImg, new RealConverter<>(), inputType );
+//		return convertedOutputImgToInputType;
 
-		Utils.workaroundImagePlusNSlices( roiImp );
-
-		return new ValuePair<>( roiImp, roiBoundingBox );
+		return avgChannelImg;
 	}
 
-	private < F extends NumericType< F > > void blur( final RandomAccessibleInterval< F > image, final double[] sigmas ) throws IncompatibleTypeException
+	private static < F extends NumericType< F > > void blur( final RandomAccessibleInterval< F > image, final double[] sigmas ) throws IncompatibleTypeException
 	{
 		final RandomAccessible< F > extendedImage = Views.extendMirrorSingle( image );
 		Gauss3.gauss( sigmas, extendedImage, image, new SameThreadExecutorService() );
 	}
 
 	// TODO: compute variance only within new overlapping region (after matching)
-	static double computeVariance( final ImagePlus[] roiPartImps )
+	static < T extends NativeType< T > & RealType< T > > double computeVariance( final ImagePlus[] roiPartImps )
 	{
 		double pixelSum = 0, pixelSumSquares = 0;
 		long pixelCount = 0;
 		for ( int i = 0; i < 2; ++i )
 		{
-			final ImagePlusImg< FloatType, ? > roiImg = ImagePlusImgs.from( roiPartImps[ i ] );
-			final Cursor< FloatType > roiImgCursor = Views.iterable( roiImg ).cursor();
+			final RandomAccessibleInterval< T > roiImg = ImagePlusImgs.from( roiPartImps[ i ] );
+			final Cursor< T > roiImgCursor = Views.iterable( roiImg ).cursor();
 			while ( roiImgCursor.hasNext() )
 			{
-				final double val = roiImgCursor.next().get();
+				final double val = roiImgCursor.next().getRealDouble();
 				pixelSum += val;
 				pixelSumSquares += Math.pow( val, 2 );
 			}
-			pixelCount += roiImg.size();
+			pixelCount += Intervals.numElements( roiImg );
 		}
 		final double variance = pixelSumSquares / pixelCount - Math.pow( pixelSum / pixelCount, 2 );
 		return variance;
@@ -315,25 +323,54 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 			final ImagePlus[] roiImps,
 			final OffsetValidator offsetValidator )
 	{
+		return stitchPairwise( roiImps, offsetValidator, job.getParams() );
+	}
+
+	public static SerializablePairWiseStitchingResult stitchPairwise(
+			final ImagePlus[] roiImps,
+			final OffsetValidator offsetValidator,
+			final SerializableStitchingParameters stitchingParameters )
+	{
 		final int timepoint = 1;
-		final int numPeaks = 1;
+		final int numReturnPeaks = 1;
 		PairwiseStitchingPerformer.setThreads( 1 );
 
 		final SerializablePairWiseStitchingResult[] results = PairwiseStitchingPerformer.stitchPairwise(
 				roiImps[ 0 ], roiImps[ 1 ], timepoint, timepoint,
-				job.getParams(), numPeaks,
+				stitchingParameters, numReturnPeaks,
 				offsetValidator
 			);
 
 		final SerializablePairWiseStitchingResult result = results[ 0 ];
 
-		if ( result == null )
-		{
-			// TODO: pass actions to update accumulators
-//			noPeaksWithinConfidenceIntervalPairsCount.add( 1 );
-			System.out.println( "no peaks found within the confidence interval" );
-		}
+		return result;
+	}
 
+	public static < T extends NativeType< T > & RealType< T > > SerializablePairWiseStitchingResult stitchPairwiseUsingNewPhaseCorrelationCode(
+			final ImagePlus[] roiImps,
+			final SerializableStitchingParameters stitchingParameters )
+	{
+		final RandomAccessibleInterval< T > imgA = ImagePlusImgs.from( roiImps[ 0 ] );
+		final RandomAccessibleInterval< T > imgB = ImagePlusImgs.from( roiImps[ 1 ] );
+
+		final PairwiseStitchingParameters params = new PairwiseStitchingParameters(0, stitchingParameters.checkPeaks, true, false, false);
+		final Pair<Translation, Double> shift = PairwiseStitching.getShift(
+				imgA,
+				imgB,
+				new Translation(imgA.numDimensions()),
+				new Translation(imgB.numDimensions()),
+				params,
+				new SameThreadExecutorService()
+			);
+
+		if ( shift == null || shift.getA() == null || shift.getB() == null )
+			return null;
+
+		final SerializablePairWiseStitchingResult result = new SerializablePairWiseStitchingResult(
+				null,
+				Conversions.toFloatArray( shift.getA().getTranslationCopy() ),
+				shift.getB().floatValue()
+			);
 		return result;
 	}
 
