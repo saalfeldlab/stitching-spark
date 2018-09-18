@@ -3,6 +3,8 @@ package org.janelia.stitching.analysis;
 import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -15,6 +17,10 @@ import org.janelia.stitching.Utils;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
+
+import net.imglib2.util.Pair;
+import net.imglib2.util.Util;
+import net.imglib2.util.ValuePair;
 
 public class CompareEstimatedShiftsConstrainedVsUnconstrained
 {
@@ -73,6 +79,9 @@ public class CompareEstimatedShiftsConstrainedVsUnconstrained
 			) );
 
 
+		final List< SerializablePairWiseStitchingResult > commonBestShifts = new ArrayList<>();
+		final List< Pair< SerializablePairWiseStitchingResult, SerializablePairWiseStitchingResult > > mostDisagreeingShifts = new ArrayList<>();
+
 		try ( final PrintWriter fileWriter = new PrintWriter( "constrained-vs-unconstrained.txt" ) )
 		{
 			fileWriter.println( "constrained_cr.corr unconstrained_cr.corr constrained_ph.corr unconstrained_ph.corr" );
@@ -87,11 +96,36 @@ public class CompareEstimatedShiftsConstrainedVsUnconstrained
 							constrainedPairwiseShift.getCrossCorrelation(), unconstrainedPairwiseShift.getCrossCorrelation(),
 							constrainedPairwiseShift.getPhaseCorrelation(), unconstrainedPairwiseShift.getPhaseCorrelation()
 						) );
+
+					if ( constrainedPairwiseShift.getCrossCorrelation() > 0.98 && Util.isApproxEqual( constrainedPairwiseShift.getCrossCorrelation(), unconstrainedPairwiseShift.getCrossCorrelation(), 1e-5 ) )
+						commonBestShifts.add( constrainedPairwiseShift );
+
+					if ( constrainedPairwiseShift.getCrossCorrelation() > 0.98 && unconstrainedPairwiseShift.getCrossCorrelation() < 0.02 )
+						mostDisagreeingShifts.add( new ValuePair<>( constrainedPairwiseShift, unconstrainedPairwiseShift ) );
 				}
 			}
 		}
 
-		System.out.println( "Done" );
+		System.out.println();
+		System.out.println( "Common best shifts:" );
+		for ( final SerializablePairWiseStitchingResult shift : commonBestShifts )
+			System.out.println( String.format( "%s, cr.corr=%.5f", shift.getSubTilePair(), shift.getCrossCorrelation() ) );
+
+		System.out.println();
+		System.out.println( "Most disagreeing shifts:" );
+		for ( final Pair< SerializablePairWiseStitchingResult, SerializablePairWiseStitchingResult > shiftPair : mostDisagreeingShifts ) {
+			if ( shiftPair.getA().getSubTilePair().getA().getIndex().intValue() != shiftPair.getB().getSubTilePair().getA().getIndex().intValue() || shiftPair.getA().getSubTilePair().getB().getIndex().intValue() != shiftPair.getB().getSubTilePair().getB().getIndex().intValue() )
+				throw new RuntimeException( "different subtile pairs" );
+			System.out.println( String.format( "%s, constrained cr.corr=%.5f, unconstrained cr.corr=%.5f,  constrained shift (probably correct)=%s, unconstrained shift=%s",
+					shiftPair.getA().getSubTilePair(),
+					shiftPair.getA().getCrossCorrelation(),
+					shiftPair.getB().getCrossCorrelation(),
+					Arrays.toString( shiftPair.getA().getOffset() ),
+					Arrays.toString( shiftPair.getB().getOffset() )
+				) );
+		}
+
+		System.out.println( System.lineSeparator() + "Done" );
 	}
 
 	private static int countExtraPairsInA(
