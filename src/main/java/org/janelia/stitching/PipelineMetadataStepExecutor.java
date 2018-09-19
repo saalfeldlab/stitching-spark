@@ -166,8 +166,13 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			for ( final TileInfo tile : tileChannels.get( channel ) )
 			{
 				final String coordinates = Utils.getTileCoordinatesString( tile );
-				if ( !coordinatesToTiles.containsKey( coordinates ) || Utils.getTileTimestamp( tile ) > Utils.getTileTimestamp( coordinatesToTiles.get( coordinates ) ) )
-					coordinatesToTiles.put( coordinates, tile );
+
+				// in case of a duplicate, remove the old entry to ensure that the sorted order by the timestamp is maintained
+				if ( coordinatesToTiles.containsKey( coordinates ) && Utils.getTileTimestamp( tile ) > Utils.getTileTimestamp( coordinatesToTiles.get( coordinates ) ) )
+					coordinatesToTiles.remove( coordinates );
+
+				// insert a new one
+				coordinatesToTiles.put( coordinates, tile );
 			}
 			duplicates.put( channel, tileChannels.get( channel ).size() - coordinatesToTiles.size() );
 			tileChannels.put( channel, new ArrayList<>( coordinatesToTiles.values() ) );
