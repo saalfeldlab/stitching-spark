@@ -125,7 +125,7 @@ public class StitchingJob implements Serializable {
 	public int getDimensionality() { return tilesMultichannel.get( 0 )[ 0 ].numDimensions(); }
 	public double[] getPixelResolution() { return tilesMultichannel.get( 0 )[ 0 ].getPixelResolution(); }
 
-	public void validateTiles() throws IllegalArgumentException
+	public void validateTiles() throws IOException
 	{
 		final int dimensionality = getDimensionality();
 
@@ -153,6 +153,9 @@ public class StitchingJob implements Serializable {
 			if ( dimensionality != tiles[ 0 ].numDimensions() )
 				throw new IllegalArgumentException( "Channels have different dimensionality" );
 		}
+
+		if ( !CheckTilesOnDisk.allTilesArePresent( dataProvider, tilesMultichannel ) )
+			throw new IllegalArgumentException( "Cannot find some of the tile images on disk" );
 
 		if ( params != null )
 			params.dimensionality = dimensionality;

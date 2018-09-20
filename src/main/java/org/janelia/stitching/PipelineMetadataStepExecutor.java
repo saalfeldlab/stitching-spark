@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.File;
 import java.io.FilenameFilter;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -154,7 +155,14 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 	public void run() throws PipelineExecutionException
 	{
 		// don't execute smart logic since this step has already been executed at the ImageList.csv -> JSON parsing step
-		job.validateTiles();
+		try
+		{
+			job.validateTiles();
+		}
+		catch ( final IOException e )
+		{
+			throw new PipelineExecutionException( e );
+		}
 	}
 
 	private static Map< Integer, Integer > removeDuplicateTiles( final TreeMap< Integer, List< TileInfo > > tileChannels ) throws Exception
