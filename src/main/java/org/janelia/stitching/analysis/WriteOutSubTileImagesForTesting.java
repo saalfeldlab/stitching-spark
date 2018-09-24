@@ -77,11 +77,13 @@ public class WriteOutSubTileImagesForTesting
 		final List< RandomAccessiblePairNullable< U, U > > flatfieldsForChannels = new ArrayList<>();
 		for ( int c = 0; c < channelsPaths.length; ++c )
 		{
-			flatfieldsForChannels.add( FlatfieldCorrection.loadFlatfields(
+			final RandomAccessiblePairNullable< U, U > flatfield = FlatfieldCorrection.loadFlatfields(
 					dataProvider,
 					channelsPaths[ c ].substring( 0, channelsPaths[ c ].lastIndexOf( "." ) ),
 					tileChannels[ 0 ][ 0 ].numDimensions()
-				) );
+				);
+			System.out.println( String.format( "--- %s flatfield for channel %d ---", flatfield != null ? "Successfully loaded" : "Could not load", c ) );
+			flatfieldsForChannels.add( flatfield );
 		}
 
 		final String basePath = PathResolver.getParent( channelsPaths[ 0 ] );
@@ -99,7 +101,7 @@ public class WriteOutSubTileImagesForTesting
 					subTilePair[ i ],
 					new Translation( subTilePair[ i ].numDimensions() ),
 					channelTilesForRendering,
-					Optional.empty(),
+					Optional.of( flatfieldsForChannels ),
 					blurSigma
 				);
 			final ImagePlus subTileImp = Utils.copyToImagePlus( renderedSubTile );
