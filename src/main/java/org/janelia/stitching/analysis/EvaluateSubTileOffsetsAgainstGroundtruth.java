@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -77,6 +78,8 @@ public class EvaluateSubTileOffsetsAgainstGroundtruth
 
 		System.out.println( "Found " + pairwiseShiftsContainingRequestedTile.size() + " subtile pairs containing tile " + parsedArgs.tileToInspect + System.lineSeparator() );
 
+		final Map< Integer, TileInfo > fullTilesInMatches = new TreeMap<>();
+
 		for ( final SerializablePairWiseStitchingResult pairwiseShift : pairwiseShiftsContainingRequestedTile )
 		{
 			final double[] stageSubTileOffset = new double[ pairwiseShift.getNumDimensions() ];
@@ -95,7 +98,16 @@ public class EvaluateSubTileOffsetsAgainstGroundtruth
 					Arrays.toString( round( groundtruthSubTileOffset ) ),
 					Arrays.toString( round( Conversions.toDoubleArray( pairwiseShift.getOffset() ) ) )
 				) );
+
+			for ( final TileInfo fullTile : pairwiseShift.getSubTilePair().getFullTilePair().toArray() )
+				fullTilesInMatches.put( fullTile.getIndex(), fullTile );
 		}
+
+		System.out.println( System.lineSeparator() + String.format( "Requested full tile info: %d (%s)", parsedArgs.tileToInspect, Utils.getTileCoordinatesString( fullTilesInMatches.get( parsedArgs.tileToInspect ) ) ) );
+		System.out.println( "Full tiles in pairwise matches:" );
+		for ( final TileInfo fullTile : fullTilesInMatches.values() )
+			if ( fullTile.getIndex().intValue() != parsedArgs.tileToInspect )
+				System.out.println( "  " + String.format( "%d (%s)", fullTile.getIndex(), Utils.getTileCoordinatesString( fullTile ) ) );
 	}
 
 	private static long[] round( final double[] arr )
