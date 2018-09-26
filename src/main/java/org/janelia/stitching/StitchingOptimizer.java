@@ -34,14 +34,18 @@ public class StitchingOptimizer implements Serializable
 
 	public static enum OptimizerMode implements Serializable
 	{
-		TRANSLATION,
-		AFFINE
+		AFFINE,
+		SIMILARITY,
+		RIGID,
+		TRANSLATION
 	}
 
 	public static enum RegularizerType implements Serializable
 	{
+		SIMILARITY,
+		RIGID,
 		TRANSLATION,
-		RIGID
+		NONE
 	}
 
 	private static final class OptimizationParameters implements Serializable
@@ -163,7 +167,7 @@ public class StitchingOptimizer implements Serializable
 
 	public void optimize( final int iteration, final PrintWriter logWriter ) throws IOException
 	{
-		final OptimizerMode optimizerMode = job.getArgs().translationOnlyStitching() ? OptimizerMode.TRANSLATION : OptimizerMode.AFFINE;
+		final OptimizerMode optimizerMode = job.getArgs().optimizerMode();
 		final DataProvider dataProvider = job.getDataProvider();
 
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
@@ -210,7 +214,7 @@ public class StitchingOptimizer implements Serializable
 	{
 		logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
 		logWriter.println( "Optimizer mode: " + optimizerMode );
-		if ( optimizerMode == OptimizerMode.AFFINE )
+		if ( optimizerMode != OptimizerMode.TRANSLATION )
 		{
 			logWriter.println( "Regularizer type: " + job.getArgs().regularizerType() );
 			logWriter.println( "Regularizer lambda: " + job.getArgs().regularizerLambda() );
@@ -390,35 +394,42 @@ public class StitchingOptimizer implements Serializable
 		final M model;
 		switch ( optimizerMode )
 		{
+		case AFFINE:
+			model = TileModelFactory.createAffineModel( numDimensions );
+			break;
+		case SIMILARITY:
+			model = TileModelFactory.createSimilarityModel( numDimensions );
+			break;
+		case RIGID:
+			model = TileModelFactory.createRigidModel( numDimensions );
+			break;
 		case TRANSLATION:
 			model = TileModelFactory.createTranslationModel( numDimensions );
 			break;
-		case AFFINE:
-		{
-			final M regularizer;
-			switch ( regularizerType )
-			{
-			case TRANSLATION:
-				regularizer = TileModelFactory.createTranslationModel( numDimensions );
-				break;
-			case RIGID:
-				regularizer = TileModelFactory.createRigidModel( numDimensions );
-				break;
-			default:
-				throw new IllegalArgumentException( "regularizer type not supported: " + regularizerType );
-			}
-			model = TileModelFactory.createInterpolatedModel(
-					numDimensions,
-					TileModelFactory.createAffineModel( numDimensions ),
-					regularizer,
-					regularizerLambda
-				);
-			break;
-		}
 		default:
 			throw new IllegalArgumentException( "optimizer mode not supported: " + optimizerMode );
 		}
-		return model;
+
+		final M regularizer;
+		switch ( regularizerType )
+		{
+		case SIMILARITY:
+			regularizer = TileModelFactory.createSimilarityModel( numDimensions );
+			break;
+		case RIGID:
+			regularizer = TileModelFactory.createRigidModel( numDimensions );
+			break;
+		case TRANSLATION:
+			regularizer = TileModelFactory.createTranslationModel( numDimensions );
+			break;
+		case NONE:
+			regularizer = null;
+			break;
+		default:
+			throw new IllegalArgumentException( "regularizer type not supported: " + regularizerType );
+		}
+
+		return ( regularizer != null ? TileModelFactory.createInterpolatedModel( numDimensions, model, regularizer, regularizerLambda ) : model );
 	}
 
 	private TileInfo[] updateTileTransformations( final TileInfo[] tiles, final List< ImagePlusTimePoint > newTransformations )

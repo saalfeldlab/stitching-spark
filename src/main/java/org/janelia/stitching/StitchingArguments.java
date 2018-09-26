@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.List;
 
 import org.janelia.fusion.FusionMode;
+import org.janelia.stitching.StitchingOptimizer.OptimizerMode;
 import org.janelia.stitching.StitchingOptimizer.RegularizerType;
 import org.janelia.util.Conversions;
 import org.kohsuke.args4j.CmdLineException;
@@ -35,10 +36,6 @@ public class StitchingArguments implements Serializable {
 	@Option(name = "--constrain", required = false,
 			usage = "Constrain pairwise matching on the first iteration")
 	private boolean constrainMatchingOnFirstIteration = false;
-
-	@Option(name = "-t", aliases = { "--translation" }, required = false,
-			usage = "Use translation-only stitching")
-	private boolean translationOnlyStitching = false;
 
 	@Option(name = "-w", aliases = { "--weighted" }, required = false,
 			usage = "Weighted predictions for tile positions in the rematching phase")
@@ -106,6 +103,11 @@ public class StitchingArguments implements Serializable {
 			usage = "Allow fusing tiles using their stage coordinates if the world transform is missing, i.e. when exporting initial tile configuration.")
 	private boolean allowFusingStage = false;
 
+	@Option(name = "-opt", aliases = { "--optimizer" }, required = false,
+			usage = "Optimizer model")
+	private String optimizerModeStr = "affine";
+	private OptimizerMode optimizerMode = null;
+
 	@Option(name = "-reg", aliases = { "--regularizer" }, required = false,
 			usage = "Regularizer model")
 	private String regularizerTypeStr = "rigid";
@@ -166,7 +168,7 @@ public class StitchingArguments implements Serializable {
 		if ( !fuseOnly )
 		{
 			stitchingMode = StitchingMode.valueOf( stitchingModeStr.replace( '-', '_' ).toUpperCase() );
-
+			optimizerMode = OptimizerMode.valueOf( optimizerModeStr.replace( '-', '_' ).toUpperCase() );
 			regularizerType = RegularizerType.valueOf( regularizerTypeStr.replace( '-', '_' ).toUpperCase() );
 		}
 
@@ -201,7 +203,6 @@ public class StitchingArguments implements Serializable {
 	public double searchRadiusMultiplier() { return searchRadiusMultiplier; }
 	public boolean constrainMatchingOnFirstIteration() { return constrainMatchingOnFirstIteration; }
 	public double errorEllipseRadiusAsTileSizeRatio() { return errorEllipseRadiusAsTileSizeRatio; }
-	public boolean translationOnlyStitching() { return translationOnlyStitching; }
 	public int[] searchWindowSizeTiles() { return Conversions.toIntArray( parseArray( statsWindowSizeTiles ) ); }
 	public boolean weightedPredictions() { return weightedPredictions; }
 	public long[] padding() { return parseArray( padding ); }
@@ -213,6 +214,7 @@ public class StitchingArguments implements Serializable {
 	public boolean noLeaves() { return noLeaves; }
 	public boolean useFloatImagesForPhaseCorrelation() { return useFloatImagesForPhaseCorrelation; }
 
+	public OptimizerMode optimizerMode() { return optimizerMode; }
 	public RegularizerType regularizerType() { return regularizerType; }
 	public double regularizerLambda() { return regularizerLambda; }
 
