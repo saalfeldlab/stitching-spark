@@ -162,7 +162,7 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 				validateGridCoordinates( subTiles[ i ], tile );
 			}
 
-			final RandomAccessibleInterval/*< T >*/ renderedRoiInFixedSubTileSpace = renderSubTile(
+			final RandomAccessibleInterval< T > renderedRoiInFixedSubTileSpace = renderSubTile(
 					job.getDataProvider(),
 					subTiles[ i ],
 					affinesToFixedSubTileSpace[ i ],
@@ -171,19 +171,7 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 					job.getArgs().blurSigma()
 				);
 
-			final RandomAccessibleInterval renderedRoiPossiblyConverted;
-			if ( job.getArgs().useFloatImagesForPhaseCorrelation() )
-			{
-				renderedRoiPossiblyConverted = renderedRoiInFixedSubTileSpace;
-			}
-			else
-			{
-				final RandomAccessibleInterval< FloatType > cast = renderedRoiInFixedSubTileSpace;
-				final RandomAccessibleInterval< T > converted = Converters.convert( cast, new RealConverter< FloatType, T >(), ( T ) subTiles[ i ].getFullTile().getType().getType().createVariable() );
-				renderedRoiPossiblyConverted = converted;
-			}
-
-			roiImps[ i ] = Utils.copyToImagePlus( renderedRoiPossiblyConverted );
+			roiImps[ i ] = Utils.copyToImagePlus( renderedRoiInFixedSubTileSpace );
 			transformedRoiIntervals[ i ] = new FinalInterval( renderedRoiInFixedSubTileSpace );
 		}
 		// ROIs are rendered in the fixed subtile space, validate that the fixed subtile has zero-min
@@ -219,7 +207,7 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 	 * @throws IOException
 	 * @throws IncompatibleTypeException
 	 */
-	public static < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > /*RandomAccessibleInterval< T >*/ RandomAccessibleInterval< FloatType > renderSubTile(
+	public static < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > RandomAccessibleInterval< T > renderSubTile(
 			final DataProvider dataProvider,
 			final Interval subTileInterval,
 			final InvertibleRealTransform fullTileTransform,
@@ -286,10 +274,8 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 		blur( avgChannelImg, blurSigmas );
 
 		// convert the output image to the input datatype
-//		final RandomAccessibleInterval< T > convertedOutputImgToInputType = Converters.convert( avgChannelImg, new RealConverter<>(), inputType );
-//		return convertedOutputImgToInputType;
-
-		return avgChannelImg;
+		final RandomAccessibleInterval< T > convertedOutputImgToInputType = Converters.convert( avgChannelImg, new RealConverter<>(), inputType );
+		return convertedOutputImgToInputType;
 	}
 
 	private static < F extends NumericType< F > > void blur( final RandomAccessibleInterval< F > image, final double[] sigmas ) throws IncompatibleTypeException
