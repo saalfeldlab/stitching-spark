@@ -152,7 +152,7 @@ public class StitchingTestGenerator
 
 		protected static < T extends NativeType< T > & RealType< T > > ImagePlus copyToImage( final RandomAccessibleInterval< T > srcImg ) throws ImgLibException
 		{
-			final ImagePlusImg< T, ? > dstImg = new ImagePlusImgFactory< T >().create( srcImg, Util.getTypeFromInterval( srcImg ) );
+			final ImagePlusImg< T, ? > dstImg = new ImagePlusImgFactory<>( Util.getTypeFromInterval( srcImg ) ).create( srcImg );
 			final Cursor< T > srcImgCursor = Views.flatIterable( srcImg ).cursor();
 			final Cursor< T > dstImgCursor = Views.flatIterable( dstImg ).cursor();
 			while ( srcImgCursor.hasNext() || dstImgCursor.hasNext() )
