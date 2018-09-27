@@ -17,12 +17,12 @@ import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileLoader;
@@ -69,7 +69,7 @@ public class HistogramsProvider implements Serializable
 	private transient final TileInfo[] tiles;
 	private transient final Interval workingInterval;
 
-	private final DataAccessType dataAccessType;
+	private final DataProviderType dataProviderType;
 
 	private final String histogramsN5BasePath;
 	private final String histogramsDataset;
@@ -100,9 +100,9 @@ public class HistogramsProvider implements Serializable
 		this.histMaxValue = histMaxValue;
 		this.bins = innerBins + 2; // add two extra bins to store tails of the distribution
 
-		dataAccessType = dataProvider.getType();
+		dataProviderType = dataProvider.getType();
 
-		if ( dataAccessType == DataAccessType.FILESYSTEM )
+		if ( dataProviderType == DataProviderType.FILESYSTEM )
 		{
 			histogramsN5BasePath = basePath;
 			histogramsDataset = HISTOGRAMS_N5_DATASET_NAME;
@@ -159,7 +159,7 @@ public class HistogramsProvider implements Serializable
 	}
 
 	public DataProvider getDataProvider() { return dataProvider; }
-	public DataAccessType getDataAccessType() { return dataAccessType; }
+	public DataProviderType getDataProviderType() { return dataProviderType; }
 	public Interval getWorkingInterval() { return workingInterval; };
 
 	public String getHistogramsN5BasePath() { return histogramsN5BasePath; }
@@ -249,7 +249,7 @@ public class HistogramsProvider implements Serializable
 					cellMax[ d ] = cellMin[ d ] + cellDimensions[ d ] - 1;
 				final Interval blockInterval = new FinalInterval( cellMin, cellMax );
 
-				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 
 				// loop over tile images and populate the histograms using the corresponding part of each tile image
 				int done = 0;
@@ -343,7 +343,7 @@ public class HistogramsProvider implements Serializable
 			{
 				referenceHistogram = estimateReferenceHistogram(
 						sparkContext,
-						dataProvider, dataAccessType,
+						dataProvider, dataProviderType,
 						histogramsN5BasePath, histogramsDataset,
 						fieldOfViewSize, blockSize,
 						REFERENCE_HISTOGRAM_POINTS_PERCENT,
@@ -358,7 +358,7 @@ public class HistogramsProvider implements Serializable
 	}
 	public static < T extends RealType< T > > double[] estimateReferenceHistogram(
 			final JavaSparkContext sparkContext,
-			final DataProvider dataProvider, final DataAccessType dataAccessType,
+			final DataProvider dataProvider, final DataProviderType dataProviderType,
 			final String histogramsN5BasePath, final String histogramsDataset,
 			final long[] fieldOfViewSize, final int[] blockSize,
 			final double medianPointsPercent,
@@ -374,7 +374,7 @@ public class HistogramsProvider implements Serializable
 			// compute mean value for each histogram
 			.flatMapToPair( blockPosition ->
 				{
-					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
+					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 					final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( histogramsN5BasePath ) );
 					final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, histogramsDataset );
 					final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
@@ -441,7 +441,7 @@ public class HistogramsProvider implements Serializable
 			.map( tuple ->
 				{
 					final Iterable< long[] > pixelPositions = tuple._2();
-					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataAccessType );
+					final DataProvider dataProviderLocal = DataProviderFactory.createByType( dataProviderType );
 					final N5Reader n5Local = dataProviderLocal.createN5Reader( URI.create( histogramsN5BasePath ) );
 					final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, histogramsDataset );
 					final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );

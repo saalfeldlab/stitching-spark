@@ -20,10 +20,10 @@ import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.s3.N5AmazonS3Reader;
 import org.janelia.saalfeldlab.n5.s3.N5AmazonS3Writer;
 import org.janelia.stitching.Utils;
@@ -94,9 +94,9 @@ public class AmazonS3DataProvider implements DataProvider
 	}
 
 	@Override
-	public DataAccessType getType()
+	public DataProviderType getType()
 	{
-		return DataAccessType.AMAZON_S3;
+		return DataProviderType.AMAZON_S3;
 	}
 
 	@Override

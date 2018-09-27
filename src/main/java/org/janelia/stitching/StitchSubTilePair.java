@@ -9,7 +9,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.janelia.dataaccess.DataProvider;
-import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
@@ -29,18 +28,14 @@ import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.InvertibleRealTransform;
-import net.imglib2.realtransform.Translation;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
-import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
-import net.preibisch.stitcher.algorithm.PairwiseStitching;
-import net.preibisch.stitcher.algorithm.PairwiseStitchingParameters;
 
 public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > >
 {
@@ -178,8 +173,8 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 		if ( !Views.isZeroMin( transformedRoiIntervals[ 0 ] ) )
 			throw new PipelineExecutionException( "fixed subtile is expected to be zero-min" );
 
-//		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImps, movingSubTileSearchRadius );
-		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwiseUsingNewPhaseCorrelationCode( roiImps, job.getParams() );
+		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImps, movingSubTileSearchRadius );
+//		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwiseUsingNewPhaseCorrelationCode( roiImps, job.getParams() );
 
 		if ( pairwiseResult == null )
 		{
@@ -332,7 +327,7 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 		return result;
 	}
 
-	public static < T extends NativeType< T > & RealType< T > > SerializablePairWiseStitchingResult stitchPairwiseUsingNewPhaseCorrelationCode(
+	/*public static < T extends NativeType< T > & RealType< T > > SerializablePairWiseStitchingResult stitchPairwiseUsingNewPhaseCorrelationCode(
 			final ImagePlus[] roiImps,
 			final SerializableStitchingParameters stitchingParameters )
 	{
@@ -358,7 +353,7 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 				shift.getB().floatValue()
 			);
 		return result;
-	}
+	}*/
 
 	private void validateGridCoordinates( final SubTile tileBox, final TileInfo tile )
 	{

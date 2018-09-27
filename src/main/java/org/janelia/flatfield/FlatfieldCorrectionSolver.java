@@ -9,13 +9,13 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldRegularizerMetadata.RegularizerMode;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5RemoveSpark;
 
@@ -212,7 +212,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 				final Interval cellInterval = new FinalInterval( cellMin, cellMax );
 
 				// open histograms dataset
-				final DataProvider dataProviderLocal = DataProviderFactory.createByType( histogramsProvider.getDataAccessType() );
+				final DataProvider dataProviderLocal = DataProviderFactory.createByType( histogramsProvider.getDataProviderType() );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( URI.create( histogramsProvider.getHistogramsN5BasePath() ) );
 				final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, currentScaleHistogramsDataset );
 				final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
@@ -404,10 +404,10 @@ public class FlatfieldCorrectionSolver implements Serializable
 
 	public void cleanupFlatfieldSolutionExports( final DataProvider dataProvider, final String histogramsN5BasePath ) throws IOException
 	{
-		final DataAccessType dataAccessType = dataProvider.getType();
+		final DataProviderType dataProviderType = dataProvider.getType();
 		N5RemoveSpark.remove(
 				sparkContext,
-				() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
+				() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( histogramsN5BasePath ) ),
 				INTERMEDIATE_EXPORTS_N5_GROUP
 			);
 	}

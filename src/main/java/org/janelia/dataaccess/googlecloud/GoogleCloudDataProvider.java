@@ -19,11 +19,11 @@ import java.util.List;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageURI;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.googlecloud.N5GoogleCloudStorageReader;
 import org.janelia.saalfeldlab.n5.googlecloud.N5GoogleCloudStorageWriter;
 import org.janelia.stitching.Utils;
@@ -80,9 +80,9 @@ public class GoogleCloudDataProvider implements DataProvider
 	}
 
 	@Override
-	public DataAccessType getType()
+	public DataProviderType getType()
 	{
-		return DataAccessType.GOOGLE_CLOUD;
+		return DataProviderType.GOOGLE_CLOUD;
 	}
 
 	@Override

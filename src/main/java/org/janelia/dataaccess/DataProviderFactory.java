@@ -6,7 +6,6 @@ import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.fs.FSDataProvider;
 import org.janelia.dataaccess.googlecloud.GoogleCloudDataProvider;
 import org.janelia.dataaccess.s3.AmazonS3DataProvider;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -95,7 +94,7 @@ public abstract class DataProviderFactory
 	 *
 	 * @return
 	 */
-	public static DataProvider createByType( final DataAccessType type )
+	public static DataProvider createByType( final DataProviderType type )
 	{
 		switch ( type )
 		{
@@ -110,23 +109,23 @@ public abstract class DataProviderFactory
 		}
 	}
 
-	public static DataAccessType getTypeByURI( final URI uri )
+	public static DataProviderType getTypeByURI( final URI uri )
 	{
 		final String protocol = uri.getScheme();
 
 		if ( protocol == null || protocol.equalsIgnoreCase( localFileProtocol ) )
-			return DataAccessType.FILESYSTEM;
+			return DataProviderType.FILESYSTEM;
 
 		if ( protocol.equalsIgnoreCase( s3Protocol ) )
-			return DataAccessType.AMAZON_S3;
+			return DataProviderType.AMAZON_S3;
 
 		if ( protocol.equalsIgnoreCase( googleCloudProtocol ) )
-			return DataAccessType.GOOGLE_CLOUD;
+			return DataProviderType.GOOGLE_CLOUD;
 
 		throw new NotImplementedException( "factory for protocol " + uri.getScheme() + " is not implemented" );
 	}
 
-	public static URI createBucketUri( final DataAccessType type, final String bucketName )
+	public static URI createBucketUri( final DataProviderType type, final String bucketName )
 	{
 		final String protocol;
 		switch ( type )

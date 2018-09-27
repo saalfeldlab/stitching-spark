@@ -21,11 +21,11 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 
 import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.stitching.Utils;
 import org.janelia.util.ImageImporter;
 
@@ -42,9 +42,9 @@ import ij.ImagePlus;
 public class FSDataProvider implements DataProvider
 {
 	@Override
-	public DataAccessType getType()
+	public DataProviderType getType()
 	{
-		return DataAccessType.FILESYSTEM;
+		return DataProviderType.FILESYSTEM;
 	}
 
 	@Override

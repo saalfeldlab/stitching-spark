@@ -10,7 +10,6 @@ import java.net.URISyntaxException;
 
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 
 import com.google.gson.GsonBuilder;
 
@@ -23,7 +22,7 @@ import ij.ImagePlus;
  */
 public interface DataProvider
 {
-	public DataAccessType getType();
+	public DataProviderType getType();
 
 	public URI getUri( final String path ) throws URISyntaxException;
 

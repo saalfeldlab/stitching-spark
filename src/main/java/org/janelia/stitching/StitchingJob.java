@@ -10,7 +10,7 @@ import java.util.List;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
+import org.janelia.dataaccess.DataProviderType;
 
 /**
  * Represents input parameters and customizations for tweaking the stitching/fusing procedure.
@@ -33,7 +33,7 @@ public class StitchingJob implements Serializable {
 	private static final long serialVersionUID = 2619120742300093982L;
 
 	private transient DataProvider dataProvider;
-	private final DataAccessType dataAccessType;
+	private final DataProviderType dataProviderType;
 
 	private final EnumSet< PipelineStep > pipeline;
 	private StitchingArguments args;
@@ -51,7 +51,7 @@ public class StitchingJob implements Serializable {
 		ensureAbsolutePaths();
 
 		dataProvider = DataProviderFactory.createByURI( URI.create( args.inputTileConfigurations().get( 0 ) ) );
-		dataAccessType = dataProvider.getType();
+		dataProviderType = dataProvider.getType();
 
 		pipeline = setUpPipeline( args );
 
@@ -83,7 +83,7 @@ public class StitchingJob implements Serializable {
 	public synchronized DataProvider getDataProvider()
 	{
 		if ( dataProvider == null )
-			dataProvider = DataProviderFactory.createByType( dataAccessType );
+			dataProvider = DataProviderFactory.createByType( dataProviderType );
 		return dataProvider;
 	}
 

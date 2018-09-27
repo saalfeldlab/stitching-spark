@@ -18,6 +18,7 @@ import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.fusion.DebugOverlapsFusionStrategy;
@@ -30,7 +31,6 @@ import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -95,12 +95,12 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final String overlapsPathSuffix = job.getArgs().exportOverlaps() ? "-overlaps" : "";
 
 		final DataProvider dataProvider = job.getDataProvider();
-		final DataAccessType dataAccessType = dataProvider.getType();
+		final DataProviderType dataProviderType = dataProvider.getType();
 
 		// determine the best location for storing the export files (near the tile configurations by default)
 		// for cloud backends, the export is stored in a separate bucket to be compatible with n5-viewer
 		String baseExportPath = null;
-		if ( dataAccessType == DataAccessType.FILESYSTEM )
+		if ( dataProviderType == DataProviderType.FILESYSTEM )
 		{
 			for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
 			{
@@ -133,7 +133,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				}
 			}
 			final String exportBucket = baseExportPath + "-export-n5" + overlapsPathSuffix;
-			baseExportPath = DataProviderFactory.createBucketUri( dataAccessType, exportBucket ).toString();
+			baseExportPath = DataProviderFactory.createBucketUri( dataProviderType, exportBucket ).toString();
 		}
 
 		final String n5ExportPath = baseExportPath;
@@ -188,9 +188,10 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// Generate lower scale levels
 			downsampledDatasets = N5NonIsotropicScalePyramidSpark3D.downsampleNonIsotropicScalePyramid(
 					sparkContext,
-					() -> DataProviderFactory.createByType( dataAccessType ).createN5Writer( URI.create( n5ExportPath ) ),
+					() -> DataProviderFactory.createByType( dataProviderType ).createN5Writer( URI.create( n5ExportPath ) ),
 					fullScaleOutputPath,
-					voxelDimensions
+					voxelDimensions,
+					false // not a power of two scale pyramid
 				);
 
 			broadcastedPairwiseConnectionsMap.destroy();

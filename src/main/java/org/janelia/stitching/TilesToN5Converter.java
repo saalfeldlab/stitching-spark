@@ -10,13 +10,13 @@ import java.util.Map;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
+import org.janelia.saalfeldlab.googlecloud.GoogleCloudClientSecretsCmdLinePrompt;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudOAuth;
-import org.janelia.saalfeldlab.googlecloud.GoogleCloudResourceManagerClient;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageClient;
 import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.bdv.DataAccessType;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.N5WriterSupplier;
 import org.janelia.util.ImageImporter;
@@ -24,8 +24,7 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
-import com.google.auth.oauth2.AccessToken;
+import com.google.auth.Credentials;
 import com.google.cloud.storage.Storage;
 
 import ij.ImagePlus;
@@ -81,60 +80,30 @@ abstract class TilesToN5Converter
 		private static final long serialVersionUID = -1199787780776971335L;
 
 		private final URI n5Uri;
-		private final DataAccessType type;
-
-		private final AccessToken accessToken;
-		private final String refreshToken;
-		private final String clientId;
-		private final String clientSecret;
+		private final DataProviderType type;
+		private final Credentials credentials;
 
 		public CloudN5WriterSupplier( final String n5Path ) throws IOException
 		{
 			n5Uri = URI.create( n5Path );
 			type = DataProviderFactory.getTypeByURI( n5Uri );
 
-			if ( type == DataAccessType.GOOGLE_CLOUD )
+			if ( type == DataProviderType.GOOGLE_CLOUD )
 			{
-				final GoogleCloudOAuth oauth = new GoogleCloudOAuth(
-						Arrays.asList(
-								GoogleCloudResourceManagerClient.ProjectsScope.READ_ONLY,
-								GoogleCloudStorageClient.StorageScope.READ_WRITE
-							),
-						"n5-viewer-google-cloud-oauth2",  // TODO: create separate application? currently using n5-viewer app id
-						TilesToN5Converter.class.getResourceAsStream("/googlecloud_client_secrets.json")
-					);
-
-				accessToken = oauth.getAccessToken();
-				refreshToken = oauth.getRefreshToken();
-				final GoogleClientSecrets clientSecrets = oauth.getClientSecrets();
-				clientId = clientSecrets.getDetails().getClientId();
-				clientSecret = clientSecrets.getDetails().getClientSecret();
+				final GoogleCloudOAuth oauth = new GoogleCloudOAuth( new GoogleCloudClientSecretsCmdLinePrompt() );
+				credentials = oauth.getCredentials();
 			}
 			else
 			{
-				accessToken = null;
-				refreshToken = null;
-				clientId = null;
-				clientSecret = null;
+				credentials = null;
 			}
 		}
 
 		public DataProvider getDataProvider()
 		{
-			if ( type == DataAccessType.GOOGLE_CLOUD )
+			if ( type == DataProviderType.GOOGLE_CLOUD )
 			{
-				final GoogleClientSecrets.Details clientSecretsDetails = new GoogleClientSecrets.Details();
-				clientSecretsDetails.setClientId( clientId );
-				clientSecretsDetails.setClientSecret( clientSecret );
-				final GoogleClientSecrets clientSecrets = new GoogleClientSecrets();
-				clientSecrets.setInstalled( clientSecretsDetails );
-
-				final GoogleCloudStorageClient storageClient = new GoogleCloudStorageClient(
-						accessToken,
-						clientSecrets,
-						refreshToken
-					);
-
+				final GoogleCloudStorageClient storageClient = new GoogleCloudStorageClient( credentials );
 				final Storage storage = storageClient.create();
 				return DataProviderFactory.createGoogleCloudDataProvider( storage );
 			}
@@ -147,7 +116,7 @@ abstract class TilesToN5Converter
 		@Override
 		public N5Writer get() throws IOException
 		{
-			if ( type == DataAccessType.GOOGLE_CLOUD )
+			if ( type == DataProviderType.GOOGLE_CLOUD )
 			{
 				final DataProvider googleCloudDataProvider = getDataProvider();
 				try
