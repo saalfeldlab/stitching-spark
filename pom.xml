@@ -119,6 +119,12 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>TrakEM2_</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>ca.mcgill</groupId>
+					<artifactId>Sholl_Analysis</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.ojalgo</groupId>
