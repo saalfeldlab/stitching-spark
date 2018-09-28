@@ -27,7 +27,7 @@ public class TileInfoJSONProvider
 	public static boolean isTilesConfiguration( final Reader reader ) throws IOException
 	{
 		final TileInfo[] tiles = loadTilesConfiguration( reader );
-		return ( tiles != null && tiles.length > 0 && !tiles[ 0 ].isNull() );
+		return ( tiles != null && tiles.length > 0 && tiles[ 0 ].getFilePath() != null );
 	}
 
 	public static TileInfo[] loadTilesConfiguration( final Reader reader ) throws IOException
@@ -49,7 +49,7 @@ public class TileInfoJSONProvider
 	public static boolean isPairwiseConfiguration( final Reader reader ) throws IOException
 	{
 		final List< SerializablePairWiseStitchingResult > pairwiseShifts = loadPairwiseShifts( reader );
-		return ( pairwiseShifts != null && !pairwiseShifts.isEmpty() && !pairwiseShifts.get( 0 ).isNull() );
+		return ( pairwiseShifts != null && !pairwiseShifts.isEmpty() && pairwiseShifts.get( 0 ).getSubTilePair() != null );
 	}
 
 	public static ArrayList< SerializablePairWiseStitchingResult > loadPairwiseShifts( final Reader reader ) throws IOException

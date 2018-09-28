@@ -21,7 +21,6 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TransformedTileOperations;
 import org.janelia.stitching.Utils;
-import org.janelia.util.Conversions;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -147,7 +146,7 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 			final double[] estimatedMovingSubTileMiddlePointInFixedTile = PairwiseTileOperations.mapMovingSubTileMiddlePointIntoFixedTile(
 					pairwiseShift.getSubTilePair().toArray(),
 					pairwiseShift.getEstimatedFullTileTransformPair().toArray(),
-					Conversions.toDoubleArray( pairwiseShift.getOffset() )
+					pairwiseShift.getOffset()
 				);
 
 			// find corresponding subtiles in the groundtruth for the current pairwise item

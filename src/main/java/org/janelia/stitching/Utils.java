@@ -1,6 +1,5 @@
 package org.janelia.stitching;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -10,12 +9,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.janelia.dataaccess.PathResolver;
-import org.janelia.util.Conversions;
 
 import ij.IJ;
 import ij.ImagePlus;
-import mpicbg.models.Model;
-import mpicbg.stitching.ImageCollectionElement;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.exception.ImgLibException;
@@ -31,12 +27,6 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
-
-/**
- * Provides some useful methods for working with file paths
- *
- * @author Igor Pisarev
- */
 
 public class Utils {
 
@@ -69,19 +59,10 @@ public class Utils {
 		return ret.toString();
 	}
 
-	public static ImageCollectionElement createElementCollectionElementModel( final TileInfo tile, final Model< ? > model )
-	{
-		final File file = new File( tile.getFilePath() );
-		final ImageCollectionElement e = new ImageCollectionElement( file, tile.getIndex() );
-		e.setOffset( Conversions.toFloatArray( tile.getStagePosition() ) );
-		e.setDimensionality( tile.numDimensions() );
-		e.setModel( model );
-		return e;
-	}
-
 	public static < T extends NativeType< T > & RealType< T > > ImagePlus copyToImagePlus( final RandomAccessibleInterval< T > img ) throws ImgLibException
 	{
-		final ImagePlusImg< T, ? > imagePlusImg = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( img ), Util.getTypeFromInterval( img ) );
+//		final ImagePlusImg< T, ? > imagePlusImg = new ImagePlusImgFactory<>( Util.getTypeFromInterval( img ) ).create( Intervals.dimensionsAsLongArray( img ) );
+		final ImagePlusImg< T, ? > imagePlusImg = new ImagePlusImgFactory().create( Intervals.dimensionsAsLongArray( img ), Util.getTypeFromInterval( img )  );
 		final Cursor< T > imgCursor = Views.flatIterable( img ).cursor();
 		final Cursor< T > imagePlusImgCursor = Views.flatIterable( imagePlusImg ).cursor();
 		while ( imagePlusImgCursor.hasNext() || imgCursor.hasNext() )
@@ -123,6 +104,7 @@ public class Utils {
 
 	public static < T extends NumericType< T > > void saveTileImageToFile( final TileInfo tile, final Img< T > img ) throws ImgLibException
 	{
+		@SuppressWarnings("rawtypes")
 		final ImagePlus imp = ( img instanceof ImagePlusImg ? ((ImagePlusImg)img).getImagePlus() : ImageJFunctions.wrap( img, "" ) );
 		Utils.workaroundImagePlusNSlices( imp );
 		tile.setType( ImageType.valueOf( imp.getType() ) );

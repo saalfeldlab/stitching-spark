@@ -1,6 +1,5 @@
 package org.janelia.stitching.analysis;
 
-import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,14 +17,12 @@ import org.janelia.stitching.TileModelFactory;
 import org.janelia.stitching.TileOperations;
 import org.janelia.stitching.TilePair;
 import org.janelia.stitching.Utils;
-import org.janelia.util.Conversions;
 
 import ij.ImagePlus;
+import mpicbg.models.IndexedTile;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import mpicbg.models.Tile;
-import mpicbg.stitching.ImageCollectionElement;
-import mpicbg.stitching.ImagePlusTimePoint;
 
 /**
  * @author Igor Pisarev
@@ -59,13 +56,12 @@ public class CheckConnectedGraphs
 				{
 					try
 					{
-						final ImageCollectionElement e = new ImageCollectionElement( new File( tileInfo.getFilePath() ), tileInfo.getIndex() );
-						e.setOffset( Conversions.toFloatArray( tileInfo.getStagePosition() ) );
-						e.setDimensionality( tileInfo.numDimensions() );
-						e.setModel( TileModelFactory.createTranslationModel( tileInfo.numDimensions() ) );
 						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
-						final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, e.getIndex(), 1, e.getModel(), e );
-						fakeTileImagesMap.put( tileInfo.getIndex(), fakeTile );
+						final Tile< ? > tile = new IndexedTile(
+								TileModelFactory.createTranslationModel( tileInfo.numDimensions() ),
+								tileInfo.getIndex()
+							);
+						fakeTileImagesMap.put( tileInfo.getIndex(), tile );
 					}
 					catch ( final Exception e ) {
 						e.printStackTrace();
@@ -125,10 +121,10 @@ public class CheckConnectedGraphs
 			{
 				if ( node.getConnectedTiles().size() == degrees.lastKey() )
 				{
-					final int index = ( ( ImagePlusTimePoint ) node ).getImpId();
+					final int index = ( ( IndexedTile< ? > ) node ).getIndex();
 					System.out.println( Arrays.toString( Utils.getTileCoordinates( tilesMap.get( index ) ) ) );
 					for ( final Tile< ? > neighbor : node.getConnectedTiles() )
-						System.out.println( "  " + Arrays.toString( Utils.getTileCoordinates( tilesMap.get( ( ( ImagePlusTimePoint ) neighbor ).getImpId() ) ) ) );
+						System.out.println( "  " + Arrays.toString( Utils.getTileCoordinates( tilesMap.get( ( ( IndexedTile< ? > ) neighbor ).getIndex() ) ) ) );
 				}
 			}
 		}
@@ -158,13 +154,11 @@ public class CheckConnectedGraphs
 				{
 					try
 					{
-						final ImageCollectionElement e = new ImageCollectionElement( new File( tileInfo.getFilePath() ), tileInfo.getIndex() );
-						e.setOffset( Conversions.toFloatArray( tileInfo.getStagePosition() ) );
-						e.setDimensionality( tileInfo.numDimensions() );
-						e.setModel( TileModelFactory.createTranslationModel( tileInfo.numDimensions() ) );
-						final ImagePlus fakeImage = new ImagePlus( tileInfo.getIndex().toString(), (java.awt.Image)null );
-						final Tile< ? > fakeTile = new ImagePlusTimePoint( fakeImage, e.getIndex(), 1, e.getModel(), e );
-						fakeTileImagesMap.put( tileInfo.getIndex(), fakeTile );
+						final IndexedTile< ? > tile = new IndexedTile(
+								TileModelFactory.createTranslationModel( tileInfo.numDimensions() ),
+								tileInfo.getIndex()
+							);
+						fakeTileImagesMap.put( tileInfo.getIndex(), tile );
 					}
 					catch ( final Exception e ) {
 						e.printStackTrace();

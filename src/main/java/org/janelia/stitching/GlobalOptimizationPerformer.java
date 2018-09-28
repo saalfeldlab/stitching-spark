@@ -2,7 +2,6 @@ package org.janelia.stitching;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -13,13 +12,11 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.Vector;
 import java.util.concurrent.ExecutionException;
-
-import org.janelia.util.Conversions;
 
 import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.IndexedTile;
 import mpicbg.models.InterpolatedModel;
 import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
@@ -29,138 +26,81 @@ import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
-import mpicbg.stitching.ImagePlusTimePoint;
 import net.imglib2.realtransform.AffineGet;
 
-// based on the GlobalOptimization class from the original Fiji's Stitching plugin repository
 public class GlobalOptimizationPerformer
 {
-	private static final double POINT_MATCH_MAX_OFFSET = 10;
+	private static final double POINT_MATCH_MAX_RANDOM_SHIFT = 10;
 	private static final double DAMPNESS_FACTOR = 0.9;
 
 	private static final int fixedIndex = 0;
 	private static final int movingIndex = 1;
 
-	public Map< Integer, Tile< ? > > lostTiles = null;
+	public Map< Integer, IndexedTile< ? > > lostTiles;
 
 	public boolean translationOnlyStitching = false;
-
 	public int replacedTilesTranslation = 0;
 
 	private final Random rnd = new Random( 69997 ); // repeatable results
 
-	static private final java.io.PrintStream originalOut, suppressedOut;
-	static
-	{
-		originalOut = System.out;
-		suppressedOut = new java.io.PrintStream(new java.io.OutputStream() {
-			@Override public void write(final int b) {}
-		}) {
-			@Override public void flush() {}
-			@Override public void close() {}
-			@Override public void write(final int b) {}
-			@Override public void write(final byte[] b) {}
-			@Override public void write(final byte[] buf, final int off, final int len) {}
-			@Override public void print(final boolean b) {}
-			@Override public void print(final char c) {}
-			@Override public void print(final int i) {}
-			@Override public void print(final long l) {}
-			@Override public void print(final float f) {}
-			@Override public void print(final double d) {}
-			@Override public void print(final char[] s) {}
-			@Override public void print(final String s) {}
-			@Override public void print(final Object obj) {}
-			@Override public void println() {}
-			@Override public void println(final boolean x) {}
-			@Override public void println(final char x) {}
-			@Override public void println(final int x) {}
-			@Override public void println(final long x) {}
-			@Override public void println(final float x) {}
-			@Override public void println(final double x) {}
-			@Override public void println(final char[] x) {}
-			@Override public void println(final String x) {}
-			@Override public void println(final Object x) {}
-			@Override public java.io.PrintStream printf(final String format, final Object... args) { return this; }
-			@Override public java.io.PrintStream printf(final java.util.Locale l, final String format, final Object... args) { return this; }
-			@Override public java.io.PrintStream format(final String format, final Object... args) { return this; }
-			@Override public java.io.PrintStream format(final java.util.Locale l, final String format, final Object... args) { return this; }
-			@Override public java.io.PrintStream append(final CharSequence csq) { return this; }
-			@Override public java.io.PrintStream append(final CharSequence csq, final int start, final int end) { return this; }
-			@Override public java.io.PrintStream append(final char c) { return this; }
-		};
-	}
-
 	public int remainingGraphSize, remainingPairs;
 	public double avgDisplacement, maxDisplacement;
 
-	public synchronized static void suppressOutput()
-	{
-		System.setOut( suppressedOut );
-	}
-	public synchronized static void restoreOutput()
-	{
-		System.setOut( originalOut );
-	}
-
-	public ArrayList< ImagePlusTimePoint > optimize(
-			final Vector< ComparePointPair > comparePointPairs,
+	public List< IndexedTile< ? > > optimize(
+			final List< SubTilePairwiseMatch > subTilePairwiseMatches,
 			final SerializableStitchingParameters params ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
 	{
-		return optimize( comparePointPairs, params, null );
+		return optimize( subTilePairwiseMatches, params, null );
 	}
 
-	public ArrayList< ImagePlusTimePoint > optimize(
-			final Vector< ComparePointPair > comparePointPairs,
+	public List< IndexedTile< ? > > optimize(
+			final List< SubTilePairwiseMatch > subTilePairwiseMatches,
 			final SerializableStitchingParameters params,
 			final PrintWriter logWriter ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
 	{
 		// create a set of tiles
-		final LinkedHashMap< Tile< ? >, Map< Tile< ? >, List< PointMatch > > > connectedTilesMap = new LinkedHashMap<>();
-		int pairsAdded = 0;
-		for ( final ComparePointPair comparePointPair : comparePointPairs )
+		final LinkedHashMap< IndexedTile< ? >, Map< IndexedTile< ? >, List< PointMatch > > > connectedTilesMap = new LinkedHashMap<>();
+		for ( final SubTilePairwiseMatch subTilePairwiseMatch : subTilePairwiseMatches )
 		{
-			if ( comparePointPair.getIsValidOverlap() )
+			final SubTile[] subTiles = subTilePairwiseMatch.getPairwiseResult().getSubTilePair().toArray();
+			final AffineGet[] estimatedFullTileTransforms = subTilePairwiseMatch.getPairwiseResult().getEstimatedFullTileTransformPair().toArray();
+
+			final IndexedTile< ? >[] tileModels = new IndexedTile< ? >[ 2 ];
+			tileModels[ fixedIndex ] = subTilePairwiseMatch.getFixedTile();
+			tileModels[ movingIndex ] = subTilePairwiseMatch.getMovingTile();
+
+			// add empty collections if not present
+			for ( int i = 0; i < 2; ++i )
 			{
-				++pairsAdded;
+				if ( !connectedTilesMap.containsKey( tileModels[ i ] ) )
+					connectedTilesMap.put( tileModels[ i ], new HashMap<>() );
 
-				final SubTile[] subTiles = comparePointPair.getSubTilePair().toArray();
-				final AffineGet[] estimatedFullTileTransforms = comparePointPair.getEstimatedFullTileTransformPair().toArray();
-				final Tile< ? >[] tileModels = new Tile< ? >[] { comparePointPair.getTile1(), comparePointPair.getTile2() };
-
-				// add empty collections if not present
-				for ( int i = 0; i < 2; ++i )
-				{
-					if ( !connectedTilesMap.containsKey( tileModels[ i ] ) )
-						connectedTilesMap.put( tileModels[ i ], new HashMap<>() );
-
-					if ( !connectedTilesMap.get( tileModels[ i ] ).containsKey( tileModels[ ( i + 1 ) % 2 ] ) )
-						connectedTilesMap.get( tileModels[ i ] ).put( tileModels[ ( i + 1 ) % 2 ], new ArrayList<>() );
-				}
-
-				// create point match to map the middle point of the moving subtile into its new position in the fixed tile space
-				final PointMatch movingIntoFixedPointMatch = createMovingIntoFixedPointMatch(
-						subTiles,
-						estimatedFullTileTransforms,
-						comparePointPair.getRelativeShift(),
-						comparePointPair.getCrossCorrelation()
-					);
-
-				connectedTilesMap.get( tileModels[ movingIndex ] ).get( tileModels[ fixedIndex ] ).add( movingIntoFixedPointMatch );
+				if ( !connectedTilesMap.get( tileModels[ i ] ).containsKey( tileModels[ ( i + 1 ) % 2 ] ) )
+					connectedTilesMap.get( tileModels[ i ] ).put( tileModels[ ( i + 1 ) % 2 ], new ArrayList<>() );
 			}
+
+			// create point match to map the middle point of the moving subtile into its new position in the fixed tile space
+			final PointMatch movingIntoFixedPointMatch = createMovingIntoFixedPointMatch(
+					subTiles,
+					estimatedFullTileTransforms,
+					subTilePairwiseMatch.getPairwiseResult().getOffset(),
+					subTilePairwiseMatch.getPairwiseResult().getCrossCorrelation()
+				);
+
+			connectedTilesMap.get( tileModels[ movingIndex ] ).get( tileModels[ fixedIndex ] ).add( movingIntoFixedPointMatch );
 		}
 
 		// connect the tiles
-		for ( final Entry< Tile< ? >, Map< Tile< ? >, List< PointMatch > > > connectedTiles : connectedTilesMap.entrySet() )
+		for ( final Entry< IndexedTile< ? >, Map< IndexedTile< ? >, List< PointMatch > > > connectedTiles : connectedTilesMap.entrySet() )
 		{
-			final Tile< ? > tile = connectedTiles.getKey();
-			for ( final Entry< Tile< ? >, List< PointMatch > > connectedTile : connectedTiles.getValue().entrySet() )
+			final IndexedTile< ? > tile = connectedTiles.getKey();
+			for ( final Entry< IndexedTile< ? >, List< PointMatch > > connectedTile : connectedTiles.getValue().entrySet() )
 				tile.connect( connectedTile.getKey(), connectedTile.getValue() );
 		}
 
-		writeLog( logWriter, "Pairs above the threshold: " + pairsAdded + ", pairs total = " + comparePointPairs.size() );
+		writeLog( logWriter, "Added " + subTilePairwiseMatches.size() + " pairwise matches" );
 
-		final Set< Tile< ? > > tilesSet = new LinkedHashSet<>( connectedTilesMap.keySet() );
-
+		final Set< IndexedTile< ? > > tilesSet = new LinkedHashSet<>( connectedTilesMap.keySet() );
 		if ( tilesSet.isEmpty() )
 			return new ArrayList<>();
 
@@ -172,20 +112,20 @@ public class GlobalOptimizationPerformer
 
 		// trash everything but the largest graph
 		final int numTilesBeforeRetainingLargestGraph = tilesSet.size();
-		preserveOnlyLargestGraph( tilesSet );
+		retainOnlyLargestGraph( tilesSet );
 		final int numTilesAfterRetainingLargestGraph = tilesSet.size();
 
 		writeLog( logWriter, "Using the largest graph of size " + numTilesAfterRetainingLargestGraph + " (throwing away " + ( numTilesBeforeRetainingLargestGraph - numTilesAfterRetainingLargestGraph ) + " tiles from smaller graphs)" );
 		remainingGraphSize = numTilesAfterRetainingLargestGraph;
 
-		remainingPairs = countRemainingPairs( tilesSet, comparePointPairs );
+		remainingPairs = countRemainingPairs( tilesSet, subTilePairwiseMatches );
 
 		// if some of the tiles do not have enough point matches for a high-order model, fall back to simpler model
 		replacedTilesTranslation = ensureEnoughPointMatches( tilesSet );
 
 		// if all tiles have underlying translation models, consider this stitching configuration to be translation-only
 		translationOnlyStitching = true;
-		for ( final Tile< ? > tile : tilesSet )
+		for ( final IndexedTile< ? > tile : tilesSet )
 		{
 			if ( !( tile.getModel() instanceof TranslationModel2D || tile.getModel() instanceof TranslationModel3D ) )
 			{
@@ -214,8 +154,8 @@ public class GlobalOptimizationPerformer
 		else
 		{
 			// first, prealign with translation-only
-			final Map< Tile< ? >, Double > originalLambdas = new HashMap<>();
-			for ( final Tile< ? > tile : tilesSet )
+			final Map< IndexedTile< ? >, Double > originalLambdas = new HashMap<>();
+			for ( final IndexedTile< ? > tile : tilesSet )
 			{
 				if ( tile.getModel() instanceof InterpolatedModel )
 				{
@@ -234,7 +174,7 @@ public class GlobalOptimizationPerformer
 				);
 
 			// then, solve using original models
-			for ( final Tile< ? > tile : tilesSet )
+			for ( final IndexedTile< ? > tile : tilesSet )
 			{
 				if ( tile.getModel() instanceof InterpolatedModel )
 				{
@@ -273,23 +213,20 @@ public class GlobalOptimizationPerformer
 		maxDisplacement = maxError;
 
 		// find out what tiles have been thrown out
-		lostTiles = getLostTiles( tilesSet, comparePointPairs );
+		lostTiles = getLostTiles( tilesSet, subTilePairwiseMatches );
 		writeLog( logWriter, "Tiles lost: " + lostTiles.size() );
 
-		// create a list of image informations containing their positions
-		final ArrayList< ImagePlusTimePoint > imageInformationList = new ArrayList< >();
-		for ( final Tile< ? > t : tc.getTiles() )
-			imageInformationList.add( (ImagePlusTimePoint)t );
-
-		Collections.sort( imageInformationList );
-		return imageInformationList;
+		final List< IndexedTile< ? > > resultingTiles = new ArrayList< >();
+		for ( final Tile< ? > tile : tc.getTiles() )
+			resultingTiles.add( ( IndexedTile< ? > ) tile );
+		return resultingTiles;
 	}
 
 	private PointMatch createMovingIntoFixedPointMatch(
 			final SubTile[] subTiles,
 			final AffineGet[] estimatedFullTileTransforms,
-			final float[] subTilesOffset,
-			final float pointMatchWeight )
+			final double[] subTilesOffset,
+			final double pointMatchWeight )
 	{
 		// get the middle point of the moving subtile in the local (moving) tile space
 		final Point movingSubTileMiddlePoint = new Point( SubTileOperations.getSubTileMiddlePoint( subTiles[ movingIndex ] ) );
@@ -298,7 +235,7 @@ public class GlobalOptimizationPerformer
 		final Point newTransformedMovingSubTileMiddlePoint = new Point( PairwiseTileOperations.mapMovingSubTileMiddlePointIntoFixedTile(
 				subTiles,
 				estimatedFullTileTransforms,
-				Conversions.toDoubleArray( subTilesOffset )
+				subTilesOffset
 			) );
 
 		// slightly change the matched positions to avoid IllDefinedDataPointsException when fitting models
@@ -325,19 +262,19 @@ public class GlobalOptimizationPerformer
 		final int dim = points[ 0 ].getL().length;
 		final double[] shift = new double[ dim ];
 		for ( int d = 0; d < dim; ++d )
-			shift[ d ] = ( rnd.nextDouble() * 2 - 1 ) * POINT_MATCH_MAX_OFFSET;
+			shift[ d ] = ( rnd.nextDouble() * 2 - 1 ) * POINT_MATCH_MAX_RANDOM_SHIFT;
 
 		for ( final Point point : points )
 			for ( int d = 0; d < dim; ++d )
 				point.getL()[ d ] += shift[ d ];
 	}
 
-	private static int ensureEnoughPointMatches( final Set< Tile< ? > > tilesSet )
+	private static int ensureEnoughPointMatches( final Set< IndexedTile< ? > > tilesSet )
 	{
 		int numTilesReplacedWithTranslation = 0;
 
-		final Set< Tile< ? > > newTilesSet = new HashSet<>();
-		for ( final Tile< ? > tile : tilesSet )
+		final Set< IndexedTile< ? > > newTilesSet = new HashSet<>();
+		for ( final IndexedTile< ? > tile : tilesSet )
 		{
 			if ( tile.getMatches().isEmpty() )
 				throw new RuntimeException( "tile does not have any point matches" );
@@ -347,12 +284,10 @@ public class GlobalOptimizationPerformer
 				final int dim = tile.getMatches().iterator().next().getP1().getL().length;
 				final Model< ? > replacementModel = dim == 2 ? new TranslationModel2D() : new TranslationModel3D();
 
-				final Tile< ? > replacementTile = new ImagePlusTimePoint(
-						( ( ImagePlusTimePoint ) tile ).getImagePlus(),
-						( ( ImagePlusTimePoint ) tile ).getImpId(),
-						( ( ImagePlusTimePoint ) tile ).getTimePoint(),
+				@SuppressWarnings( { "rawtypes", "unchecked" } )
+				final IndexedTile< ? > replacementTile = new IndexedTile(
 						replacementModel,
-						( ( ImagePlusTimePoint ) tile ).getElement()
+						tile.getIndex()
 					);
 
 				replacementTile.addMatches( tile.getMatches() );
@@ -379,11 +314,11 @@ public class GlobalOptimizationPerformer
 		return numTilesReplacedWithTranslation;
 	}
 
-	private static TreeMap< Integer, Integer > getGraphsSize( final Set< Tile< ? > > tilesSet )
+	private static TreeMap< Integer, Integer > getGraphsSize( final Set< IndexedTile< ? > > tilesSet )
 	{
 		final TreeMap< Integer, Integer > graphSizeToCount = new TreeMap<>();
 
-		final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
+		final List< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
 		for ( final Set< Tile< ? > > graph : graphs )
 		{
 			final int graphSize = graph.size();
@@ -393,10 +328,10 @@ public class GlobalOptimizationPerformer
 		return graphSizeToCount;
 	}
 
-	private static void preserveOnlyLargestGraph( final Set< Tile< ? > > tilesSet )
+	private static void retainOnlyLargestGraph( final Set< IndexedTile< ? > > tilesSet )
 	{
 		// get components
-		final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
+		final List< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tilesSet );
 		int largestGraphSize = 0, largestGraphId = -1;
 		for ( int i = 0; i < graphs.size(); ++i )
 		{
@@ -409,31 +344,33 @@ public class GlobalOptimizationPerformer
 		}
 
 		// retain the largest component
-		final ArrayList< Tile< ? > > largestGraph = new ArrayList<>();
+		final List< Tile< ? > > largestGraph = new ArrayList<>();
 		largestGraph.addAll( graphs.get( largestGraphId ) );
 		tilesSet.clear();
-		tilesSet.addAll( largestGraph );
+
+		for ( final Tile< ? > tile : largestGraph )
+			tilesSet.add( ( IndexedTile< ? > ) tile );
 	}
 
-	private static int countRemainingPairs( final Set< Tile< ? > > remainingTilesSet, final Vector< ComparePointPair > comparePointPairs )
+	private static int countRemainingPairs( final Set< IndexedTile< ? > > remainingTilesSet, final List< SubTilePairwiseMatch > subTilePairwiseMatches )
 	{
 		int remainingPairs = 0;
-		for ( final ComparePointPair comparePointPair : comparePointPairs )
-			if ( comparePointPair.getIsValidOverlap() && remainingTilesSet.contains( comparePointPair.getTile1() ) && remainingTilesSet.contains( comparePointPair.getTile2() ) )
+		for ( final SubTilePairwiseMatch subTilePairwiseMatch : subTilePairwiseMatches )
+			if ( remainingTilesSet.contains( subTilePairwiseMatch.getFixedTile() ) && remainingTilesSet.contains( subTilePairwiseMatch.getMovingTile() ) )
 				++remainingPairs;
 		return remainingPairs;
 	}
 
-	private static Map< Integer, Tile< ? > > getLostTiles( final Set< Tile< ? > > tilesSet, final Vector< ComparePointPair > comparePointPairs )
+	private static Map< Integer, IndexedTile< ? > > getLostTiles( final Set< IndexedTile< ? > > tilesSet, final List< SubTilePairwiseMatch > subTilePairwiseMatches )
 	{
-		final Map< Integer, Tile< ? > > lostTiles = new TreeMap<>();
+		final Map< Integer, IndexedTile< ? > > lostTiles = new TreeMap<>();
 
-		for ( final ComparePointPair comparePointPair : comparePointPairs )
-			for ( final ImagePlusTimePoint t : new ImagePlusTimePoint[] { comparePointPair.getTile1(), comparePointPair.getTile2() } )
-				lostTiles.put( t.getImpId(), t );
+		for ( final SubTilePairwiseMatch subTilePairwiseMatch : subTilePairwiseMatches )
+			for ( final IndexedTile< ? > tile : new IndexedTile< ? >[] { subTilePairwiseMatch.getFixedTile(), subTilePairwiseMatch.getMovingTile() } )
+				lostTiles.put( tile.getIndex(), tile );
 
-		for ( final Tile< ? > t : tilesSet )
-			lostTiles.remove( ( ( ImagePlusTimePoint ) t ).getImpId() );
+		for ( final IndexedTile< ? > tile : tilesSet )
+			lostTiles.remove( tile.getIndex() );
 
 		return lostTiles;
 	}

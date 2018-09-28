@@ -124,10 +124,6 @@ public class TileInfo implements Cloneable {
 		this.transform = transform;
 	}
 
-	public boolean isNull() {
-		return file == null;
-	}
-
 	public int numDimensions() {
 		return position.length;
 	}

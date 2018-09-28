@@ -15,7 +15,6 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TilePair;
 import org.janelia.stitching.Utils;
-import org.janelia.util.Conversions;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -96,7 +95,7 @@ public class EvaluateSubTileOffsetsAgainstGroundtruth
 					pairwiseShift.getSubTilePair(),
 					Arrays.toString( round( stageSubTileOffset ) ),
 					Arrays.toString( round( groundtruthSubTileOffset ) ),
-					Arrays.toString( round( Conversions.toDoubleArray( pairwiseShift.getOffset() ) ) )
+					Arrays.toString( round( pairwiseShift.getOffset() ) )
 				) );
 
 			for ( final TileInfo fullTile : pairwiseShift.getSubTilePair().getFullTilePair().toArray() )

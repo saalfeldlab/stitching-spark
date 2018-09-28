@@ -12,9 +12,7 @@ import org.janelia.dataaccess.DataProvider;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
-import mpicbg.imglib.custom.OffsetValidator;
 import net.imglib2.Cursor;
-import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
@@ -25,17 +23,20 @@ import net.imglib2.converter.RealFloatConverter;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.InvertibleRealTransform;
+import net.imglib2.realtransform.Translation;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
+import net.preibisch.stitcher.algorithm.PairwiseStitching;
+import net.preibisch.stitcher.algorithm.PairwiseStitchingParameters;
 
 public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > >
 {
@@ -142,8 +143,8 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 			affinesToFixedSubTileSpace[ i ] = PairwiseTileOperations.getFixedSubTileTransform( subTiles, affinesToFixedTileSpace[ i ] );
 
 		// TODO: use smaller ROI instead of the full subtile?
-		final ImagePlus[] roiImps = new ImagePlus[ subTiles.length ];
-		final Interval[] transformedRoiIntervals = new Interval[ subTiles.length ];
+		@SuppressWarnings( "unchecked" )
+		final RandomAccessibleInterval< T >[] roiImagesInFixedSubtileSpace = new RandomAccessibleInterval[ subTiles.length ];
 		for ( int i = 0; i < subTiles.length; ++i )
 		{
 			final List< TileInfo > channelTiles = new ArrayList<>();
@@ -157,7 +158,7 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 				validateGridCoordinates( subTiles[ i ], tile );
 			}
 
-			final RandomAccessibleInterval< T > renderedRoiInFixedSubTileSpace = renderSubTile(
+			roiImagesInFixedSubtileSpace[ i ] = renderSubTile(
 					job.getDataProvider(),
 					subTiles[ i ],
 					affinesToFixedSubTileSpace[ i ],
@@ -165,16 +166,12 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 					Optional.of( flatfieldsForChannels ),
 					job.getArgs().blurSigma()
 				);
-
-			roiImps[ i ] = Utils.copyToImagePlus( renderedRoiInFixedSubTileSpace );
-			transformedRoiIntervals[ i ] = new FinalInterval( renderedRoiInFixedSubTileSpace );
 		}
 		// ROIs are rendered in the fixed subtile space, validate that the fixed subtile has zero-min
-		if ( !Views.isZeroMin( transformedRoiIntervals[ 0 ] ) )
+		if ( !Views.isZeroMin( roiImagesInFixedSubtileSpace[ 0 ] ) )
 			throw new PipelineExecutionException( "fixed subtile is expected to be zero-min" );
 
-		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImps, movingSubTileSearchRadius );
-//		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwiseUsingNewPhaseCorrelationCode( roiImps, job.getParams() );
+		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImagesInFixedSubtileSpace, job.getParams() );
 
 		if ( pairwiseResult == null )
 		{
@@ -183,7 +180,7 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 			return invalidPairwiseResult;
 		}
 
-		pairwiseResult.setVariance( computeVariance( roiImps ) );
+		pairwiseResult.setVariance( computeVariance( roiImagesInFixedSubtileSpace ) );
 		pairwiseResult.setSubTilePair( subTilePair );
 		pairwiseResult.setEstimatedFullTileTransformPair( new AffineTransformPair( estimatedFullTileTransforms[ 0 ], estimatedFullTileTransforms[ 1 ] ) );
 
@@ -280,66 +277,35 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 	}
 
 	// TODO: compute variance only within new overlapping region (after matching)
-	static < T extends NativeType< T > & RealType< T > > double computeVariance( final ImagePlus[] roiPartImps )
+	static < T extends NativeType< T > & RealType< T > > double computeVariance( final RandomAccessibleInterval< T >[] roiImages )
 	{
 		double pixelSum = 0, pixelSumSquares = 0;
 		long pixelCount = 0;
 		for ( int i = 0; i < 2; ++i )
 		{
-			final RandomAccessibleInterval< T > roiImg = ImagePlusImgs.from( roiPartImps[ i ] );
-			final Cursor< T > roiImgCursor = Views.iterable( roiImg ).cursor();
+			final Cursor< T > roiImgCursor = Views.iterable( roiImages[ i ] ).cursor();
 			while ( roiImgCursor.hasNext() )
 			{
 				final double val = roiImgCursor.next().getRealDouble();
 				pixelSum += val;
 				pixelSumSquares += Math.pow( val, 2 );
 			}
-			pixelCount += Intervals.numElements( roiImg );
+			pixelCount += Intervals.numElements( roiImages[ i ] );
 		}
 		final double variance = pixelSumSquares / pixelCount - Math.pow( pixelSum / pixelCount, 2 );
 		return variance;
 	}
 
-	private SerializablePairWiseStitchingResult stitchPairwise(
-			final ImagePlus[] roiImps,
-			final OffsetValidator offsetValidator )
-	{
-		return stitchPairwise( roiImps, offsetValidator, job.getParams() );
-	}
-
-	public static SerializablePairWiseStitchingResult stitchPairwise(
-			final ImagePlus[] roiImps,
-			final OffsetValidator offsetValidator,
+	public static < T extends NativeType< T > & RealType< T > > SerializablePairWiseStitchingResult stitchPairwise(
+			final RandomAccessibleInterval< T >[] roiImages,
 			final SerializableStitchingParameters stitchingParameters )
 	{
-		final int timepoint = 1;
-		final int numReturnPeaks = 1;
-		PairwiseStitchingPerformer.setThreads( 1 );
-
-		final SerializablePairWiseStitchingResult[] results = PairwiseStitchingPerformer.stitchPairwise(
-				roiImps[ 0 ], roiImps[ 1 ], timepoint, timepoint,
-				stitchingParameters, numReturnPeaks,
-				offsetValidator
-			);
-
-		final SerializablePairWiseStitchingResult result = results[ 0 ];
-
-		return result;
-	}
-
-	/*public static < T extends NativeType< T > & RealType< T > > SerializablePairWiseStitchingResult stitchPairwiseUsingNewPhaseCorrelationCode(
-			final ImagePlus[] roiImps,
-			final SerializableStitchingParameters stitchingParameters )
-	{
-		final RandomAccessibleInterval< T > imgA = ImagePlusImgs.from( roiImps[ 0 ] );
-		final RandomAccessibleInterval< T > imgB = ImagePlusImgs.from( roiImps[ 1 ] );
-
 		final PairwiseStitchingParameters params = new PairwiseStitchingParameters(0, stitchingParameters.checkPeaks, true, false, false);
-		final Pair<Translation, Double> shift = PairwiseStitching.getShift(
-				imgA,
-				imgB,
-				new Translation(imgA.numDimensions()),
-				new Translation(imgB.numDimensions()),
+		final Pair< Translation, Double > shift = PairwiseStitching.getShift(
+				roiImages[ 0 ],
+				roiImages[ 1 ],
+				new Translation(roiImages[ 0 ].numDimensions()),
+				new Translation(roiImages[ 1 ].numDimensions()),
 				params,
 				new SameThreadExecutorService()
 			);
@@ -349,11 +315,11 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 
 		final SerializablePairWiseStitchingResult result = new SerializablePairWiseStitchingResult(
 				null,
-				Conversions.toFloatArray( shift.getA().getTranslationCopy() ),
-				shift.getB().floatValue()
+				shift.getA().getTranslationCopy(),
+				shift.getB().doubleValue()
 			);
 		return result;
-	}*/
+	}
 
 	private void validateGridCoordinates( final SubTile tileBox, final TileInfo tile )
 	{

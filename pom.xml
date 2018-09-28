@@ -22,10 +22,11 @@
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
 		<version>23.2.0</version>
+		<relativePath />
 	</parent>
 
 	<properties>
-		<scijava.jvm.version>1.8</scijava.jvm.version>
+		<enforcer.skip>true</enforcer.skip>
 	</properties>
 
 	<profiles>
@@ -77,20 +78,12 @@
 		</profile>
 	</profiles>
 	
-	<dependencies> 
+	<dependencies>
 		<dependency>
-			<groupId>sc.fiji</groupId>
-			<artifactId>Stitching_</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>sc.fiji</groupId>
-			<artifactId>legacy-imglib1</artifactId>
-		</dependency>
-		<!--dependency>
 			<groupId>net.preibisch</groupId>
 			<artifactId>BigStitcher</artifactId>
 			<version>0.2.12-SNAPSHOT</version>
-		</dependency-->
+		</dependency>
 		<dependency>
 			<groupId>mpicbg</groupId>
 			<artifactId>mpicbg</artifactId>
@@ -209,6 +202,10 @@
 			<groupId>net.imglib2</groupId>
 			<artifactId>imglib2-cache</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>net.imglib2</groupId>
+			<artifactId>imglib2-ij</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -219,7 +216,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
-				<version>3.1.0</version>
+				<version>3.2.0</version>
 				<configuration>
 					<!-- Do not minimize for now to speed up packaging. -->
 					<!--<minimizeJar>true</minimizeJar> -->
@@ -255,18 +252,6 @@
 						<goals>
 							<goal>shade</goal>
 						</goals>
-						<configuration>
-							<transformers>
-								<transformer
-									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>org.janelia.stitching.StitchingSpark</mainClass>
-								</transformer>
-								<transformer
-									implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-									<resource>reference.conf</resource>
-								</transformer>
-							</transformers>
-						</configuration>
 					</execution>
 				</executions>
 			</plugin>
@@ -285,6 +270,7 @@
 				<configuration>
 					<source>1.8</source>
 					<target>1.8</target>
+					<forceJavacCompilerUse>true</forceJavacCompilerUse>
 				</configuration>
 			</plugin>
 			<plugin>

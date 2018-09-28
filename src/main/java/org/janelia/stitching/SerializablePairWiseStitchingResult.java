@@ -8,21 +8,21 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 
 	private SubTilePair subTilePair;
 	private AffineTransformPair estimatedFullTileTransformPair;
-	private float[] offset;
-	private float crossCorrelation;
-	private Float phaseCorrelation;
+	private double[] offset;
+	private double crossCorrelation;
+	private Double phaseCorrelation;
 	private Double variance;
 	private boolean isValidOverlap = true;
 
-	public SerializablePairWiseStitchingResult( final SubTilePair subTilePair, final float[] offset, final float crossCorrelation ) {
+	public SerializablePairWiseStitchingResult( final SubTilePair subTilePair, final double[] offset, final double crossCorrelation ) {
 		this( subTilePair, offset, crossCorrelation, null, null );
 	}
 
-	public SerializablePairWiseStitchingResult( final SubTilePair subTilePair, final float[] offset, final float crossCorrelation, final Float phaseCorrelation ) {
+	public SerializablePairWiseStitchingResult( final SubTilePair subTilePair, final double[] offset, final double crossCorrelation, final Double phaseCorrelation ) {
 		this( subTilePair, offset, crossCorrelation, phaseCorrelation, null );
 	}
 
-	public SerializablePairWiseStitchingResult( final SubTilePair subTilePair, final float[] offset, final float crossCorrelation, final Float phaseCorrelation, final Double variance ) {
+	public SerializablePairWiseStitchingResult( final SubTilePair subTilePair, final double[] offset, final double crossCorrelation, final Double phaseCorrelation, final Double variance ) {
 		this.subTilePair = subTilePair;
 		this.offset = offset;
 		this.crossCorrelation = crossCorrelation;
@@ -30,22 +30,20 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 		this.variance = variance;
 	}
 
-	protected SerializablePairWiseStitchingResult() { }
-
 	public int getNumDimensions() { return offset.length; }
 
-	public float[] getOffset() { return offset; }
+	public double[] getOffset() { return offset; }
 	public void setOffset( final float[] offset )
 	{
 		for ( int d = 0; d < Math.max( this.offset.length, offset.length ); ++d )
 			this.offset[ d ] = offset[ d ];
 	}
 
-	public float getOffset( final int dim ) { return offset[ dim ]; }
-	public void setOffset( final float val, final int dim ) { offset[ dim ] = val; }
+	public double getOffset( final int dim ) { return offset[ dim ]; }
+	public void setOffset( final double val, final int dim ) { offset[ dim ] = val; }
 
-	public float getCrossCorrelation() { return crossCorrelation; }
-	public Float getPhaseCorrelation() { return phaseCorrelation; }
+	public double getCrossCorrelation() { return crossCorrelation; }
+	public Double getPhaseCorrelation() { return phaseCorrelation; }
 
 	public SubTilePair getSubTilePair() { return subTilePair; }
 	public void setSubTilePair( final SubTilePair subTilePair ) { this.subTilePair = subTilePair; }
@@ -64,10 +62,5 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 		subTilePair.swap();
 		for ( int d = 0; d < offset.length; d++ )
 			offset[ d ] *= -1;
-	}
-
-	public boolean isNull()
-	{
-		return subTilePair == null;
 	}
 }

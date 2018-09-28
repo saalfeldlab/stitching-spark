@@ -20,7 +20,6 @@ import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TransformedTileOperations;
 import org.janelia.stitching.Utils;
-import org.janelia.util.Conversions;
 
 import mpicbg.models.Point;
 import net.imglib2.realtransform.AffineGet;
@@ -145,7 +144,7 @@ public class CheckWhetherGroundtruthFallsIntoConstrainedSearchRadius
 			if ( !Util.isApproxEqual( movingSubTileSearchRadius.getOffsetUnitLength( stageSubTilePairwiseOffset ), 0, 1e-8 ) )
 				throw new RuntimeException( String.format( "bug? the stage offset converted to unit sphere coordinates in the error ellipse space should be 0" ) );
 
-			if ( !testOffsetApprox( movingSubTileSearchRadius, Conversions.toDoubleArray( pairwiseShift.getOffset() ) ) )
+			if ( !testOffsetApprox( movingSubTileSearchRadius, pairwiseShift.getOffset() ) )
 				++numPairsWhereEstimatedOffsetIsOutsideSearchRadius;
 //				throw new RuntimeException( "bug? the estimated offset is reported to be outside the constrained search radius" );
 
@@ -153,8 +152,8 @@ public class CheckWhetherGroundtruthFallsIntoConstrainedSearchRadius
 			{
 				offsetDistancesInsideSearchRadius.add( Point.distance(
 						new Point( groundtruthSubTilePairwiseOffset ),
-						new Point( Conversions.toDoubleArray( pairwiseShift.getOffset() ) ) )
-					);
+						new Point( pairwiseShift.getOffset() )
+					) );
 			}
 			else
 			{
@@ -163,7 +162,7 @@ public class CheckWhetherGroundtruthFallsIntoConstrainedSearchRadius
 						pairwiseShift.getSubTilePair(),
 						Point.distance(
 								new Point( groundtruthSubTilePairwiseOffset ),
-								new Point( Conversions.toDoubleArray( pairwiseShift.getOffset() ) ) )
+								new Point( pairwiseShift.getOffset() ) )
 					) );
 			}
 		}
