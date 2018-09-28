@@ -17,6 +17,7 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
+import net.imglib2.algorithm.phasecorrelation.PeakFilter;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealConverter;
 import net.imglib2.converter.RealFloatConverter;
@@ -171,7 +172,7 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 		if ( !Views.isZeroMin( roiImagesInFixedSubtileSpace[ 0 ] ) )
 			throw new PipelineExecutionException( "fixed subtile is expected to be zero-min" );
 
-		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImagesInFixedSubtileSpace, job.getParams() );
+		final SerializablePairWiseStitchingResult pairwiseResult = stitchPairwise( roiImagesInFixedSubtileSpace, job.getParams(), movingSubTileSearchRadius );
 
 		if ( pairwiseResult == null )
 		{
@@ -298,7 +299,8 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 
 	public static < T extends NativeType< T > & RealType< T > > SerializablePairWiseStitchingResult stitchPairwise(
 			final RandomAccessibleInterval< T >[] roiImages,
-			final SerializableStitchingParameters stitchingParameters )
+			final SerializableStitchingParameters stitchingParameters,
+			final PeakFilter peakFilter )
 	{
 		final PairwiseStitchingParameters params = new PairwiseStitchingParameters(0, stitchingParameters.checkPeaks, true, false, false);
 		final Pair< Translation, Double > shift = PairwiseStitching.getShift(
@@ -307,7 +309,8 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 				new Translation(roiImages[ 0 ].numDimensions()),
 				new Translation(roiImages[ 1 ].numDimensions()),
 				params,
-				new SameThreadExecutorService()
+				new SameThreadExecutorService(),
+				peakFilter
 			);
 
 		if ( shift == null || shift.getA() == null || shift.getB() == null )

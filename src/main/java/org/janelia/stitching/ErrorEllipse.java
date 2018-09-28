@@ -8,9 +8,10 @@ import org.ojalgo.matrix.store.MatrixStore;
 import org.ojalgo.matrix.store.PhysicalStore;
 import org.ojalgo.matrix.store.PrimitiveDenseStore;
 
-import mpicbg.imglib.custom.OffsetValidator;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.RealInterval;
+import net.imglib2.RealLocalizable;
+import net.imglib2.algorithm.phasecorrelation.PeakFilter;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineSet;
 import net.imglib2.realtransform.AffineTransform;
@@ -19,7 +20,7 @@ import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.InvertibleRealTransformSequence;
 
-public class ErrorEllipse implements OffsetValidator
+public class ErrorEllipse implements PeakFilter
 {
 	private final double[] offsetsMeanValues;
 	private final double[][] offsetsCovarianceMatrix;
@@ -161,9 +162,11 @@ public class ErrorEllipse implements OffsetValidator
 	 * @param offset
 	 */
 	@Override
-	public boolean testOffset( final double... offset )
+	public boolean testPeak( final RealLocalizable offset )
 	{
-		return getOffsetUnitLength( offset ) <= 1;
+		final double[] offsetPos = new double[ offset.numDimensions() ];
+		offset.localize( offsetPos );
+		return getOffsetUnitLength( offsetPos ) <= 1;
 	}
 
 	public double getOffsetUnitLength( final double... offset )
@@ -179,7 +182,6 @@ public class ErrorEllipse implements OffsetValidator
         return Math.sqrt( coordsSumSquared );
 	}
 
-	@Override
 	public int numDimensions()
 	{
 		return offsetsMeanValues.length;

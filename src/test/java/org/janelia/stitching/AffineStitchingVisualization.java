@@ -309,7 +309,7 @@ public class AffineStitchingVisualization
 
 		// test that simulated offset is within the error ellipse
 		System.out.println();
-		if ( movingBoxRelativeSearchRadius.combinedErrorEllipse.testOffset( simulatedMovingBoundingBoxOffset ) )
+		if ( movingBoxRelativeSearchRadius.combinedErrorEllipse.testPeak( new RealPoint( simulatedMovingBoundingBoxOffset ) ) )
 			System.out.println( "New offset is inside the accepted error range" );
 		else
 			System.out.println( "New offset is outside the accepted error range" );
@@ -624,7 +624,7 @@ public class AffineStitchingVisualization
 		{
 			errorEllipseTestImgCursor.fwd();
 			errorEllipseTestImgCursor.localize( pos );
-			if ( errorEllipse.testOffset( pos ) )
+			if ( errorEllipse.testPeak( new RealPoint( pos ) ) )
 				errorEllipseTestImgCursor.get().setOne();
 		}
 
@@ -678,7 +678,7 @@ public class AffineStitchingVisualization
 			displayTestImgCursor.fwd();
 			displayTestImgCursor.localize( pos );
 			displayTransform.applyInverse( pos, pos );
-			if ( errorEllipse.testOffset( pos ) )
+			if ( errorEllipse.testPeak( new RealPoint( pos ) ) )
 				displayTestImgCursor.get().setOne();
 		}
 
