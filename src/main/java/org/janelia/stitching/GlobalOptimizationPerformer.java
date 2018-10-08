@@ -9,10 +9,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
+
+import org.janelia.util.ComparableTuple;
 
 import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
@@ -22,15 +23,18 @@ import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
+import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
+import net.imglib2.Interval;
 import net.imglib2.realtransform.AffineGet;
+import net.imglib2.util.Pair;
+import net.imglib2.util.ValuePair;
 
 public class GlobalOptimizationPerformer
 {
-	private static final double POINT_MATCH_MAX_RANDOM_SHIFT = 10;
 	private static final double DAMPNESS_FACTOR = 0.9;
 
 	private static final int fixedIndex = 0;
@@ -39,9 +43,7 @@ public class GlobalOptimizationPerformer
 	public Map< Integer, IndexedTile< ? > > lostTiles;
 
 	public boolean translationOnlyStitching = false;
-	public int replacedTilesTranslation = 0;
-
-	private final Random rnd = new Random( 69997 ); // repeatable results
+	public int replacedTilesTranslation = 0, replacedTilesSimilarity = 0;
 
 	public int remainingGraphSize, remainingPairs;
 	public double avgDisplacement, maxDisplacement;
@@ -58,8 +60,9 @@ public class GlobalOptimizationPerformer
 			final SerializableStitchingParameters params,
 			final PrintWriter logWriter ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
 	{
-		// create a set of tiles
 		final LinkedHashMap< IndexedTile< ? >, Map< IndexedTile< ? >, List< PointMatch > > > connectedTilesMap = new LinkedHashMap<>();
+		final Map< IndexedTile< ? >, List< Interval > > tileToMatchedSubTiles = new HashMap<>();
+
 		for ( final SubTilePairwiseMatch subTilePairwiseMatch : subTilePairwiseMatches )
 		{
 			final SubTile[] subTiles = subTilePairwiseMatch.getPairwiseResult().getSubTilePair().toArray();
@@ -88,6 +91,14 @@ public class GlobalOptimizationPerformer
 				);
 
 			connectedTilesMap.get( tileModels[ movingIndex ] ).get( tileModels[ fixedIndex ] ).add( movingIntoFixedPointMatch );
+
+			// record the matched subtiles for both tiles
+			for ( int i = 0; i < 2; ++i )
+			{
+				if ( !tileToMatchedSubTiles.containsKey( tileModels[ i ] ) )
+					tileToMatchedSubTiles.put( tileModels[ i ], new ArrayList<>() );
+				tileToMatchedSubTiles.get( tileModels[ i ] ).add( subTiles[ i ] );
+			}
 		}
 
 		// connect the tiles
@@ -121,7 +132,9 @@ public class GlobalOptimizationPerformer
 		remainingPairs = countRemainingPairs( tilesSet, subTilePairwiseMatches );
 
 		// if some of the tiles do not have enough point matches for a high-order model, fall back to simpler model
-		replacedTilesTranslation = ensureEnoughPointMatches( tilesSet );
+		final Pair< Integer, Integer > tileModelsSimplificationResult = simplifyTileModelsIfNeeded( tilesSet, tileToMatchedSubTiles );
+		replacedTilesTranslation = tileModelsSimplificationResult.getA();
+		replacedTilesSimilarity = tileModelsSimplificationResult.getB();
 
 		// if all tiles have underlying translation models, consider this stitching configuration to be translation-only
 		translationOnlyStitching = true;
@@ -238,9 +251,6 @@ public class GlobalOptimizationPerformer
 				subTilesOffset
 			) );
 
-		// slightly change the matched positions to avoid IllDefinedDataPointsException when fitting models
-		shiftPoints( movingSubTileMiddlePoint, newTransformedMovingSubTileMiddlePoint );
-
 		final PointMatch movingIntoFixedPointMatch = new PointMatch(
 				movingSubTileMiddlePoint,
 				newTransformedMovingSubTileMiddlePoint,
@@ -250,28 +260,11 @@ public class GlobalOptimizationPerformer
 		return movingIntoFixedPointMatch;
 	}
 
-	/**
-	 * Shift the given points by the same random shift within the range of [-10, 10] px.
-	 * This helps to avoid the case when all point matches are located on the same plane. Without shifting,
-	 * the resulting affine model will be degenerate, and {@code IllDefinedDataPointsException} will be thrown when trying to fit.
-	 *
-	 * @param points
-	 */
-	private void shiftPoints( final Point... points )
+	private static Pair< Integer, Integer > simplifyTileModelsIfNeeded(
+			final Set< IndexedTile< ? > > tilesSet,
+			final Map< IndexedTile< ? >, List< Interval > > tileToMatchedSubTiles )
 	{
-		final int dim = points[ 0 ].getL().length;
-		final double[] shift = new double[ dim ];
-		for ( int d = 0; d < dim; ++d )
-			shift[ d ] = ( rnd.nextDouble() * 2 - 1 ) * POINT_MATCH_MAX_RANDOM_SHIFT;
-
-		for ( final Point point : points )
-			for ( int d = 0; d < dim; ++d )
-				point.getL()[ d ] += shift[ d ];
-	}
-
-	private static int ensureEnoughPointMatches( final Set< IndexedTile< ? > > tilesSet )
-	{
-		int numTilesReplacedWithTranslation = 0;
+		int numTileModelsReplacedWithTranslation = 0, numTileModelsReplacedWithSimilarity = 0;
 
 		final Set< IndexedTile< ? > > newTilesSet = new HashSet<>();
 		for ( final IndexedTile< ? > tile : tilesSet )
@@ -279,11 +272,52 @@ public class GlobalOptimizationPerformer
 			if ( tile.getMatches().isEmpty() )
 				throw new RuntimeException( "tile does not have any point matches" );
 
-			if ( tile.getMatches().size() < tile.getModel().getMinNumMatches() )
-			{
-				final int dim = tile.getMatches().iterator().next().getP1().getL().length;
-				final Model< ? > replacementModel = dim == 2 ? new TranslationModel2D() : new TranslationModel3D();
+			// group subtiles by their local positions
+			final TreeMap< ComparableTuple< Long >, Integer > localSubTilePositions = CheckSubTileConfigurationCoplanarity.groupSubTilesByTheirLocalPosition( tileToMatchedSubTiles.get( tile ) );
 
+			final int dim = tile.getMatches().iterator().next().getP1().getL().length;
+			final Model< ? > replacementModel;
+
+			if ( dim == 2 )
+			{
+				if ( localSubTilePositions.size() <= 2 )
+				{
+					// collinear, fallback to translation
+					replacementModel = new TranslationModel2D();
+					++numTileModelsReplacedWithTranslation;
+				}
+				else
+				{
+					replacementModel = null;
+				}
+			}
+			else if ( dim == 3 )
+			{
+				if ( localSubTilePositions.size() <= 2 )
+				{
+					// collinear, fallback to translation
+					replacementModel = new TranslationModel3D();
+					++numTileModelsReplacedWithTranslation;
+				}
+				else if ( CheckSubTileConfigurationCoplanarity.checkCoplanarity( localSubTilePositions ) )
+				{
+					// coplanar, fallback to similarity
+					replacementModel = new SimilarityModel3D();
+					++numTileModelsReplacedWithSimilarity;
+				}
+				else
+				{
+					replacementModel = null;
+				}
+			}
+			else
+			{
+				throw new RuntimeException( "wrong dimensionality: " + dim );
+			}
+
+
+			if ( replacementModel != null )
+			{
 				@SuppressWarnings( { "rawtypes", "unchecked" } )
 				final IndexedTile< ? > replacementTile = new IndexedTile(
 						replacementModel,
@@ -300,7 +334,6 @@ public class GlobalOptimizationPerformer
 				}
 
 				newTilesSet.add( replacementTile );
-				++numTilesReplacedWithTranslation;
 			}
 			else
 			{
@@ -311,7 +344,7 @@ public class GlobalOptimizationPerformer
 		tilesSet.clear();
 		tilesSet.addAll( newTilesSet );
 
-		return numTilesReplacedWithTranslation;
+		return new ValuePair<>( numTileModelsReplacedWithTranslation, numTileModelsReplacedWithSimilarity );
 	}
 
 	private static TreeMap< Integer, Integer > getGraphsSize( final Set< IndexedTile< ? > > tilesSet )

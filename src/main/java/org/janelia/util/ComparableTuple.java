@@ -12,11 +12,13 @@ import java.util.Arrays;
 public class ComparableTuple< T extends Comparable< ? super T > > implements Comparable< ComparableTuple< ? extends T > >
 {
 	private final T[] values;
+	public final int length;
 
 	@SafeVarargs
 	public ComparableTuple( final T... values )
 	{
 		this.values = values;
+		this.length = values.length;
 	}
 
 	public T[] getValues()
@@ -32,12 +34,12 @@ public class ComparableTuple< T extends Comparable< ? super T > > implements Com
 	@Override
 	public int compareTo( final ComparableTuple< ? extends T > other ) throws IllegalArgumentException
 	{
-		assert values.length == other.getValues().length;
-		if ( values.length != other.getValues().length )
+		assert length == other.length;
+		if ( length != other.length )
 			throw new IllegalArgumentException( "Cannot compare tuples of different length" );
 
 		int ret = 0;
-		for ( int i = 0; i < Math.max( values.length, other.getValues().length ); ++i )
+		for ( int i = 0; i < Math.max( length, other.length ); ++i )
 			if ( ( ret = values[ i ].compareTo( other.getValue( i ) ) ) != 0 )
 				break;
 		return ret;
