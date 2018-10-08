@@ -134,6 +134,10 @@ public class HistogramsProvider implements Serializable
 			throw new NotImplementedException( "Backend storage not supported for tiles: " + tileType );
 		}
 
+		// even out block size in all dimensions
+		for ( int d = 0; d < blockSize.length; ++d )
+			if ( blockSize[ d ] == Arrays.stream( blockSize ).max().getAsInt() )
+				blockSize[ d ] /= Arrays.stream( blockSize ).max().getAsInt() / Arrays.stream( blockSize ).min().getAsInt();
 		// reduce memory requirement by shrinking block size for the histogram dataset
 		while (
 				( workingInterval.numDimensions() == 2 && Arrays.stream( blockSize ).min().getAsInt() > 128 ) ||
