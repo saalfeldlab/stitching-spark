@@ -74,6 +74,7 @@ public class StitchingOptimizer implements Serializable
 
 		public final boolean translationOnlyStitching;
 		public final int replacedTilesTranslation;
+		public final int replacedTilesSimilarity;
 
 		public List< String > newTileConfigurationPaths;
 		public String usedPairwiseIndexesPath;
@@ -87,7 +88,8 @@ public class StitchingOptimizer implements Serializable
 				final double avgDisplacement,
 				final double maxDisplacement,
 				final boolean translationOnlyStitching,
-				final int replacedTilesTranslation )
+				final int replacedTilesTranslation,
+				final int replacedTilesSimilarity )
 		{
 			this.maxAllowedError = maxAllowedError;
 			this.optimizationParameters = optimizationParameters;
@@ -97,6 +99,7 @@ public class StitchingOptimizer implements Serializable
 			this.maxDisplacement = maxDisplacement;
 			this.translationOnlyStitching = translationOnlyStitching;
 			this.replacedTilesTranslation = replacedTilesTranslation;
+			this.replacedTilesSimilarity = replacedTilesSimilarity;
 
 			retainedGraphRatio = ( double ) remainingGraphSize / fullGraphSize;
 		}
@@ -266,7 +269,8 @@ public class StitchingOptimizer implements Serializable
 								optimizationPerformer.avgDisplacement,
 								optimizationPerformer.maxDisplacement,
 								optimizationPerformer.translationOnlyStitching,
-								optimizationPerformer.replacedTilesTranslation
+								optimizationPerformer.replacedTilesTranslation,
+								optimizationPerformer.replacedTilesSimilarity
 							);
 
 						final String optimizedTileConfigurationFolder = PathResolver.get(
@@ -508,7 +512,8 @@ public class StitchingOptimizer implements Serializable
 				{
 					modelSpecificationLog =
 							";  higher-order model stitching" +
-							"; tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation;
+							"; tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation +
+							"; tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity;
 				}
 			}
 			else
