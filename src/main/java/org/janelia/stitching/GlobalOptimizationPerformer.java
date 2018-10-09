@@ -280,7 +280,7 @@ public class GlobalOptimizationPerformer
 
 			if ( dim == 2 )
 			{
-				if ( localSubTilePositions.size() <= 2 )
+				if ( CheckSubTileMatchesCoplanarity.isCollinear( localSubTilePositions ) )
 				{
 					// collinear, fallback to translation
 					replacementModel = new TranslationModel2D();
@@ -293,7 +293,7 @@ public class GlobalOptimizationPerformer
 			}
 			else if ( dim == 3 )
 			{
-				if ( localSubTilePositions.size() <= 2 )
+				if ( CheckSubTileMatchesCoplanarity.isCollinear( localSubTilePositions ) )
 				{
 					// collinear, fallback to translation
 					replacementModel = new TranslationModel3D();

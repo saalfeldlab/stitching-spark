@@ -30,15 +30,21 @@ public class CheckSubTileMatchesCoplanarity
 		return groups;
 	}
 
+	public static boolean isCollinear( final TreeMap< ComparableTuple< Long >, Integer > groupedSubTileIntervals )
+	{
+		 return groupedSubTileIntervals.size() <= 2;
+	}
+
 	public static boolean isCoplanar( final TreeMap< ComparableTuple< Long >, Integer > groupedSubTileIntervals )
 	{
 		if ( !groupedSubTileIntervals.isEmpty() && groupedSubTileIntervals.firstKey().length != 3 )
 			throw new IllegalArgumentException( "incorrect dimensionality: " + groupedSubTileIntervals.firstKey().length );
 
-		if ( groupedSubTileIntervals.size() < 4 )
+		if ( groupedSubTileIntervals.size() < 3 )
+			throw new IllegalArgumentException( "points are collinear" );
+		else if ( groupedSubTileIntervals.size() == 3 )
 			return true;
-
-		if ( groupedSubTileIntervals.size() > 4 )
+		else if ( groupedSubTileIntervals.size() > 4 )
 			return false;
 
 		// Check two possible coplanar configurations:

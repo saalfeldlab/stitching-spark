@@ -22,8 +22,10 @@ public class CheckSubTileMatchesCoplanarityTest
 		final int numConfigs = 1 << subTiles.size();
 		Assert.assertEquals( 256, numConfigs );
 
-		int numConfigsWithFewerThan4Points = 0;
-		int numCoplanarConfigsWithFewerThan4Points = 0, numCoplanarConfigsWith4Points = 0, numCoplanarConfigsWithMoreThan4Points = 0;
+		int numCollinearConfigs = 0;
+		int numConfigsWithFewerThan3Points = 0, numConfigsWith3Points = 0;
+		int numCoplanarConfigsWith3Points = 0, numCoplanarConfigsWith4Points = 0, numCoplanarConfigsWithMoreThan4Points = 0;
+
 		for ( int mask = 0; mask < numConfigs; ++mask )
 		{
 			final List< SubTile > subTilesConfig = new ArrayList<>();
@@ -38,13 +40,19 @@ public class CheckSubTileMatchesCoplanarityTest
 			final TreeMap< ComparableTuple< Long >, Integer > groupedSubTiles = CheckSubTileMatchesCoplanarity.groupSubTilesByTheirLocalPosition( subTilesConfigWithDuplicates );
 			Assert.assertEquals( subTilesConfig.size(), groupedSubTiles.size() );
 
-			if ( subTilesConfig.size() < 4 )
-				++numConfigsWithFewerThan4Points;
+			if ( subTilesConfig.size() < 3 )
+				++numConfigsWithFewerThan3Points;
+			else if ( subTilesConfig.size() == 3 )
+				++numConfigsWith3Points;
 
-			if ( CheckSubTileMatchesCoplanarity.isCoplanar( groupedSubTiles ) )
+			if ( CheckSubTileMatchesCoplanarity.isCollinear( groupedSubTiles ) )
 			{
-				if ( groupedSubTiles.size() < 4 )
-					++numCoplanarConfigsWithFewerThan4Points;
+				++numCollinearConfigs;
+			}
+			else if ( CheckSubTileMatchesCoplanarity.isCoplanar( groupedSubTiles ) )
+			{
+				if ( groupedSubTiles.size() == 3 )
+					++numCoplanarConfigsWith3Points;
 				else if ( groupedSubTiles.size() == 4 )
 					++numCoplanarConfigsWith4Points;
 				else if ( groupedSubTiles.size() > 4 )
@@ -52,7 +60,8 @@ public class CheckSubTileMatchesCoplanarityTest
 			}
 		}
 
-		Assert.assertEquals( numConfigsWithFewerThan4Points, numCoplanarConfigsWithFewerThan4Points );
+		Assert.assertEquals( numConfigsWithFewerThan3Points, numCollinearConfigs );
+		Assert.assertEquals( numConfigsWith3Points, numCoplanarConfigsWith3Points );
 		Assert.assertEquals( 12, numCoplanarConfigsWith4Points ); // 6 orthogonal configs + 6 tilted configs
 		Assert.assertEquals( 0, numCoplanarConfigsWithMoreThan4Points );
 	}
