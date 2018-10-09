@@ -6,10 +6,12 @@ import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -18,6 +20,7 @@ import java.util.stream.Collectors;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.AxisMapping;
+import org.janelia.stitching.CheckSubTileMatchesCoplanarity;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
 import org.janelia.stitching.SubTile;
 import org.janelia.stitching.SubTileOperations;
@@ -27,6 +30,7 @@ import org.janelia.stitching.TilePair;
 import org.janelia.stitching.TransformUtils;
 import org.janelia.stitching.TransformedTileOperations;
 import org.janelia.stitching.Utils;
+import org.janelia.util.ComparableTuple;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -278,6 +282,10 @@ public class VisualizeTileConfigurationAsProjections
 				System.out.println( "Its neighbors used for optimization (tile index -> count): " + tileToInspectOptimizationNeighbors );
 			}
 		}
+
+		System.out.println();
+		if ( pairwiseConnections.isPresent() )
+			printCollinearAndCoplanarConfigurations( pairwiseConnections.get() );
 	}
 
 	private static List< Set< Integer > > getTileIndexesProjectionsWhitelist( final TileInfo[] tiles, final Optional< long[] > projectionGridCoords )
@@ -661,5 +669,37 @@ public class VisualizeTileConfigurationAsProjections
 				ARGBType.blue( argb.get() ),
 				ARGBType.alpha( argb.get() )
 			);
+	}
+
+	private static void printCollinearAndCoplanarConfigurations( final List< SerializablePairWiseStitchingResult > pairwiseConnections )
+	{
+		final Map< Integer, List< SubTile > > tileIndexToItsSubTiles = new HashMap<>();
+		for ( final SerializablePairWiseStitchingResult match : pairwiseConnections )
+		{
+			for ( final SubTile subTile : match.getSubTilePair().toArray() )
+			{
+				final int tileIndex = subTile.getFullTile().getIndex();
+				if ( !tileIndexToItsSubTiles.containsKey( tileIndex ) )
+					tileIndexToItsSubTiles.put( tileIndex, new ArrayList<>() );
+				tileIndexToItsSubTiles.get( tileIndex ).add( subTile );
+			}
+		}
+
+		final List< Integer > collinearConfigurationTileIndexes = new ArrayList<>(), coplanarConfigurationTileIndexes = new ArrayList<>();
+
+		for ( final Entry< Integer, List< SubTile > > entry : tileIndexToItsSubTiles.entrySet() )
+		{
+			final TreeMap< ComparableTuple< Long >, Integer > subTilePositionGroups = CheckSubTileMatchesCoplanarity.groupSubTilesByTheirLocalPosition( entry.getValue() );
+			if ( CheckSubTileMatchesCoplanarity.isCollinear( subTilePositionGroups ) )
+				collinearConfigurationTileIndexes.add( entry.getKey() );
+			else if ( CheckSubTileMatchesCoplanarity.isCoplanar( subTilePositionGroups ) )
+				coplanarConfigurationTileIndexes.add( entry.getKey() );
+		}
+
+		if ( !collinearConfigurationTileIndexes.isEmpty() )
+			System.out.println( "Tiles with collinear config: " + collinearConfigurationTileIndexes );
+
+		if ( !coplanarConfigurationTileIndexes.isEmpty() )
+			System.out.println( "Tiles with coplanar config: " + coplanarConfigurationTileIndexes );
 	}
 }
