@@ -273,7 +273,7 @@ public class GlobalOptimizationPerformer
 				throw new RuntimeException( "tile does not have any point matches" );
 
 			// group subtiles by their local positions
-			final TreeMap< ComparableTuple< Long >, Integer > localSubTilePositions = CheckSubTileConfigurationCoplanarity.groupSubTilesByTheirLocalPosition( tileToMatchedSubTiles.get( tile ) );
+			final TreeMap< ComparableTuple< Long >, Integer > localSubTilePositions = CheckSubTileMatchesCoplanarity.groupSubTilesByTheirLocalPosition( tileToMatchedSubTiles.get( tile ) );
 
 			final int dim = tile.getMatches().iterator().next().getP1().getL().length;
 			final Model< ? > replacementModel;
@@ -299,7 +299,7 @@ public class GlobalOptimizationPerformer
 					replacementModel = new TranslationModel3D();
 					++numTileModelsReplacedWithTranslation;
 				}
-				else if ( CheckSubTileConfigurationCoplanarity.checkCoplanarity( localSubTilePositions ) )
+				else if ( CheckSubTileMatchesCoplanarity.isCoplanar( localSubTilePositions ) )
 				{
 					// coplanar, fallback to similarity
 					replacementModel = new SimilarityModel3D();
@@ -314,7 +314,6 @@ public class GlobalOptimizationPerformer
 			{
 				throw new RuntimeException( "wrong dimensionality: " + dim );
 			}
-
 
 			if ( replacementModel != null )
 			{

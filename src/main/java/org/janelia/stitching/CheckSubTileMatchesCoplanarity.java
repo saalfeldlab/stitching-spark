@@ -12,7 +12,7 @@ import org.janelia.util.Conversions;
 import net.imglib2.Interval;
 import net.imglib2.util.Intervals;
 
-public class CheckSubTileConfigurationCoplanarity
+public class CheckSubTileMatchesCoplanarity
 {
 	public static TreeMap< ComparableTuple< Long >, Integer > groupSubTilesByTheirLocalPosition( final Collection< ? extends Interval > subTileIntervals )
 	{
@@ -25,7 +25,7 @@ public class CheckSubTileConfigurationCoplanarity
 		return groups;
 	}
 
-	public static boolean checkCoplanarity( final TreeMap< ComparableTuple< Long >, Integer > groupedSubTileIntervals )
+	public static boolean isCoplanar( final TreeMap< ComparableTuple< Long >, Integer > groupedSubTileIntervals )
 	{
 		if ( !groupedSubTileIntervals.isEmpty() && groupedSubTileIntervals.firstKey().length != 3 )
 			throw new IllegalArgumentException( "incorrect dimensionality: " + groupedSubTileIntervals.firstKey().length );
@@ -51,18 +51,15 @@ public class CheckSubTileConfigurationCoplanarity
 		// or, 2) there are 2 subgroups in 2 dimensions having the same coordinates (the plane is tilted 45 degrees)
 A:		for ( int d = 0; d < 3; ++d )
 		{
+			final List< Integer > subgroupDimensions = new ArrayList<>();
+			for ( int k = 0; k < 3; ++k )
+				if ( k != d )
+					subgroupDimensions.add( k );
+
 			final TreeMap< ComparableTuple< Long >, Integer > subgroups = new TreeMap<>();
 			for ( final ComparableTuple< Long > group : groupedSubTileIntervals.keySet() )
 			{
-				final List< Integer > subgroupDimensions = new ArrayList<>();
-				for ( int k = 0; k < 3; ++k )
-					if ( k != d )
-						subgroupDimensions.add( k );
-
 				final ComparableTuple< Long > subgroup = new ComparableTuple<>( group.getValue( subgroupDimensions.get( 0 ) ), group.getValue( subgroupDimensions.get( 1 ) ) );
-				if ( subgroup.getValue( 0 ) != subgroup.getValue( 1 ) )
-					continue A;
-
 				subgroups.put( subgroup, subgroups.getOrDefault( subgroup, 0 ) + 1 );
 			}
 
