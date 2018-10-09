@@ -12,6 +12,11 @@ import org.janelia.util.Conversions;
 import net.imglib2.Interval;
 import net.imglib2.util.Intervals;
 
+/**
+ * Tests a configuration of subtiles (containing point matches) for coplanarity.
+ * The test is based on the assumption that full tiles are subdivided into 2x2x2 subtiles, so that each subtile can only have either zero or non-zero coordinate in any dimension.
+ * Under this assumption, any configuration containing more than 4 subtiles will not be coplanar, and the test checks two possible coplanar configurations where there are exactly 4 subtiles.
+ */
 public class CheckSubTileMatchesCoplanarity
 {
 	public static TreeMap< ComparableTuple< Long >, Integer > groupSubTilesByTheirLocalPosition( final Collection< ? extends Interval > subTileIntervals )
@@ -38,7 +43,7 @@ public class CheckSubTileMatchesCoplanarity
 
 		// Check two possible coplanar configurations:
 
-		// 1) all 4 points have the same coordinate in any dimension (the plane is orthogonal to the tile)
+		// 1) all 4 points have the same coordinate in any dimension (the plane is orthogonal)
 		for ( int d = 0; d < 3; ++d )
 		{
 			final TreeSet< Long > positionInDimension = new TreeSet<>();
@@ -49,7 +54,7 @@ public class CheckSubTileMatchesCoplanarity
 		}
 
 		// or, 2) there are 2 subgroups in 2 dimensions having the same coordinates (the plane is tilted 45 degrees)
-A:		for ( int d = 0; d < 3; ++d )
+		for ( int d = 0; d < 3; ++d )
 		{
 			final List< Integer > subgroupDimensions = new ArrayList<>();
 			for ( int k = 0; k < 3; ++k )
