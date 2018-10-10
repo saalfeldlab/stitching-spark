@@ -73,8 +73,7 @@ public class StitchingOptimizer implements Serializable
 		public final double avgDisplacement;
 
 		public final boolean translationOnlyStitching;
-		public final int replacedTilesTranslation;
-		public final int replacedTilesSimilarity;
+		public final int numCollinearTileConfigs, numCoplanarTileConfigs;
 
 		public List< String > newTileConfigurationPaths;
 		public String usedPairwiseIndexesPath;
@@ -88,8 +87,8 @@ public class StitchingOptimizer implements Serializable
 				final double avgDisplacement,
 				final double maxDisplacement,
 				final boolean translationOnlyStitching,
-				final int replacedTilesTranslation,
-				final int replacedTilesSimilarity )
+				final int numCollinearTileConfigs,
+				final int numCoplanarTileConfigs )
 		{
 			this.maxAllowedError = maxAllowedError;
 			this.optimizationParameters = optimizationParameters;
@@ -98,8 +97,8 @@ public class StitchingOptimizer implements Serializable
 			this.avgDisplacement = avgDisplacement;
 			this.maxDisplacement = maxDisplacement;
 			this.translationOnlyStitching = translationOnlyStitching;
-			this.replacedTilesTranslation = replacedTilesTranslation;
-			this.replacedTilesSimilarity = replacedTilesSimilarity;
+			this.numCollinearTileConfigs = numCollinearTileConfigs;
+			this.numCoplanarTileConfigs = numCoplanarTileConfigs;
 
 			retainedGraphRatio = ( double ) remainingGraphSize / fullGraphSize;
 		}
@@ -269,8 +268,8 @@ public class StitchingOptimizer implements Serializable
 								optimizationPerformer.avgDisplacement,
 								optimizationPerformer.maxDisplacement,
 								optimizationPerformer.translationOnlyStitching,
-								optimizationPerformer.replacedTilesTranslation,
-								optimizationPerformer.replacedTilesSimilarity
+								optimizationPerformer.numCollinearTileConfigs,
+								optimizationPerformer.numCoplanarTileConfigs
 							);
 
 						final String optimizedTileConfigurationFolder = PathResolver.get(
@@ -512,8 +511,8 @@ public class StitchingOptimizer implements Serializable
 				{
 					modelSpecificationLog =
 							";  higher-order model stitching" +
-							"; tiles replaced to Translation model=" + optimizationResult.replacedTilesTranslation +
-							"; tiles replaced to Similarity model=" + optimizationResult.replacedTilesSimilarity;
+							"; tiles with simplified models: collinear=" + optimizationResult.numCollinearTileConfigs +
+							", coplanar=" + optimizationResult.numCoplanarTileConfigs;
 				}
 			}
 			else

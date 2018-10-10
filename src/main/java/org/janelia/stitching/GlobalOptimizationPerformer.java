@@ -43,7 +43,7 @@ public class GlobalOptimizationPerformer
 	public Map< Integer, IndexedTile< ? > > lostTiles;
 
 	public boolean translationOnlyStitching = false;
-	public int replacedTilesTranslation = 0, replacedTilesSimilarity = 0;
+	public int numCollinearTileConfigs = 0, numCoplanarTileConfigs = 0;
 
 	public int remainingGraphSize, remainingPairs;
 	public double avgDisplacement, maxDisplacement;
@@ -133,8 +133,8 @@ public class GlobalOptimizationPerformer
 
 		// if some of the tiles do not have enough point matches for a high-order model, fall back to simpler model
 		final Pair< Integer, Integer > tileModelsSimplificationResult = simplifyTileModelsIfNeeded( tilesSet, tileToMatchedSubTiles );
-		replacedTilesTranslation = tileModelsSimplificationResult.getA();
-		replacedTilesSimilarity = tileModelsSimplificationResult.getB();
+		numCollinearTileConfigs = tileModelsSimplificationResult.getA();
+		numCoplanarTileConfigs = tileModelsSimplificationResult.getB();
 
 		// if all tiles have underlying translation models, consider this stitching configuration to be translation-only
 		translationOnlyStitching = true;
@@ -264,7 +264,7 @@ public class GlobalOptimizationPerformer
 			final Set< IndexedTile< ? > > tilesSet,
 			final Map< IndexedTile< ? >, List< Interval > > tileToMatchedSubTiles )
 	{
-		int numTileModelsReplacedWithTranslation = 0, numTileModelsReplacedWithSimilarity = 0;
+		int numCollinearTileConfigs = 0, numCoplanarTileConfigs = 0;
 
 		final Set< IndexedTile< ? > > newTilesSet = new HashSet<>();
 		for ( final IndexedTile< ? > tile : tilesSet )
@@ -284,7 +284,7 @@ public class GlobalOptimizationPerformer
 				{
 					// collinear, fallback to translation
 					replacementModel = new TranslationModel2D();
-					++numTileModelsReplacedWithTranslation;
+					++numCollinearTileConfigs;
 				}
 				else
 				{
@@ -297,13 +297,13 @@ public class GlobalOptimizationPerformer
 				{
 					// collinear, fallback to translation
 					replacementModel = new TranslationModel3D();
-					++numTileModelsReplacedWithTranslation;
+					++numCollinearTileConfigs;
 				}
 				else if ( CheckSubTileMatchesCoplanarity.isCoplanar( localSubTilePositions ) )
 				{
 					// coplanar, fallback to similarity
 					replacementModel = new SimilarityModel3D();
-					++numTileModelsReplacedWithSimilarity;
+					++numCoplanarTileConfigs;
 				}
 				else
 				{
@@ -343,7 +343,7 @@ public class GlobalOptimizationPerformer
 		tilesSet.clear();
 		tilesSet.addAll( newTilesSet );
 
-		return new ValuePair<>( numTileModelsReplacedWithTranslation, numTileModelsReplacedWithSimilarity );
+		return new ValuePair<>( numCollinearTileConfigs, numCoplanarTileConfigs );
 	}
 
 	private static TreeMap< Integer, Integer > getGraphsSize( final Set< IndexedTile< ? > > tilesSet )
