@@ -23,7 +23,6 @@ import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
-import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
 import mpicbg.models.TranslationModel2D;
@@ -302,7 +301,9 @@ public class GlobalOptimizationPerformer
 				else if ( CheckSubTileMatchesCoplanarity.isCoplanar( localSubTilePositions ) )
 				{
 					// coplanar, fallback to similarity
-					replacementModel = new SimilarityModel3D();
+					// UPD: Replacing with similarity still yields bad tile transforms. Replacing with translation is safe and generates good and consistent results.
+//					replacementModel = new SimilarityModel3D();
+					replacementModel = new TranslationModel3D();
 					++numCoplanarTileConfigs;
 				}
 				else
