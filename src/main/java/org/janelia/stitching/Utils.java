@@ -61,8 +61,7 @@ public class Utils {
 
 	public static < T extends NativeType< T > & RealType< T > > ImagePlus copyToImagePlus( final RandomAccessibleInterval< T > img ) throws ImgLibException
 	{
-//		final ImagePlusImg< T, ? > imagePlusImg = new ImagePlusImgFactory<>( Util.getTypeFromInterval( img ) ).create( Intervals.dimensionsAsLongArray( img ) );
-		final ImagePlusImg< T, ? > imagePlusImg = new ImagePlusImgFactory().create( Intervals.dimensionsAsLongArray( img ), Util.getTypeFromInterval( img )  );
+		final ImagePlusImg< T, ? > imagePlusImg = new ImagePlusImgFactory<>( Util.getTypeFromInterval( img ) ).create( Intervals.dimensionsAsLongArray( img ) );
 		final Cursor< T > imgCursor = Views.flatIterable( img ).cursor();
 		final Cursor< T > imagePlusImgCursor = Views.flatIterable( imagePlusImg ).cursor();
 		while ( imagePlusImgCursor.hasNext() || imgCursor.hasNext() )
