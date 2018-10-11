@@ -304,8 +304,8 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 	{
 		final PairwiseStitchingParameters params = new PairwiseStitchingParameters(0, stitchingParameters.checkPeaks, true, false, false);
 		final Pair< Translation, Double > shift = PairwiseStitching.getShift(
-				roiImages[ 0 ],
-				roiImages[ 1 ],
+				Views.zeroMin( roiImages[ 0 ] ),
+				Views.zeroMin( roiImages[ 1 ] ),
 				new Translation(roiImages[ 0 ].numDimensions()),
 				new Translation(roiImages[ 1 ].numDimensions()),
 				params,
