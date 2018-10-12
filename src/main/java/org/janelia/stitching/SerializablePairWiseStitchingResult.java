@@ -28,6 +28,8 @@ public class SerializablePairWiseStitchingResult implements Serializable {
 		this.crossCorrelation = crossCorrelation;
 		this.phaseCorrelation = phaseCorrelation;
 		this.variance = variance;
+
+		isValidOverlap = offset != null;
 	}
 
 	public int getNumDimensions() { return offset.length; }
