@@ -167,6 +167,9 @@ public class StitchingArguments implements Serializable {
 			stitchingMode = StitchingMode.valueOf( stitchingModeStr.replace( '-', '_' ).toUpperCase() );
 			optimizerMode = OptimizerMode.valueOf( optimizerModeStr.replace( '-', '_' ).toUpperCase() );
 			regularizerType = RegularizerType.valueOf( regularizerTypeStr.replace( '-', '_' ).toUpperCase() );
+
+			if ( optimizerMode == OptimizerMode.TRANSLATION && regularizerType != RegularizerType.NONE )
+				throw new IllegalArgumentException( "optimizer set to TRANSLATION, expected regularizer to be NONE, got " + regularizerType );
 		}
 
 		if ( !stitchOnly )
