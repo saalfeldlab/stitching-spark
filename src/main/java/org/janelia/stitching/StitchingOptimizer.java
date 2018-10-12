@@ -2,9 +2,7 @@ package org.janelia.stitching;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.Reader;
 import java.io.Serializable;
-import java.io.Writer;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -18,8 +16,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.PathResolver;
-
-import com.google.gson.GsonBuilder;
 
 import mpicbg.models.IndexedTile;
 import mpicbg.models.Model;
@@ -198,7 +194,7 @@ public class StitchingOptimizer implements Serializable
 		}
 
 		// save resulting used pairwise shifts configuration (load the file with indexes and extract the actual shifts from the existing pairwise file)
-		final PairwiseShiftsIndexFilter usedPairwiseShiftsIndexes = loadPairwiseShiftsIndexesFromFile( dataProvider, bestOptimization.usedPairwiseIndexesPath );
+		final PairwiseShiftsIndexFilter usedPairwiseShiftsIndexes = PairwiseShiftsIndexFilter.loadFromFile( dataProvider, bestOptimization.usedPairwiseIndexesPath );
 		final List< SerializablePairWiseStitchingResult > usedPairwiseShifts = usedPairwiseShiftsIndexes.filterPairwiseShifts( subTilePairwiseResults );
 		final String usedPairwiseShiftsPath = PathResolver.get( iterationDirPath, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) );
 		TileInfoJSONProvider.savePairwiseShifts( usedPairwiseShifts, dataProvider.getJsonWriter( URI.create( usedPairwiseShiftsPath ) ) );
@@ -306,7 +302,7 @@ public class StitchingOptimizer implements Serializable
 								subTilePairwiseMatches
 							);
 						optimizationResult.usedPairwiseIndexesPath = PathResolver.get( optimizedTileConfigurationFolder, "pairwise-used-indexes.json" );
-						savePairwiseShiftsIndexesToFile( usedPairwiseShiftsIndexes, dataProviderLocal, optimizationResult.usedPairwiseIndexesPath );
+						PairwiseShiftsIndexFilter.saveToFile( usedPairwiseShiftsIndexes, dataProviderLocal, optimizationResult.usedPairwiseIndexesPath );
 
 						return optimizationResult;
 					} )
@@ -466,22 +462,6 @@ public class StitchingOptimizer implements Serializable
 		}
 
 		return new PairwiseShiftsIndexFilter( filteredPairwiseShifts );
-	}
-
-	private void savePairwiseShiftsIndexesToFile( final PairwiseShiftsIndexFilter pairwiseShiftsIndexes, final DataProvider dataProvider, final String filePath ) throws IOException
-	{
-		try ( final Writer gsonWriter = dataProvider.getJsonWriter( URI.create( filePath ) ) )
-		{
-			gsonWriter.write( new GsonBuilder().create().toJson( pairwiseShiftsIndexes ) );
-		}
-	}
-
-	private PairwiseShiftsIndexFilter loadPairwiseShiftsIndexesFromFile( final DataProvider dataProvider, final String filePath ) throws IOException
-	{
-		try ( final Reader gsonReader = dataProvider.getJsonReader( URI.create( filePath ) ) )
-		{
-			return new GsonBuilder().create().fromJson( gsonReader, PairwiseShiftsIndexFilter.class );
-		}
 	}
 
 	private void logOptimizationResults( final PrintWriter logWriter, final List< OptimizationResult > optimizationResultList )

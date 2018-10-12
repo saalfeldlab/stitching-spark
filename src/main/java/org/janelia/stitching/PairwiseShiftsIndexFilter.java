@@ -1,10 +1,18 @@
 package org.janelia.stitching;
 
+import java.io.IOException;
+import java.io.Reader;
 import java.io.Serializable;
+import java.io.Writer;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.TreeSet;
+
+import org.janelia.dataaccess.DataProvider;
+
+import com.google.gson.GsonBuilder;
 
 public class PairwiseShiftsIndexFilter implements Serializable
 {
@@ -45,5 +53,21 @@ public class PairwiseShiftsIndexFilter implements Serializable
 				filteredPairwiseShifts.add( shift );
 		}
 		return filteredPairwiseShifts;
+	}
+
+	public static void saveToFile( final PairwiseShiftsIndexFilter pairwiseShiftsIndexes, final DataProvider dataProvider, final String filePath ) throws IOException
+	{
+		try ( final Writer gsonWriter = dataProvider.getJsonWriter( URI.create( filePath ) ) )
+		{
+			gsonWriter.write( new GsonBuilder().create().toJson( pairwiseShiftsIndexes ) );
+		}
+	}
+
+	public static PairwiseShiftsIndexFilter loadFromFile( final DataProvider dataProvider, final String filePath ) throws IOException
+	{
+		try ( final Reader gsonReader = dataProvider.getJsonReader( URI.create( filePath ) ) )
+		{
+			return new GsonBuilder().create().fromJson( gsonReader, PairwiseShiftsIndexFilter.class );
+		}
 	}
 }
