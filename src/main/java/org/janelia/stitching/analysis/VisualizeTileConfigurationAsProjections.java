@@ -62,7 +62,7 @@ public class VisualizeTileConfigurationAsProjections
 	{
 		private static final long serialVersionUID = 215043103837732209L;
 
-		@Option(name = "-g", aliases = { "--groundtruthTilesPath" }, required = true,
+		@Option(name = "-g", aliases = { "--groundtruthTilesPath" }, required = false,
 				usage = "Path to the grountruth tile configuration file.")
 		public String groundtruthTilesPath;
 
@@ -93,6 +93,12 @@ public class VisualizeTileConfigurationAsProjections
 				System.err.println( e.getMessage() );
 				parser.printUsage( System.err );
 			}
+
+			if ( groundtruthTilesPath == null && stitchedTilesPath == null )
+				throw new IllegalArgumentException( "At least one tile configuration (groundtruth or stitched) has to be provided" );
+
+			if ( usedPairwiseConfigurationPath != null && stitchedTilesPath == null )
+				throw new IllegalArgumentException( "Pairwise file is provided, expected stitched tile configuration to be provided as well" );
 		}
 	}
 
@@ -149,17 +155,19 @@ public class VisualizeTileConfigurationAsProjections
 			System.exit( 1 );
 
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
-		final TileInfo[] groundtruthTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( parsedArgs.groundtruthTilesPath ) ) );
+		final TileInfo[] groundtruthTiles = parsedArgs.groundtruthTilesPath != null ? TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( parsedArgs.groundtruthTilesPath ) ) ) : null;
 		final TileInfo[] stitchedTiles = parsedArgs.stitchedTilesPath != null ? TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( URI.create( parsedArgs.stitchedTilesPath ) ) ) : null;
+
+		final int numDimensions = groundtruthTiles != null ? groundtruthTiles[ 0 ].numDimensions() : stitchedTiles[ 0 ].numDimensions();
 
 		final Optional< TileForInspection > tileForInspection;
 		final Optional< long[] > projectionGridCoords;
 		if ( parsedArgs.tileToInspect != null )
 		{
-			if ( groundtruthTiles[ 0 ].numDimensions() == 3 )
+			if ( numDimensions == 3 )
 			{
 				final long[] inspectedTileCoords = new long[ 3 ];
-				for ( final TileInfo tile : groundtruthTiles )
+				for ( final TileInfo tile : ( groundtruthTiles != null ? groundtruthTiles : stitchedTiles ) )
 				{
 					if ( tile.getIndex().intValue() == parsedArgs.tileToInspect.intValue() )
 					{
@@ -193,19 +201,25 @@ public class VisualizeTileConfigurationAsProjections
 			pairwiseConnections = Optional.empty();
 		}
 
-		final Optional< List< Set< Integer > > > tileIndexesProjectionsWhitelist = Optional.ofNullable( getTileIndexesProjectionsWhitelist( groundtruthTiles, projectionGridCoords ) );
-
-		final List< TileForDrawing > stageTilesForDrawing = new ArrayList<>(), groundtruthTilesForDrawing = new ArrayList<>();
-		for ( final TileInfo tile : groundtruthTiles )
-		{
-			stageTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), new Translation( tile.getStagePosition() ), stageTilesColor ) );
-			groundtruthTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), TransformedTileOperations.getTileTransform( tile, false ), groundtruthTilesColor ) );
-		}
+		final Optional< List< Set< Integer > > > tileIndexesProjectionsWhitelist = Optional.ofNullable( getTileIndexesProjectionsWhitelist(
+				groundtruthTiles != null ? groundtruthTiles : stitchedTiles,
+				projectionGridCoords
+			) );
 
 		new ImageJ();
 
+//		final List< TileForDrawing > stageTilesForDrawing = new ArrayList<>();
+//		for ( final TileInfo tile : ( groundtruthTiles != null ? groundtruthTiles : stitchedTiles ) )
+//			stageTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), new Translation( tile.getStagePosition() ), stageTilesColor ) );
 //		drawTiles( stageTilesForDrawing, "stage", tileIndexesProjectionsWhitelist );
-		drawTiles( groundtruthTilesForDrawing, "groundtruth", tileIndexesProjectionsWhitelist );
+
+		if ( groundtruthTiles != null )
+		{
+			final List< TileForDrawing > groundtruthTilesForDrawing = new ArrayList<>();
+			for ( final TileInfo tile : groundtruthTiles )
+				groundtruthTilesForDrawing.add( new TileForDrawing( tile.getIndex(), new FinalDimensions( tile.getSize() ), TransformedTileOperations.getTileTransform( tile, false ), groundtruthTilesColor ) );
+			drawTiles( groundtruthTilesForDrawing, "groundtruth", tileIndexesProjectionsWhitelist );
+		}
 
 		if ( stitchedTiles != null )
 		{
@@ -222,7 +236,9 @@ public class VisualizeTileConfigurationAsProjections
 				);
 		}
 
-		System.out.println( groundtruthTiles.length + " input/groundtruth tiles" );
+		if ( groundtruthTiles != null )
+			System.out.println( groundtruthTiles.length + " input/groundtruth tiles" );
+
 		if ( stitchedTiles != null )
 			System.out.println( stitchedTiles.length + " stitched tiles" );
 
