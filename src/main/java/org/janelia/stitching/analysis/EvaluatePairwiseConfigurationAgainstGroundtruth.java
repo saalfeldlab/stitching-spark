@@ -138,10 +138,15 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 
 		final Map< Integer, Map< Integer, List< Pair< SerializablePairWiseStitchingResult, Double > > > > fixedToMovingPairwiseErrors = new TreeMap<>();
 
+		int numInvalidPairwiseShifts = 0;
+
 		for ( final SerializablePairWiseStitchingResult pairwiseShift : pairwiseShifts )
 		{
 			if ( !pairwiseShift.getIsValidOverlap() )
-				throw new Exception( "invalid pairwise match" );
+			{
+				++numInvalidPairwiseShifts;
+				continue;
+			}
 
 			final double[] estimatedMovingSubTileMiddlePointInFixedTile = PairwiseTileOperations.mapMovingSubTileMiddlePointIntoFixedTile(
 					pairwiseShift.getSubTilePair().toArray(),
@@ -215,11 +220,9 @@ public class EvaluatePairwiseConfigurationAgainstGroundtruth
 				}
 			}
 		}
-
-		if ( numMatches != pairwiseShifts.size() )
-			throw new Exception( "number of pairwise shifts does not match" );
-
 		avgError /= numMatches;
+
+		System.out.println( "Skipped " + numInvalidPairwiseShifts + " invalid shifts" );
 
 		System.out.println( System.lineSeparator() + String.format( "avg.error=%.2fpx, max.error=%.2fpx", avgError, maxError ) );
 

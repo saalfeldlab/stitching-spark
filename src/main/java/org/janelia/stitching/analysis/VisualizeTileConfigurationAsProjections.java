@@ -15,6 +15,7 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import org.janelia.dataaccess.DataProvider;
@@ -701,7 +702,7 @@ public class VisualizeTileConfigurationAsProjections
 			}
 		}
 
-		final List< Integer > collinearConfigurationTileIndexes = new ArrayList<>(), coplanarConfigurationTileIndexes = new ArrayList<>();
+		final Set< Integer > collinearConfigurationTileIndexes = new TreeSet<>(), coplanarConfigurationTileIndexes = new TreeSet<>();
 
 		for ( final Entry< Integer, List< SubTile > > entry : tileIndexToItsSubTiles.entrySet() )
 		{

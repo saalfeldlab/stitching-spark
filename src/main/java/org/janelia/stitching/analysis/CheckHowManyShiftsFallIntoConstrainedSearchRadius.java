@@ -33,7 +33,7 @@ public class CheckHowManyShiftsFallIntoConstrainedSearchRadius
 
 		for ( final SerializablePairWiseStitchingResult pairwiseShift : pairwiseShifts )
 		{
-			if ( !pairwiseShift.getIsValidOverlap() || pairwiseShift.getOffset() == null )
+			if ( !pairwiseShift.getIsValidOverlap() )
 			{
 				++numInvalidShifts;
 				continue;
