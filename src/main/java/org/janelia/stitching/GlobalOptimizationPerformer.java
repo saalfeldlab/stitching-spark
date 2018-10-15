@@ -301,9 +301,7 @@ public class GlobalOptimizationPerformer
 				else if ( CheckSubTileMatchesCoplanarity.isCoplanar( localSubTilePositions ) )
 				{
 					// coplanar, fallback to similarity
-					// UPD: Replacing with similarity still yields bad tile transforms. Replacing with translation is safe and generates good and consistent results.
-//					replacementModel = new SimilarityModel3D();
-					replacementModel = new TranslationModel3D();
+					replacementModel = new SimilarityModel3D();
 					++numCoplanarTileConfigs;
 				}
 				else
