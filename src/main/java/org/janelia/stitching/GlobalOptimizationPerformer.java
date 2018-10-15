@@ -263,6 +263,7 @@ public class GlobalOptimizationPerformer
 		return movingIntoFixedPointMatch;
 	}
 
+	@SuppressWarnings( { "rawtypes", "unchecked" } )
 	private static Pair< Integer, Integer > simplifyTileModelsIfNeeded(
 			final Set< IndexedTile< ? > > tilesSet,
 			final Map< IndexedTile< ? >, List< Interval > > tileToMatchedSubTiles )
@@ -320,9 +321,24 @@ public class GlobalOptimizationPerformer
 
 			if ( replacementModel != null )
 			{
-				@SuppressWarnings( { "rawtypes", "unchecked" } )
+				final Model< ? > replacementInterpolatedModel;
+				if ( tile.getModel() instanceof InterpolatedModel && !( replacementModel instanceof TranslationModel2D || replacementModel instanceof TranslationModel3D ) )
+				{
+					final InterpolatedModel< ?, ?, ? > interpolatedModel = ( InterpolatedModel< ?, ?, ? > ) tile.getModel();
+					replacementInterpolatedModel = TileModelFactory.createInterpolatedModel(
+							dim,
+							( Model ) replacementModel,
+							( Model ) interpolatedModel.getB(),
+							interpolatedModel.getLambda()
+						);
+				}
+				else
+				{
+					replacementInterpolatedModel = replacementModel;
+				}
+
 				final IndexedTile< ? > replacementTile = new IndexedTile(
-						replacementModel,
+						replacementInterpolatedModel,
 						tile.getIndex()
 					);
 
