@@ -23,6 +23,7 @@ import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
+import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
 import mpicbg.models.TranslationModel2D;
@@ -130,11 +131,6 @@ public class GlobalOptimizationPerformer
 
 		remainingPairs = countRemainingPairs( tilesSet, subTilePairwiseMatches );
 
-		// if some of the tiles do not have enough point matches for a high-order model, fall back to simpler model
-		final Pair< Integer, Integer > tileModelsSimplificationResult = simplifyTileModelsIfNeeded( tilesSet, tileToMatchedSubTiles );
-		numCollinearTileConfigs = tileModelsSimplificationResult.getA();
-		numCoplanarTileConfigs = tileModelsSimplificationResult.getB();
-
 		// if all tiles have underlying translation models, consider this stitching configuration to be translation-only
 		translationOnlyStitching = true;
 		for ( final IndexedTile< ? > tile : tilesSet )
@@ -144,6 +140,14 @@ public class GlobalOptimizationPerformer
 				translationOnlyStitching = false;
 				break;
 			}
+		}
+
+		if ( !translationOnlyStitching )
+		{
+			// if some of the tiles do not have enough point matches for a high-order model, fall back to simpler model
+			final Pair< Integer, Integer > tileModelsSimplificationResult = simplifyTileModelsIfNeeded( tilesSet, tileToMatchedSubTiles );
+			numCollinearTileConfigs = tileModelsSimplificationResult.getA();
+			numCoplanarTileConfigs = tileModelsSimplificationResult.getB();
 		}
 
 		final TileConfiguration tc = new TileConfiguration();
