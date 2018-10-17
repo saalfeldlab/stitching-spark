@@ -6,7 +6,7 @@ import java.util.Collection;
 *
 * @author Igor Pisarev &lt;pisarevi@janelia.hhmi.org&gt;
 */
-public class IndependentlyInterpolatedModel< A extends Model< A >, B extends Model< B >, M extends IndependentlyInterpolatedModel< A, B, M > > extends AbstractModel< M >
+public abstract class IndependentlyInterpolatedModel< A extends Model< A >, B extends Model< B >, M extends IndependentlyInterpolatedModel< A, B, M > > extends AbstractModel< M >
 {
 	private static final long serialVersionUID = -3975559034238200788L;
 
@@ -20,6 +20,8 @@ public class IndependentlyInterpolatedModel< A extends Model< A >, B extends Mod
 		this.b = b;
 		this.lambdas = lambdas;
 	}
+
+	public abstract void interpolate();
 
 	public A getA()
 	{
@@ -64,12 +66,12 @@ public class IndependentlyInterpolatedModel< A extends Model< A >, B extends Mod
 	}
 
 	@Override
-	public M copy()
+	public void reset()
 	{
-		@SuppressWarnings( "unchecked" )
-		final M copy = ( M )new IndependentlyInterpolatedModel< A, B, M >( a.copy(), b.copy(), lambdas.clone() );
-		copy.cost = cost;
-		return copy;
+		a.reset();
+		b.reset();
+		cost = Double.MAX_VALUE;
+		interpolate();
 	}
 
 	@Override

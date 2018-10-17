@@ -231,6 +231,12 @@ public class FixedScalingAffineModel1D extends AbstractAffineModel1D< FixedScali
 	}
 
 	@Override
+	public void reset()
+	{
+		set( new FixedScalingAffineModel1D() );
+	}
+
+	@Override
 	public FixedScalingAffineModel1D copy()
 	{
 		final FixedScalingAffineModel1D m = new FixedScalingAffineModel1D();

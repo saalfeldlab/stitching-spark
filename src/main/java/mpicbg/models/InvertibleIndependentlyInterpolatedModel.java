@@ -4,7 +4,7 @@ package mpicbg.models;
 *
 * @author Igor Pisarev &lt;pisarevi@janelia.hhmi.org&gt;
 */
-public class InvertibleIndependentlyInterpolatedModel<
+public abstract class InvertibleIndependentlyInterpolatedModel<
 		A extends Model< A > & InvertibleCoordinateTransform,
 		B extends Model< B > & InvertibleCoordinateTransform,
 		M extends InvertibleIndependentlyInterpolatedModel< A, B, M > > extends IndependentlyInterpolatedModel< A, B, M > implements InvertibleCoordinateTransform
@@ -14,15 +14,6 @@ public class InvertibleIndependentlyInterpolatedModel<
 	public InvertibleIndependentlyInterpolatedModel( final A a, final B b, final double... lambdas )
 	{
 		super( a, b, lambdas );
-	}
-
-	@Override
-	public M copy()
-	{
-		@SuppressWarnings( "unchecked" )
-		final M copy = ( M )new InvertibleIndependentlyInterpolatedModel< A, B, M >( a.copy(), b.copy(), lambdas.clone() );
-		copy.cost = cost;
-		return copy;
 	}
 
 	@Override
@@ -44,14 +35,5 @@ public class InvertibleIndependentlyInterpolatedModel<
 			final double dd = copy[ d ] - point[ d ];
 			point[ d ] += lambdas[ d ] * dd;
 		}
-	}
-
-	@Override
-	public InvertibleCoordinateTransform createInverse()
-	{
-		@SuppressWarnings( "unchecked" )
-		final InvertibleIndependentlyInterpolatedModel< A, B, M > inverse = new InvertibleIndependentlyInterpolatedModel< >( ( A )a.createInverse(), ( B )b.createInverse(), lambdas.clone() );
-		inverse.cost = cost;
-		return inverse;
 	}
 }

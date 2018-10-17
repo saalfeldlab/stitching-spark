@@ -226,6 +226,12 @@ public class FixedTranslationAffineModel1D extends AbstractAffineModel1D< FixedT
 	}
 
 	@Override
+	public void reset()
+	{
+		set( new FixedTranslationAffineModel1D() );
+	}
+
+	@Override
 	public FixedTranslationAffineModel1D copy()
 	{
 		final FixedTranslationAffineModel1D m = new FixedTranslationAffineModel1D();
