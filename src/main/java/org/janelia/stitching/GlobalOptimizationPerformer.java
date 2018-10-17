@@ -3,7 +3,6 @@ package org.janelia.stitching;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -13,8 +12,11 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.commons.lang3.NotImplementedException;
 import org.janelia.util.ComparableTuple;
 
+import mpicbg.models.AffineModel2D;
+import mpicbg.models.AffineModel3D;
 import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.IndexedTile;
@@ -23,6 +25,9 @@ import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
+import mpicbg.models.RigidModel2D;
+import mpicbg.models.RigidModel3D;
+import mpicbg.models.SimilarityModel2D;
 import mpicbg.models.SimilarityModel3D;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
@@ -36,6 +41,7 @@ import net.imglib2.util.ValuePair;
 public class GlobalOptimizationPerformer
 {
 	private static final double DAMPNESS_FACTOR = 0.9;
+	private static final int OPTIMIZER_ITERATIONS = 5000;
 
 	private static final int fixedIndex = 0;
 	private static final int movingIndex = 1;
@@ -153,59 +159,12 @@ public class GlobalOptimizationPerformer
 		final TileConfiguration tc = new TileConfiguration();
 		tc.addTiles( tilesSet );
 
-		final int iterations = 5000;
 		long elapsed = System.nanoTime();
 
 		if ( translationOnlyStitching )
-		{
-			tc.preAlign();
-			tc.optimizeSilently(
-					new ErrorStatistic( iterations + 1 ),
-					0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
-					iterations,
-					iterations,
-					1
-				);
-		}
+			optimizeTranslation( tc );
 		else
-		{
-			// first, prealign with translation-only
-			final Map< IndexedTile< ? >, Double > originalLambdas = new HashMap<>();
-			for ( final IndexedTile< ? > tile : tilesSet )
-			{
-				if ( tile.getModel() instanceof InterpolatedModel )
-				{
-					final InterpolatedModel< ?, ?, ? > model = ( InterpolatedModel< ?, ?, ? > ) tile.getModel();
-					originalLambdas.put( tile, model.getLambda() );
-					model.setLambda( 1 );
-				}
-			}
-			tc.preAlign();
-			tc.optimizeSilently(
-					new ErrorStatistic( iterations + 1 ),
-					0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
-					iterations,
-					iterations,
-					1
-				);
-
-			// then, solve using original models
-			for ( final IndexedTile< ? > tile : tilesSet )
-			{
-				if ( tile.getModel() instanceof InterpolatedModel )
-				{
-					final InterpolatedModel< ?, ?, ? > model = ( InterpolatedModel< ?, ?, ? > ) tile.getModel();
-					model.setLambda( originalLambdas.get( tile ) );
-				}
-			}
-			tc.optimizeSilently(
-					new ErrorStatistic( iterations + 1 ),
-					0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
-					iterations,
-					iterations,
-					DAMPNESS_FACTOR
-				);
-		}
+			optimizeHigherOrder( tc );
 
 		elapsed = System.nanoTime() - elapsed;
 
@@ -270,7 +229,6 @@ public class GlobalOptimizationPerformer
 	{
 		int numCollinearTileConfigs = 0, numCoplanarTileConfigs = 0;
 
-		final Set< IndexedTile< ? > > newTilesSet = new HashSet<>();
 		for ( final IndexedTile< ? > tile : tilesSet )
 		{
 			if ( tile.getMatches().isEmpty() )
@@ -321,46 +279,23 @@ public class GlobalOptimizationPerformer
 
 			if ( replacementModel != null )
 			{
-				final Model< ? > replacementInterpolatedModel;
 				if ( tile.getModel() instanceof InterpolatedModel && !( replacementModel instanceof TranslationModel2D || replacementModel instanceof TranslationModel3D ) )
 				{
 					final InterpolatedModel< ?, ?, ? > interpolatedModel = ( InterpolatedModel< ?, ?, ? > ) tile.getModel();
-					replacementInterpolatedModel = TileModelFactory.createInterpolatedModel(
+					final Model< ? > replacementInterpolatedModel = TileModelFactory.createInterpolatedModel(
 							dim,
 							( Model ) replacementModel,
 							( Model ) interpolatedModel.getB(),
 							interpolatedModel.getLambda()
 						);
+					( ( IndexedTile ) tile ).setModel( replacementInterpolatedModel );
 				}
 				else
 				{
-					replacementInterpolatedModel = replacementModel;
+					( ( IndexedTile ) tile ).setModel( replacementModel );
 				}
-
-				final IndexedTile< ? > replacementTile = new IndexedTile(
-						replacementInterpolatedModel,
-						tile.getIndex()
-					);
-
-				replacementTile.addMatches( tile.getMatches() );
-				for ( final Tile< ? > connectedTile : tile.getConnectedTiles() )
-				{
-					// do not use removeConnectedTile() because it also removes corresponding point matches from both sides which we need to keep
-					connectedTile.getConnectedTiles().remove( tile );
-					connectedTile.addConnectedTile( replacementTile );
-					replacementTile.addConnectedTile( connectedTile );
-				}
-
-				newTilesSet.add( replacementTile );
-			}
-			else
-			{
-				newTilesSet.add( tile );
 			}
 		}
-
-		tilesSet.clear();
-		tilesSet.addAll( newTilesSet );
 
 		return new ValuePair<>( numCollinearTileConfigs, numCoplanarTileConfigs );
 	}
@@ -410,6 +345,114 @@ public class GlobalOptimizationPerformer
 			if ( remainingTilesSet.contains( subTilePairwiseMatch.getFixedTile() ) && remainingTilesSet.contains( subTilePairwiseMatch.getMovingTile() ) )
 				++remainingPairs;
 		return remainingPairs;
+	}
+
+	private static void optimizeTranslation( final TileConfiguration tc ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		tc.preAlign();
+		tc.optimizeSilently(
+				new ErrorStatistic( OPTIMIZER_ITERATIONS + 1 ),
+				0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
+				OPTIMIZER_ITERATIONS,
+				OPTIMIZER_ITERATIONS,
+				1
+			);
+	}
+
+	@SuppressWarnings( { "rawtypes", "unchecked" } )
+	private static void optimizeHigherOrder( final TileConfiguration tc ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		final Set< IndexedTile< ? > > tilesSet = ( Set ) tc.getTiles();
+
+		// first, prealign with translation-only
+		final Map< IndexedTile< ? >, Model< ? > > fullModels = new HashMap<>();
+		for ( final IndexedTile< ? > tile : tilesSet )
+		{
+			fullModels.put( tile, tile.getModel() );
+			final int dim = tile.getMatches().iterator().next().getP1().getL().length;
+			tile.setModel( TileModelFactory.createTranslationModel( dim ) );
+		}
+		optimizeTranslation( tc );
+
+		// then, solve using full models
+		for ( final IndexedTile tile : tilesSet )
+		{
+			final Model< ? > fullModel = fullModels.get( tile );
+			initializeModelWithTranslation( fullModel, tile.getModel() );
+			tile.setModel( fullModel );
+		}
+		tc.optimizeSilently(
+				new ErrorStatistic( OPTIMIZER_ITERATIONS + 1 ),
+				0, // max allowed error -- does not matter as maxPlateauWidth=maxIterations
+				OPTIMIZER_ITERATIONS,
+				OPTIMIZER_ITERATIONS,
+				DAMPNESS_FACTOR
+			);
+	}
+
+	private static void initializeModelWithTranslation( final Model< ? > model, final Model< ? > translationModel )
+	{
+		if ( model instanceof InterpolatedModel )
+		{
+			final InterpolatedModel< ?, ?, ? > interpolatedModel = ( InterpolatedModel< ?, ?, ? > ) model;
+			initializeModelWithTranslation( interpolatedModel.getA(), translationModel );
+			initializeModelWithTranslation( interpolatedModel.getB(), translationModel );
+			interpolatedModel.interpolate();
+		}
+		else if ( translationModel instanceof TranslationModel2D )
+			initializeModelWithTranslation2D( model, ( TranslationModel2D ) translationModel );
+		else if ( translationModel instanceof TranslationModel3D )
+			initializeModelWithTranslation3D( model, ( TranslationModel3D ) translationModel );
+		else
+			throw new IllegalArgumentException( "expected TranslationModel2D or TranslationModel3D, got " + translationModel );
+	}
+
+	private static void initializeModelWithTranslation2D( final Model< ? > model, final TranslationModel2D translationModel )
+	{
+		if ( model instanceof TranslationModel2D )
+		{
+			( ( TranslationModel2D ) model ).set( translationModel );
+		}
+		else if ( model instanceof RigidModel2D )
+		{
+			( ( RigidModel2D ) model ).set( translationModel );
+		}
+		else if ( model instanceof SimilarityModel2D )
+		{
+			( ( SimilarityModel2D ) model ).set( translationModel );
+		}
+		else if ( model instanceof AffineModel2D )
+		{
+			( ( AffineModel2D ) model ).set( translationModel );
+		}
+		else
+		{
+			throw new NotImplementedException( "model initialization is not implemented yet for " + model );
+		}
+	}
+
+	private static void initializeModelWithTranslation3D( final Model< ? > model, final TranslationModel3D translationModel )
+	{
+		if ( model instanceof TranslationModel3D )
+		{
+			( ( TranslationModel3D ) model ).set( translationModel );
+		}
+		else if ( model instanceof RigidModel3D )
+		{
+			( ( RigidModel3D ) model ).set( translationModel );
+		}
+		else if ( model instanceof SimilarityModel3D )
+		{
+			( ( SimilarityModel3D ) model ).set( translationModel );
+		}
+		else if ( model instanceof AffineModel3D )
+		{
+			( ( AffineModel3D ) model ).set( translationModel );
+		}
+		else
+		{
+			throw new NotImplementedException( "model initialization is not implemented yet for " + model );
+		}
 	}
 
 	private static Map< Integer, IndexedTile< ? > > getLostTiles( final Set< IndexedTile< ? > > tilesSet, final List< SubTilePairwiseMatch > subTilePairwiseMatches )
