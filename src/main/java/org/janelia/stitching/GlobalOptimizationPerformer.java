@@ -20,6 +20,8 @@ import mpicbg.models.AffineModel3D;
 import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.IndexedTile;
+import mpicbg.models.InterpolatedAffineModel2D;
+import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.InterpolatedModel;
 import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
@@ -393,18 +395,26 @@ public class GlobalOptimizationPerformer
 	private static void initializeModelWithTranslation( final Model< ? > model, final Model< ? > translationModel )
 	{
 		if ( model instanceof InterpolatedModel )
-		{
-			final InterpolatedModel< ?, ?, ? > interpolatedModel = ( InterpolatedModel< ?, ?, ? > ) model;
-			initializeModelWithTranslation( interpolatedModel.getA(), translationModel );
-			initializeModelWithTranslation( interpolatedModel.getB(), translationModel );
-			interpolatedModel.interpolate();
-		}
+			initializeInterpolatedModelWithTranslation( ( InterpolatedModel< ?, ?, ? > ) model, translationModel );
 		else if ( translationModel instanceof TranslationModel2D )
 			initializeModelWithTranslation2D( model, ( TranslationModel2D ) translationModel );
 		else if ( translationModel instanceof TranslationModel3D )
 			initializeModelWithTranslation3D( model, ( TranslationModel3D ) translationModel );
 		else
 			throw new IllegalArgumentException( "expected TranslationModel2D or TranslationModel3D, got " + translationModel );
+	}
+
+	private static void initializeInterpolatedModelWithTranslation( final InterpolatedModel< ?, ?, ? > interpolatedModel, final Model< ? > translationModel )
+	{
+		initializeModelWithTranslation( interpolatedModel.getA(), translationModel );
+		initializeModelWithTranslation( interpolatedModel.getB(), translationModel );
+
+		if ( interpolatedModel instanceof InterpolatedAffineModel2D )
+			( ( InterpolatedAffineModel2D< ?, ? > ) interpolatedModel ).interpolate();
+		else if ( interpolatedModel instanceof InterpolatedAffineModel3D )
+			( ( InterpolatedAffineModel3D< ?, ? > ) interpolatedModel ).interpolate();
+		else
+			throw new IllegalArgumentException( "expected InterpolatedAffineModel2D or InterpolatedAffineModel3D, got " + interpolatedModel );
 	}
 
 	private static void initializeModelWithTranslation2D( final Model< ? > model, final TranslationModel2D translationModel )
