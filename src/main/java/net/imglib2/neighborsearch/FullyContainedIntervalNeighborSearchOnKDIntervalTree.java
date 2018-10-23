@@ -35,56 +35,47 @@
 package net.imglib2.neighborsearch;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import net.imglib2.KDTree;
-import net.imglib2.KDTreeNode;
+import net.imglib2.KDIntervalTree;
+import net.imglib2.KDIntervalTree.ValueWithId;
 import net.imglib2.RealInterval;
-import net.imglib2.RealLocalizable;
 
-public class IntervalNeighborSearchOnKDTree< T > implements IntervalNeighborSearch< T >
+public class FullyContainedIntervalNeighborSearchOnKDIntervalTree< T > implements IntervalNeighborSearch< T >
 {
-	protected final KDTree< T > tree;
+	protected final IntervalNeighborSearchOnKDTree< ValueWithId< T > > intervalNeighborSearchOnCornerPointsKDTree;
+	protected final int numFullyContainedCornerPoints;
 
-	public IntervalNeighborSearchOnKDTree( final KDTree< T > tree )
+	public FullyContainedIntervalNeighborSearchOnKDIntervalTree( final KDIntervalTree< T > intervalTree )
 	{
-		this.tree = tree;
+		intervalNeighborSearchOnCornerPointsKDTree = new IntervalNeighborSearchOnKDTree<>( intervalTree.getIntervalsCornerPointsKDTree() );
+		numFullyContainedCornerPoints = 1 << numDimensions();
 	}
 
 	@Override
 	public List< T > search( final RealInterval interval )
 	{
-		final List< T > found = new ArrayList<>();
-		searchNode( tree.getRoot(), interval, found );
-		return found;
+		final List< ValueWithId< T > > found = intervalNeighborSearchOnCornerPointsKDTree.search( interval );
+		final Map< Integer, T > foundUnique = new LinkedHashMap<>();
+		found.forEach( valueWithId -> foundUnique.put( valueWithId.id, valueWithId.value ) );
+
+		// count how many times each id occurs in the resulting set
+		final Map< Integer, Integer > foundIdToCount = new HashMap<>();
+		found.forEach( valueWithId -> foundIdToCount.put( valueWithId.id, foundIdToCount.getOrDefault( valueWithId.id, 0 ) + 1 ) );
+
+		// filter entries whose number of occurrences is equal to total number of corners
+		final Stream< T > foundFullyContainedStream = foundUnique.keySet().stream().filter( id -> foundIdToCount.get( id ) == numFullyContainedCornerPoints ).map( id -> foundUnique.get( id ) );
+		return new ArrayList<>( foundFullyContainedStream.collect( Collectors.toList() ) );
 	}
 
 	@Override
 	public int numDimensions()
 	{
-		return tree.numDimensions();
-	}
-
-	protected void searchNode( final KDTreeNode< T > current, final RealInterval interval, final List< T > found )
-	{
-		if ( testWithinInterval( current, interval ) )
-			found.add( current.get() );
-
-		final boolean onlyLeft  = current.getSplitCoordinate() > interval.realMax( current.getSplitDimension() );
-		final boolean onlyRight = current.getSplitCoordinate() < interval.realMin( current.getSplitDimension() );
-
-		if ( current.left != null && ( onlyLeft || onlyLeft == onlyRight ) )
-			searchNode( current.left, interval, found );
-
-		if ( current.right != null && ( onlyRight || onlyLeft == onlyRight ) )
-			searchNode( current.right, interval, found );
-	}
-
-	private static boolean testWithinInterval( final RealLocalizable pos, final RealInterval interval )
-	{
-		for ( int d = 0; d < pos.numDimensions(); ++d )
-			if ( pos.getDoublePosition( d ) < interval.realMin( d ) || pos.getDoublePosition( d ) > interval.realMax( d ) )
-				return false;
-		return true;
+		return intervalNeighborSearchOnCornerPointsKDTree.numDimensions();
 	}
 }
