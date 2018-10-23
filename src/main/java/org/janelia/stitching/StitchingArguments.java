@@ -41,13 +41,13 @@ public class StitchingArguments implements Serializable {
 			usage = "Weighted predictions for tile positions in the rematching phase")
 	private boolean weightedPredictions = false;
 
-	@Option(name = "-sr", aliases = { "--sphereradius" }, required = false,
+	@Option(name = "--sphereradius", required = false,
 			usage = "Radius of search sphere as a percent of tile size (when prediction model is not available, usually on the first stitching iteration)")
 	private double errorEllipseRadiusAsTileSizeRatio = 0.1;
 
-	@Option(name = "-sw", aliases = { "--searchwindow" }, required = false,
+	@Option(name = "--searchwindow", required = false,
 			usage = "Search window size for local offset statistics in terms of number of tiles")
-	private String statsWindowSizeTiles = "3,3,3";
+	private String statsWindowSizeAsTileCount = "3,3,3";
 
 	@Option(name = "-c", aliases = { "--fusioncell" }, required = false,
 			usage = "Size of an individual tile when fusing")
@@ -203,7 +203,7 @@ public class StitchingArguments implements Serializable {
 	public double searchRadiusMultiplier() { return searchRadiusMultiplier; }
 	public boolean constrainMatchingOnFirstIteration() { return constrainMatchingOnFirstIteration; }
 	public double errorEllipseRadiusAsTileSizeRatio() { return errorEllipseRadiusAsTileSizeRatio; }
-	public int[] searchWindowSizeTiles() { return Conversions.toIntArray( parseArray( statsWindowSizeTiles ) ); }
+	public int[] searchWindowSizeAsTileCount() { return Conversions.toIntArray( parseArray( statsWindowSizeAsTileCount ) ); }
 	public boolean weightedPredictions() { return weightedPredictions; }
 	public long[] padding() { return parseArray( padding ); }
 	public int numCheckPeaks() { return numCheckPeaks; }

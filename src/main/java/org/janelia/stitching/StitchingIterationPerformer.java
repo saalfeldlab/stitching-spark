@@ -156,7 +156,7 @@ public class StitchingIterationPerformer< U extends NativeType< U > & RealType< 
 			return null;
 
 		final TileInfo[] previousStitchedTiles = getStitchedTilesFromPreviousIteration();
-		final double[] estimationWindow = NeighboringTilesLocator.getSearchWindowSize( previousStitchedTiles[ 0 ].getSize(), job.getArgs().searchWindowSizeTiles() );
+		final double[] estimationWindow = NeighboringTilesLocator.getSearchWindowSize( previousStitchedTiles[ 0 ].getSize(), job.getArgs().searchWindowSizeAsTileCount() );
 
 		if ( logWriter != null )
 		{

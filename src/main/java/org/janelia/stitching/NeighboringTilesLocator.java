@@ -99,11 +99,11 @@ public class NeighboringTilesLocator implements Serializable
 		return neighboringTiles;
 	}
 
-	public static double[] getSearchWindowSize( final long[] tileSize, final int[] searchWindowTileSize )
+	public static double[] getSearchWindowSize( final long[] tileSize, final int[] searchWindowSizeAsTileCount )
 	{
 		final double[] searchWindowSize = new double[ tileSize.length ];
 		for ( int d = 0; d < tileSize.length; ++d )
-			searchWindowSize[ d ] = tileSize[ d ] * searchWindowTileSize[ d ];
+			searchWindowSize[ d ] = tileSize[ d ] * searchWindowSizeAsTileCount[ d ];
 		return searchWindowSize;
 	}
 
