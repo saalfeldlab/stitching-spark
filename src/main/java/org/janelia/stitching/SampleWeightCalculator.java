@@ -7,11 +7,11 @@ import net.imglib2.RealPoint;
 
 public class SampleWeightCalculator
 {
-	private final boolean equalWeights;
+	private final boolean weighted;
 
-	public SampleWeightCalculator( final boolean equalWeights )
+	public SampleWeightCalculator( final boolean weighted )
 	{
-		this.equalWeights = equalWeights;
+		this.weighted = weighted;
 	}
 
 	public double[] calculateSampleWeights( final RealPoint point, final List< RealPoint > samples )
@@ -19,11 +19,7 @@ public class SampleWeightCalculator
 		final double[] sampleWeights = new double[ samples.size() ];
 
 		// calculate weights
-		if ( equalWeights )
-		{
-			Arrays.fill( sampleWeights, 1 );
-		}
-		else
+		if ( weighted )
 		{
 			for ( int i = 0; i < sampleWeights.length; ++i )
 			{
@@ -36,6 +32,10 @@ public class SampleWeightCalculator
 
 				sampleWeights[ i ] = 1. / distanceSqr;
 			}
+		}
+		else
+		{
+			Arrays.fill( sampleWeights, 1 );
 		}
 
 		// normalize weights
