@@ -195,6 +195,21 @@ public class TileOperations
 	}
 
 	/**
+	 * Returns stage position of the middle point in the given tile.
+	 *
+	 * @param tile
+	 * @return
+	 */
+	public static double[] getTileMiddlePointStagePosition( final TileInfo tile )
+	{
+		final double[] middlePoint = new double[ tile.numDimensions() ];
+		final RealInterval stageInterval = tile.getStageInterval();
+		for ( int d = 0; d < middlePoint.length; ++d )
+			middlePoint[ d ] = ( stageInterval.realMin( d ) + stageInterval.realMax( d ) ) / 2;
+		return middlePoint;
+	}
+
+	/**
 	 * @return an integer bounding box of a collection of tiles
 	 */
 	public static Interval getCollectionBoundaries( final TileInfo[] tiles )

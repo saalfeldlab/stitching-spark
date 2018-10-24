@@ -109,7 +109,7 @@ public class NeighboringTilesLocator implements Serializable
 
 	public Interval getSearchWindowInterval( final TileInfo tile )
 	{
-		return getSearchWindowInterval( new RealPoint( tile.getStagePosition() ) );
+		return getSearchWindowInterval( new RealPoint( TileOperations.getTileMiddlePointStagePosition( tile ) ) );
 	}
 
 	public Interval getSearchWindowInterval( final RealPoint point )
