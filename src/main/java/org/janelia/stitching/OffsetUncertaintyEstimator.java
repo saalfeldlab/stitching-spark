@@ -116,7 +116,7 @@ public class OffsetUncertaintyEstimator implements Serializable
 		return estimateSearchRadius( tile, neighboringTilesLocator.findTilesWithinWindow( estimationWindow ) );
 	}
 
-	public EstimatedWorldSearchRadius estimateSearchRadiusKNearestNeighbors( final TileInfo tile, final int numNearestNeighbors ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
+	/*public EstimatedWorldSearchRadius estimateSearchRadiusKNearestNeighbors( final TileInfo tile, final int numNearestNeighbors ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
 		return estimateSearchRadius(
 				tile,
@@ -125,7 +125,7 @@ public class OffsetUncertaintyEstimator implements Serializable
 						numNearestNeighbors
 					)
 			);
-	}
+	}*/
 
 	private EstimatedWorldSearchRadius estimateSearchRadius( final TileInfo tile, final Set< TileInfo > neighboringTiles ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{

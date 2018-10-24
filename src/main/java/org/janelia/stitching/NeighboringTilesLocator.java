@@ -89,7 +89,7 @@ public class NeighboringTilesLocator implements Serializable
 		return neighboringTiles;
 	}
 
-	public Set< TileInfo > findNearestTiles( final RealPoint point, final int numNearestNeighbors )
+	/*public Set< TileInfo > findNearestTiles( final RealPoint point, final int numNearestNeighbors )
 	{
 		final KNearestNeighborSearchOnKDTree< TileInfo > neighborsSearch = new KNearestNeighborSearchOnKDTree<>( kdTree, numNearestNeighbors );
 		neighborsSearch.search( point );
@@ -97,7 +97,7 @@ public class NeighboringTilesLocator implements Serializable
 		for ( int i = 0; i < neighborsSearch.getK(); ++i )
 			neighboringTiles.add( neighborsSearch.getSampler( i ).get() );
 		return neighboringTiles;
-	}
+	}*/
 
 	public static double[] getSearchWindowSize( final long[] tileSize, final int[] searchWindowSizeAsTileCount )
 	{
