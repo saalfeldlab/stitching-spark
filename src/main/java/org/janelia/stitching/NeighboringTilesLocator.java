@@ -9,11 +9,11 @@ import java.util.Set;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
-import net.imglib2.KDTree;
-import net.imglib2.RealLocalizable;
+import net.imglib2.KDIntervalTree;
+import net.imglib2.RealInterval;
 import net.imglib2.RealPoint;
-import net.imglib2.neighborsearch.IntervalNeighborSearchOnKDTree;
-import net.imglib2.neighborsearch.KNearestNeighborSearchOnKDTree;
+import net.imglib2.neighborsearch.IntervalNeighborSearch;
+import net.imglib2.neighborsearch.OverlappingIntervalNeighborSearchOnKDIntervalTree;
 import net.imglib2.util.Intervals;
 
 public class NeighboringTilesLocator implements Serializable
@@ -22,7 +22,7 @@ public class NeighboringTilesLocator implements Serializable
 
 	private final double[] searchWindowSize;
 	private final int subdivisionGridSize;
-	private final KDTree< TileInfo > kdTree;
+	private final KDIntervalTree< TileInfo > kdIntervalTree;
 
 	public NeighboringTilesLocator(
 			final TileInfo[] tiles,
@@ -37,12 +37,12 @@ public class NeighboringTilesLocator implements Serializable
 			if ( tile.getTransform() != null )
 				tilesWithStitchedTransform.add( tile );
 
-		final List< RealLocalizable > stageSubsetPositions = new ArrayList<>();
+		final List< RealInterval > stageTileIntervals = new ArrayList<>();
 		for ( final TileInfo tileWithStitchedTransform : tilesWithStitchedTransform )
-			stageSubsetPositions.add( new RealPoint( tileWithStitchedTransform.getStagePosition() ) );
+			stageTileIntervals.add( tileWithStitchedTransform.getStageInterval() );
 
 		// build a search tree to be able to look up neighboring tiles by stage position
-		kdTree = new KDTree<>( tilesWithStitchedTransform, stageSubsetPositions );
+		kdIntervalTree = new KDIntervalTree<>( tilesWithStitchedTransform, stageTileIntervals );
 	}
 
 	public double[] getSearchWindowSize()
@@ -84,7 +84,7 @@ public class NeighboringTilesLocator implements Serializable
 
 	public Set< TileInfo > findTilesWithinWindow( final Interval estimationWindow )
 	{
-		final IntervalNeighborSearchOnKDTree< TileInfo > intervalSearch = new IntervalNeighborSearchOnKDTree<>( kdTree );
+		final IntervalNeighborSearch< TileInfo > intervalSearch = new OverlappingIntervalNeighborSearchOnKDIntervalTree<>( kdIntervalTree );
 		final Set< TileInfo > neighboringTiles = new HashSet<>( intervalSearch.search( estimationWindow ) );
 		return neighboringTiles;
 	}
