@@ -16,7 +16,7 @@ import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.util.Intervals;
 
-public class IntervalNeighborSearchTest
+public class IntervalNeighborSearchOnKDTreeTest
 {
 	@Test
 	public void test2D()
