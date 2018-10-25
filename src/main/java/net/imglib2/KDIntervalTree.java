@@ -8,7 +8,7 @@ import net.imglib2.iterator.IntervalIterator;
 
 public class KDIntervalTree< T > implements EuclideanSpace
 {
-	public final static class ValueWithId< T >
+	public final class ValueWithId
 	{
 		public final T value;
 		public final int id;
@@ -20,7 +20,7 @@ public class KDIntervalTree< T > implements EuclideanSpace
 		}
 	}
 
-	protected final KDTree< ValueWithId< T > > kdTree;
+	protected final KDTree< ValueWithId > kdTree;
 	protected final int size;
 	protected final int n;
 
@@ -45,7 +45,7 @@ public class KDIntervalTree< T > implements EuclideanSpace
 		n = intervals.iterator().next().numDimensions();
 		assert ( verifyDimensions( intervals, n ) );
 
-		final List< ValueWithId< T > > cornerValuesWithId = new ArrayList<>();
+		final List< ValueWithId > cornerValuesWithId = new ArrayList<>();
 		final List< RealPoint > corners = new ArrayList<>();
 
 		// generate points at every corner of each interval
@@ -66,7 +66,7 @@ public class KDIntervalTree< T > implements EuclideanSpace
 					intervalCornerPosition[ d ] = cornerIterator.getIntPosition( d ) == 0 ? interval.realMin( d ) : interval.realMax( d );
 
 				corners.add( new RealPoint( intervalCornerPosition ) );
-				cornerValuesWithId.add( new ValueWithId<>( value, i ) );
+				cornerValuesWithId.add( new ValueWithId( value, i ) );
 			}
 		}
 
@@ -92,7 +92,7 @@ public class KDIntervalTree< T > implements EuclideanSpace
 		return size;
 	}
 
-	public KDTree< ValueWithId< T > > getIntervalsCornerPointsKDTree()
+	public KDTree< ValueWithId > getIntervalsCornerPointsKDTree()
 	{
 		return kdTree;
 	}

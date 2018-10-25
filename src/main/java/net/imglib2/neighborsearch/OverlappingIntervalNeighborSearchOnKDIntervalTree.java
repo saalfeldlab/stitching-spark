@@ -40,14 +40,13 @@ import java.util.List;
 import java.util.Map;
 
 import net.imglib2.KDIntervalTree;
-import net.imglib2.KDIntervalTree.ValueWithId;
 import net.imglib2.KDTreeNode;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
 
 public class OverlappingIntervalNeighborSearchOnKDIntervalTree< T > implements IntervalNeighborSearch< T >
 {
-	protected final IntervalNeighborSearchOnKDTree< ValueWithId< T > > intervalNeighborSearchOnCornerPointsKDTree;
+	protected final IntervalNeighborSearchOnKDTree< KDIntervalTree< T >.ValueWithId > intervalNeighborSearchOnCornerPointsKDTree;
 
 	public OverlappingIntervalNeighborSearchOnKDIntervalTree( final KDIntervalTree< T > intervalTree )
 	{
@@ -58,7 +57,7 @@ public class OverlappingIntervalNeighborSearchOnKDIntervalTree< T > implements I
 	public List< T > search( final RealInterval interval )
 	{
 		// find corners contained inside the queried interval
-		final List< ValueWithId< T > > found = intervalNeighborSearchOnCornerPointsKDTree.search( interval );
+		final List< KDIntervalTree< T >.ValueWithId > found = intervalNeighborSearchOnCornerPointsKDTree.search( interval );
 		final Map< Integer, T > foundUnique = new LinkedHashMap<>();
 		found.forEach( valueWithId -> foundUnique.put( valueWithId.id, valueWithId.value ) );
 
@@ -81,13 +80,13 @@ public class OverlappingIntervalNeighborSearchOnKDIntervalTree< T > implements I
 	protected List< T > findFullyContaining( final RealInterval interval )
 	{
 		// find points with coordinates smaller than min of the queried interval in all dimensions
-		final List< ValueWithId< T > > foundLeft = new ArrayList<>();
+		final List< KDIntervalTree< T >.ValueWithId > foundLeft = new ArrayList<>();
 		findLeft( intervalNeighborSearchOnCornerPointsKDTree.tree.getRoot(), interval, foundLeft );
 		final Map< Integer, T > foundLeftUnique = new LinkedHashMap<>();
 		foundLeft.forEach( valueWithId -> foundLeftUnique.put( valueWithId.id, valueWithId.value ) );
 
 		// find points with coordinates larger than max of the queried interval in all dimensions
-		final List< ValueWithId< T > > foundRight = new ArrayList<>();
+		final List< KDIntervalTree< T >.ValueWithId > foundRight = new ArrayList<>();
 		findRight( intervalNeighborSearchOnCornerPointsKDTree.tree.getRoot(), interval, foundRight );
 		final Map< Integer, T > foundRightUnique = new LinkedHashMap<>();
 		foundRight.forEach( valueWithId -> foundRightUnique.put( valueWithId.id, valueWithId.value ) );
@@ -99,7 +98,7 @@ public class OverlappingIntervalNeighborSearchOnKDIntervalTree< T > implements I
 		return new ArrayList<>( foundUnique.values() );
 	}
 
-	protected static < T > void findLeft( final KDTreeNode< ValueWithId< T > > current, final RealInterval interval, final List< ValueWithId< T > > foundLeft )
+	protected static < T > void findLeft( final KDTreeNode< KDIntervalTree< T >.ValueWithId > current, final RealInterval interval, final List< KDIntervalTree< T >.ValueWithId > foundLeft )
 	{
 		if ( testLeft( current, interval ) )
 			foundLeft.add( current.get() );
@@ -124,7 +123,7 @@ public class OverlappingIntervalNeighborSearchOnKDIntervalTree< T > implements I
 		return pos.getDoublePosition( d ) < interval.realMin( d );
 	}
 
-	protected static < T > void findRight( final KDTreeNode< ValueWithId< T > > current, final RealInterval interval, final List< ValueWithId< T > > foundRight )
+	protected static < T > void findRight( final KDTreeNode< KDIntervalTree< T >.ValueWithId > current, final RealInterval interval, final List< KDIntervalTree< T >.ValueWithId > foundRight )
 	{
 		if ( testRight( current, interval ) )
 			foundRight.add( current.get() );

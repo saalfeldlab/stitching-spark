@@ -43,12 +43,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import net.imglib2.KDIntervalTree;
-import net.imglib2.KDIntervalTree.ValueWithId;
 import net.imglib2.RealInterval;
 
 public class FullyContainedIntervalNeighborSearchOnKDIntervalTree< T > implements IntervalNeighborSearch< T >
 {
-	protected final IntervalNeighborSearchOnKDTree< ValueWithId< T > > intervalNeighborSearchOnCornerPointsKDTree;
+	protected final IntervalNeighborSearchOnKDTree< KDIntervalTree< T >.ValueWithId > intervalNeighborSearchOnCornerPointsKDTree;
 	protected final int numFullyContainedCornerPoints;
 
 	public FullyContainedIntervalNeighborSearchOnKDIntervalTree( final KDIntervalTree< T > intervalTree )
@@ -60,7 +59,7 @@ public class FullyContainedIntervalNeighborSearchOnKDIntervalTree< T > implement
 	@Override
 	public List< T > search( final RealInterval interval )
 	{
-		final List< ValueWithId< T > > found = intervalNeighborSearchOnCornerPointsKDTree.search( interval );
+		final List< KDIntervalTree< T >.ValueWithId > found = intervalNeighborSearchOnCornerPointsKDTree.search( interval );
 		final Map< Integer, T > foundUnique = new LinkedHashMap<>();
 		found.forEach( valueWithId -> foundUnique.put( valueWithId.id, valueWithId.value ) );
 
