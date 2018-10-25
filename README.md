@@ -49,7 +49,7 @@ The application requires an input file containing the registered tiles configura
   "position" : [0.0, 0.0, 0.0],
   "size" : [991, 992, 880],
   "pixelResolution" : [0.097,0.097,0.18],
-  "imageType" : "GRAY16"
+  "type" : "GRAY16"
 },
 {
   "index" : 1,
@@ -57,7 +57,7 @@ The application requires an input file containing the registered tiles configura
   "position" : [716.932762003862, -694.0887500300357, -77.41783189603937],
   "size" : [991, 992, 953],
   "pixelResolution" : [0.097,0.097,0.18],
-  "imageType" : "GRAY16"
+  "type" : "GRAY16"
 }
 ]
 ```
