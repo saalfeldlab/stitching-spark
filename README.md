@@ -36,6 +36,11 @@ The scripts for starting the application are located under `startup-scripts/spar
 
 If running locally, you can access the Spark job tracker at http://localhost:4040/ to monitor the progress of the tasks.
 
+#### If running on public platforms such as AWS or Google Cloud:
+* Compile with `python build.py`. This will include embed required dependencies into the final package, except for the Spark which is provided by the respective target platform at runtime.
+* For running the pipeline, refer to the wiki page [Running on Google Cloud](https://github.com/saalfeldlab/stitching-spark/wiki/Running-on-Google-Cloud)
+* The currently used Spark version is **2.2.0** — make sure you're requesting the same version when submitting a job
+
 
 ### 2. Preparing input tile configuration files
 
