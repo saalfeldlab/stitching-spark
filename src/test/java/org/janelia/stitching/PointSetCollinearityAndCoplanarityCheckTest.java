@@ -11,6 +11,15 @@ import net.imglib2.RealPoint;
 
 public class PointSetCollinearityAndCoplanarityCheckTest
 {
+	private void testWithShuffle( final List< RealPoint > points, final boolean expectedResult )
+	{
+		for ( int i = 0; i < 100; ++i )
+		{
+			Collections.shuffle( points );
+			Assert.assertEquals( expectedResult, PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
+		}
+	}
+
 	@Test
 	public void testCollinearity2D()
 	{
@@ -19,11 +28,7 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 		points.add( new RealPoint( 22, 7 ) );
 		points.add( new RealPoint( 14, 3 ) );
 		points.add( new RealPoint( -5, -6.5 ) );
-		for ( int i = 0; i < 100; ++i )
-		{
-			Collections.shuffle( points );
-			Assert.assertTrue( PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
-		}
+		testWithShuffle( points, true );
 	}
 
 	@Test
@@ -34,11 +39,7 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 		points.add( new RealPoint( 5, 3 ) );
 		points.add( new RealPoint( -100, 3 ) );
 		points.add( new RealPoint( 1000, 3 ) );
-		for ( int i = 0; i < 100; ++i )
-		{
-			Collections.shuffle( points );
-			Assert.assertTrue( PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
-		}
+		testWithShuffle( points, true );
 	}
 
 	@Test
@@ -49,11 +50,7 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 		points.add( new RealPoint( 3, 5 ) );
 		points.add( new RealPoint( 3, -100 ) );
 		points.add( new RealPoint( 3, 1000 ) );
-		for ( int i = 0; i < 100; ++i )
-		{
-			Collections.shuffle( points );
-			Assert.assertTrue( PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
-		}
+		testWithShuffle( points, true );
 	}
 
 	@Test
@@ -64,11 +61,7 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 		points.add( new RealPoint( 1, 4 ) );
 		points.add( new RealPoint( 7, 2 ) );
 		points.add( new RealPoint( 3, 6 ) );
-		for ( int i = 0; i < 100; ++i )
-		{
-			Collections.shuffle( points );
-			Assert.assertFalse( PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
-		}
+		testWithShuffle( points, false );
 	}
 
 	@Test
@@ -79,11 +72,7 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 		points.add( new RealPoint( 22, 7, -1 ) );
 		points.add( new RealPoint( 14, 3, 1 ) );
 		points.add( new RealPoint( -5, -6.5, 5.75 ) );
-		for ( int i = 0; i < 100; ++i )
-		{
-			Collections.shuffle( points );
-			Assert.assertTrue( PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
-		}
+		testWithShuffle( points, true );
 	}
 
 	@Test
@@ -94,11 +83,7 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 		points.add( new RealPoint( -2.2, 22, 7 ) );
 		points.add( new RealPoint( -2.2, 14, 3 ) );
 		points.add( new RealPoint( -2.2, -5, -6.5 ) );
-		for ( int i = 0; i < 100; ++i )
-		{
-			Collections.shuffle( points );
-			Assert.assertTrue( PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
-		}
+		testWithShuffle( points, true );
 	}
 
 	@Test
@@ -109,11 +94,7 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 		points.add( new RealPoint( 22, -2.2, 7 ) );
 		points.add( new RealPoint( 14, -2.2, 3 ) );
 		points.add( new RealPoint( -5, -2.2, -6.5 ) );
-		for ( int i = 0; i < 100; ++i )
-		{
-			Collections.shuffle( points );
-			Assert.assertTrue( PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
-		}
+		testWithShuffle( points, true );
 	}
 
 	@Test
@@ -124,11 +105,7 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 		points.add( new RealPoint( 22, 7, -2.2 ) );
 		points.add( new RealPoint( 14, 3, -2.2 ) );
 		points.add( new RealPoint( -5, -6.5, -2.2 ) );
-		for ( int i = 0; i < 100; ++i )
-		{
-			Collections.shuffle( points );
-			Assert.assertTrue( PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
-		}
+		testWithShuffle( points, true );
 	}
 
 	@Test
@@ -139,10 +116,6 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 		points.add( new RealPoint( 1, 4, 7 ) );
 		points.add( new RealPoint( 7, 2, 8 ) );
 		points.add( new RealPoint( 3, 6, -4 ) );
-		for ( int i = 0; i < 100; ++i )
-		{
-			Collections.shuffle( points );
-			Assert.assertFalse( PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
-		}
+		testWithShuffle( points, false );
 	}
 }
