@@ -227,36 +227,10 @@ public class VisualizeEstimatedTileTransform
 		if ( stitchedTilesMap.containsKey( parsedArgs.tileToInspect ) )
 			throw new RuntimeException( "stitched set already contains the queried tile" );
 
-//		final Map< Integer, TileInfo > estimatedTileTransforms = new TreeMap<>();
-//		estimatedTileTransforms.putAll( inputTilesMap );
-//		estimatedTileTransforms.keySet().removeAll( stitchedTilesMap.keySet() );
-//		for ( final Entry< Integer, TileInfo > entry : estimatedTileTransforms.entrySet() )
-//		{
-//			final TileInfo tileWithEstimatedTransform = entry.getValue().clone();
-//			try
-//			{
-//				tileWithEstimatedTransform.setTransform(
-//						TileTransformEstimator.estimateAffineTransformation( tileWithEstimatedTransform, neighboringTilesLocator, sampleWeightCalculator )
-//					);
-//			}
-//			catch ( final NotEnoughDataPointsException | IllDefinedDataPointsException e )
-//			{
-//				tileWithEstimatedTransform.setTransform( null );
-//			}
-//			entry.setValue( tileWithEstimatedTransform );
-//		}
-//		final TileInfo tileToEstimateTransform = estimatedTileTransforms.get( parsedArgs.tileToInspect );
-
 		final TileInfo tileToEstimateTransform = inputTilesMap.get( parsedArgs.tileToInspect ).clone();
 		tileToEstimateTransform.setTransform(
 				TileTransformEstimator.estimateAffineTransformation( inputTilesMap.get( parsedArgs.tileToInspect ), neighboringTilesLocator, sampleWeightCalculator )
 			);
-//		tileToEstimateTransform.setTransform(
-//				TileTransformEstimator.estimateAffineTransformation( inputTilesMap.get( parsedArgs.tileToInspect ), neighboringTilesLocator, sampleWeightCalculator )
-//			);
-//		tileToEstimateTransform.setTransform(
-//				TileTransformEstimator.estimateAffineTransformation( inputTilesMap.get( parsedArgs.tileToInspect ), neighboringTilesLocator, sampleWeightCalculator )
-//			);
 
 		System.out.println();
 		System.out.println( "Estimated transform for tile " + tileToEstimateTransform.getIndex() + ": " + Arrays.deepToString( TransformUtils.getMatrix( tileToEstimateTransform.getTransform() ) ) );

@@ -58,4 +58,43 @@ public class TransformUtils
 		}
 		return createTransform( matrix );
 	}
+
+	/**
+	 * Returns an affine matrix for a given transformation.
+	 */
+	public static double[][] getMatrix( final AffineGet transform )
+	{
+		final double[][] matrix;
+		if ( transform.numDimensions() == 2 )
+		{
+			matrix = new double[ 2 ][ 3 ];
+			matrix[ 0 ][ 0 ] = transform.get( 0, 0 );
+			matrix[ 0 ][ 1 ] = transform.get( 0, 1 );
+			matrix[ 0 ][ 2 ] = transform.get( 0, 2 );
+			matrix[ 1 ][ 0 ] = transform.get( 1, 0 );
+			matrix[ 1 ][ 1 ] = transform.get( 1, 1 );
+			matrix[ 1 ][ 2 ] = transform.get( 1, 2 );
+		}
+		else if ( transform.numDimensions() == 3 )
+		{
+			matrix = new double[ 3 ][ 4 ];
+			matrix[ 0 ][ 0 ] = transform.get( 0, 0 );
+			matrix[ 0 ][ 1 ] = transform.get( 0, 1 );
+			matrix[ 0 ][ 2 ] = transform.get( 0, 2 );
+			matrix[ 0 ][ 3 ] = transform.get( 0, 3 );
+			matrix[ 1 ][ 0 ] = transform.get( 1, 0 );
+			matrix[ 1 ][ 1 ] = transform.get( 1, 1 );
+			matrix[ 1 ][ 2 ] = transform.get( 1, 2 );
+			matrix[ 1 ][ 3 ] = transform.get( 1, 3 );
+			matrix[ 2 ][ 0 ] = transform.get( 2, 0 );
+			matrix[ 2 ][ 1 ] = transform.get( 2, 1 );
+			matrix[ 2 ][ 2 ] = transform.get( 2, 2 );
+			matrix[ 2 ][ 3 ] = transform.get( 2, 3 );
+		}
+		else
+		{
+			throw new IllegalArgumentException( "only 2d/3d are supported" );
+		}
+		return matrix;
+	}
 }
