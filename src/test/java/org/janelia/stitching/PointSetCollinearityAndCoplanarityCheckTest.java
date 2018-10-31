@@ -54,6 +54,17 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 	}
 
 	@Test
+	public void testCollinearityIdenticalPoints2D()
+	{
+		final List< RealPoint > points = new ArrayList<>();
+		points.add( new RealPoint( 10, 1 ) );
+		points.add( new RealPoint( 10, 1 ) );
+		points.add( new RealPoint( 10, 1 ) );
+		points.add( new RealPoint( 10, 1 ) );
+		testWithShuffle( points, true );
+	}
+
+	@Test
 	public void testNotCollinear2D()
 	{
 		final List< RealPoint > points = new ArrayList<>();
@@ -105,6 +116,17 @@ public class PointSetCollinearityAndCoplanarityCheckTest
 		points.add( new RealPoint( 22, 7, -2.2 ) );
 		points.add( new RealPoint( 14, 3, -2.2 ) );
 		points.add( new RealPoint( -5, -6.5, -2.2 ) );
+		testWithShuffle( points, true );
+	}
+
+	@Test
+	public void testCollinearityIdenticalPoints3D()
+	{
+		final List< RealPoint > points = new ArrayList<>();
+		points.add( new RealPoint( 10, 1, 2 ) );
+		points.add( new RealPoint( 10, 1, 2 ) );
+		points.add( new RealPoint( 10, 1, 2 ) );
+		points.add( new RealPoint( 10, 1, 2 ) );
 		testWithShuffle( points, true );
 	}
 
