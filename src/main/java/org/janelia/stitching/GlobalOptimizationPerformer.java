@@ -281,7 +281,7 @@ public class GlobalOptimizationPerformer
 
 			if ( replacementModel != null )
 			{
-				if ( tile.getModel() instanceof InterpolatedModel && !( replacementModel instanceof TranslationModel2D || replacementModel instanceof TranslationModel3D ) )
+				if ( tile.getModel() instanceof InterpolatedModel< ?, ?, ? > && !( replacementModel instanceof TranslationModel2D || replacementModel instanceof TranslationModel3D ) )
 				{
 					final InterpolatedModel< ?, ?, ? > interpolatedModel = ( InterpolatedModel< ?, ?, ? > ) tile.getModel();
 					final Model< ? > replacementInterpolatedModel = TileModelFactory.createInterpolatedModel(
@@ -394,7 +394,7 @@ public class GlobalOptimizationPerformer
 
 	private static void initializeModelWithTranslation( final Model< ? > model, final Model< ? > translationModel )
 	{
-		if ( model instanceof InterpolatedModel )
+		if ( model instanceof InterpolatedModel< ?, ?, ? > )
 			initializeInterpolatedModelWithTranslation( ( InterpolatedModel< ?, ?, ? > ) model, translationModel );
 		else if ( translationModel instanceof TranslationModel2D )
 			initializeModelWithTranslation2D( model, ( TranslationModel2D ) translationModel );
@@ -409,9 +409,9 @@ public class GlobalOptimizationPerformer
 		initializeModelWithTranslation( interpolatedModel.getA(), translationModel );
 		initializeModelWithTranslation( interpolatedModel.getB(), translationModel );
 
-		if ( interpolatedModel instanceof InterpolatedAffineModel2D )
+		if ( interpolatedModel instanceof InterpolatedAffineModel2D< ?, ? > )
 			( ( InterpolatedAffineModel2D< ?, ? > ) interpolatedModel ).interpolate();
-		else if ( interpolatedModel instanceof InterpolatedAffineModel3D )
+		else if ( interpolatedModel instanceof InterpolatedAffineModel3D< ?, ? > )
 			( ( InterpolatedAffineModel3D< ?, ? > ) interpolatedModel ).interpolate();
 		else
 			throw new IllegalArgumentException( "expected InterpolatedAffineModel2D or InterpolatedAffineModel3D, got " + interpolatedModel );
