@@ -6,7 +6,7 @@ import java.util.Iterator;
 import net.imglib2.RealPoint;
 import net.imglib2.util.Util;
 
-public class PointSetCollinearityAndCoplanarityCheck
+public class PointSetCollinearityCheck
 {
 	private static double EPSILON = 1e-5;
 

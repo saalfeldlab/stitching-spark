@@ -9,14 +9,14 @@ import org.junit.Test;
 
 import net.imglib2.RealPoint;
 
-public class PointSetCollinearityAndCoplanarityCheckTest
+public class PointSetCollinearityCheckTest
 {
 	private void testWithShuffle( final List< RealPoint > points, final boolean expectedResult )
 	{
 		for ( int i = 0; i < 100; ++i )
 		{
 			Collections.shuffle( points );
-			Assert.assertEquals( expectedResult, PointSetCollinearityAndCoplanarityCheck.testCollinearity( points ) );
+			Assert.assertEquals( expectedResult, PointSetCollinearityCheck.testCollinearity( points ) );
 		}
 	}
 
