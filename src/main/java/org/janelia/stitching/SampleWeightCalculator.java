@@ -38,13 +38,6 @@ public class SampleWeightCalculator
 			Arrays.fill( sampleWeights, 1 );
 		}
 
-		// normalize weights
-		double sumWeights = 0;
-		for ( final double weight : sampleWeights )
-			sumWeights += weight;
-		for ( int i = 0; i < sampleWeights.length; ++i )
-			sampleWeights[ i ] /= sumWeights;
-
 		return sampleWeights;
 	}
 }

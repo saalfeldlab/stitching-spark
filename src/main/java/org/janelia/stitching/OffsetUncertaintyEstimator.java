@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import org.janelia.stitching.math.WeightedCovariance;
+
 import net.imglib2.Interval;
 import net.imglib2.RealPoint;
 import net.imglib2.realtransform.AffineGet;
@@ -151,35 +153,8 @@ public class OffsetUncertaintyEstimator implements Serializable
 			offsetSamples.add( offsetSample );
 		}
 
-		final double[] meanOffset = new double[ tile.numDimensions() ];
-		for ( int i = 0; i < offsetSamples.size(); ++i )
-		{
-			final double[] offsetSample = offsetSamples.get( i );
-			for ( int d = 0; d < meanOffset.length; ++d )
-				meanOffset[ d ] += offsetSample[ d ] * sampleWeights[ i ];
-		}
-
-		final double[][] covarianceMatrix = new double[ meanOffset.length ][ meanOffset.length ];
-		double covarianceDenomCoeff = 0;
-		for ( final double sampleWeight : sampleWeights )
-			covarianceDenomCoeff += Math.pow( sampleWeight, 2 );
-		covarianceDenomCoeff = 1 - covarianceDenomCoeff;
-		for ( int dRow = 0; dRow < covarianceMatrix.length; ++dRow )
-		{
-			for ( int dCol = dRow; dCol < covarianceMatrix[ dRow ].length; ++dCol )
-			{
-				double dRowColOffsetSumProduct = 0;
-				for ( int i = 0; i < offsetSamples.size(); ++i )
-				{
-					final double[] offsetSample = offsetSamples.get( i );
-					dRowColOffsetSumProduct += ( offsetSample[ dRow ] - meanOffset[ dRow ] ) * ( offsetSample[ dCol ] - meanOffset[ dCol ] ) * sampleWeights[ i ];
-				}
-				final double covariance = dRowColOffsetSumProduct / covarianceDenomCoeff;
-				covarianceMatrix[ dRow ][ dCol ] = covarianceMatrix[ dCol ][ dRow ] = covariance;
-			}
-		}
-
-		final ErrorEllipse searchRadius = new ErrorEllipse( searchRadiusMultiplier, meanOffset, covarianceMatrix );
+		final WeightedCovariance weightedCovariance = new WeightedCovariance( offsetSamples, sampleWeights );
+		final ErrorEllipse searchRadius = new ErrorEllipse( searchRadiusMultiplier, weightedCovariance.getWeightedMean(), weightedCovariance.getWeightedCovarianceMatrix() );
 		return new EstimatedWorldSearchRadius( searchRadius, tile, neighboringTiles, stageAndWorldCoordinates );
 	}
 
