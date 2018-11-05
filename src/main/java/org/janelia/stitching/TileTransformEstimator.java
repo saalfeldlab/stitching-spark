@@ -7,12 +7,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import mpicbg.models.AffineModel2D;
-import mpicbg.models.AffineModel3D;
+import org.janelia.stitching.PointMatchSpatialLayout.SpatialLayout;
+
 import mpicbg.models.IllDefinedDataPointsException;
-import mpicbg.models.InterpolatedAffineModel2D;
-import mpicbg.models.InterpolatedAffineModel3D;
-import mpicbg.models.InterpolatedModel;
 import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Point;
@@ -27,7 +24,7 @@ import net.imglib2.realtransform.Translation;
 public class TileTransformEstimator
 {
 	private static final double REGULARIZER_LAMBDA = 0.1; // TODO: allow to tweak the regularizer lambda value using a cmd arg
-	private static final double EPSILON = 1e-3;
+	private static final double EPSILON = 1e-2;
 
 	/**
 	 * Estimates an expected affine transformation for a given tile in the following way:
@@ -74,7 +71,9 @@ public class TileTransformEstimator
 		final int[] subTilesGridSize = new int[ tile.numDimensions() ];
 		Arrays.fill( subTilesGridSize, neighboringTilesLocator.getSubdivisionGridSize() );
 		final List< SubTile > subTiles = SubTileOperations.subdivideTiles( new TileInfo[] { tile }, subTilesGridSize );
-		final Map< SubTile, AffineGet > estimatedSubTileTransforms = new HashMap<>();
+
+		// create point matches for each subtile
+		final Map< SubTile, List< PointMatch > > subTilesToPointMatches = new HashMap<>();
 		for ( final SubTile subTile : subTiles )
 		{
 			final List< SubTile > neighboringSubTiles = new ArrayList<>( neighboringTilesLocator.findSubTilesWithinWindow( subTile ) );
@@ -101,42 +100,56 @@ public class TileTransformEstimator
 				pointMatches.add( pointMatch );
 			}
 
-			Model< ? > model = TileModelFactory.createInterpolatedModel(
-					tile.numDimensions(),
-					( Model ) TileModelFactory.createAffineModel( tile.numDimensions() ),
-					( Model ) TileModelFactory.createRigidModel( tile.numDimensions() ),
-					REGULARIZER_LAMBDA
-				);
-
-			try
-			{
-				fitWithEpsilon( model, pointMatches );
-			}
-			catch ( final IllDefinedDataPointsException e )
-			{
-				// the configuration is not suitable for fitting an affine model
-				if ( PointSetCollinearityCheck.testCollinearity( neighboringSubTilesStageMiddlePoints ) )
-				{
-					// collinear, fallback to translation model
-					model = TileModelFactory.createTranslationModel( tile.numDimensions() );
-				}
-				else
-				{
-					// coplanar, fallback to similarity model
-					model = TileModelFactory.createInterpolatedModel(
-							tile.numDimensions(),
-							( Model ) TileModelFactory.createSimilarityModel( tile.numDimensions() ),
-							( Model ) TileModelFactory.createRigidModel( tile.numDimensions() ),
-							REGULARIZER_LAMBDA
-						);
-				}
-				model.fit( pointMatches );
-			}
-
-			estimatedSubTileTransforms.put( subTile, TransformUtils.getModelTransform( model ) );
+			subTilesToPointMatches.put( subTile, pointMatches );
 		}
 
-		return estimatedSubTileTransforms;
+		// detect the spatial layout
+		final List< SpatialLayout > subTilesSpatialLayouts = new ArrayList<>();
+		for ( final List< PointMatch > pointMatches : subTilesToPointMatches.values() )
+			subTilesSpatialLayouts.add( PointMatchSpatialLayout.determine( pointMatches ) );
+		final SpatialLayout spatialLayout = PointMatchSpatialLayout.pickMostRestrictedLayout( subTilesSpatialLayouts.toArray( new SpatialLayout[ 0 ] ) );
+
+		// create subtile models of appropriate type
+		final Map< SubTile, Model< ? > > subTilesToModels = new HashMap<>();
+		for ( final SubTile subTile : subTilesToPointMatches.keySet() )
+		{
+			final Model< ? > model;
+			switch ( spatialLayout )
+			{
+			case Collinear: // translation
+				model = TileModelFactory.createTranslationModel( tile.numDimensions() );
+				break;
+			case Coplanar: // similarity
+				model = TileModelFactory.createInterpolatedModel(
+						tile.numDimensions(),
+						( Model ) TileModelFactory.createSimilarityModel( tile.numDimensions() ),
+						( Model ) TileModelFactory.createRigidModel( tile.numDimensions() ),
+						REGULARIZER_LAMBDA
+					);
+				break;
+			default: // affine
+				model = TileModelFactory.createInterpolatedModel(
+						tile.numDimensions(),
+						( Model ) TileModelFactory.createAffineModel( tile.numDimensions() ),
+						( Model ) TileModelFactory.createRigidModel( tile.numDimensions() ),
+						REGULARIZER_LAMBDA
+					);
+				break;
+			}
+			subTilesToModels.put( subTile, model );
+		}
+
+		// fit the models
+		final Map< SubTile, AffineGet > subTilesToEstimatedTransforms = new HashMap<>();
+		for ( final SubTile subTile : subTilesToPointMatches.keySet() )
+		{
+			final Model< ? > model = subTilesToModels.get( subTile );
+			final List< PointMatch > pointMatches = subTilesToPointMatches.get( subTile );
+			model.fit( pointMatches );
+			subTilesToEstimatedTransforms.put( subTile, TransformUtils.getModelTransform( model ) );
+		}
+
+		return subTilesToEstimatedTransforms;
 	}
 
 	/**
@@ -185,35 +198,5 @@ public class TileTransformEstimator
 			.preConcatenate( new Translation( tile.getStagePosition() ) ) // local->stage
 			.preConcatenate( TransformUtils.getModelTransform( model ) ); // stage->world
 		return estimatedLocalToWorldTileTransform;
-	}
-
-	private static void fitWithEpsilon( final Model< ? > model, final List< PointMatch > pointMatches ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
-	{
-		if ( model instanceof InterpolatedModel< ?, ?, ? > )
-		{
-			final InterpolatedModel< ?, ?, ? > interpolatedModel = ( InterpolatedModel< ?, ?, ? > ) model;
-			fitWithEpsilon( interpolatedModel.getA(), pointMatches );
-			fitWithEpsilon( interpolatedModel.getB(), pointMatches );
-
-			if ( interpolatedModel instanceof InterpolatedAffineModel2D< ?, ? > )
-				( ( InterpolatedAffineModel2D< ?, ? > ) interpolatedModel ).interpolate();
-			else if ( interpolatedModel instanceof InterpolatedAffineModel3D< ?, ? > )
-				( ( InterpolatedAffineModel3D< ?, ? > ) interpolatedModel ).interpolate();
-			else
-				throw new IllegalArgumentException( "expected InterpolatedAffineModel2D or InterpolatedAffineModel3D, got " + interpolatedModel );
-		}
-		else if ( model instanceof AffineModel2D )
-		{
-			( ( AffineModel2D ) model ).fit( pointMatches, EPSILON );
-		}
-		else if ( model instanceof AffineModel3D )
-		{
-			( ( AffineModel3D ) model ).fit( pointMatches, EPSILON );
-		}
-		else
-		{
-			// epsilon is not needed for this model
-			model.fit( pointMatches );
-		}
 	}
 }
