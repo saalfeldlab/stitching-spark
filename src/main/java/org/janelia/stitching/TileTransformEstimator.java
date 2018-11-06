@@ -24,7 +24,6 @@ import net.imglib2.realtransform.Translation;
 public class TileTransformEstimator
 {
 	private static final double REGULARIZER_LAMBDA = 0.1; // TODO: allow to tweak the regularizer lambda value using a cmd arg
-	private static final double EPSILON = 1e-2;
 
 	/**
 	 * Estimates an expected affine transformation for a given tile in the following way:
@@ -62,7 +61,6 @@ public class TileTransformEstimator
 	 * @throws IllDefinedDataPointsException
 	 * @throws NotEnoughDataPointsException
 	 */
-	@SuppressWarnings( { "unchecked", "rawtypes" } )
 	static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > Map< SubTile, AffineGet > estimateSubTileTransforms(
 			final TileInfo tile,
 			final NeighboringTilesLocator neighboringTilesLocator,
@@ -109,41 +107,11 @@ public class TileTransformEstimator
 			subTilesSpatialLayouts.add( PointMatchSpatialLayout.determine( pointMatches ) );
 		final SpatialLayout spatialLayout = PointMatchSpatialLayout.pickMostRestrictedLayout( subTilesSpatialLayouts.toArray( new SpatialLayout[ 0 ] ) );
 
-		// create subtile models of appropriate type
-		final Map< SubTile, Model< ? > > subTilesToModels = new HashMap<>();
-		for ( final SubTile subTile : subTilesToPointMatches.keySet() )
-		{
-			final Model< ? > model;
-			switch ( spatialLayout )
-			{
-			case Collinear: // translation
-				model = TileModelFactory.createTranslationModel( tile.numDimensions() );
-				break;
-			case Coplanar: // similarity
-				model = TileModelFactory.createInterpolatedModel(
-						tile.numDimensions(),
-						( Model ) TileModelFactory.createSimilarityModel( tile.numDimensions() ),
-						( Model ) TileModelFactory.createRigidModel( tile.numDimensions() ),
-						REGULARIZER_LAMBDA
-					);
-				break;
-			default: // affine
-				model = TileModelFactory.createInterpolatedModel(
-						tile.numDimensions(),
-						( Model ) TileModelFactory.createAffineModel( tile.numDimensions() ),
-						( Model ) TileModelFactory.createRigidModel( tile.numDimensions() ),
-						REGULARIZER_LAMBDA
-					);
-				break;
-			}
-			subTilesToModels.put( subTile, model );
-		}
-
-		// fit the models
+		// create and fit subtile models of appropriate type
 		final Map< SubTile, AffineGet > subTilesToEstimatedTransforms = new HashMap<>();
 		for ( final SubTile subTile : subTilesToPointMatches.keySet() )
 		{
-			final Model< ? > model = subTilesToModels.get( subTile );
+			final Model< ? > model = createModelForLayout( spatialLayout, subTile.numDimensions(), REGULARIZER_LAMBDA );
 			final List< PointMatch > pointMatches = subTilesToPointMatches.get( subTile );
 			model.fit( pointMatches );
 			subTilesToEstimatedTransforms.put( subTile, TransformUtils.getModelTransform( model ) );
@@ -162,7 +130,6 @@ public class TileTransformEstimator
 	 * @throws IllDefinedDataPointsException
 	 * @throws NotEnoughDataPointsException
 	 */
-	@SuppressWarnings( { "unchecked", "rawtypes" } )
 	static < A extends AffineGet & AffineSet & Concatenable< AffineGet > & PreConcatenable< AffineGet > > AffineGet estimateTransformForTile(
 			final TileInfo tile,
 			final Map< SubTile, AffineGet > subTileTransforms ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
@@ -184,12 +151,9 @@ public class TileTransformEstimator
 			pointMatches.add( pointMatch );
 		}
 
-		final Model< ? > model = TileModelFactory.createInterpolatedModel(
-				tile.numDimensions(),
-				( Model ) TileModelFactory.createAffineModel( tile.numDimensions() ),
-				( Model ) TileModelFactory.createRigidModel( tile.numDimensions() ),
-				REGULARIZER_LAMBDA
-			);
+		// P1 cannot be collinear/coplanar, however, P2 may form a degenerate configuration
+		final SpatialLayout spatialLayout = PointMatchSpatialLayout.determine( pointMatches );
+		final Model< ? > model = createModelForLayout( spatialLayout, tile.numDimensions(), REGULARIZER_LAMBDA );
 		model.fit( pointMatches );
 
 		// the resulting transform does stage->world mapping, convert it to local->world
@@ -198,5 +162,34 @@ public class TileTransformEstimator
 			.preConcatenate( new Translation( tile.getStagePosition() ) ) // local->stage
 			.preConcatenate( TransformUtils.getModelTransform( model ) ); // stage->world
 		return estimatedLocalToWorldTileTransform;
+	}
+
+	@SuppressWarnings( { "unchecked", "rawtypes" } )
+	static Model< ? > createModelForLayout(
+			final SpatialLayout spatialLayout,
+			final int numDimensions,
+			final double regularizerLambda )
+	{
+		switch ( spatialLayout )
+		{
+		case Collinear: // translation
+			return TileModelFactory.createTranslationModel( numDimensions );
+		case Coplanar: // similarity
+			return TileModelFactory.createInterpolatedModel(
+					numDimensions,
+					( Model ) TileModelFactory.createSimilarityModel( numDimensions ),
+					( Model ) TileModelFactory.createRigidModel( numDimensions ),
+					regularizerLambda
+				);
+		case Other: // affine
+			return TileModelFactory.createInterpolatedModel(
+					numDimensions,
+					( Model ) TileModelFactory.createAffineModel( numDimensions ),
+					( Model ) TileModelFactory.createRigidModel( numDimensions ),
+					regularizerLambda
+				);
+		default:
+			throw new RuntimeException( "unknown spatial layout: " + spatialLayout );
+		}
 	}
 }
