@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
@@ -207,9 +208,24 @@ public class ParseTilesImageList
 		// check that tile configuration forms a single graph
 		// NOTE: may fail with StackOverflowError. Pass -Xss to the JVM
 		final TileInfo[] tileInfos = tiles.firstEntry().getValue().toArray( new TileInfo[ 0 ] );
-		final List< Integer > connectedComponentsSize = CheckConnectedGraphs.connectedComponentsSize( tileInfos );
-		if ( connectedComponentsSize.size() > 1 )
-			throw new Exception( "Expected single graph, got several components of size " + connectedComponentsSize );
+		final List< Set< TileInfo > > connectedComponents = CheckConnectedGraphs.connectedComponents( tileInfos );
+		if ( connectedComponents.size() > 1 )
+		{
+			Set< TileInfo > smallestComponent = null;
+			for ( final Set< TileInfo > component : connectedComponents )
+				if ( smallestComponent == null || component.size() < smallestComponent.size() )
+					smallestComponent = component;
+
+			final Set< Integer > tileIndexesInSmallestComponent = new TreeSet<>();
+			for ( final TileInfo tile : smallestComponent )
+				tileIndexesInSmallestComponent.add( tile.getIndex() );
+
+			throw new Exception(
+					"Expected single graph, got several components of size " + CheckConnectedGraphs.connectedComponentsSize( connectedComponents ) + System.lineSeparator() +
+					"Tiles in the smallest component: " + tileIndexesInSmallestComponent
+				);
+
+		}
 
 		// trace overlaps to ensure that tile positions are accurate
 		System.out.println();
