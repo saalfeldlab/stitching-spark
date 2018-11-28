@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -15,6 +16,7 @@ import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.TileModelFactory;
 import org.janelia.stitching.TileOperations;
 import org.janelia.stitching.TilePair;
+import org.janelia.stitching.Utils;
 import org.janelia.util.Conversions;
 
 import ij.ImagePlus;
@@ -50,6 +52,23 @@ public class CheckConnectedGraphs
 
 
 	public static List< Integer > connectedComponentsSize( final TileInfo[] tileInfos )
+	{
+		return connectedComponentsSize( connectedComponents( tileInfos ) );
+	}
+
+	public static List< Integer > connectedComponentsSize( final List< Set< TileInfo > > components )
+	{
+		final ArrayList< Integer > graphsSize = new ArrayList<>();
+		for ( final Set< TileInfo > graph : components )
+			graphsSize.add( graph.size() );
+
+		Collections.sort( graphsSize );
+		Collections.reverse( graphsSize );
+
+		return graphsSize;
+	}
+
+	public static List< Set< TileInfo > > connectedComponents( final TileInfo[] tileInfos )
 	{
 		final List< TilePair > overlappingPairs = TileOperations.findOverlappingTiles( tileInfos );
 		final List< TilePair > adjPairs = FilterAdjacentShifts.filterAdjacentPairs( overlappingPairs );
@@ -106,17 +125,33 @@ public class CheckConnectedGraphs
 		}
 
 		final ArrayList< Set< Tile< ? > > > graphs = Tile.identifyConnectedGraphs( tiles );
-		final ArrayList< Integer > graphsSize = new ArrayList<>();
+
+		final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( tileInfos );
+		final List< Set< TileInfo > > graphsTileInfos = new ArrayList<>();
 		for ( final Set< Tile< ? > > graph : graphs )
-			graphsSize.add( graph.size() );
+		{
+			final Set< TileInfo > graphTileInfos = new HashSet<>();
+			for ( final Tile< ? > tile : graph )
+			{
+				final int tileIndex = ( ( ImagePlusTimePoint ) tile ).getImpId();
+				graphTileInfos.add( tilesMap.get( tileIndex ) );
+			}
+			graphsTileInfos.add( graphTileInfos );
+		}
 
+		// Graphs above were created by using adjacent overlapping pairs. If there are tiles that do not overlap with any other tiles, they would not appear in the graphs above.
+		// They need to be identified differently:
 		for ( final Tile< ? > tile : fakeTileImagesMap.values() )
+		{
 			if ( tile.getConnectedTiles().isEmpty() )
-				graphsSize.add( 1 );
+			{
+				final int tileIndex = ( ( ImagePlusTimePoint ) tile ).getImpId();
+				final Set< TileInfo > graphTileInfo = new HashSet<>();
+				graphTileInfo.add( tilesMap.get( tileIndex ) );
+				graphsTileInfos.add( graphTileInfo );
+			}
+		}
 
-		Collections.sort( graphsSize );
-		Collections.reverse( graphsSize );
-
-		return graphsSize;
+		return graphsTileInfos;
 	}
 }

@@ -19,4 +19,4 @@ os.environ['TERMINATE'] = '1'
 
 nodes = int(sys.argv[1])
 
-subprocess.call([flintstone_path, str(nodes), bin_path, 'org.janelia.flatfield.FlatfieldCorrection'] + sys.argv[2:])
+subprocess.call([flintstone_path, str(nodes), bin_path, 'org.janelia.flatfield.FlatfieldCorrection', '--2d'] + sys.argv[2:])

@@ -15,9 +15,8 @@ flintstone_path = os.path.join(curr_script_dir, flintstone_relpath)
 
 os.environ['SPARK_VERSION'] = 'test'
 os.environ['N_DRIVER_THREADS'] = '2'
-os.environ['MEMORY_PER_NODE'] = '105'
 os.environ['TERMINATE'] = '1'
 
 nodes = int(sys.argv[1])
 
-subprocess.call([flintstone_path, str(nodes), bin_path, 'org.janelia.util.spark.RemoveDirectoryTreeSpark'] + sys.argv[2:] + [''])
+subprocess.call([flintstone_path, str(nodes), bin_path, 'org.janelia.stitching.N5ToSliceTiffSpark', '-s', '3'] + sys.argv[2:])

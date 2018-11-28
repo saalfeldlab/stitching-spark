@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.File;
 import java.io.FilenameFilter;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -154,7 +155,14 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 	public void run() throws PipelineExecutionException
 	{
 		// don't execute smart logic since this step has already been executed at the ImageList.csv -> JSON parsing step
-		job.validateTiles();
+		try
+		{
+			job.validateTiles();
+		}
+		catch ( final IOException e )
+		{
+			throw new PipelineExecutionException( e );
+		}
 	}
 
 	private static Map< Integer, Integer > removeDuplicateTiles( final TreeMap< Integer, List< TileInfo > > tileChannels ) throws Exception
@@ -166,8 +174,13 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			for ( final TileInfo tile : tileChannels.get( channel ) )
 			{
 				final String coordinates = Utils.getTileCoordinatesString( tile );
-				if ( !coordinatesToTiles.containsKey( coordinates ) || Utils.getTileTimestamp( tile ) > Utils.getTileTimestamp( coordinatesToTiles.get( coordinates ) ) )
-					coordinatesToTiles.put( coordinates, tile );
+
+				// in case of a duplicate, remove the old entry to ensure that the sorted order by the timestamp is maintained
+				if ( coordinatesToTiles.containsKey( coordinates ) && Utils.getTileTimestamp( tile ) > Utils.getTileTimestamp( coordinatesToTiles.get( coordinates ) ) )
+					coordinatesToTiles.remove( coordinates );
+
+				// insert a new one
+				coordinatesToTiles.put( coordinates, tile );
 			}
 			duplicates.put( channel, tileChannels.get( channel ).size() - coordinatesToTiles.size() );
 			tileChannels.put( channel, new ArrayList<>( coordinatesToTiles.values() ) );
