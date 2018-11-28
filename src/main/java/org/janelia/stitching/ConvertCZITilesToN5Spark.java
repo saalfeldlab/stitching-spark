@@ -167,7 +167,7 @@ public class ConvertCZITilesToN5Spark
 		{
 			final String channelName = tilesChannel.getKey();
 			final TileInfo[] newChannelTiles = tilesChannel.getValue();
-			final String newConfigPath = PathResolver.get( n5Path, channelName + "_" + Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-converted-n5" ) );
+			final String newConfigPath = PathResolver.get( n5Path, channelName + "_" + Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-n5" ) );
 			dataProvider.saveTiles( newChannelTiles, newConfigPath );
 		}
 	}
