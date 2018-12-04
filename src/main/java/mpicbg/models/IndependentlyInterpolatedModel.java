@@ -66,15 +66,6 @@ public abstract class IndependentlyInterpolatedModel< A extends Model< A >, B ex
 	}
 
 	@Override
-	public void reset()
-	{
-		a.reset();
-		b.reset();
-		cost = Double.MAX_VALUE;
-		interpolate();
-	}
-
-	@Override
 	public double[] apply( final double[] location )
 	{
 		final double[] copy = location.clone();
