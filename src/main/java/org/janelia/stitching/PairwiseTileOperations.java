@@ -41,7 +41,7 @@ public class PairwiseTileOperations
 
 		final EstimatedWorldSearchRadius[] searchRadiusStats = new EstimatedWorldSearchRadius[ subTiles.length ];
 		for ( int i = 0; i < subTiles.length; ++i )
-			searchRadiusStats[ i ] = offsetUncertaintyEstimator.estimateSearchRadiusWithinWindow( subTiles[ i ].getFullTile() );
+			searchRadiusStats[ i ] = offsetUncertaintyEstimator.estimateSearchRadiusWithinWindow( subTiles[ i ] );
 
 		return offsetUncertaintyEstimator.getCombinedCovariancesSearchRadius( searchRadiusStats );
 	}

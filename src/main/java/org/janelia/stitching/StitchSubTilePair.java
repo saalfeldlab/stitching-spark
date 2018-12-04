@@ -9,6 +9,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.janelia.dataaccess.DataProvider;
+import org.janelia.stitching.OffsetUncertaintyEstimator.EstimatedRelativeSearchRadius;
+import org.janelia.stitching.OffsetUncertaintyEstimator.NotEnoughNeighboringTilesException;
 import org.janelia.util.concurrent.SameThreadExecutorService;
 
 import ij.ImagePlus;
@@ -85,28 +87,20 @@ public class StitchSubTilePair< T extends NativeType< T > & RealType< T >, U ext
 			for ( final AffineGet estimatedFullTileTransform : estimatedFullTileTransforms )
 				Objects.requireNonNull( estimatedFullTileTransform, "expected non-null affine transform for tile" );
 
-//			try
-//			{
-//				// get search radius for new moving subtile position in the fixed subtile space
-//				final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingSubtile = PairwiseTileOperations.getCombinedSearchRadiusForMovingSubTile( subTiles, offsetUncertaintyEstimator );
-//
-//				movingSubTileSearchRadius = combinedSearchRadiusForMovingSubtile.combinedErrorEllipse;
-//				System.out.println( "Estimated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingSubTileSearchRadius.estimateBoundingBox() ) ) ) );
-//			}
-//			catch ( final NotEnoughNeighboringTilesException e )
-//			{
-//				System.out.println( "Could not estimate error ellipse for pair " + subTilePair );
-//				final SerializablePairWiseStitchingResult invalidPairwiseResult = new SerializablePairWiseStitchingResult( subTilePair, null, 0 );
-//				return invalidPairwiseResult;
-//			}
+			try
+			{
+				// get search radius for new moving subtile position in the fixed subtile space
+				final EstimatedRelativeSearchRadius combinedSearchRadiusForMovingSubtile = PairwiseTileOperations.getCombinedSearchRadiusForMovingSubTile( subTiles, offsetUncertaintyEstimator );
 
-			// FIXME: use uncorrelated error ellipse for now instead of estimating uncertainty
-			final double[] uncorrelatedErrorEllipseRadius = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipseRadius(
-					subTilePair.getA().getFullTile().getSize(),
-					job.getArgs().errorEllipseRadiusAsTileSizeRatio()
-				);
-			movingSubTileSearchRadius = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
-			System.out.println( "Create uncorrelated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingSubTileSearchRadius.estimateBoundingBox() ) ) ) + " (instead of estimating uncertainty for now)" );
+				movingSubTileSearchRadius = combinedSearchRadiusForMovingSubtile.combinedErrorEllipse;
+				System.out.println( "Estimated error ellipse of size " + Arrays.toString( Intervals.dimensionsAsLongArray( Intervals.smallestContainingInterval( movingSubTileSearchRadius.estimateBoundingBox() ) ) ) );
+			}
+			catch ( final NotEnoughNeighboringTilesException e )
+			{
+				System.out.println( "Too few data points to estimate error ellipse for pair " + subTilePair );
+				final SerializablePairWiseStitchingResult invalidPairwiseResult = new SerializablePairWiseStitchingResult( subTilePair, null, 0 );
+				return invalidPairwiseResult;
+			}
 		}
 		else
 		{

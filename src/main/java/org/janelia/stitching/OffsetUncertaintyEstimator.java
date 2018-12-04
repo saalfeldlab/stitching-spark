@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -9,7 +10,7 @@ import org.janelia.stitching.math.WeightedCovariance;
 
 import net.imglib2.Interval;
 import net.imglib2.RealPoint;
-import net.imglib2.realtransform.AffineGet;
+import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
@@ -19,18 +20,18 @@ public class OffsetUncertaintyEstimator implements Serializable
 	public static class EstimatedWorldSearchRadius
 	{
 		public final ErrorEllipse errorEllipse;
-		public final TileInfo tile;
+		public final SubTile subTile;
 		public final Set< TileInfo > neighboringTiles;
 		public final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates;
 
 		public EstimatedWorldSearchRadius(
 				final ErrorEllipse errorEllipse,
-				final TileInfo tile,
+				final SubTile subTile,
 				final Set< TileInfo > neighboringTiles,
 				final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates )
 		{
 			this.errorEllipse = errorEllipse;
-			this.tile = tile;
+			this.subTile = subTile;
 			this.neighboringTiles = neighboringTiles;
 			this.stageAndWorldCoordinates = stageAndWorldCoordinates;
 		}
@@ -108,14 +109,14 @@ public class OffsetUncertaintyEstimator implements Serializable
 		return minNumNeighboringTiles;
 	}
 
-	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final TileInfo tile ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
+	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final SubTile subTile ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
-		return estimateSearchRadiusWithinWindow( tile, neighboringTilesLocator.getSearchWindowInterval( tile ) );
+		return estimateSearchRadiusWithinWindow( subTile, neighboringTilesLocator.getSearchWindowInterval( subTile.getFullTile() ) );
 	}
 
-	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final TileInfo tile, final Interval estimationWindow ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
+	public EstimatedWorldSearchRadius estimateSearchRadiusWithinWindow( final SubTile subTile, final Interval estimationWindow ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
-		return estimateSearchRadius( tile, neighboringTilesLocator.findTilesWithinWindow( estimationWindow ) );
+		return estimateSearchRadius( subTile, neighboringTilesLocator.findTilesWithinWindow( estimationWindow ) );
 	}
 
 	/*public EstimatedWorldSearchRadius estimateSearchRadiusKNearestNeighbors( final TileInfo tile, final int numNearestNeighbors ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
@@ -129,25 +130,28 @@ public class OffsetUncertaintyEstimator implements Serializable
 			);
 	}*/
 
-	private EstimatedWorldSearchRadius estimateSearchRadius( final TileInfo tile, final Set< TileInfo > neighboringTiles ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
+	private EstimatedWorldSearchRadius estimateSearchRadius( final SubTile subTile, final Set< TileInfo > neighboringTiles ) throws PipelineExecutionException, NotEnoughNeighboringTilesException
 	{
 		// do not use the tile in its offset statistics for prediction
-		neighboringTiles.removeIf( t -> t.getIndex().equals( tile.getIndex() ) );
+		neighboringTiles.removeIf( t -> t.getIndex().equals( subTile.getFullTile().getIndex() ) );
 
 		if ( neighboringTiles.size() < minNumNeighboringTiles )
 			throw new NotEnoughNeighboringTilesException( neighboringTiles, minNumNeighboringTiles );
 
-		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = getStageAndWorldCoordinates( neighboringTiles );
+		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = getStageAndWorldCoordinates( subTile, neighboringTiles );
 
 		final List< RealPoint > stageCoordinates = new ArrayList<>();
 		for ( final Pair< RealPoint, RealPoint > stageAndWorld : stageAndWorldCoordinates )
 			stageCoordinates.add( stageAndWorld.getA() );
-		final double[] sampleWeights = sampleWeightCalculator.calculateSampleWeights( new RealPoint( tile.getStagePosition() ), stageCoordinates );
+		final double[] sampleWeights = sampleWeightCalculator.calculateSampleWeights(
+				new RealPoint( SubTileOperations.getSubTileMiddlePointStagePosition( subTile ) ),
+				stageCoordinates
+			);
 
 		final List< double[] > offsetSamples = new ArrayList<>();
 		for ( final Pair< RealPoint, RealPoint > stageAndWorld : stageAndWorldCoordinates )
 		{
-			final double[] offsetSample = new double[ tile.numDimensions() ];
+			final double[] offsetSample = new double[ subTile.numDimensions() ];
 			for ( int d = 0; d < offsetSample.length; ++d )
 				offsetSample[ d ] = stageAndWorld.getB().getDoublePosition( d ) - stageAndWorld.getA().getDoublePosition( d );
 			offsetSamples.add( offsetSample );
@@ -155,7 +159,7 @@ public class OffsetUncertaintyEstimator implements Serializable
 
 		final WeightedCovariance weightedCovariance = new WeightedCovariance( offsetSamples, sampleWeights );
 		final ErrorEllipse searchRadius = new ErrorEllipse( searchRadiusMultiplier, weightedCovariance.getWeightedMean(), weightedCovariance.getWeightedCovarianceMatrix() );
-		return new EstimatedWorldSearchRadius( searchRadius, tile, neighboringTiles, stageAndWorldCoordinates );
+		return new EstimatedWorldSearchRadius( searchRadius, subTile, neighboringTiles, stageAndWorldCoordinates );
 	}
 
 	public static double[] getUncorrelatedErrorEllipseRadius( final long[] tileSize, final double errorEllipseRadiusAsTileSizeRatio )
@@ -175,23 +179,30 @@ public class OffsetUncertaintyEstimator implements Serializable
 		return new ErrorEllipse( 1.0, zeroMeanValues, uncorrelatedCovarianceMatrix );
 	}
 
-	static List< Pair< RealPoint, RealPoint > > getStageAndWorldCoordinates( final Set< TileInfo > neighboringTiles )
+	static List< Pair< RealPoint, RealPoint > > getStageAndWorldCoordinates( final SubTile subTile, final Set< TileInfo > neighboringTiles )
 	{
 		final List< Pair< RealPoint, RealPoint > > stageAndWorldCoordinates = new ArrayList<>();
 		for ( final TileInfo neighboringTile : neighboringTiles )
 		{
-			// invert the linear part of the affine transformation
-			final AffineGet neighboringTileTransform = TransformedTileOperations.getTileTransform( neighboringTile, true );
-//			final RealTransform neighboringTileLocalToOffsetTransform = TransformUtils.undoLinearComponent( neighboringTileTransform );
+			// find corresponding subtile in the neighboring tile
+			final int[] subdivisionGridSize = new int[ neighboringTile.numDimensions() ];
+			Arrays.fill( subdivisionGridSize, 2 );
+			final List< SubTile > neighboringSubTiles = SubTileOperations.subdivideTiles( new TileInfo[] { neighboringTile }, subdivisionGridSize );
 
-			final double[] stagePosition = neighboringTile.getStagePosition();
-			final double[] transformedPosition = new double[ neighboringTile.numDimensions() ];
-			/*neighboringTileLocalToOffsetTransform*/neighboringTileTransform.apply( new double[ neighboringTile.numDimensions() ], transformedPosition ); // (0,0,0) -> transformed
+			SubTile correspondingNeighboringSubTile = null;
+			for ( final SubTile neighboringSubTile : neighboringSubTiles )
+			{
+				if ( Intervals.equals( neighboringSubTile, subTile ) )
+				{
+					correspondingNeighboringSubTile = neighboringSubTile;
+					break;
+				}
+			}
 
-			if ( neighboringTileTransform != null )
-				throw new RuntimeException( "FIXME: check implementation" );
+			final double[] middlePointStagePosition = SubTileOperations.getSubTileMiddlePointStagePosition( correspondingNeighboringSubTile );
+			final double[] middlePointWorldPosition = TransformedTileOperations.transformSubTileMiddlePoint( correspondingNeighboringSubTile, true );
 
-			stageAndWorldCoordinates.add( new ValuePair<>( new RealPoint( stagePosition ), new RealPoint( transformedPosition ) ) );
+			stageAndWorldCoordinates.add( new ValuePair<>( new RealPoint( middlePointStagePosition ), new RealPoint( middlePointWorldPosition ) ) );
 		}
 		return stageAndWorldCoordinates;
 	}
