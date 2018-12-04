@@ -46,6 +46,9 @@ public class PointMatchSpatialLayout
 
 	public static SpatialLayout determine( final List< double[] > samples, final double[] weights )
 	{
+		if ( samples.isEmpty() )
+			return SpatialLayout.Collinear;
+
 		final int dim = samples.iterator().next().length;
 
 		final WeightedCovariance covariance = new WeightedCovariance( samples, weights );
