@@ -260,19 +260,19 @@ public class AffineStitchingVisualization
 			);
 
 		// draw transformed uncorrelated error ellipse in the fixed box space
-		final double[] uncorrelatedErrorEllipseRadius = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipseRadius(
-				tileBoxPair.getA().getFullTile().getSize(),
-				errorEllipseRadiusAsTileSizeRatio
-			);
-		final ErrorEllipse movingBoxUncorrelatedErrorEllipse = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
-		movingBoxUncorrelatedErrorEllipse.setErrorEllipseTransform( PairwiseTileOperations.getErrorEllipseTransform( tileBoxPair.toArray(), estimatedTileTransforms ) );
-		drawErrorEllipse(
-				movingBoxUncorrelatedErrorEllipse,
-				displayOffsetTransform,
-				localDisplaySize,
-				imgLocalRandomAccess,
-				new ARGBType( ARGBType.rgba( 64, 255, 64, 255 ) )
-			);
+//		final double[] uncorrelatedErrorEllipseRadius = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipseRadius(
+//				tileBoxPair.getA().getFullTile().getSize(),
+//				errorEllipseRadiusAsTileSizeRatio
+//			);
+//		final ErrorEllipse movingBoxUncorrelatedErrorEllipse = OffsetUncertaintyEstimator.getUncorrelatedErrorEllipse( uncorrelatedErrorEllipseRadius );
+//		movingBoxUncorrelatedErrorEllipse.setErrorEllipseTransform( PairwiseTileOperations.getErrorEllipseTransform( tileBoxPair.toArray(), estimatedTileTransforms ) );
+//		drawErrorEllipse(
+//				movingBoxUncorrelatedErrorEllipse,
+//				displayOffsetTransform,
+//				localDisplaySize,
+//				imgLocalRandomAccess,
+//				new ARGBType( ARGBType.rgba( 64, 255, 64, 255 ) )
+//			);
 
 		final ImagePlus impLocal = imgLocal.getImagePlus();
 		impLocal.show();
