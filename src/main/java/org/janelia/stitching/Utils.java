@@ -49,7 +49,7 @@ public class Utils {
 			return filename;
 
 		int lastDotIndex = filename.lastIndexOf( "." );
-		if ( lastDotIndex == -1 )
+		if ( lastDotIndex == -1 || lastDotIndex < filename.lastIndexOf( "/" ) || lastDotIndex < filename.lastIndexOf( "\\" ))
 			lastDotIndex = filename.length();
 
 		if ( suffixIndex + suffix.length() != lastDotIndex )
