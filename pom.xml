@@ -208,6 +208,10 @@
 			<artifactId>imglib2-cache</artifactId>
 			<version>1.0.0-beta-7</version>
 		</dependency>
+		<dependency>
+			<groupId>net.imagej</groupId>
+			<artifactId>imagej</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

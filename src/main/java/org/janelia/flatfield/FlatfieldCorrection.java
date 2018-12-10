@@ -55,6 +55,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	public static final String scalingTermFilename = "S.tif";
 	public static final String translationTermFilename = "T.tif";
 
+	public static final String pivotValueAttributeKey = "pivotValue";
+
 	private static final int SCALE_LEVEL_MIN_PIXELS = 1;
 //	private static final int AVERAGE_SKIP_SLICES = 5;
 
@@ -81,8 +83,10 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 			final String basePath,
 			final int dimensionality ) throws IOException
 	{
-		final String scalingTermPath = PathResolver.get( basePath + flatfieldFolderSuffix, scalingTermFilename );
-		final String translationTermPath = PathResolver.get( basePath + flatfieldFolderSuffix, translationTermFilename );
+		final String flatfieldFolderPath = getFlatfieldFolderForBasePath( basePath );
+
+		final String scalingTermPath = PathResolver.get( flatfieldFolderPath, scalingTermFilename );
+		final String translationTermPath = PathResolver.get( flatfieldFolderPath, translationTermFilename );
 
 		System.out.println( "Loading flat-field components:" );
 		System.out.println( "  " + scalingTermPath );
@@ -124,6 +128,16 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		return dst;
 	}
 
+	public static double getPivotValue( final DataProvider dataProvider, final String basePath ) throws IOException
+	{
+		return dataProvider.createN5Reader( getFlatfieldFolderForBasePath( basePath ) ).getAttribute( "/", pivotValueAttributeKey, Double.class );
+	}
+
+	protected static String getFlatfieldFolderForBasePath( final String basePath )
+	{
+		final String basePathNoExt = basePath.lastIndexOf( '.' ) != -1 ? basePath.substring( 0, basePath.lastIndexOf( '.' ) ) : basePath;
+		return basePathNoExt + flatfieldFolderSuffix;
+	}
 
 
 	public FlatfieldCorrection( final FlatfieldCorrectionArguments args ) throws IOException
@@ -167,10 +181,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final String solutionPath = PathResolver.get( basePath, args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr(), "solution" );
 
 		if ( !checkSameSizeForAllTiles( tiles ) )
-		{
-			System.out.println("Assumption failed: not all the tiles are of the same size");
-			System.exit(1);
-		}
+			throw new RuntimeException( "not all tiles are of the same size" );
 
 		final long[] fullTileSize = getMinTileSize( tiles );
 		final Interval workingInterval = args.cropMinMaxInterval( args.use2D() ? new long[] { fullTileSize[ 0 ], fullTileSize[ 1 ] } : fullTileSize );
@@ -239,9 +250,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 			}
 		}
 
-		// log estimated pivot point value
-		final String pivotPointLogFilepath = PathResolver.get( basePath, "pivotPoint_" + pivotValue );
-		try ( final OutputStream out = dataProvider.getOutputStream( pivotPointLogFilepath ) ) { }
+		// save estimated pivot point value in the attributes
+		dataProvider.createN5Writer( histogramsProvider.getHistogramsN5BasePath() ).setAttribute( "/", pivotValueAttributeKey, pivotValue );
 
 		// Generate downsampled histograms with half-pixel offset
 		final ShiftedDownsampling< A > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, histogramsProvider );
