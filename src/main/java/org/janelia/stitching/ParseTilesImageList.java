@@ -86,7 +86,7 @@ public class ParseTilesImageList
 	{
 		final ParseTilesImageListCmdArgs parsedArgs = new ParseTilesImageListCmdArgs( args );
 		if ( !parsedArgs.parsedSuccessfully )
-			System.exit( 1 );
+			throw new IllegalArgumentException( "argument format mismatch" );
 
 		run(
 				parsedArgs.imageListFilepath,

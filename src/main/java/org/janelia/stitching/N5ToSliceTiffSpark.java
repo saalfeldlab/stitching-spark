@@ -79,7 +79,7 @@ public class N5ToSliceTiffSpark
 	{
 		final N5ToSliceTiffCmdArgs parsedArgs = new N5ToSliceTiffCmdArgs( args );
 		if ( !parsedArgs.parsedSuccessfully )
-			System.exit( 1 );
+			throw new IllegalArgumentException( "argument format mismatch" );
 
 		final TiffCompression tiffCompression = parsedArgs.compressTiffs ? TiffCompression.LZW : TiffCompression.NONE;
 		System.out.println( "Output path: " + parsedArgs.outputPath );

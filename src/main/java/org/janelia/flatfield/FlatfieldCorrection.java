@@ -66,7 +66,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	{
 		final FlatfieldCorrectionArguments argsParsed = new FlatfieldCorrectionArguments( args );
 		if ( !argsParsed.parsedSuccessfully() )
-			System.exit( 1 );
+			throw new IllegalArgumentException( "argument format mismatch" );
 
 		try ( final FlatfieldCorrection driver = new FlatfieldCorrection( argsParsed ) )
 		{
