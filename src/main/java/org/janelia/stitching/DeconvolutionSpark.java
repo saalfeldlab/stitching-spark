@@ -21,9 +21,11 @@ import org.janelia.flatfield.FlatfieldCorrection;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
+import org.scijava.Context;
+import org.scijava.plugin.Parameter;
 
 import ij.ImagePlus;
-import net.imagej.ImageJ;
+import net.imagej.ops.OpService;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.ClampingConverter;
@@ -86,6 +88,36 @@ public class DeconvolutionSpark
 			for ( int i = 0; i < inputChannelsPaths.size(); ++i )
 				if ( !CloudURI.isCloudURI( inputChannelsPaths.get( i ) ) )
 					inputChannelsPaths.set( i, Paths.get( inputChannelsPaths.get( i ) ).toAbsolutePath().toString() );
+		}
+	}
+
+	private static class OpServiceContainer implements AutoCloseable
+	{
+		@Parameter
+		private Context context;
+
+		@Parameter
+		private OpService ops;
+
+		public OpServiceContainer()
+		{
+			new Context( OpService.class ).inject( this );
+		}
+
+		public OpService ops()
+		{
+			return ops;
+		}
+
+		@Override
+		public void close() throws Exception
+		{
+			if ( context != null )
+			{
+				context.dispose();
+				context = null;
+				ops = null;
+			}
 		}
 	}
 
@@ -166,11 +198,15 @@ public class DeconvolutionSpark
 					// TODO: edgetaper
 
 					// run decon
-					final RandomAccessibleInterval< FloatType > deconImg = new ImageJ().op().deconvolve().richardsonLucy(
-							sourceImgNoBackground,
-							psfImgNoBackground,
-							parsedArgs.numIterations
-						);
+					final RandomAccessibleInterval< FloatType > deconImg;
+					try ( final OpServiceContainer opServiceContainer = new OpServiceContainer() )
+					{
+						deconImg = opServiceContainer.ops().deconvolve().richardsonLucy(
+								sourceImgNoBackground,
+								psfImgNoBackground,
+								parsedArgs.numIterations
+							);
+					}
 
 					// rescale data back to 16-bit (use the original range)
 					final Pair< Double, Double > inputDataMinMax = getMinMax( tileImg );

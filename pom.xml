@@ -210,7 +210,7 @@
 		</dependency>
 		<dependency>
 			<groupId>net.imagej</groupId>
-			<artifactId>imagej</artifactId>
+			<artifactId>imagej-ops</artifactId>
 		</dependency>
 	</dependencies>
 
