@@ -208,8 +208,6 @@ public class DeconvolutionSpark
 					final RandomAccessibleInterval< FloatType > sourceImgNoBackground = subtractBackground( sourceImgFloat, backgroundValue );
 					final RandomAccessibleInterval< FloatType > psfImgNoBackground = subtractBackground( psfImgFloat, backgroundValue );
 
-					// TODO: edgetaper
-
 					// run decon
 					final RandomAccessibleInterval< FloatType > deconImg;
 					try ( final OpServiceContainer opServiceContainer = new OpServiceContainer() )
@@ -217,7 +215,10 @@ public class DeconvolutionSpark
 						deconImg = opServiceContainer.ops().deconvolve().richardsonLucyTV(
 								sourceImgNoBackground,
 								psfImgNoBackground,
+								null, null, null, null, null,
 								parsedArgs.numIterations,
+								true,	// non-circulant mode to prevent ringing artifacts at the edges
+								true,	// accelerated mode
 								parsedArgs.regularization
 							);
 					}
