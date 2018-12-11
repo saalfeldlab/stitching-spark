@@ -84,10 +84,14 @@ public class DeconvolutionSpark
 			if ( inputChannelsPaths.size() != psfPaths.size() )
 				throw new IllegalArgumentException( "Number of input channels should match the number of PSFs" );
 
-			// make sure that inputChannelsPaths contains absolute file paths if running on a traditional filesystem
+			// make sure that input paths are absolute file paths if running on a traditional filesystem
 			for ( int i = 0; i < inputChannelsPaths.size(); ++i )
 				if ( !CloudURI.isCloudURI( inputChannelsPaths.get( i ) ) )
 					inputChannelsPaths.set( i, Paths.get( inputChannelsPaths.get( i ) ).toAbsolutePath().toString() );
+
+			for ( int i = 0; i < psfPaths.size(); ++i )
+				if ( !CloudURI.isCloudURI( psfPaths.get( i ) ) )
+					psfPaths.set( i, Paths.get( psfPaths.get( i ) ).toAbsolutePath().toString() );
 		}
 	}
 
