@@ -61,6 +61,10 @@ public class DeconvolutionSpark
 				usage = "Number of iterations to perform for the deconvolution algorithm.")
 		private int numIterations = 10;
 
+		@Option(name = "-r", aliases = { "--regularization" }, required = false,
+				usage = "Regularization coefficient for the total variation constraint in the deconvolution algorithm.")
+		private float regularization = 0.01f;
+
 		@Option(name = "-b", aliases = { "--backgroundValue" }, required = false,
 				usage = "Background value of the data for each channel. If omitted, the pivot value estimated in the Flatfield Correction step will be used.")
 		private Double backgroundValue = null;
@@ -210,10 +214,11 @@ public class DeconvolutionSpark
 					final RandomAccessibleInterval< FloatType > deconImg;
 					try ( final OpServiceContainer opServiceContainer = new OpServiceContainer() )
 					{
-						deconImg = opServiceContainer.ops().deconvolve().richardsonLucy(
+						deconImg = opServiceContainer.ops().deconvolve().richardsonLucyTV(
 								sourceImgNoBackground,
 								psfImgNoBackground,
-								parsedArgs.numIterations
+								parsedArgs.numIterations,
+								parsedArgs.regularization
 							);
 					}
 
