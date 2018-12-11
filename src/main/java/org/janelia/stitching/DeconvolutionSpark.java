@@ -121,6 +121,8 @@ public class DeconvolutionSpark
 		}
 	}
 
+	private static final int MAX_PARTITIONS = 15000;
+
 	public static < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > void main( final String[] args ) throws Exception
 	{
 		final DeconvolutionCmdArgs parsedArgs = new DeconvolutionCmdArgs( args );
@@ -157,7 +159,10 @@ public class DeconvolutionSpark
 				channelFlatfields.add( FlatfieldCorrection.loadCorrectionImages( dataProvider, channelPath, tilesAndChannelIndices.iterator().next()._1().numDimensions() ) );
 			final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedChannelFlatfields = sparkContext.broadcast( channelFlatfields );
 
-			final List< Tuple2< TileInfo, Integer > > deconTilesAndChannelIndices = sparkContext.parallelize( tilesAndChannelIndices ).map( tileAndChannelIndex->
+			final List< Tuple2< TileInfo, Integer > > deconTilesAndChannelIndices = sparkContext.parallelize(
+					tilesAndChannelIndices,
+					Math.min( tilesAndChannelIndices.size(), MAX_PARTITIONS )
+			).map( tileAndChannelIndex->
 				{
 					final TileInfo tile = tileAndChannelIndex._1();
 					final int channelIndex = tileAndChannelIndex._2();
