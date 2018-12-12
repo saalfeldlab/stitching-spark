@@ -28,7 +28,6 @@ import ij.ImagePlus;
 import net.imagej.ops.OpService;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.converter.ClampingConverter;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealConverter;
 import net.imglib2.img.array.ArrayImgFactory;
@@ -218,21 +217,21 @@ public class DeconvolutionSpark
 						deconImg = opServiceContainer.ops().deconvolve().richardsonLucy( sourceImgNoBackground, psfImgNoBackground, parsedArgs.numIterations );
 					}
 
-					// rescale data back to 16-bit (use the original range)
-					final Pair< Double, Double > inputDataMinMax = getMinMax( tileImg );
-					final Pair< Double, Double > outputDataMinMax = getMinMax( deconImg );
-					final ClampingConverter< FloatType, T > deconConverter = new ClampingConverter<>(
-							outputDataMinMax.getA(), outputDataMinMax.getB(),
-							inputDataMinMax.getA(), inputDataMinMax.getB()
-						);
-					final RandomAccessibleInterval< T > convertedDeconImg = Converters.convert( deconImg, deconConverter, Util.getTypeFromInterval( tileImg ) );
+					// check if all resulting values are within the range of the original data type
+					final T originalDataType = Util.getTypeFromInterval( tileImg ).createVariable();
+					for ( final FloatType val : Views.iterable( deconImg ) )
+						if ( val.get() < originalDataType.getMinValue() || val.get() > originalDataType.getMaxValue() )
+							throw new RuntimeException( "resulting intensity values are outside of the input datatype range. TODO: use rescaling" );
+
+					// convert the resulting image to the original data type
+					final RandomAccessibleInterval< T > convertedDeconImg = Converters.convert( deconImg, new RealConverter<>(), originalDataType );
 
 					// save resulting decon tile
 					final ImagePlus deconImp = Utils.copyToImagePlus( convertedDeconImg );
 					final String deconTilePath = PathResolver.get( outputImagesPath, Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "-decon" ) );
 					localDataProvider.saveImage( deconImp, deconTilePath );
 
-					// build resulting decon tile metadata
+					// create metadata for resulting decon tile
 					final TileInfo deconTile = tile.clone();
 					deconTile.setFilePath( deconTilePath );
 
