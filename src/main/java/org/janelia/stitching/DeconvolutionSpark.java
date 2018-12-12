@@ -204,6 +204,13 @@ public class DeconvolutionSpark
 					final RandomAccessibleInterval< FloatType > sourceImgNoBackground = subtractBackground( sourceImgFloat, backgroundValue );
 					final RandomAccessibleInterval< FloatType > psfImgNoBackground = subtractBackground( psfImgFloat, backgroundValue );
 
+					// normalize the PSF
+					double psfSum = 0;
+					for ( final FloatType val : Views.iterable( psfImgNoBackground ) )
+						psfSum += val.get();
+					for ( final FloatType val : Views.iterable( psfImgNoBackground ) )
+						val.set( ( float ) ( val.get() / psfSum ) );
+
 					// run decon
 					final RandomAccessibleInterval< FloatType > deconImg;
 					try ( final OpServiceContainer opServiceContainer = new OpServiceContainer() )
