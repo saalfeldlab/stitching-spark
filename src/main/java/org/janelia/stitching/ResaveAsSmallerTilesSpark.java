@@ -158,7 +158,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		final List< TileInfo > newTilesInSingleTile = new ArrayList<>();
 		for ( final Interval newTileInterval : newTilesIntervalsInSingleTile )
 		{
-			final ImagePlusImg< T, ? > newTileImg = new ImagePlusImgFactory< T >().create( newTileInterval, tileImageType );
+			final ImagePlusImg< T, ? > newTileImg = new ImagePlusImgFactory<>( tileImageType ).create( newTileInterval );
 			final Cursor< T > newTileImgCursor = Views.flatIterable( newTileImg ).cursor();
 			final Cursor< T > tileImgIntervalCursor = Views.flatIterable( Views.interval( tileImg, newTileInterval ) ).cursor();
 			while ( newTileImgCursor.hasNext() || tileImgIntervalCursor.hasNext() )

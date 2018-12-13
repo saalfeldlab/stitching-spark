@@ -30,7 +30,6 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
-import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
@@ -119,7 +118,7 @@ public class BlurTest
 		final T type = ( T ) ImageType.valueOf( inImp.getType() ).getType();
 
 		final RandomAccessible< T > inImg = ImagePlusImgs.from( inImp );
-		final ImagePlusImg< T, ? > outImg = new ImagePlusImgFactory< T >().create( region, type.createVariable() );
+		final ImagePlusImg< T, ? > outImg = new ImagePlusImgFactory<>( type.createVariable() ).create( region );
 
 		final IterableInterval< T > inInterval = Views.flatIterable( Views.offsetInterval( inImg, region ) );
 		final IterableInterval< T > outInterval = Views.flatIterable( outImg );
@@ -159,12 +158,12 @@ public class BlurTest
 		Gauss3.gauss( sigmas, extendedImage, crop, service );
 		service.shutdown();
 	}
-	
-	
-	
-	
-	
-	
+
+
+
+
+
+
 	public static void main(final String[] args) throws Exception
 	{
 		new ImageJ();
@@ -174,16 +173,16 @@ public class BlurTest
 
 		final Interval region = new FinalInterval( new long[] { 1250, 0, 0 }, new long[] { imp.getWidth() - 1, imp.getHeight() - 1, imp.getNSlices() - 1 } );
 		final Interval regionSlice = new FinalInterval( new long[] { region.min(0), region.min(1) }, new long[] { region.max(0), region.max(1) } );
-		
+
 		final Img< UnsignedShortType > outImg = ArrayImgs.unsignedShorts( Intervals.dimensionsAsLongArray(region) );
-		
+
 		final int channels = imp.getNChannels();
 		final int frame = 0;
 		for ( int z = 0; z < imp.getNSlices(); z++ )
 		{
 			if ( z % 100 == 0 )
 				System.out.println( "Processing slice " + z + " out of "+ imp.getNSlices() );
-			
+
 			//System.out.println( "Grabbing channel data" );
 			final Img< UnsignedShortType >[] data = new Img[ channels ];
 			final Cursor< UnsignedShortType >[] cursors = new Cursor[ channels ];
@@ -192,10 +191,10 @@ public class BlurTest
 				data[ ch ] = ArrayImgs.unsignedShorts( ( short[] ) imp.getStack().getProcessor( imp.getStackIndex( ch + 1, z + 1, frame + 1 ) ).getPixels(), new long[] { imp.getWidth(), imp.getHeight() } );
 				cursors[ ch ] = Views.flatIterable( Views.offsetInterval( data[ ch ], regionSlice ) ).cursor();
 			}
-			
+
 			final IntervalView< UnsignedShortType > outSlice = Views.hyperSlice( outImg, 2, z );
 			final Cursor< UnsignedShortType > outSliceCursor = Views.flatIterable( outSlice ).cursor();
-			
+
 			while ( outSliceCursor.hasNext() )
 			{
 				double val = 0;
@@ -203,12 +202,12 @@ public class BlurTest
 					val += cursors[ch].next().getRealDouble();
 				outSliceCursor.next().setReal( val / channels );
 			}
-			
+
 			for ( int ch = 0; ch < channels; ch++ )
 				if ( cursors[ch].hasNext() )
 					throw new Exception( "Cursors mismatch" );
 		}
-		
+
 		System.out.println( "Wrapping into ImagePlus" );
 		final ImagePlus impOut = ImageJFunctions.wrap( outImg, null );
 		Utils.workaroundImagePlusNSlices(impOut);

@@ -36,7 +36,7 @@ public class ExtractDarkfield
 	{
 		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( basePath ) );
 		final RandomAccessiblePairNullable< U, U > flatfield = FlatfieldCorrection.loadCorrectionImages( dataProvider, Utils.removeFilenameSuffix( basePath, "-flatfield" ), is2d ? 2 : 3 );
-		final ImagePlusImg< U, ? > darkfield = new ImagePlusImgFactory< U >().create( ( Dimensions ) flatfield.getA(), ( U ) Util.getTypeFromInterval( ( RandomAccessibleInterval) flatfield.getA() ) );
+		final ImagePlusImg< U, ? > darkfield = new ImagePlusImgFactory<>( ( U ) Util.getTypeFromInterval( ( RandomAccessibleInterval) flatfield.getA() ) ).create( ( Dimensions ) flatfield.getA() );
 		final Cursor< U > scalingCursor = Views.flatIterable( ( RandomAccessibleInterval ) flatfield.getA() ).cursor();
 		final Cursor< U > translationCursor = Views.flatIterable( ( RandomAccessibleInterval ) flatfield.getB() ).cursor();
 		final Cursor< U > darkfieldCursor = Views.flatIterable( darkfield ).cursor();

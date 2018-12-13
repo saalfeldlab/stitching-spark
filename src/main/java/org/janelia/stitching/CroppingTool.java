@@ -79,7 +79,7 @@ public class CroppingTool
 		final N5Reader n5 = dataProvider.createN5Reader( parsedArgs.inputN5Path );
 		final RandomAccessibleInterval< T > img = N5Utils.open( n5, N5ExportMetadata.getScaleLevelDatasetPath( parsedArgs.channel, 0 ) );
 		final Interval cropInterval = new FinalInterval( CmdUtils.parseLongArray( parsedArgs.minStr ), CmdUtils.parseLongArray( parsedArgs.maxStr ) );
-		final ImagePlusImg< T, ? > imgCrop = new ImagePlusImgFactory< T >().create( cropInterval, Util.getTypeFromInterval( img ) );
+		final ImagePlusImg< T, ? > imgCrop = new ImagePlusImgFactory<>( Util.getTypeFromInterval( img ) ).create( cropInterval );
 		final Cursor< T > imgCursor = Views.flatIterable( Views.offsetInterval( Views.extendZero( img ), cropInterval ) ).cursor();
 		final Cursor< T > imgCropCursor = Views.flatIterable( imgCrop ).cursor();
 		while ( imgCropCursor.hasNext() || imgCursor.hasNext() )

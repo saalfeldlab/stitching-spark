@@ -241,7 +241,7 @@ public class PipelineIntensityCorrectionStepExecutor extends PipelineStepExecuto
 				final LinearIntensityMap< DoubleType > transform = new LinearIntensityMap< >( ArrayImgs.doubles( unrolledCoeffs, Conversions.toLongArray( unrolledCoeffsDim ) ) );
 
 				final RandomAccessibleInterval< T > src = TileLoader.loadTile( tile, dataProviderLocal );
-				final ImagePlusImg< T, ? > dst = new ImagePlusImgFactory< T >().create( src, Util.getTypeFromInterval( src ) );
+				final ImagePlusImg< T, ? > dst = new ImagePlusImgFactory<>( Util.getTypeFromInterval( src ) ).create( src );
 				transform.run( dst );
 
 				tile.setFilePath( destFolder + "/transformed_" + PathResolver.getFileName( tile.getFilePath() ) );

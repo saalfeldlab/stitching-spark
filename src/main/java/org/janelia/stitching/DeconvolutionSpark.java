@@ -137,7 +137,7 @@ public class DeconvolutionSpark
 	{
 		final DeconvolutionCmdArgs parsedArgs = new DeconvolutionCmdArgs( args );
 		if ( !parsedArgs.parsedSuccessfully )
-			System.exit( 1 );
+			throw new IllegalArgumentException( "argument format mismatch" );
 
 		final DataProviderType dataProviderType = DataProviderFactory.detectType( parsedArgs.inputChannelsPaths.iterator().next() );
 		final DataProvider dataProvider = DataProviderFactory.create( dataProviderType );
@@ -385,7 +385,7 @@ public class DeconvolutionSpark
 			final RandomAccessibleInterval< T > img,
 			final double backgroundValue )
 	{
-		final RandomAccessibleInterval< T > ret = new ArrayImgFactory< T >().create( img, Util.getTypeFromInterval( img ) );
+		final RandomAccessibleInterval< T > ret = new ArrayImgFactory<>( Util.getTypeFromInterval( img ) ).create( img );
 		final Cursor< T > imgCursor = Views.flatIterable( img ).cursor();
 		final Cursor< T > retCursor = Views.flatIterable( ret ).cursor();
 		while ( imgCursor.hasNext() || retCursor.hasNext() )

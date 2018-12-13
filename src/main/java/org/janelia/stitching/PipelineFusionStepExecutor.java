@@ -176,7 +176,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 					sparkContext,
 					() -> DataProviderFactory.create( dataProviderType ).createN5Writer( n5ExportPath ),
 					fullScaleOutputPath,
-					voxelDimensions
+					voxelDimensions,
+					false // not a power of two scale pyramid
 				);
 
 			broadcastedPairwiseConnectionsMap.destroy();
