@@ -3,6 +3,7 @@ package org.janelia.stitching;
 import java.io.Serializable;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -28,6 +29,7 @@ import ij.ImagePlus;
 import net.imagej.ops.OpService;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.ClampingConverter;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealConverter;
 import net.imglib2.img.array.ArrayImgFactory;
@@ -63,6 +65,12 @@ public class DeconvolutionSpark
 		@Option(name = "-b", aliases = { "--backgroundValue" }, required = false,
 				usage = "Background value of the data for each channel. If omitted, the pivot value estimated in the Flatfield Correction step will be used.")
 		private Double backgroundValue = null;
+
+		@Option(name = "-r", aliases = { "--rescale" }, required = false,
+				usage = "Rescale data to map the 32-bit deconvolution output images into the value range of the original data type. "
+						+ "Requires several extra steps: writing out all resulting 32-bit images, collecting the resulting stack histogram, and then resaving each image with the intensities of the stack mapped into the value range of the original data type. "
+						+ "If omitted, the same intensity values are used for the conversion, which may exceed the value range of the original data type.")
+		private boolean rescaleData = false;
 
 		private boolean parsedSuccessfully = false;
 
@@ -125,6 +133,7 @@ public class DeconvolutionSpark
 	}
 
 	private static final int MAX_PARTITIONS = 15000;
+	private static final String FILENAME_SUFFIX_32BIT = "-32bit";
 
 	public static < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > void main( final String[] args ) throws Exception
 	{
@@ -138,7 +147,7 @@ public class DeconvolutionSpark
 		final String outputImagesPath = PathResolver.get( PathResolver.getParent( parsedArgs.inputChannelsPaths.iterator().next() ), "decon-tiles" );
 		dataProvider.createFolder( outputImagesPath );
 
-		final Map< Integer, Map< Integer, TileInfo > > channelDeconTilesMap = new TreeMap<>();
+		final Map< Integer, Map< Integer, TileInfo > > channelDeconTilesMap;
 
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "DeconvolutionSpark" )
@@ -162,6 +171,10 @@ public class DeconvolutionSpark
 				channelFlatfields.add( FlatfieldCorrection.loadCorrectionImages( dataProvider, channelPath, tilesAndChannelIndices.iterator().next()._1().numDimensions() ) );
 			final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedChannelFlatfields = sparkContext.broadcast( channelFlatfields );
 
+			final ImageType inputImageType = tilesAndChannelIndices.iterator().next()._1().getType();
+			if ( parsedArgs.rescaleData && inputImageType.equals( ImageType.GRAY32 ) )
+				throw new IllegalArgumentException( "Requested to rescale the resulting images but the input data type is already 32-bit float." );
+
 			final List< Tuple2< TileInfo, Integer > > deconTilesAndChannelIndices = sparkContext.parallelize(
 					tilesAndChannelIndices,
 					Math.min( tilesAndChannelIndices.size(), MAX_PARTITIONS )
@@ -169,7 +182,6 @@ public class DeconvolutionSpark
 				{
 					final TileInfo tile = tileAndChannelIndex._1();
 					final int channelIndex = tileAndChannelIndex._2();
-
 					final DataProvider localDataProvider = DataProviderFactory.create( dataProviderType );
 
 					// load tile image
@@ -217,40 +229,128 @@ public class DeconvolutionSpark
 						deconImg = opServiceContainer.ops().deconvolve().richardsonLucy( sourceImgNoBackground, psfImgNoBackground, parsedArgs.numIterations );
 					}
 
-					// check if all resulting values are within the range of the original data type
-					final T originalDataType = Util.getTypeFromInterval( tileImg ).createVariable();
-					for ( final FloatType val : Views.iterable( deconImg ) )
-						if ( val.get() < originalDataType.getMinValue() || val.get() > originalDataType.getMaxValue() )
-							throw new RuntimeException( "resulting intensity values are outside of the input datatype range. TODO: use rescaling" );
+					// create output image data
+					final ImagePlus deconImp;
+					if ( parsedArgs.rescaleData )
+					{
+						// save 32-bit image, rescaling is to be done after all the decon tiles are ready
+						deconImp = Utils.copyToImagePlus( deconImg );
+					}
+					else
+					{
+						// check if all resulting values are within the range of the original data type
+						final T originalDataType = Util.getTypeFromInterval( tileImg ).createVariable();
+						for ( final FloatType val : Views.iterable( deconImg ) )
+							if ( val.get() < originalDataType.getMinValue() || val.get() > originalDataType.getMaxValue() )
+								throw new RuntimeException( "resulting intensity values are outside of the input datatype range. TODO: use rescaling" );
 
-					// convert the resulting image to the original data type
-					final RandomAccessibleInterval< T > convertedDeconImg = Converters.convert( deconImg, new RealConverter<>(), originalDataType );
+						// convert the resulting image to the original data type using the same values
+						final RandomAccessibleInterval< T > convertedDeconTileImg = Converters.convert( deconImg, new RealConverter<>(), originalDataType );
+						deconImp = Utils.copyToImagePlus( convertedDeconTileImg );
+					}
 
 					// save resulting decon tile
-					final ImagePlus deconImp = Utils.copyToImagePlus( convertedDeconImg );
-					final String deconTilePath = PathResolver.get( outputImagesPath, Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "-decon" ) );
+					final String deconTilePath = PathResolver.get( outputImagesPath,
+							Utils.addFilenameSuffix(
+									Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "-decon" ),
+									parsedArgs.rescaleData ? FILENAME_SUFFIX_32BIT : ""
+								)
+						);
 					localDataProvider.saveImage( deconImp, deconTilePath );
 
 					// create metadata for resulting decon tile
 					final TileInfo deconTile = tile.clone();
 					deconTile.setFilePath( deconTilePath );
+					deconTile.setType( ImageType.valueOf( deconImp.getType() ) );
 
-					return new Tuple2<>( deconTile, tileAndChannelIndex._2() );
+					return new Tuple2<>( deconTile, channelIndex );
 				}
 			).collect();
 
 			broadcastedChannelFlatfields.destroy();
 
-			// group decon tiles into channels
-			for ( final Tuple2< TileInfo, Integer > deconTileAndChannelIndex : deconTilesAndChannelIndices )
+			if ( parsedArgs.rescaleData )
 			{
-				final TileInfo deconTile = deconTileAndChannelIndex._1();
-				final int channelIndex = deconTileAndChannelIndex._2();
+				// collect stack min and max values of the resulting deconvolved collection of tiles for each channel
+				final Map< Integer, Map< Integer, TileInfo > > deconChannelGroups = groupTilesIntoChannels( deconTilesAndChannelIndices );
+				final Map< Integer, Tuple2< Double, Double > > channelGlobalMinMaxIntensityValues = new TreeMap<>();
+				for ( final Entry< Integer, Map< Integer, TileInfo > > channelIndexAndDeconTiles : deconChannelGroups.entrySet() )
+				{
+					final Tuple2< Double, Double > globalDeconMinMaxValues = sparkContext.parallelize(
+							new ArrayList<>( channelIndexAndDeconTiles.getValue().values() ),
+							Math.min( channelIndexAndDeconTiles.getValue().size(), MAX_PARTITIONS )
+					).map( deconTile ->
+						{
+							final DataProvider localDataProvider = DataProviderFactory.create( dataProviderType );
 
-				if ( !channelDeconTilesMap.containsKey( channelIndex ) )
-					channelDeconTilesMap.put( channelIndex, new TreeMap<>() );
+							// load 32-bit decon tile image
+							final RandomAccessibleInterval< FloatType > deconTileImg = TileLoader.loadTile( deconTile, localDataProvider );
 
-				channelDeconTilesMap.get( channelIndex ).put( deconTile.getIndex(), deconTile );
+							// find min and max intensity values of the image
+							double minValue = Double.POSITIVE_INFINITY, maxValue = Double.NEGATIVE_INFINITY;
+							for ( final FloatType val : Views.iterable( deconTileImg ) )
+							{
+								minValue = Math.min( val.get(), minValue );
+								maxValue = Math.max( val.get(), maxValue );
+							}
+
+							return new Tuple2<>( minValue, maxValue );
+						}
+					).treeReduce( ( a, b ) -> new Tuple2<>(
+							Math.min( a._1(), b._1() ),
+							Math.max( a._2(), b._2() )
+						),
+						Integer.MAX_VALUE  // max possible aggregation depth
+					);
+
+					channelGlobalMinMaxIntensityValues.put( channelIndexAndDeconTiles.getKey(), globalDeconMinMaxValues );
+				}
+
+				final List< Tuple2< TileInfo, Integer > > rescaledDeconTilesAndChannelIndices = sparkContext.parallelize(
+						deconTilesAndChannelIndices,
+						Math.min( deconTilesAndChannelIndices.size(), MAX_PARTITIONS )
+				).map( deconTileAndChannelIndex ->
+					{
+						final TileInfo deconTile = deconTileAndChannelIndex._1();
+						final int channelIndex = deconTileAndChannelIndex._2();
+						final DataProvider localDataProvider = DataProviderFactory.create( dataProviderType );
+
+						// load 32-bit decon tile image
+						final RandomAccessibleInterval< FloatType > deconTileImg = TileLoader.loadTile( deconTile, localDataProvider );
+
+						// convert the image data to original data type mapping the intensities of the resulting stack into the value range of the target data type
+						final Tuple2< Double, Double > globalDeconMinMaxValues = channelGlobalMinMaxIntensityValues.get( channelIndex );
+						final ClampingConverter< FloatType, T > rescalingConverter = new ClampingConverter<>(
+								globalDeconMinMaxValues._1(), globalDeconMinMaxValues._2(),
+								inputImageType.getType().getMinValue(), inputImageType.getType().getMaxValue()
+							);
+						final RandomAccessibleInterval< T > rescaledDeconTileImg = Converters.convert( deconTileImg, rescalingConverter, ( T ) inputImageType.getType() );
+						final ImagePlus rescaledDeconImp = Utils.copyToImagePlus( rescaledDeconTileImg );
+
+						// save the rescaled decon tile image
+						final String rescaledDeconTilePath = Utils.addFilenameSuffix(
+								Utils.removeFilenameSuffix( deconTile.getFilePath(), FILENAME_SUFFIX_32BIT ),
+								"-rescaled-intensity"
+							);
+						localDataProvider.saveImage( rescaledDeconImp, rescaledDeconTilePath );
+
+						// delete intermediate 32-bit decon tile image
+						localDataProvider.deleteFile( deconTile.getFilePath() );
+
+						// create metadata for rescaled decon tile
+						final TileInfo rescaledDeconTile = deconTile.clone();
+						rescaledDeconTile.setFilePath( rescaledDeconTilePath );
+						rescaledDeconTile.setType( ImageType.valueOf( rescaledDeconImp.getType() ) );
+
+						return new Tuple2<>( rescaledDeconTile, channelIndex );
+					}
+				).collect();
+
+				channelDeconTilesMap = groupTilesIntoChannels( rescaledDeconTilesAndChannelIndices );
+			}
+			else
+			{
+				channelDeconTilesMap = groupTilesIntoChannels( deconTilesAndChannelIndices );
 			}
 		}
 
@@ -287,5 +387,20 @@ public class DeconvolutionSpark
 			max = Math.max( val.getRealDouble(), max );
 		}
 		return new ValuePair<>( min, max );
+	}
+
+	private static Map< Integer, Map< Integer, TileInfo > > groupTilesIntoChannels( final Collection< Tuple2< TileInfo, Integer > > tilesAndChannelIndices )
+	{
+		// group tiles into channels
+		final Map< Integer, Map< Integer, TileInfo > > channelToTiles = new TreeMap<>();
+		for ( final Tuple2< TileInfo, Integer > tileAndChannelIndex : tilesAndChannelIndices )
+		{
+			final TileInfo tile = tileAndChannelIndex._1();
+			final int channelIndex = tileAndChannelIndex._2();
+			if ( !channelToTiles.containsKey( channelIndex ) )
+				channelToTiles.put( channelIndex, new TreeMap<>() );
+			channelToTiles.get( channelIndex ).put( tile.getIndex(), tile );
+		}
+		return channelToTiles;
 	}
 }
