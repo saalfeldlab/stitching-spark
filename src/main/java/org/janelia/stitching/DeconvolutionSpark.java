@@ -241,7 +241,7 @@ public class DeconvolutionSpark
 						final T originalDataType = Util.getTypeFromInterval( tileImg ).createVariable();
 						for ( final FloatType val : Views.iterable( deconImg ) )
 							if ( val.get() < originalDataType.getMinValue() || val.get() > originalDataType.getMaxValue() )
-								throw new RuntimeException( "resulting intensity values are outside of the input datatype range. TODO: use rescaling" );
+								throw new RuntimeException( "Resulting intensity values are outside of the input datatype range. Use rescaling" );
 
 						// convert the resulting image to the original data type using the same values
 						final RandomAccessibleInterval< T > convertedDeconTileImg = Converters.convert( deconImg, new RealConverter<>(), originalDataType );
@@ -270,6 +270,8 @@ public class DeconvolutionSpark
 
 			if ( parsedArgs.rescaleData )
 			{
+				System.out.println( "Requested to rescale data, collecting min/max values of the resulting decon stack for each channel..." );
+
 				// collect stack min and max values of the resulting deconvolved collection of tiles for each channel
 				final Map< Integer, Map< Integer, TileInfo > > deconChannelGroups = groupTilesIntoChannels( deconTilesAndChannelIndices );
 				final Map< Integer, Tuple2< Double, Double > > channelGlobalMinMaxIntensityValues = new TreeMap<>();
@@ -303,6 +305,19 @@ public class DeconvolutionSpark
 					);
 
 					channelGlobalMinMaxIntensityValues.put( channelIndexAndDeconTiles.getKey(), globalDeconMinMaxValues );
+				}
+
+				System.out.println( "Rescaling the intensity range of the resulting decon data..." );
+				for ( final Entry< Integer, Tuple2< Double, Double > > entry : channelGlobalMinMaxIntensityValues.entrySet() )
+				{
+					System.out.println( String.format(
+							"  Channel %d: [%.2f, %.2f] -> [%.2f, %.2f]",
+							entry.getKey(),
+							entry.getValue()._1(),
+							entry.getValue()._2(),
+							inputImageType.getType().getMinValue(),
+							inputImageType.getType().getMaxValue()
+						) );
 				}
 
 				final List< Tuple2< TileInfo, Integer > > rescaledDeconTilesAndChannelIndices = sparkContext.parallelize(
