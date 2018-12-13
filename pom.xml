@@ -208,6 +208,10 @@
 			<artifactId>imglib2-cache</artifactId>
 			<version>1.0.0-beta-7</version>
 		</dependency>
+		<dependency>
+			<groupId>net.imagej</groupId>
+			<artifactId>imagej-ops</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -263,6 +267,10 @@
 								<transformer
 									implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
 									<resource>reference.conf</resource>
+								</transformer>
+								<transformer
+									implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+									<resource>META-INF/json/org.scijava.plugin.Plugin</resource>
 								</transformer>
 							</transformers>
 						</configuration>
