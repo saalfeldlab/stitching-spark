@@ -37,9 +37,7 @@ import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
-import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 import scala.Tuple2;
@@ -325,6 +323,7 @@ public class DeconvolutionSpark
 								globalDeconMinMaxValues._1(), globalDeconMinMaxValues._2(),
 								inputImageType.getType().getMinValue(), inputImageType.getType().getMaxValue()
 							);
+						@SuppressWarnings( "unchecked" )
 						final RandomAccessibleInterval< T > rescaledDeconTileImg = Converters.convert( deconTileImg, rescalingConverter, ( T ) inputImageType.getType() );
 						final ImagePlus rescaledDeconImp = Utils.copyToImagePlus( rescaledDeconTileImg );
 
@@ -377,17 +376,6 @@ public class DeconvolutionSpark
 		while ( imgCursor.hasNext() || retCursor.hasNext() )
 			retCursor.next().setReal( Math.max( imgCursor.next().getRealDouble() - backgroundValue, 0 ) );
 		return ret;
-	}
-
-	private static < T extends NativeType< T > & RealType< T > > Pair< Double, Double > getMinMax( final RandomAccessibleInterval< T > img )
-	{
-		double min = Double.POSITIVE_INFINITY, max = Double.NEGATIVE_INFINITY;
-		for ( final T val : Views.iterable( img ) )
-		{
-			min = Math.min( val.getRealDouble(), min );
-			max = Math.max( val.getRealDouble(), max );
-		}
-		return new ValuePair<>( min, max );
 	}
 
 	private static Map< Integer, Map< Integer, TileInfo > > groupTilesIntoChannels( final Collection< Tuple2< TileInfo, Integer > > tilesAndChannelIndices )
