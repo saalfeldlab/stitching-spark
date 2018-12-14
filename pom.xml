@@ -208,6 +208,7 @@
 		<dependency>
 			<groupId>net.imagej</groupId>
 			<artifactId>imagej-ops</artifactId>
+			<version>0.41.1</version>
 		</dependency>
 	</dependencies>
 
