@@ -1,8 +1,6 @@
 package org.janelia.flatfield;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.URISyntaxException;
 import java.util.Arrays;
@@ -19,6 +17,7 @@ import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldRegularizerMetad
 import org.janelia.flatfield.FlatfieldCorrectionSolver.FlatfieldSolutionMetadata;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.ModelType;
 import org.janelia.flatfield.FlatfieldCorrectionSolver.RegularizerModelType;
+import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.Utils;
 import org.kohsuke.args4j.CmdLineException;
@@ -29,7 +28,6 @@ import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.histogram.Real1dBinMapper;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
@@ -56,6 +54,9 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	public static final String translationTermFilename = "T.tif";
 
 	public static final String pivotValueAttributeKey = "pivotValue";
+
+	public static final String referenceHistogramAttributeKey = "referenceHistogram";
+	public static final String referenceHistogramSettingsAttributeKey = "referenceHistogramSettings";
 
 	private static final int SCALE_LEVEL_MIN_PIXELS = 1;
 //	private static final int AVERAGE_SKIP_SLICES = 5;
@@ -223,35 +224,21 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 			);
 
 		final double[] referenceHistogram = histogramsProvider.getReferenceHistogram();
-		System.out.println( "Obtained reference histogram of size " + referenceHistogram.length + " (first and last bins are tail bins)" );
-		System.out.println( "Reference histogram:");
+		System.out.println( "Collected reference histogram of size " + referenceHistogram.length + " (first and last bins are tail bins):" );
 		System.out.println( Arrays.toString( referenceHistogram ) );
 		System.out.println();
 
-		// save the reference histogram to file so one can plot it
-		final String referenceHistogramFilepath = PathResolver.get( basePath, "referenceHistogram-min_" + histogramSettings.histMinValue + ",max_" + histogramSettings.histMaxValue + ".txt" );
-		try ( final OutputStream out = dataProvider.getOutputStream( referenceHistogramFilepath ) )
-		{
-			final Real1dBinMapper< DoubleType > binMapper = new Real1dBinMapper<>(
-					histogramSettings.histMinValue,
-					histogramSettings.histMaxValue,
-					histogramSettings.bins,
-					true
-				);
-			final DoubleType binCenterValue = new DoubleType();
-			try ( final PrintWriter writer = new PrintWriter( out ) )
-			{
-				writer.println( "BinValue Frequency");
-				for ( int bin = 1; bin < referenceHistogram.length - 1; ++bin )
-				{
-					binMapper.getCenterValue( bin, binCenterValue );
-					writer.println( binCenterValue.get() + " " + referenceHistogram[ bin ] );
-				}
-			}
-		}
+		// create N5 writer to store estimated values in root attributes
+		final N5Writer n5Writer = dataProvider.createN5Writer( histogramsProvider.getHistogramsN5BasePath() );
 
 		// save estimated pivot point value in the attributes
-		dataProvider.createN5Writer( histogramsProvider.getHistogramsN5BasePath() ).setAttribute( "/", pivotValueAttributeKey, pivotValue );
+		n5Writer.setAttribute( "/", pivotValueAttributeKey, pivotValue );
+
+		// save reference histogram
+		n5Writer.setAttribute( "/", referenceHistogramAttributeKey, referenceHistogram );
+
+		// save reference histogram settings
+		n5Writer.setAttribute( "/", referenceHistogramSettingsAttributeKey, histogramSettings );
 
 		// Generate downsampled histograms with half-pixel offset
 		final ShiftedDownsampling< A > shiftedDownsampling = new ShiftedDownsampling<>( sparkContext, histogramsProvider );
