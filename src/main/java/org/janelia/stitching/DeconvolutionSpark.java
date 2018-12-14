@@ -100,15 +100,22 @@ public class DeconvolutionSpark
 		}
 	}
 
-	private static class OpServiceContainer implements AutoCloseable
+	private static class OpServiceContainer
 	{
+		private static final OpServiceContainer INSTANCE = new OpServiceContainer();
+
+		public static OpServiceContainer getInstance()
+		{
+			return INSTANCE;
+		}
+
 		@Parameter
 		private Context context;
 
 		@Parameter
 		private OpService ops;
 
-		public OpServiceContainer()
+		private OpServiceContainer()
 		{
 			new Context( OpService.class ).inject( this );
 		}
@@ -116,17 +123,6 @@ public class DeconvolutionSpark
 		public OpService ops()
 		{
 			return ops;
-		}
-
-		@Override
-		public void close() throws Exception
-		{
-			if ( context != null )
-			{
-				context.dispose();
-				context = null;
-				ops = null;
-			}
 		}
 	}
 
@@ -222,11 +218,11 @@ public class DeconvolutionSpark
 						val.set( ( float ) ( val.get() / psfSum ) );
 
 					// run decon
-					final RandomAccessibleInterval< FloatType > deconImg;
-					try ( final OpServiceContainer opServiceContainer = new OpServiceContainer() )
-					{
-						deconImg = opServiceContainer.ops().deconvolve().richardsonLucy( sourceImgNoBackground, psfImgNoBackground, parsedArgs.numIterations );
-					}
+					final RandomAccessibleInterval< FloatType > deconImg = OpServiceContainer.getInstance().ops().deconvolve().richardsonLucy(
+							sourceImgNoBackground,
+							psfImgNoBackground,
+							parsedArgs.numIterations
+						);
 
 					// create output image data
 					final ImagePlus deconImp;
