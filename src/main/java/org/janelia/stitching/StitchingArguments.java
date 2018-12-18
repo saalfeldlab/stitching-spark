@@ -43,7 +43,7 @@ public class StitchingArguments implements Serializable {
 
 	@Option(name = "-b", aliases = { "--blurSigma" }, required = false,
 			usage = "Sigma value of the gaussian blur preapplied to the images before stitching")
-	private double blurSigma = 2.0;
+	private double blurSigma = 0.0;
 
 	@Option(name = "-p", aliases = { "--padding" }, required = false,
 			usage = "Padding for the overlap regions")
