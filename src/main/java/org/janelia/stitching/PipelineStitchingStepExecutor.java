@@ -4,6 +4,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -11,6 +12,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -71,7 +74,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 
-		final List< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles( 0 ) );
+		final List< TilePair > overlappingTiles = TileOperations.findOverlappingTiles( job.getTiles( job.getMainChannelIndex() ) );
 		System.out.println( "Overlapping pairs count = " + overlappingTiles.size() );
 
 		// Remove pairs with small overlap area if only adjacent pairs are requested
@@ -91,8 +94,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			for ( int iteration = 0; ; ++iteration )
 			{
 				// check if number of stitched tiles has increased compared to the previous iteration
-				final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
-				final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) );
+				final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( job.getMainChannelIndex() ) );
+				final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( job.getMainChannelIndex() ) );
 				final String iterationDirname = "iter" + iteration;
 				final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 
@@ -108,7 +111,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				}
 
 				// check if number of stitched tiles has increased compared to the previous iteration
-				final TileInfo[] stageTiles = job.getTiles( 0 );
+				final TileInfo[] stageTiles = job.getTiles( job.getMainChannelIndex() );
 				final TileInfo[] stitchedTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( stitchedTilesFilepath ) );
 
 				// TODO: test and keep if works or remove (currently generates worse solutions)
@@ -173,7 +176,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			final String finalTilesFilepath = PathResolver.get( basePath, Utils.addFilenameSuffix( filename, "-final" ) );
 			dataProvider.copyFile( stitchedTilesFilepath, finalTilesFilepath );
 
-			if ( channel == 0 )
+			if ( channel == job.getMainChannelIndex() )
 				dataProvider.copyFile(
 						PathResolver.get( basePath, iterationDirname, "optimizer.txt" ),
 						PathResolver.get( basePath, "optimizer-final.txt" )
@@ -185,7 +188,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 
-		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
+		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( job.getMainChannelIndex() ) );
 		final String iterationDirname = "iter" + iteration;
 		final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
 		final String pairwiseFilename = "pairwise.json";
@@ -322,7 +325,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			final String statsTileConfigurationPath = iteration == 0 ? null : PathResolver.get(
 					basePath,
 					previousIterationDirname,
-					Utils.addFilenameSuffix( PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( 0 ) ), "-stitched" )
+					Utils.addFilenameSuffix( PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( job.getMainChannelIndex() ) ), "-stitched" )
 				);
 
 			// Initiate the computation
@@ -355,8 +358,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			try
 			{
 				final TileInfo[] statsTiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( statsTileConfigurationPath ) );
-				System.out.println( "-- Creating search radius estimator using " + job.getTiles( 0 ).length + " stage tiles and " + statsTiles.length + " stitched tiles --" );
-				searchRadiusEstimator = new TileSearchRadiusEstimator( job.getTiles( 0 ), statsTiles );
+				System.out.println( "-- Creating search radius estimator using " + job.getTiles( job.getMainChannelIndex() ).length + " stage tiles and " + statsTiles.length + " stitched tiles --" );
+				searchRadiusEstimator = new TileSearchRadiusEstimator( job.getTiles( job.getMainChannelIndex() ), statsTiles );
 				System.out.println( "-- Created search radius estimator. Estimation window size (neighborhood): " + Arrays.toString( Intervals.dimensionsAsIntArray( searchRadiusEstimator.getEstimationWindowSize() ) ) + " --" );
 			}
 			catch ( final IOException e )
@@ -427,7 +430,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 						{
 							notEnoughNeighborsWithinConfidenceIntervalPairsCount.add( 1 );
 
-//								System.out.println( "Found " + searchRadiusEstimationWindow.getUsedPointsIndexes().size() + " neighbors within the search window but we require " + numNearestNeighbors + " nearest neighbors, perform a K-nearest neighbor search instead..." );
+//							System.out.println( "Found " + searchRadiusEstimationWindow.getUsedPointsIndexes().size() + " neighbors within the search window but we require " + numNearestNeighbors + " nearest neighbors, perform a K-nearest neighbor search instead..." );
 							System.out.println();
 							System.out.println( pairOfTiles + ": found " + tilesSearchRadius[ j ].getUsedPointsIndexes().size() + " neighbors within the search window of the " + ( j == 0 ? "fixed" : "moving" ) + " tile but we require at least " + minNumNearestNeighbors + " nearest neighbors, so ignore this tile pair for now" );
 							System.out.println();
@@ -548,12 +551,23 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				// prepare images
 				for ( int j = 0; j < pair.length; j++ )
 				{
-					System.out.println( "Averaging corresponding tile images for " + job.getChannels() + " channels" );
+					if ( job.getArgs().registrationChannelIndex() != null )
+						System.out.println( "Using the channel " + PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( job.getArgs().registrationChannelIndex() ) ) + " for stitching" );
+					else
+						System.out.println( "Averaging corresponding tile images for " + job.getChannels() + " channels" );
+
 //					final ComparableTuple< Integer > coordinates = new ComparableTuple<>( Conversions.toBoxedArray( Utils.getTileCoordinates( pair[ j ] ) ) );
 					final Integer tileIndex = pair[ j ].getIndex();
 					int channelsUsed = 0;
+
+					final List< Integer > channelIndices;
+					if ( job.getArgs().registrationChannelIndex() != null )
+						channelIndices = Collections.singletonList( job.getArgs().registrationChannelIndex() ); // only the specified channel
+					else
+						channelIndices = IntStream.range( 0, job.getChannels() ).boxed().collect( Collectors.toList() ); // all channels
+
 					final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( overlaps[ j ] ) );
-					for ( int channel = 0; channel < job.getChannels(); channel++ )
+					for ( final int channel : channelIndices )
 					{
 						final TileInfo tileInfo = broadcastedTileChannelMappingByIndex.value().get( channel ).get( tileIndex );
 //						for ( final TileInfo tile : job.getTiles( channel ) )
@@ -611,10 +625,14 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					if ( channelsUsed == 0 )
 						throw new PipelineExecutionException( pairOfTiles + ": images are missing in all channels" );
 
-					final FloatType denom = new FloatType( channelsUsed );
-					final Cursor< FloatType > dstCursor = Views.iterable( dst ).cursor();
-					while ( dstCursor.hasNext() )
-						dstCursor.next().div( denom );
+					// normalize if needed
+					if ( channelsUsed > 1 )
+					{
+						final FloatType denom = new FloatType( channelsUsed );
+						final Cursor< FloatType > dstCursor = Views.iterable( dst ).cursor();
+						while ( dstCursor.hasNext() )
+							dstCursor.next().div( denom );
+					}
 
 					if ( blurSigma > 0 )
 					{

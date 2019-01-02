@@ -105,6 +105,10 @@ public class StitchingJob implements Serializable {
 		return tilesMultichannel.get( channel );
 	}
 
+	public int getMainChannelIndex() {
+		return args.registrationChannelIndex() != null ? args.registrationChannelIndex() : 0;
+	}
+
 	public void setTiles( final TileInfo[] tiles, final int channel ) throws Exception {
 		tilesMultichannel.set( channel, tiles );
 		checkTilesConfiguration();

@@ -29,6 +29,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Path/link to a tile configuration JSON file. Multiple configurations can be passed at once.")
 	private List< String > inputTileConfigurations;
 
+	@Option(name = "-r", aliases = { "--registrationChannelIndex" }, required = false,
+			usage = "Index of the input channel to be used for registration. If omitted, all the input channels will be used for registration (by averaging the tile images).")
+	private Integer registrationChannelIndex = null;
+
 	@Option(name = "-n", aliases = { "--minNeighbors" }, required = false,
 			usage = "Min neighborhood for estimating confidence intervals using offset statistics")
 	private int minStatsNeighborhood = 5;
@@ -122,6 +126,9 @@ public class StitchingArguments implements Serializable {
 		for ( int i = 0; i < inputTileConfigurations.size(); ++i )
 			if ( !CloudURI.isCloudURI( inputTileConfigurations.get( i ) ) )
 				inputTileConfigurations.set( i, Paths.get( inputTileConfigurations.get( i ) ).toAbsolutePath().toString() );
+
+		if ( registrationChannelIndex != null && ( registrationChannelIndex < 0 || registrationChannelIndex >= inputTileConfigurations.size() ) )
+			throw new IllegalArgumentException( "Registration channel index " + registrationChannelIndex + " is out of bounds [0-" + ( inputTileConfigurations.size() - 1 ) + "]" );
 	}
 
 	protected StitchingArguments() { }
@@ -143,6 +150,7 @@ public class StitchingArguments implements Serializable {
 	}
 
 	public List< String > inputTileConfigurations() { return inputTileConfigurations; }
+	public Integer registrationChannelIndex() { return registrationChannelIndex; }
 	public int minStatsNeighborhood() { return minStatsNeighborhood; }
 	public int fusionCellSize() { return fusionCellSize; }
 	public double blurSigma() { return blurSigma; }
