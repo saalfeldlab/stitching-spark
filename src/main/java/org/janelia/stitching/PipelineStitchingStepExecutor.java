@@ -96,14 +96,14 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				// check if number of stitched tiles has increased compared to the previous iteration
 				final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( job.getMainChannelIndex() ) );
 				final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( job.getMainChannelIndex() ) );
-				final String iterationDirname = "iter" + iteration;
+				final String iterationDirname = getIterationFolderName( iteration );
 				final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 
 				if ( !dataProvider.fileExists( stitchedTilesFilepath ) )
 				{
 					System.out.println( "************** Iteration " + iteration + " **************" );
 					preparePairwiseShiftsMulti( overlappingTiles, iteration );
-					optimizer.optimize( iteration );
+					optimizer.optimize( iteration, getIterationFolderName( iteration ) );
 				}
 				else
 				{
@@ -132,7 +132,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				}
 				else
 				{
-					final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
+					final String previousIterationDirname = iteration == 0 ? null : getIterationFolderName( iteration - 1 );
 
 					final String previousStitchedTilesFilepath = PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 					final TileInfo[] previousStitchedTiles = dataProvider.loadTiles( previousStitchedTilesFilepath );
@@ -164,6 +164,17 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		}
 	}
 
+	private String getIterationFolderName( final int iteration )
+	{
+		String iterationDirname = "iter" + iteration;
+		if ( job.getArgs().registrationChannelIndex() != null )
+		{
+			final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( job.getMainChannelIndex() ) );
+			iterationDirname += "-" + filename.substring( 0, filename.lastIndexOf( "." ) );
+		}
+		return iterationDirname;
+	}
+
 	private void copyFinalSolution( final int fromIteration ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
@@ -171,7 +182,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		{
 			final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( channel ) );
 			final String filename = PathResolver.getFileName( job.getArgs().inputTileConfigurations().get( channel ) );
-			final String iterationDirname = "iter" + fromIteration;
+			final String iterationDirname = getIterationFolderName( fromIteration );
 			final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 			final String finalTilesFilepath = PathResolver.get( basePath, Utils.addFilenameSuffix( filename, "-final" ) );
 			dataProvider.copyFile( stitchedTilesFilepath, finalTilesFilepath );
@@ -189,8 +200,8 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		final DataProvider dataProvider = job.getDataProvider();
 
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( job.getMainChannelIndex() ) );
-		final String iterationDirname = "iter" + iteration;
-		final String previousIterationDirname = iteration == 0 ? null : "iter" + ( iteration - 1 );
+		final String iterationDirname = getIterationFolderName( iteration );
+		final String previousIterationDirname = iteration == 0 ? null : getIterationFolderName( iteration - 1 );
 		final String pairwiseFilename = "pairwise.json";
 		dataProvider.createFolder( PathResolver.get( basePath, iterationDirname ) );
 		final String pairwisePath = PathResolver.get( basePath, iterationDirname, pairwiseFilename );

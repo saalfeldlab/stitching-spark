@@ -105,12 +105,11 @@ public class StitchingOptimizer implements Serializable
 		this.sparkContext = sparkContext;
 	}
 
-	public void optimize( final int iteration ) throws IOException
+	public void optimize( final int iteration, final String iterationDirname ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 
 		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( job.getMainChannelIndex() ) );
-		final String iterationDirname = "iter" + iteration;
 		final String pairwiseShiftsPath = PathResolver.get( basePath, iterationDirname, "pairwise.json" );
 
 		// FIXME: skip if solution already exists?
