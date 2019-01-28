@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>saalfeldlab</groupId>
 	<artifactId>stitching-spark</artifactId>
-	<version>1.0.1</version>
+	<version>1.1.0</version>
 	<name>StitchingSpark</name>
 	<description>This project is for running stitching jobs on a Spark cluster.</description>
 
@@ -21,12 +21,8 @@
 	<parent>
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
-		<version>16.1.0</version>
+		<version>24.0.0</version>
 	</parent>
-
-	<properties>
-		<scijava.jvm.version>1.8</scijava.jvm.version>
-	</properties>
 
 	<profiles>
 		<profile>
@@ -85,12 +81,10 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>legacy-imglib1</artifactId>
-			<version>1.1.4-DEPRECATED</version>
 		</dependency>
 		<dependency>
 			<groupId>mpicbg</groupId>
 			<artifactId>mpicbg</artifactId>
-			<version>1.2.0</version>
 		</dependency>
 		<dependency>
 			<groupId>args4j</groupId>
@@ -122,11 +116,16 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>TrakEM2_</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>ca.mcgill</groupId>
+					<artifactId>Sholl_Analysis</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.ojalgo</groupId>
 			<artifactId>ojalgo</artifactId>
-			<version>43.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
@@ -166,12 +165,12 @@
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-imglib2</artifactId>
-			<version>2.1.1</version>
+			<version>3.0.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-viewer_fiji</artifactId>
-			<version>2.0.0</version>
+			<version>2.1.0</version>
 			<exclusions>
 				<exclusion>
 					<groupId>com.fasterxml.jackson.core</groupId>
@@ -182,7 +181,7 @@
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-spark</artifactId>
-			<version>2.1.0</version>
+			<version>3.0.0</version>
 			<exclusions>
 				<exclusion>
 					<groupId>org.slf4j</groupId>
@@ -197,16 +196,20 @@
 		<dependency>
 			<groupId>net.imglib2</groupId>
 			<artifactId>imglib2-algorithm</artifactId>
+			<version>0.10.0</version>
 		</dependency>
 		<dependency>
 			<groupId>net.imglib2</groupId>
 			<artifactId>imglib2</artifactId>
-			<version>4.3.0</version>
 		</dependency>
 		<dependency>
 			<groupId>net.imglib2</groupId>
 			<artifactId>imglib2-cache</artifactId>
-			<version>1.0.0-beta-7</version>
+		</dependency>
+		<dependency>
+			<groupId>net.imagej</groupId>
+			<artifactId>imagej-ops</artifactId>
+			<version>0.41.1</version>
 		</dependency>
 	</dependencies>
 
@@ -218,7 +221,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
-				<version>2.4.3</version>
+				<version>3.2.1</version>
 				<configuration>
 					<!-- Do not minimize for now to speed up packaging. -->
 					<!--<minimizeJar>true</minimizeJar> -->
@@ -264,6 +267,10 @@
 									implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
 									<resource>reference.conf</resource>
 								</transformer>
+								<transformer
+									implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+									<resource>META-INF/json/org.scijava.plugin.Plugin</resource>
+								</transformer>
 							</transformers>
 						</configuration>
 					</execution>
@@ -276,14 +283,6 @@
 				<configuration>
 					<!-- Don't fail on duplicate classes. -->
 					<fail>false</fail>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<configuration>
-					<source>1.8</source>
-					<target>1.8</target>
 				</configuration>
 			</plugin>
 			<plugin>

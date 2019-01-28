@@ -49,6 +49,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 	private static final int MAX_PARTITIONS = 15000;
 
+	private static final long MAX_PIXELS = Integer.MAX_VALUE;
+
 	final TreeMap< Integer, long[] > levelToImageDimensions = new TreeMap<>(), levelToCellSize = new TreeMap<>();
 
 	double[] normalizedVoxelDimensions;
@@ -146,7 +148,6 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 			final String absoluteChannelPath = job.getArgs().inputTileConfigurations().get( channel );
 			final String absoluteChannelPathNoFinal = Utils.removeFilenameSuffix( absoluteChannelPath, "-final" ); // adjust the path in order to use original flatfields
-			final String absoluteChannelPathNoFinalNoExt = absoluteChannelPathNoFinal.lastIndexOf( '.' ) != -1 ? absoluteChannelPathNoFinal.substring( 0, absoluteChannelPathNoFinal.lastIndexOf( '.' ) ) : absoluteChannelPathNoFinal;
 
 			n5.createGroup( N5ExportMetadata.getChannelGroupPath( channel ) );
 
@@ -160,7 +161,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// use it as a folder with the input file's name
 			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
 					dataProvider,
-					absoluteChannelPathNoFinalNoExt,
+					absoluteChannelPathNoFinal,
 					job.getDimensionality()
 				);
 			if ( flatfieldCorrection != null )
@@ -177,7 +178,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 					sparkContext,
 					() -> DataProviderFactory.create( dataProviderType ).createN5Writer( n5ExportPath ),
 					fullScaleOutputPath,
-					voxelDimensions
+					voxelDimensions,
+					false // not a power of two scale pyramid
 				);
 
 			broadcastedPairwiseConnectionsMap.destroy();
@@ -224,7 +226,18 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		// use the size of the tile as a bigger cell to minimize the number of loads for each image
 		final int[] biggerCellSize = new int[ cellSize.length ];
 		for ( int d = 0; d < biggerCellSize.length; ++d )
+		{
 			biggerCellSize[ d ] = cellSize[ d ] * ( int ) Math.ceil( ( double ) tiles[ 0 ].getSize( d ) / cellSize[ d ] );
+		}
+		while ( Intervals.numElements( biggerCellSize ) > MAX_PIXELS )
+		{
+			System.out.println("Number of elements " + Intervals.numElements( biggerCellSize ) + " in the adjusted block " + Arrays.toString( biggerCellSize ) + " is too large, reduce by half in the longest dimension..." );
+			int maxDimension = 0;
+			for ( int d = 1; d < biggerCellSize.length; ++d )
+				if ( biggerCellSize[ d ] > biggerCellSize[ maxDimension ] )
+					maxDimension = d;
+			biggerCellSize[ maxDimension ] /= 2;
+		}
 		System.out.println( "Adjusted intermediate cell size to " + Arrays.toString( biggerCellSize ) + " (for faster processing)" );
 
 		final List< TileInfo > biggerCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );

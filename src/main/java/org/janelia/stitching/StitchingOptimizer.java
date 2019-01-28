@@ -105,12 +105,11 @@ public class StitchingOptimizer implements Serializable
 		this.sparkContext = sparkContext;
 	}
 
-	public void optimize( final int iteration ) throws IOException
+	public void optimize( final int iteration, final String iterationDirname ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 
-		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( 0 ) );
-		final String iterationDirname = "iter" + iteration;
+		final String basePath = PathResolver.getParent( job.getArgs().inputTileConfigurations().get( job.getMainChannelIndex() ) );
 		final String pairwiseShiftsPath = PathResolver.get( basePath, iterationDirname, "pairwise.json" );
 
 		// FIXME: skip if solution already exists?
@@ -123,8 +122,8 @@ public class StitchingOptimizer implements Serializable
 		{
 			try ( final PrintWriter logWriter = new PrintWriter( logOut ) )
 			{
-				logWriter.println( "Tiles total per channel: " + job.getTiles( 0 ).length );
-				System.out.println( "Stitching iteration " + iteration + ": Tiles total per channel: " + job.getTiles( 0 ).length );
+				logWriter.println( "Tiles total per channel: " + job.getTiles( job.getMainChannelIndex() ).length );
+				System.out.println( "Stitching iteration " + iteration + ": Tiles total per channel: " + job.getTiles( job.getMainChannelIndex() ).length );
 
 				final double maxAllowedError = getMaxAllowedError( iteration );
 				logWriter.println( "Set max allowed error to " + maxAllowedError + "px" );
@@ -158,9 +157,6 @@ public class StitchingOptimizer implements Serializable
 						}
 					}
 
-	//				if ( newTiles.size() + optimizationPerformer.lostTiles.size() != tilesMap.size() )
-	//					throw new RuntimeException( "Number of stitched tiles does not match" );
-
 					// sort the tiles by their index
 					final TileInfo[] tilesToSave = Utils.createTilesMap( newTiles.toArray( new TileInfo[ 0 ] ) ).values().toArray( new TileInfo[ 0 ] );
 					TileOperations.translateTilesToOriginReal( tilesToSave );
@@ -175,7 +171,7 @@ public class StitchingOptimizer implements Serializable
 				}
 
 				// save final pairwise shifts configuration (pairs that have been used on the final step of the optimization routine)
-				final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( job.getTiles( 0 ) );
+				final Map< Integer, TileInfo > tilesMap = Utils.createTilesMap( job.getTiles( job.getMainChannelIndex() ) );
 				final Map< Integer, ? extends Map< Integer, SerializablePairWiseStitchingResult[] > > initialShiftsMap = Utils.createPairwiseShiftsMultiMap( shifts, false );
 				final List< SerializablePairWiseStitchingResult[] > usedPairwiseShifts = new ArrayList<>();
 				final List< SerializablePairWiseStitchingResult[] > finalPairwiseShifts = new ArrayList<>();
@@ -241,7 +237,7 @@ public class StitchingOptimizer implements Serializable
 				final OptimizationResult optimizationResult = new OptimizationResult(
 						maxAllowedError,
 						optimizationParameters,
-						job.getTiles( 0 ).length,
+						job.getTiles( job.getMainChannelIndex() ).length,
 						optimizationPerformer.remainingGraphSize,
 						validPairs,
 						optimizationPerformer.avgDisplacement,

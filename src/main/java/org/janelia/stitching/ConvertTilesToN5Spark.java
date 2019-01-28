@@ -107,7 +107,7 @@ public abstract class ConvertTilesToN5Spark
 	{
 		final ConvertTilesToN5CmdArgs parsedArgs = new ConvertTilesToN5CmdArgs( args );
 		if ( !parsedArgs.parsedSuccessfully )
-			System.exit( 1 );
+			throw new IllegalArgumentException( "argument format mismatch" );
 
 		final InputFileFormat inputFileFormat = detectInputFileFormat( parsedArgs.inputChannelsPaths );
 		System.out.println( "Detected input file format: " + inputFileFormat );

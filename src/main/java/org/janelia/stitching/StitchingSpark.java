@@ -23,7 +23,7 @@ public class StitchingSpark implements Serializable, AutoCloseable
 	{
 		final StitchingArguments stitchingArgs = new StitchingArguments( args );
 		if ( !stitchingArgs.parsedSuccessfully() )
-			System.exit( 1 );
+			throw new IllegalArgumentException( "argument format mismatch" );
 
 		// check that there are no duplicated tile configurations
 		if ( stitchingArgs.inputTileConfigurations().size() != new HashSet<>( stitchingArgs.inputTileConfigurations() ).size() )
