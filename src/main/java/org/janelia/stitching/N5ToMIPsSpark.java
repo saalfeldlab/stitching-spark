@@ -1,11 +1,14 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
+import java.io.Serializable;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
@@ -14,74 +17,96 @@ import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
 import org.janelia.saalfeldlab.n5.spark.N5MaxIntensityProjection;
-import org.janelia.saalfeldlab.n5.spark.util.TiffUtils;
+import org.janelia.saalfeldlab.n5.spark.util.CmdUtils;
+import org.janelia.saalfeldlab.n5.spark.util.TiffUtils.TiffCompression;
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
+import org.kohsuke.args4j.Option;
 
 public class N5ToMIPsSpark
 {
-	private static final int SCALE_LEVEL = 0;
-	private static final int SCALE_LEVEL_BINNED = 3;
-
-	public static void main( final String[] args ) throws Exception
+	private static class N5ToMIPsCmdArgs implements Serializable
 	{
-		int argCounter = 0;
-		final String n5Path = args[ argCounter++ ];
+		private static final long serialVersionUID = 372184156792999688L;
 
-		final boolean binned;
-		final long[] slicing;
+		@Option(name = "-i", aliases = { "--input" }, required = true,
+				usage = "Path to N5 export")
+		private String n5Path;
 
-		if ( args.length > argCounter )
+		@Option(name = "-o", aliases = { "--outputPath" }, required = false,
+				usage = "Output path to store MIPs.")
+		private String outputPath;
+
+		@Option(name = "-g", aliases = { "--grouping" }, required = false,
+				usage = "Specifies how many slices in each dimension to include in a single MIP image (MIP step)."
+						+ "By default, all slices are included in one group, so the result is simply a single MIP image in each dimension.")
+		private String groupingStr = null;
+
+		@Option(name = "-s", aliases = { "--scaleLevel" }, required = false,
+				usage = "Scale level to use (0 corresponds to full resolution).")
+		private int scaleLevel = 0;
+
+		@Option(name = "-c", aliases = { "--compress" }, required = false,
+				usage = "Compress generated TIFFs using LZW compression.")
+		private boolean compressTiffs = false;
+
+		private boolean parsedSuccessfully = false;
+
+		public N5ToMIPsCmdArgs( final String... args ) throws IllegalArgumentException
 		{
-			if ( args[ argCounter ].equalsIgnoreCase( "--binned" ) )
+			final CmdLineParser parser = new CmdLineParser( this );
+			try
 			{
-				binned = true;
-				if ( args.length > ++argCounter )
-					throw new Exception( "Unexpected argument. Usage: ./mip-n5.sh <nodes> <n5 export path> [<slicing>] [--binned]" );
-				slicing = null;
+				parser.parseArgument( args );
+				parsedSuccessfully = true;
+			}
+			catch ( final CmdLineException e )
+			{
+				System.err.println( e.getMessage() );
+				parser.printUsage( System.err );
+			}
+
+			// make sure that input path is absolute if it's a filesystem path
+			if ( !CloudURI.isCloudURI( n5Path ) )
+				n5Path = Paths.get( n5Path ).toAbsolutePath().toString();
+
+			if ( outputPath != null )
+			{
+				// make sure that output path is absolute if it's a filesystem path
+				if ( !CloudURI.isCloudURI( outputPath ) )
+					outputPath = Paths.get( outputPath ).toAbsolutePath().toString();
 			}
 			else
 			{
-				slicing = parseLongArray( args[ argCounter++ ] );
-				if ( args.length > argCounter )
-				{
-					if ( args[ argCounter++ ].equalsIgnoreCase( "--binned" ) )
-						binned = true;
-					else
-						throw new Exception( "Unexpected argument. Usage: ./mip-n5.sh <nodes> <n5 export path> [<slicing>] [--binned]" );
-				}
-				else
-				{
-					binned = false;
-				}
+				outputPath = PathResolver.get( PathResolver.getParent( n5Path ), "mip" + ( groupingStr != null ? "-" + groupingStr : "" ) + "-s" + scaleLevel );
 			}
 		}
-		else
-		{
-			binned = false;
-			slicing = null;
-		}
+	}
 
-		final int scaleLevel = binned ? SCALE_LEVEL_BINNED : SCALE_LEVEL;
-		System.out.println( "Using scale level " + scaleLevel + " to generate MIPs" );
+	public static void main( final String[] args ) throws Exception
+	{
+		final N5ToMIPsCmdArgs parsedArgs = new N5ToMIPsCmdArgs( args );
+		if ( !parsedArgs.parsedSuccessfully )
+			throw new IllegalArgumentException( "argument format mismatch" );
 
-		final String outBaseFolder = PathResolver.getParent( n5Path );
-		final String slicingSuffix = ( slicing != null ? "-" + arrayToString( slicing ) : "" );
-		final String binnedSuffix = ( binned ? "-binned" : "" );
-		final String outFolder = "MIP" + slicingSuffix + binnedSuffix;
-		final String outputPath = PathResolver.get( outBaseFolder, outFolder );
-		System.out.println( "Output path: " + outputPath );
+		final TiffCompression tiffCompression = parsedArgs.compressTiffs ? TiffCompression.LZW : TiffCompression.NONE;
+		System.out.println( "Output path: " + parsedArgs.outputPath );
+		System.out.println( "Tiff compression: " + tiffCompression );
 
-		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( n5Path ) );
+		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( parsedArgs.n5Path ) );
 		final DataProviderType dataProviderType = dataProvider.getType();
 
 		final List< int[] > channelsCellDimensions = new ArrayList<>();
-		final N5Reader n5 = dataProvider.createN5Reader( n5Path, N5ExportMetadata.getGsonBuilder() );
+		final N5Reader n5 = dataProvider.createN5Reader( parsedArgs.n5Path, N5ExportMetadata.getGsonBuilder() );
 		final N5ExportMetadataReader exportMetadata = N5ExportMetadata.openForReading( n5 );
 		for ( int channel = 0; channel < exportMetadata.getNumChannels(); ++channel )
 		{
-			final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
+			final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, parsedArgs.scaleLevel );
 			final int[] cellDimensions = n5.getDatasetAttributes( n5DatasetPath ).getBlockSize();
 			channelsCellDimensions.add( cellDimensions );
 		}
+
+		final long[] grouping = CmdUtils.parseLongArray( parsedArgs.groupingStr );
 
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "N5ToMIPs" )
@@ -91,18 +116,18 @@ public class N5ToMIPsSpark
 		{
 			for ( int channel = 0; channel < channelsCellDimensions.size(); ++channel )
 			{
-				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, scaleLevel );
-				final String outputChannelPath = PathResolver.get( outputPath, "ch" + channel );
+				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, parsedArgs.scaleLevel );
+				final String outputChannelPath = PathResolver.get( parsedArgs.outputPath, "ch" + channel );
 				final int[] cellDimensions = channelsCellDimensions.get( channel );
 				final int[] mipStepsCells = new int[ cellDimensions.length ];
 				for ( int d = 0; d < mipStepsCells.length; ++d )
 				{
-					if ( slicing == null || slicing[ d ] <= 0 )
+					if ( grouping == null || grouping[ d ] <= 0 )
 						mipStepsCells[ d ] = Integer.MAX_VALUE;
 					else
 						mipStepsCells[ d ] = Math.max(
 								( int ) Math.round(
-										( ( double ) slicing[ d ] / cellDimensions[ d ] )
+										( ( double ) grouping[ d ] / cellDimensions[ d ] )
 									),
 								1
 							);
@@ -112,7 +137,7 @@ public class N5ToMIPsSpark
 						sparkContext,
 						() -> {
 							try {
-								return DataProviderFactory.create( dataProviderType ).createN5Reader( n5Path, N5ExportMetadata.getGsonBuilder() );
+								return DataProviderFactory.create( dataProviderType ).createN5Reader( parsedArgs.n5Path, N5ExportMetadata.getGsonBuilder() );
 							} catch ( final IOException e ) {
 								throw new RuntimeException( e );
 							}
@@ -120,26 +145,9 @@ public class N5ToMIPsSpark
 						n5DatasetPath,
 						mipStepsCells,
 						outputChannelPath,
-						TiffUtils.TiffCompression.NONE
+						tiffCompression
 					);
 			}
 		}
-	}
-
-	private static long[] parseLongArray( final String str )
-	{
-		final String[] tokens = str.trim().split( "," );
-		final long[] ret = new long[ tokens.length ];
-		for ( int i = 0; i < ret.length; i++ )
-			ret[ i ] = Long.parseLong( tokens[ i ] );
-		return ret;
-	}
-
-	private static String arrayToString( final long[] arr )
-	{
-		final StringBuilder sb = new StringBuilder();
-		for ( final long val : arr )
-			sb.append( sb.length() > 0 ? "," : "" ).append( val );
-		return sb.toString();
 	}
 }
