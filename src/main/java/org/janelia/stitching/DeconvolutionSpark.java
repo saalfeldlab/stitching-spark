@@ -369,7 +369,7 @@ public class DeconvolutionSpark
 		final Cursor< T > imgCursor = Views.flatIterable( img ).cursor();
 		final Cursor< T > retCursor = Views.flatIterable( ret ).cursor();
 		while ( imgCursor.hasNext() || retCursor.hasNext() )
-			retCursor.next().setReal( Math.max( imgCursor.next().getRealDouble() - backgroundValue, 0 ) );
+			retCursor.next().setReal( imgCursor.next().getRealDouble() - backgroundValue );
 		return ret;
 	}
 
