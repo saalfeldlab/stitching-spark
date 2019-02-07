@@ -15,12 +15,15 @@ import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.spark.util.CmdUtils;
 import org.janelia.stitching.analysis.CheckConnectedGraphs;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
+import org.janelia.util.ImageImporter;
 import org.jdom2.Document;
 import org.jdom2.Element;
 import org.jdom2.input.SAXBuilder;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
+
+import ij.ImagePlus;
 
 public class ParseCZITilesMetadata
 {
@@ -169,6 +172,12 @@ public class ParseCZITilesMetadata
 					"Tiles in the smallest component: " + tileIndexesInSmallestComponent
 				);
 		}
+
+		// determine data type by reading metadata of the first tile image
+		final ImagePlus[] imps = ImageImporter.openBioformatsImageSeries( tiles.iterator().next().getFilePath() );
+		final ImageType type = ImageType.valueOf( imps[ 0 ].getType() );
+		for ( final TileInfo tile : tiles )
+			tile.setType( type );
 
 		System.out.println( "Parsed metadata for " + tiles.size() + " tiles" );
 
