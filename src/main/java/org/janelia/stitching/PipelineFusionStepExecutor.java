@@ -49,7 +49,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 	private static final int MAX_PARTITIONS = 15000;
 
-	private static final long MAX_PIXELS = Integer.MAX_VALUE;
+	private static final long MAX_PIXELS = 200 * (1 << 20); // 200 mb ( x bytes per pixel)
 
 	final TreeMap< Integer, long[] > levelToImageDimensions = new TreeMap<>(), levelToCellSize = new TreeMap<>();
 
