@@ -21,6 +21,7 @@ import org.janelia.saalfeldlab.n5.spark.N5WriterSupplier;
 import org.janelia.util.ImageImporter;
 
 import ij.ImagePlus;
+import loci.formats.FormatException;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.imageplus.ImagePlusImgs;
@@ -66,6 +67,9 @@ public class ConvertCZITilesToN5Spark
 	{
 		// TODO: can consider pixel resolution to calculate isotropic block size in Z
 
+		// find out whether tile images are stored in separate .czi files or in a single .czi container
+		final boolean singleCziContainer = Arrays.asList( inputTiles ).stream().map( tileInfo -> tileInfo.getFilePath() ).distinct().count() == 1;
+
 		final List< Tuple2< Integer, TileInfo > > outputChannelTileTuples = sparkContext
 				.parallelize( Arrays.asList( inputTiles ) )
 				.flatMap( inputTile ->
@@ -74,7 +78,8 @@ public class ConvertCZITilesToN5Spark
 								inputTile,
 								n5Supplier.get(),
 								blockSize,
-								n5Compression
+								n5Compression,
+								singleCziContainer
 							);
 
 						final List< Tuple2< Integer, TileInfo > > outputChannelTiles = new ArrayList<>();
@@ -112,14 +117,30 @@ public class ConvertCZITilesToN5Spark
 			final TileInfo inputTile,
 			final N5Writer n5,
 			final int[] blockSize,
-			final Compression n5Compression ) throws IOException
+			final Compression n5Compression,
+			final boolean singleCziContainer ) throws IOException, FormatException
 	{
 		if ( inputTile.numDimensions() != blockSize.length )
 			throw new RuntimeException( "dimensionality mismatch" );
 
 		// TODO: can consider pixel resolution to calculate isotropic block size in Z
 
-		final ImagePlus imp = ImageImporter.openImage( inputTile.getFilePath() );
+		final ImagePlus[] imps = ImageImporter.openBioformatsImageSeries( inputTile.getFilePath() );
+
+		final ImagePlus imp;
+		if ( singleCziContainer )
+		{
+			if ( inputTile.getIndex() >= imps.length )
+				throw new RuntimeException( "Identified that all tile images are stored in a single .czi container, but there are not enough images in the loaded image series (file=" + inputTile.getFilePath() + ", numImages=" + imps.length + ", tileIndex=" + inputTile.getIndex() );
+			imp = imps[ inputTile.getIndex() ];
+		}
+		else
+		{
+			if ( imps.length != 1 )
+				throw new RuntimeException( "Expected one tile image per .czi file, got " + imps.length + " images in file " + inputTile.getFilePath() );
+			imp = imps[ 0 ];
+		}
+
 		final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
 
 		System.out.println( "Loaded tile image of size " + Arrays.toString( Intervals.dimensionsAsLongArray( img ) ) );
@@ -147,7 +168,7 @@ public class ConvertCZITilesToN5Spark
 			}
 
 			final String channelName = getChannelName( ch );
-			final String channelTileDatasetPath = PathResolver.get( channelName, channelName + "_" + PathResolver.getFileName( inputTile.getFilePath() ) );
+			final String channelTileDatasetPath = PathResolver.get( channelName, channelName + "_" + PathResolver.getFileName( inputTile.getFilePath() + ( singleCziContainer ? "_tile" + inputTile.getIndex() : "" ) ) );
 			N5Utils.save( channelImg, n5, channelTileDatasetPath, blockSize, n5Compression );
 			channelTileDatasetPaths.add( channelTileDatasetPath );
 		}
