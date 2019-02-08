@@ -23,7 +23,7 @@ import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5NonIsotropicScalePyramidSpark3D;
+import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5NonIsotropicScalePyramidSpark;
 import org.janelia.stitching.FusionPerformer.FusionMode;
 import org.janelia.stitching.TileLoader.TileType;
 import org.janelia.util.Conversions;
@@ -175,7 +175,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			fuse( n5ExportPath, fullScaleOutputPath, job.getTiles( channel ) );
 
 			// Generate lower scale levels
-			downsampledDatasets = N5NonIsotropicScalePyramidSpark3D.downsampleNonIsotropicScalePyramid(
+			downsampledDatasets = N5NonIsotropicScalePyramidSpark.downsampleNonIsotropicScalePyramid(
 					sparkContext,
 					() -> DataProviderFactory.create( dataProviderType ).createN5Writer( n5ExportPath ),
 					fullScaleOutputPath,
