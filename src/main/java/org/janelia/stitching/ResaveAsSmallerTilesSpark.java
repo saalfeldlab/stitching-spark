@@ -3,6 +3,7 @@ package org.janelia.stitching;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Serializable;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.List;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
@@ -43,7 +45,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 				usage = "Path/link to a tile configuration JSON file. Multiple configurations can be passed at once.")
 		public List< String > inputTileConfigurations;
 
-		@Option(name = "-t", aliases = { "--target" }, required = true,
+		@Option(name = "-t", aliases = { "--target" }, required = false,
 				usage = "Target location (filesystem directory or cloud bucket) to store the resulting tile images and configurations.")
 		public String targetLocation;
 
@@ -70,6 +72,22 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			} catch ( final CmdLineException e ) {
 				System.err.println( e.getMessage() );
 				parser.printUsage( System.err );
+			}
+
+			// make sure that inputTileConfigurations are absolute file paths if running on a traditional filesystem
+			for ( int i = 0; i < inputTileConfigurations.size(); ++i )
+				if ( !CloudURI.isCloudURI( inputTileConfigurations.get( i ) ) )
+					inputTileConfigurations.set( i, Paths.get( inputTileConfigurations.get( i ) ).toAbsolutePath().toString() );
+
+			if ( targetLocation != null )
+			{
+				// make sure that targetLocation is an absolute file path if running on a traditional filesystem
+				if ( !CloudURI.isCloudURI( targetLocation ) )
+					targetLocation = Paths.get( targetLocation ).toAbsolutePath().toString();
+			}
+			else
+			{
+				targetLocation = PathResolver.get( PathResolver.getParent( inputTileConfigurations.get( 0 ) ), "retiled-images" );
 			}
 		}
 	}
