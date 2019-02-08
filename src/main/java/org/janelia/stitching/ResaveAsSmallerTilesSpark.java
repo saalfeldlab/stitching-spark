@@ -15,6 +15,8 @@ import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
+import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
+import org.janelia.flatfield.FlatfieldCorrection;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -24,6 +26,8 @@ import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
+import net.imglib2.converter.RealConverter;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgFactory;
@@ -31,6 +35,7 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
+import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
 public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
@@ -60,6 +65,10 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		@Option(name = "-o", aliases = { "--overlap" }, required = false,
 				usage = "Overlap on each side as a ratio relative to the new tile size. This is only an initial guess, where the actual overlap is determined based on the size of the volume such that all tiles have the same size.")
 		public double minOverlapRatioEachSide = 0.1;
+
+		@Option(name = "-f", aliases = { "--flatfield" }, required = false,
+				usage = "Whether to apply flatfield correction.")
+		public boolean applyFlatfieldCorrection = false;
 
 		public boolean parsedSuccessfully = false;
 
@@ -134,7 +143,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			processChannel( inputTileConfiguration );
 	}
 
-	private void processChannel( final String inputTileConfiguration ) throws IOException
+	private < U extends NativeType< U > & RealType< U > > void processChannel( final String inputTileConfiguration ) throws IOException
 	{
 		final DataProvider sourceDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputTileConfiguration ) );
 		final TileInfo[] tiles = sourceDataProvider.loadTiles( inputTileConfiguration );
@@ -144,9 +153,16 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		final List< Interval > newTilesIntervalsInSingleTile = getNewTilesIntervalsInSingleTile( originalTileSize, newTileSize );
 
 		final Broadcast< List< Interval > > broadcastedNewTilesIntervalsInSingleTile = sparkContext.broadcast( newTilesIntervalsInSingleTile );
+
+		final RandomAccessiblePairNullable< U, U > flatfield = args.applyFlatfieldCorrection ? FlatfieldCorrection.loadCorrectionImages( sourceDataProvider, inputTileConfiguration, tiles[ 0 ].numDimensions() ) : null;
+		final Broadcast< RandomAccessiblePairNullable< U, U > > broadcastedFlatfield = sparkContext.broadcast( flatfield );
+
 		final List< TileInfo > newTiles = sparkContext.parallelize( Arrays.asList( tiles ), tiles.length ).flatMap(
-				tile -> resaveTileAsSmallerTiles( tile, broadcastedNewTilesIntervalsInSingleTile.value() ).iterator()
+				tile -> resaveTileAsSmallerTiles( tile, broadcastedNewTilesIntervalsInSingleTile.value(), broadcastedFlatfield.value() ).iterator()
 			).collect();
+
+		broadcastedNewTilesIntervalsInSingleTile.destroy();
+		broadcastedFlatfield.destroy();
 
 		// global indexing
 		for ( int i = 0; i < newTiles.size(); ++i )
@@ -166,11 +182,27 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		targetDataProvider.saveTiles( newTiles.toArray( new TileInfo[ 0 ] ), newTilesConfigurationPath );
 	}
 
-	private < T extends NativeType< T > & RealType< T > > List< TileInfo > resaveTileAsSmallerTiles( final TileInfo tile, final List< Interval > newTilesIntervalsInSingleTile ) throws IOException, ImgLibException
+	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< TileInfo > resaveTileAsSmallerTiles(
+			final TileInfo tile,
+			final List< Interval > newTilesIntervalsInSingleTile,
+			final RandomAccessiblePairNullable< U, U > flatfield ) throws IOException, ImgLibException
 	{
 		final DataProvider sourceDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( tile.getFilePath() ) );
 		final RandomAccessibleInterval< T > tileImg = TileLoader.loadTile( tile, sourceDataProvider );
 		final T tileImageType = Util.getTypeFromInterval( tileImg );
+
+		final RandomAccessibleInterval< T > sourceImg;
+		if ( flatfield != null )
+		{
+			System.out.println( "Flat-fielding image.." );
+			final FlatfieldCorrectedRandomAccessible< T, U > flatfieldCorrected = new FlatfieldCorrectedRandomAccessible<>( tileImg, flatfield.toRandomAccessiblePair() );
+			final RandomAccessibleInterval< U > correctedImg = Views.interval( flatfieldCorrected, tileImg );
+			sourceImg = Converters.convert( correctedImg, new RealConverter<>(), tileImageType.createVariable() );
+		}
+		else
+		{
+			sourceImg = tileImg;
+		}
 
 		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( targetImagesLocation ) );
 		final List< TileInfo > newTilesInSingleTile = new ArrayList<>();
@@ -178,7 +210,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		{
 			final ImagePlusImg< T, ? > newTileImg = new ImagePlusImgFactory<>( tileImageType ).create( newTileInterval );
 			final Cursor< T > newTileImgCursor = Views.flatIterable( newTileImg ).cursor();
-			final Cursor< T > tileImgIntervalCursor = Views.flatIterable( Views.interval( tileImg, newTileInterval ) ).cursor();
+			final Cursor< T > tileImgIntervalCursor = Views.flatIterable( Views.interval( sourceImg, newTileInterval ) ).cursor();
 			while ( newTileImgCursor.hasNext() || tileImgIntervalCursor.hasNext() )
 				newTileImgCursor.next().set( tileImgIntervalCursor.next() );
 			final ImagePlus newTileImagePlus = newTileImg.getImagePlus();
