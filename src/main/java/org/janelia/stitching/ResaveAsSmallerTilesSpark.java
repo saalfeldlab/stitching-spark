@@ -54,8 +54,8 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		public int retileDimension = 2;
 
 		@Option(name = "-s", aliases = { "--size" }, required = false,
-				usage = "Size of a new tile in the retile dimension. Defaults to an average size in other two dimensions")
-		public Integer retileSize = null;
+				usage = "Size of a new tile in the retile dimension. Default is 64 pixels")
+		public Integer retileSize = 64;
 
 		@Option(name = "-o", aliases = { "--overlap" }, required = false,
 				usage = "Overlap on each side as a ratio relative to the new tile size. This is only an initial guess, where the actual overlap is determined based on the size of the volume such that all tiles have the same size.")
