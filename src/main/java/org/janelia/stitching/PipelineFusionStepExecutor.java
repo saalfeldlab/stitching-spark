@@ -223,25 +223,6 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final long[] offset = Intervals.minAsLongArray( boundingBox );
 		final long[] dimensions = Intervals.dimensionsAsLongArray( boundingBox );
 
-		// use the size of the tile as a bigger cell to minimize the number of loads for each image
-		final int[] biggerCellSize = new int[ cellSize.length ];
-		for ( int d = 0; d < biggerCellSize.length; ++d )
-		{
-			biggerCellSize[ d ] = cellSize[ d ] * ( int ) Math.ceil( ( double ) tiles[ 0 ].getSize( d ) / cellSize[ d ] );
-		}
-		while ( Intervals.numElements( biggerCellSize ) > MAX_PIXELS )
-		{
-			System.out.println("Number of elements " + Intervals.numElements( biggerCellSize ) + " in the adjusted block " + Arrays.toString( biggerCellSize ) + " is too large, reduce by half in the longest dimension..." );
-			int maxDimension = 0;
-			for ( int d = 1; d < biggerCellSize.length; ++d )
-				if ( biggerCellSize[ d ] > biggerCellSize[ maxDimension ] )
-					maxDimension = d;
-			biggerCellSize[ maxDimension ] /= 2;
-		}
-		System.out.println( "Adjusted intermediate cell size to " + Arrays.toString( biggerCellSize ) + " (for faster processing)" );
-
-		final List< TileInfo > biggerCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );
-
 		final N5Writer n5 = dataProvider.createN5Writer( n5ExportPath );
 		n5.createDataset(
 				fullScaleOutputPath,
@@ -251,32 +232,34 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				new GzipCompression()
 			);
 
-		sparkContext.parallelize( biggerCells, biggerCells.size() ).foreach( biggerCell ->
+		final List< TileInfo > cells = TileOperations.divideSpace( boundingBox, new FinalDimensions( cellSize ) );
+
+		sparkContext.parallelize( cells, Math.min( cells.size(), MAX_PARTITIONS ) ).foreach( cell ->
 			{
-				final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( tiles, biggerCell );
+				final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( tiles, cell );
 				if ( tilesWithinCell.isEmpty() )
 					return;
 
-				final Boundaries biggerCellBox = biggerCell.getBoundaries();
-				final long[] biggerCellOffsetCoordinates = new long[ biggerCellBox.numDimensions() ];
-				for ( int d = 0; d < biggerCellOffsetCoordinates.length; d++ )
-					biggerCellOffsetCoordinates[ d ] = biggerCellBox.min( d ) - offset[ d ];
+				final Boundaries cellBox = cell.getBoundaries();
+				final long[] cellOffsetCoordinates = new long[ cellBox.numDimensions() ];
+				for ( int d = 0; d < cellOffsetCoordinates.length; d++ )
+					cellOffsetCoordinates[ d ] = cellBox.min( d ) - offset[ d ];
 
-				final long[] biggerCellGridPosition = new long[ biggerCell.numDimensions() ];
+				final long[] cellGridPosition = new long[ cell.numDimensions() ];
 				final CellGrid cellGrid = new CellGrid( dimensions, cellSize );
-				cellGrid.getCellPosition( biggerCellOffsetCoordinates, biggerCellGridPosition );
+				cellGrid.getCellPosition( cellOffsetCoordinates, cellGridPosition );
 
 				final DataProvider dataProviderLocal = job.getDataProvider();
 				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
 						dataProviderLocal,
 						job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
 						tilesWithinCell,
-						biggerCellBox,
+						cellBox,
 						broadcastedFlatfieldCorrection.value(),
 						broadcastedPairwiseConnectionsMap.value()
 					);
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( n5ExportPath );
-				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridPosition );
+				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, cellGridPosition );
 			}
 		);
 	}
