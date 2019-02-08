@@ -47,6 +47,10 @@ public class ParseCZITilesMetadata
 				usage = "Physical pixel resolution in mm (comma-separated, for example, '0.097,0.097,0.18').")
 		private String pixelResolutionStr;
 
+		@Option(name = "-a", aliases = { "--axes" }, required = false,
+				usage = "Axis mapping for the objective->pixel coordinates conversion (comma-separated axis specification with optional flips, for example, '-x,y,z').")
+		private String axisMappingStr = "-x,y,z";
+
 		private boolean parsedSuccessfully = false;
 
 		public ParseCZITilesMetadataCmdArgs( final String... args )
@@ -94,7 +98,8 @@ public class ParseCZITilesMetadata
 				parsedArgs.metadataFilepath,
 				parsedArgs.basePath,
 				parsedArgs.filenamePattern,
-				CmdUtils.parseDoubleArray( parsedArgs.pixelResolutionStr )
+				CmdUtils.parseDoubleArray( parsedArgs.pixelResolutionStr ),
+				parsedArgs.axisMappingStr.trim().split( "," )
 			);
 	}
 
@@ -102,12 +107,16 @@ public class ParseCZITilesMetadata
 			final String metadataFilepath,
 			final String basePath,
 			final String filenamePattern,
-			final double[] pixelResolution ) throws Exception
+			final double[] pixelResolution,
+			final String[] axisMappingStr ) throws Exception
 	{
-		if ( pixelResolution.length != 3 )
-			throw new IllegalArgumentException( "expected pixelResolution array of length 3, got " + pixelResolution.length );
+		if ( pixelResolution.length != 3 || axisMappingStr.length != 3 )
+			throw new IllegalArgumentException( "expected pixelResolution and axisMapping arrays of length 3" );
+
+		final AxisMapping axisMapping = new AxisMapping( axisMappingStr );
 
 		System.out.println( "Pixel resolution: " + Arrays.toString( pixelResolution ) );
+		System.out.println( "Axis mapping: " + Arrays.toString( axisMappingStr ) );
 
 		final String baseOutputFolder = Paths.get( metadataFilepath ).getParent().toString();
 
@@ -134,7 +143,7 @@ public class ParseCZITilesMetadata
 
 			final double[] pixelCoords = new double[ objCoords.length ];
 			for ( int d = 0; d < pixelCoords.length; ++d )
-				pixelCoords[ d ] = objCoords[ d ] / pixelResolution[ d ];
+				pixelCoords[ d ] = objCoords[ axisMapping.axisMapping[ d ] ] / pixelResolution[ axisMapping.axisMapping[ d ] ] * ( axisMapping.flip[ d ] ? -1 : 1 );
 
 			final long[] tileSize = new long[] {
 					Long.parseLong( tileElement.getAttributeValue( TILE_SIZE_X_TAG ) ),
