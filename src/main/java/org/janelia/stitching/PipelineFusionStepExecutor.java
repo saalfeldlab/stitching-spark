@@ -25,6 +25,7 @@ import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5NonIsotropicScalePyramidSpark3D;
 import org.janelia.stitching.FusionPerformer.FusionMode;
+import org.janelia.stitching.TileLoader.TileType;
 import org.janelia.util.Conversions;
 
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
@@ -49,7 +50,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 	private static final int MAX_PARTITIONS = 15000;
 
-	private static final long MAX_PIXELS = 200 * (1 << 20); // 200 mb ( x bytes per pixel)
+	private static final int MIN_BLOCK_SIZE = 64;
 
 	final TreeMap< Integer, long[] > levelToImageDimensions = new TreeMap<>(), levelToCellSize = new TreeMap<>();
 
@@ -201,18 +202,29 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 	}
 
 
-	private int[] getOptimalCellSize()
+	private int[] getOptimalCellSize( final TileInfo[] tiles ) throws IOException
 	{
+		final int[] tileN5BlockSize;
+		if ( TileLoader.getTileType( tiles[ 0 ], job.getDataProvider() ) == TileType.N5_DATASET )
+			tileN5BlockSize = TileLoader.getTileN5DatasetAttributes( tiles[ 0 ], job.getDataProvider() ).getBlockSize();
+		else
+			tileN5BlockSize = null;
+
 		final int[] cellSize = new int[ job.getDimensionality() ];
 		for ( int d = 0; d < job.getDimensionality(); d++ )
-			cellSize[ d ] = ( int ) Math.round( job.getArgs().fusionCellSize() / normalizedVoxelDimensions[ d ] );
+		{
+			cellSize[ d ] = Math.max(
+					( int ) Math.round( job.getArgs().fusionCellSize() / normalizedVoxelDimensions[ d ] ),
+					tileN5BlockSize != null ? tileN5BlockSize[ d ] : MIN_BLOCK_SIZE // set the output block size to be not smaller than input tile block size (if stored as N5)
+				);
+		}
 		return cellSize;
 	}
 
 	private void fuse( final String n5ExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
-		final int[] cellSize = getOptimalCellSize();
+		final int[] cellSize = getOptimalCellSize( tiles );
 
 		final Boundaries boundingBox;
 		if ( job.getArgs().minCoord() != null && job.getArgs().maxCoord() != null )
