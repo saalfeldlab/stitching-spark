@@ -86,6 +86,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final DataProvider dataProvider = job.getDataProvider();
 		final DataProviderType dataProviderType = dataProvider.getType();
 
+		// check if stage configuration is supplied and if it was intended
+		for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+			if ( !inputFilePath.substring( 0, inputFilePath.lastIndexOf( '.' ) ).endsWith( "-final" ) && !job.getArgs().allowFusingStage() )
+				throw new RuntimeException( "The filename of the input configuration indicates that stitching has not been performed. If you intend to export the initial (stage) configuration, supply an additional parameter '--fusestage'." );
+
 		// determine the best location for storing the export files (near the tile configurations by default)
 		// for cloud backends, the export is stored in a separate bucket to be compatible with n5-viewer
 		String baseExportPath = null;

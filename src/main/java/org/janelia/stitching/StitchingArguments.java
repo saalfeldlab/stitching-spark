@@ -92,6 +92,10 @@ public class StitchingArguments implements Serializable {
 	@Option(name = "--fuse", required = false, usage = "Only fuse the tiles, i.e. export the image in the CellFileViewer format")
 	private boolean fuseOnly = false;
 
+	@Option(name = "--fusestage", required = false,
+			usage = "Allow fusing tiles using their stage coordinates (when there is no '-final' suffix in the tile configuration filename), i.e. when exporting initial tile configuration.")
+	private boolean allowFusingStage = false;
+
 
 	private boolean parsedSuccessfully = false;
 
@@ -158,6 +162,7 @@ public class StitchingArguments implements Serializable {
 	public boolean noLeaves() { return noLeaves; }
 	public boolean exportOverlaps() { return exportOverlaps; }
 	public boolean blending() { return blending; }
+	public boolean allowFusingStage() { return allowFusingStage; }
 
 	public boolean stitchOnly() { return stitchOnly; }
 	public boolean fuseOnly() { return fuseOnly; }
