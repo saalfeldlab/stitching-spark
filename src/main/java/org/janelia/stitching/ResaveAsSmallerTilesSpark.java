@@ -3,6 +3,7 @@ package org.janelia.stitching;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Serializable;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -10,9 +11,12 @@ import java.util.List;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.PathResolver;
+import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
+import org.janelia.flatfield.FlatfieldCorrection;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -22,6 +26,8 @@ import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
+import net.imglib2.converter.RealConverter;
 import net.imglib2.exception.ImgLibException;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgFactory;
@@ -29,6 +35,7 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
+import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 
 public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
@@ -43,7 +50,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 				usage = "Path/link to a tile configuration JSON file. Multiple configurations can be passed at once.")
 		public List< String > inputTileConfigurations;
 
-		@Option(name = "-t", aliases = { "--target" }, required = true,
+		@Option(name = "-t", aliases = { "--target" }, required = false,
 				usage = "Target location (filesystem directory or cloud bucket) to store the resulting tile images and configurations.")
 		public String targetLocation;
 
@@ -52,8 +59,8 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		public int retileDimension = 2;
 
 		@Option(name = "-s", aliases = { "--size" }, required = false,
-				usage = "Size of a new tile in the retile dimension. Defaults to an average size in other two dimensions")
-		public Integer retileSize = null;
+				usage = "Size of a new tile in the retile dimension. Default is 64 pixels")
+		public Integer retileSize = 64;
 
 		@Option(name = "-o", aliases = { "--overlap" }, required = false,
 				usage = "Overlap on each side as a ratio relative to the new tile size. This is only an initial guess, where the actual overlap is determined based on the size of the volume such that all tiles have the same size.")
@@ -70,6 +77,22 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			} catch ( final CmdLineException e ) {
 				System.err.println( e.getMessage() );
 				parser.printUsage( System.err );
+			}
+
+			// make sure that inputTileConfigurations are absolute file paths if running on a traditional filesystem
+			for ( int i = 0; i < inputTileConfigurations.size(); ++i )
+				if ( !CloudURI.isCloudURI( inputTileConfigurations.get( i ) ) )
+					inputTileConfigurations.set( i, Paths.get( inputTileConfigurations.get( i ) ).toAbsolutePath().toString() );
+
+			if ( targetLocation != null )
+			{
+				// make sure that targetLocation is an absolute file path if running on a traditional filesystem
+				if ( !CloudURI.isCloudURI( targetLocation ) )
+					targetLocation = Paths.get( targetLocation ).toAbsolutePath().toString();
+			}
+			else
+			{
+				targetLocation = PathResolver.get( PathResolver.getParent( inputTileConfigurations.get( 0 ) ), "retiled-images" );
 			}
 		}
 	}
@@ -116,7 +139,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			processChannel( inputTileConfiguration );
 	}
 
-	private void processChannel( final String inputTileConfiguration ) throws IOException
+	private < U extends NativeType< U > & RealType< U > > void processChannel( final String inputTileConfiguration ) throws IOException
 	{
 		final DataProvider sourceDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputTileConfiguration ) );
 		final TileInfo[] tiles = sourceDataProvider.loadTiles( inputTileConfiguration );
@@ -126,9 +149,16 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		final List< Interval > newTilesIntervalsInSingleTile = getNewTilesIntervalsInSingleTile( originalTileSize, newTileSize );
 
 		final Broadcast< List< Interval > > broadcastedNewTilesIntervalsInSingleTile = sparkContext.broadcast( newTilesIntervalsInSingleTile );
+
+		final RandomAccessiblePairNullable< U, U > flatfield = FlatfieldCorrection.loadCorrectionImages( sourceDataProvider, inputTileConfiguration, tiles[ 0 ].numDimensions() );
+		final Broadcast< RandomAccessiblePairNullable< U, U > > broadcastedFlatfield = sparkContext.broadcast( flatfield );
+
 		final List< TileInfo > newTiles = sparkContext.parallelize( Arrays.asList( tiles ), tiles.length ).flatMap(
-				tile -> resaveTileAsSmallerTiles( tile, broadcastedNewTilesIntervalsInSingleTile.value() ).iterator()
+				tile -> resaveTileAsSmallerTiles( tile, broadcastedNewTilesIntervalsInSingleTile.value(), broadcastedFlatfield.value() ).iterator()
 			).collect();
+
+		broadcastedNewTilesIntervalsInSingleTile.destroy();
+		broadcastedFlatfield.destroy();
 
 		// global indexing
 		for ( int i = 0; i < newTiles.size(); ++i )
@@ -148,11 +178,27 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		targetDataProvider.saveTiles( newTiles.toArray( new TileInfo[ 0 ] ), newTilesConfigurationPath );
 	}
 
-	private < T extends NativeType< T > & RealType< T > > List< TileInfo > resaveTileAsSmallerTiles( final TileInfo tile, final List< Interval > newTilesIntervalsInSingleTile ) throws IOException, ImgLibException
+	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< TileInfo > resaveTileAsSmallerTiles(
+			final TileInfo tile,
+			final List< Interval > newTilesIntervalsInSingleTile,
+			final RandomAccessiblePairNullable< U, U > flatfield ) throws IOException, ImgLibException
 	{
 		final DataProvider sourceDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( tile.getFilePath() ) );
 		final RandomAccessibleInterval< T > tileImg = TileLoader.loadTile( tile, sourceDataProvider );
 		final T tileImageType = Util.getTypeFromInterval( tileImg );
+
+		final RandomAccessibleInterval< T > sourceImg;
+		if ( flatfield != null )
+		{
+			System.out.println( "Flat-fielding image.." );
+			final FlatfieldCorrectedRandomAccessible< T, U > flatfieldCorrected = new FlatfieldCorrectedRandomAccessible<>( tileImg, flatfield.toRandomAccessiblePair() );
+			final RandomAccessibleInterval< U > correctedImg = Views.interval( flatfieldCorrected, tileImg );
+			sourceImg = Converters.convert( correctedImg, new RealConverter<>(), tileImageType.createVariable() );
+		}
+		else
+		{
+			sourceImg = tileImg;
+		}
 
 		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( targetImagesLocation ) );
 		final List< TileInfo > newTilesInSingleTile = new ArrayList<>();
@@ -160,7 +206,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 		{
 			final ImagePlusImg< T, ? > newTileImg = new ImagePlusImgFactory<>( tileImageType ).create( newTileInterval );
 			final Cursor< T > newTileImgCursor = Views.flatIterable( newTileImg ).cursor();
-			final Cursor< T > tileImgIntervalCursor = Views.flatIterable( Views.interval( tileImg, newTileInterval ) ).cursor();
+			final Cursor< T > tileImgIntervalCursor = Views.flatIterable( Views.interval( sourceImg, newTileInterval ) ).cursor();
 			while ( newTileImgCursor.hasNext() || tileImgIntervalCursor.hasNext() )
 				newTileImgCursor.next().set( tileImgIntervalCursor.next() );
 			final ImagePlus newTileImagePlus = newTileImg.getImagePlus();

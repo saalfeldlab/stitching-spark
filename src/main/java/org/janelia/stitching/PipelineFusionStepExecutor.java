@@ -23,8 +23,9 @@ import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5NonIsotropicScalePyramidSpark3D;
+import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5NonIsotropicScalePyramidSpark;
 import org.janelia.stitching.FusionPerformer.FusionMode;
+import org.janelia.stitching.TileLoader.TileType;
 import org.janelia.util.Conversions;
 
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
@@ -49,7 +50,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 	private static final int MAX_PARTITIONS = 15000;
 
-	private static final long MAX_PIXELS = Integer.MAX_VALUE;
+	private static final int MIN_BLOCK_SIZE = 64;
 
 	final TreeMap< Integer, long[] > levelToImageDimensions = new TreeMap<>(), levelToCellSize = new TreeMap<>();
 
@@ -84,6 +85,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 		final DataProvider dataProvider = job.getDataProvider();
 		final DataProviderType dataProviderType = dataProvider.getType();
+
+		// check if stage configuration is supplied and if it was intended
+		for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+			if ( !inputFilePath.substring( 0, inputFilePath.lastIndexOf( '.' ) ).endsWith( "-final" ) && !job.getArgs().allowFusingStage() )
+				throw new RuntimeException( "The filename of the input configuration indicates that stitching has not been performed. If you intend to export the initial (stage) configuration, supply an additional parameter '--fusestage'." );
 
 		// determine the best location for storing the export files (near the tile configurations by default)
 		// for cloud backends, the export is stored in a separate bucket to be compatible with n5-viewer
@@ -174,7 +180,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			fuse( n5ExportPath, fullScaleOutputPath, job.getTiles( channel ) );
 
 			// Generate lower scale levels
-			downsampledDatasets = N5NonIsotropicScalePyramidSpark3D.downsampleNonIsotropicScalePyramid(
+			downsampledDatasets = N5NonIsotropicScalePyramidSpark.downsampleNonIsotropicScalePyramid(
 					sparkContext,
 					() -> DataProviderFactory.create( dataProviderType ).createN5Writer( n5ExportPath ),
 					fullScaleOutputPath,
@@ -201,18 +207,29 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 	}
 
 
-	private int[] getOptimalCellSize()
+	private int[] getOptimalCellSize( final TileInfo[] tiles ) throws IOException
 	{
+		final int[] tileN5BlockSize;
+		if ( TileLoader.getTileType( tiles[ 0 ], job.getDataProvider() ) == TileType.N5_DATASET )
+			tileN5BlockSize = TileLoader.getTileN5DatasetAttributes( tiles[ 0 ], job.getDataProvider() ).getBlockSize();
+		else
+			tileN5BlockSize = null;
+
 		final int[] cellSize = new int[ job.getDimensionality() ];
 		for ( int d = 0; d < job.getDimensionality(); d++ )
-			cellSize[ d ] = ( int ) Math.round( job.getArgs().fusionCellSize() / normalizedVoxelDimensions[ d ] );
+		{
+			cellSize[ d ] = Math.max(
+					( int ) Math.round( job.getArgs().fusionCellSize() / normalizedVoxelDimensions[ d ] ),
+					tileN5BlockSize != null ? tileN5BlockSize[ d ] : MIN_BLOCK_SIZE // set the output block size to be not smaller than input tile block size (if stored as N5)
+				);
+		}
 		return cellSize;
 	}
 
 	private void fuse( final String n5ExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
-		final int[] cellSize = getOptimalCellSize();
+		final int[] cellSize = getOptimalCellSize( tiles );
 
 		final Boundaries boundingBox;
 		if ( job.getArgs().minCoord() != null && job.getArgs().maxCoord() != null )
@@ -223,25 +240,6 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		final long[] offset = Intervals.minAsLongArray( boundingBox );
 		final long[] dimensions = Intervals.dimensionsAsLongArray( boundingBox );
 
-		// use the size of the tile as a bigger cell to minimize the number of loads for each image
-		final int[] biggerCellSize = new int[ cellSize.length ];
-		for ( int d = 0; d < biggerCellSize.length; ++d )
-		{
-			biggerCellSize[ d ] = cellSize[ d ] * ( int ) Math.ceil( ( double ) tiles[ 0 ].getSize( d ) / cellSize[ d ] );
-		}
-		while ( Intervals.numElements( biggerCellSize ) > MAX_PIXELS )
-		{
-			System.out.println("Number of elements " + Intervals.numElements( biggerCellSize ) + " in the adjusted block " + Arrays.toString( biggerCellSize ) + " is too large, reduce by half in the longest dimension..." );
-			int maxDimension = 0;
-			for ( int d = 1; d < biggerCellSize.length; ++d )
-				if ( biggerCellSize[ d ] > biggerCellSize[ maxDimension ] )
-					maxDimension = d;
-			biggerCellSize[ maxDimension ] /= 2;
-		}
-		System.out.println( "Adjusted intermediate cell size to " + Arrays.toString( biggerCellSize ) + " (for faster processing)" );
-
-		final List< TileInfo > biggerCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( biggerCellSize ) );
-
 		final N5Writer n5 = dataProvider.createN5Writer( n5ExportPath );
 		n5.createDataset(
 				fullScaleOutputPath,
@@ -251,32 +249,34 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				new GzipCompression()
 			);
 
-		sparkContext.parallelize( biggerCells, biggerCells.size() ).foreach( biggerCell ->
+		final List< TileInfo > cells = TileOperations.divideSpace( boundingBox, new FinalDimensions( cellSize ) );
+
+		sparkContext.parallelize( cells, Math.min( cells.size(), MAX_PARTITIONS ) ).foreach( cell ->
 			{
-				final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( tiles, biggerCell );
+				final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( tiles, cell );
 				if ( tilesWithinCell.isEmpty() )
 					return;
 
-				final Boundaries biggerCellBox = biggerCell.getBoundaries();
-				final long[] biggerCellOffsetCoordinates = new long[ biggerCellBox.numDimensions() ];
-				for ( int d = 0; d < biggerCellOffsetCoordinates.length; d++ )
-					biggerCellOffsetCoordinates[ d ] = biggerCellBox.min( d ) - offset[ d ];
+				final Boundaries cellBox = cell.getBoundaries();
+				final long[] cellOffsetCoordinates = new long[ cellBox.numDimensions() ];
+				for ( int d = 0; d < cellOffsetCoordinates.length; d++ )
+					cellOffsetCoordinates[ d ] = cellBox.min( d ) - offset[ d ];
 
-				final long[] biggerCellGridPosition = new long[ biggerCell.numDimensions() ];
+				final long[] cellGridPosition = new long[ cell.numDimensions() ];
 				final CellGrid cellGrid = new CellGrid( dimensions, cellSize );
-				cellGrid.getCellPosition( biggerCellOffsetCoordinates, biggerCellGridPosition );
+				cellGrid.getCellPosition( cellOffsetCoordinates, cellGridPosition );
 
 				final DataProvider dataProviderLocal = job.getDataProvider();
 				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
 						dataProviderLocal,
 						job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
 						tilesWithinCell,
-						biggerCellBox,
+						cellBox,
 						broadcastedFlatfieldCorrection.value(),
 						broadcastedPairwiseConnectionsMap.value()
 					);
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( n5ExportPath );
-				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, biggerCellGridPosition );
+				N5Utils.saveBlock( outImg, n5Local, fullScaleOutputPath, cellGridPosition );
 			}
 		);
 	}

@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>saalfeldlab</groupId>
 	<artifactId>stitching-spark</artifactId>
-	<version>1.1.0</version>
+	<version>1.2.0</version>
 	<name>StitchingSpark</name>
 	<description>This project is for running stitching jobs on a Spark cluster.</description>
 
@@ -181,7 +181,7 @@
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-spark</artifactId>
-			<version>3.0.0</version>
+			<version>3.1.0</version>
 			<exclusions>
 				<exclusion>
 					<groupId>org.slf4j</groupId>

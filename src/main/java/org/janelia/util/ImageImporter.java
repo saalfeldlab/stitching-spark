@@ -27,7 +27,18 @@ public class ImageImporter
 		{
 			try
 			{
-				return openBioformatsImage( path );
+				final ImagePlus[] imps = openBioformatsImageSeries( path );
+				if ( imps != null )
+				{
+					if ( imps.length != 1 )
+						throw new UnsupportedOperationException( "Expected single image but requested image container " + path + " contains " + imps.length + " images, use openBioformatsImageSeries() instead" );
+					else
+						return imps[ 0 ];
+				}
+				else
+				{
+					return null;
+				}
 			}
 			catch ( final IOException | FormatException e )
 			{
@@ -37,24 +48,27 @@ public class ImageImporter
 		}
 	}
 
-	public static ImagePlus openBioformatsImage( final String path ) throws IOException, FormatException
+	public static ImagePlus[] openBioformatsImageSeries( final String path ) throws IOException, FormatException
 	{
 		final ImporterOptions options = new ImporterOptions();
 		options.setId( path );
 		options.setVirtual( true );
 
+		// do not attempt to read similarly named files that are stored in the same directory
 		options.setGroupFiles( false );
 		options.setUngroupFiles( true );
+
+		// read everything if there are several images stored in a single file
+		options.setOpenAllSeries( true );
 
 		final ImportProcess process = new ImportProcess( options );
 		if ( !process.execute() )
 			return null;
 
 		final ImagePlusReader reader = new ImagePlusReader( process );
+		final ImagePlus[] imps = reader.openImagePlus();
 
-		final ImagePlus imp = reader.openImagePlus()[ 0 ];
-		System.out.println( "Opened image " + imp.getTitle() + " of size " + Arrays.toString( imp.getDimensions() ) );
-		return imp;
-
+		System.out.println( "Opened " + imps.length + ( imps.length == 1 ? " image" : " images" ) + " (" + imps[ 0 ].getTitle() + ") of size " + Arrays.toString( imps[ 0 ].getDimensions() ) );
+		return imps;
 	}
 }

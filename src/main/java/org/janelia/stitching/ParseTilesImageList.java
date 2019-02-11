@@ -104,7 +104,7 @@ public class ParseTilesImageList
 			final String[] axisMappingStr,
 			final boolean skipMissingTiles ) throws Exception
 	{
-		if ( pixelResolution.length != 3 && axisMappingStr.length != 3 )
+		if ( pixelResolution.length != 3 || axisMappingStr.length != 3 )
 			throw new IllegalArgumentException( "expected three-dimensional pixelResolution and axisMapping" );
 
 		final AxisMapping axisMapping = new AxisMapping( axisMappingStr );
