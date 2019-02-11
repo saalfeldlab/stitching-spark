@@ -66,10 +66,6 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 				usage = "Overlap on each side as a ratio relative to the new tile size. This is only an initial guess, where the actual overlap is determined based on the size of the volume such that all tiles have the same size.")
 		public double minOverlapRatioEachSide = 0.1;
 
-		@Option(name = "-f", aliases = { "--flatfield" }, required = false,
-				usage = "Whether to apply flatfield correction.")
-		public boolean applyFlatfieldCorrection = false;
-
 		public boolean parsedSuccessfully = false;
 
 		public ResaveAsSmallerTilesCmdArgs( final String[] args ) throws IllegalArgumentException
@@ -154,7 +150,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 
 		final Broadcast< List< Interval > > broadcastedNewTilesIntervalsInSingleTile = sparkContext.broadcast( newTilesIntervalsInSingleTile );
 
-		final RandomAccessiblePairNullable< U, U > flatfield = args.applyFlatfieldCorrection ? FlatfieldCorrection.loadCorrectionImages( sourceDataProvider, inputTileConfiguration, tiles[ 0 ].numDimensions() ) : null;
+		final RandomAccessiblePairNullable< U, U > flatfield = FlatfieldCorrection.loadCorrectionImages( sourceDataProvider, inputTileConfiguration, tiles[ 0 ].numDimensions() );
 		final Broadcast< RandomAccessiblePairNullable< U, U > > broadcastedFlatfield = sparkContext.broadcast( flatfield );
 
 		final List< TileInfo > newTiles = sparkContext.parallelize( Arrays.asList( tiles ), tiles.length ).flatMap(
