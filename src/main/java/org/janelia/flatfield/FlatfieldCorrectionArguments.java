@@ -33,8 +33,8 @@ public class FlatfieldCorrectionArguments
 			usage = "Number of inner bins to use (two extra outer bins will be added to store the tails of the distribution)")
 	private int innerBins = 256;
 
-	@Option(name = "-p", aliases = { "--pivot" }, required = false,
-			usage = "Pivot value which is to subtract from all histograms (usually the background intensity value)")
+	@Option(name = "-v", aliases = { "--backgroundValue" }, required = false,
+			usage = "Background value which will be subtracted from the data. If omitted, it will be estimated automatically (less reliable than if the background intensity is known).")
 	private Double pivotValue = null;
 
 	@Option(name = "--min", required = false,

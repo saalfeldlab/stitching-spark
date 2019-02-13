@@ -199,10 +199,18 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final Double pivotValue;
 		if ( !args.getHistogramSettings().isValid() || args.pivotValue() == null )
 		{
+			// if provided in the cmd args, set user-specified values, otherwise use estimated values
 			final StackHistogram stackHistogram = StackHistogram.getStackHistogram( sparkContext, tiles );
-			final Pair< Double, Double > intensityRange = stackHistogram.getIntensityRange( args.getMinMaxQuantiles() );
-			histogramSettings = new HistogramSettings( Math.floor( intensityRange.getA() ), Math.ceil( intensityRange.getB() ), args.getHistogramSettings().bins );
-			pivotValue = ( double ) Math.round( stackHistogram.getPivotValue() );
+			if ( args.getHistogramSettings().isValid() )
+			{
+				histogramSettings = args.getHistogramSettings();
+			}
+			else
+			{
+				final Pair< Double, Double > intensityRange = stackHistogram.getIntensityRange( args.getMinMaxQuantiles() );
+				histogramSettings = new HistogramSettings( Math.floor( intensityRange.getA() ), Math.ceil( intensityRange.getB() ), args.getHistogramSettings().bins );
+			}
+			pivotValue = args.pivotValue() != null ? args.pivotValue() : Math.round( stackHistogram.getPivotValue() );
 		}
 		else
 		{
