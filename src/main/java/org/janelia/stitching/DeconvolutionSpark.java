@@ -156,7 +156,20 @@ public class DeconvolutionSpark
 			// initialize background value for each channel
 			final List< Double > channelBackgroundValues = new ArrayList<>();
 			for ( final String channelPath : parsedArgs.inputChannelsPaths )
-				channelBackgroundValues.add( parsedArgs.backgroundValue != null ? parsedArgs.backgroundValue : FlatfieldCorrection.getPivotValue( dataProvider, channelPath ) );
+			{
+				final double backgroundValue;
+				if ( parsedArgs.backgroundValue != null )
+				{
+					backgroundValue = parsedArgs.backgroundValue;
+					System.out.println( "User-specified background value for " + PathResolver.getFileName( channelPath ) + ": " + backgroundValue );
+				}
+				else
+				{
+					backgroundValue = FlatfieldCorrection.getPivotValue( dataProvider, channelPath );
+					System.out.println( "Get background value from the flatfield attributes for " + PathResolver.getFileName( channelPath ) + ": " + backgroundValue );
+				}
+				channelBackgroundValues.add( backgroundValue );
+			}
 
 			// initialize flatfields for each channel
 			final List< RandomAccessiblePairNullable< U, U > > channelFlatfields = new ArrayList<>();
