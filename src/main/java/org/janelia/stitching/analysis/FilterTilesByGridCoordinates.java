@@ -24,9 +24,22 @@ public class FilterTilesByGridCoordinates
 		final Map< Integer, TileInfo > tiles = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( tileConfigPath ) ) );
 		final Map< Integer, int[] > tileGridCoordinates = Utils.getTilesCoordinatesMap( tiles.values().toArray( new TileInfo[ 0 ] ) );
 
-		final int dimension = new String( DIMENSION_STR ).indexOf( args[ 1 ] );
+		final int dimension = new String( DIMENSION_STR ).indexOf( args[ 1 ].toLowerCase() );
 		if ( dimension == -1 )
 			throw new IllegalArgumentException( "Expected x/y/z, got " + args[ 1 ] );
+
+		if ( args.length <= 2 || args[ 2 ].isEmpty() )
+		{
+			// no range requested, only print the min and max grid coordinates in the specified dimension
+			int minGridPosition = Integer.MAX_VALUE, maxGridPosition = Integer.MIN_VALUE;
+			for ( final int[] gridCoords : tileGridCoordinates.values() )
+			{
+				minGridPosition = Math.min( gridCoords[ dimension ], minGridPosition );
+				maxGridPosition = Math.max( gridCoords[ dimension ], maxGridPosition );
+			}
+			System.err.println( "Please provide a range of grid positions to extract in the format of <from>-<to> between " + minGridPosition + " and " + maxGridPosition + " in " + DIMENSION_STR[ dimension ] );
+			System.exit( 1 );
+		}
 
 		final int filteredGridPositionMin, filteredGridPositionMax;
 		{
