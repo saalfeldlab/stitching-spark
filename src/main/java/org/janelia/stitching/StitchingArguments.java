@@ -30,7 +30,7 @@ public class StitchingArguments implements Serializable {
 	private List< String > inputTileConfigurations;
 
 	@Option(name = "-r", aliases = { "--registrationChannelIndex" }, required = false,
-			usage = "Index of the input channel to be used for registration. If omitted, all the input channels will be used for registration (by averaging the tile images).")
+			usage = "Index of the input channel to be used for registration (indexing starts from 0). If omitted or equal to -1, all input channels will be used for registration by averaging the tile images.")
 	private Integer registrationChannelIndex = null;
 
 	@Option(name = "-n", aliases = { "--minNeighbors" }, required = false,
@@ -131,7 +131,9 @@ public class StitchingArguments implements Serializable {
 			if ( !CloudURI.isCloudURI( inputTileConfigurations.get( i ) ) )
 				inputTileConfigurations.set( i, Paths.get( inputTileConfigurations.get( i ) ).toAbsolutePath().toString() );
 
-		if ( registrationChannelIndex != null && ( registrationChannelIndex < 0 || registrationChannelIndex >= inputTileConfigurations.size() ) )
+		if ( registrationChannelIndex == -1 )
+			registrationChannelIndex = null;
+		else if ( registrationChannelIndex != null && ( registrationChannelIndex < 0 || registrationChannelIndex >= inputTileConfigurations.size() ) )
 			throw new IllegalArgumentException( "Registration channel index " + registrationChannelIndex + " is out of bounds [0-" + ( inputTileConfigurations.size() - 1 ) + "]" );
 	}
 
