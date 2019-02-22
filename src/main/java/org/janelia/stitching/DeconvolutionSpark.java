@@ -96,7 +96,7 @@ public class DeconvolutionSpark
 				if ( !CloudURI.isCloudURI( psfPaths.get( i ) ) )
 					psfPaths.set( i, Paths.get( psfPaths.get( i ) ).toAbsolutePath().toString() );
 
-			if ( backgroundIntensityValues != null && backgroundIntensityValues.size() != inputChannelsPaths.size() )
+			if ( backgroundIntensityValues != null && backgroundIntensityValues.size() != inputChannelsPaths.size() && backgroundIntensityValues.size() != 1 )
 				throw new IllegalArgumentException( "Background intensity values should be provided for each input channel" );
 		}
 	}
@@ -165,7 +165,11 @@ public class DeconvolutionSpark
 				final double backgroundValue;
 				if ( parsedArgs.backgroundIntensityValues != null )
 				{
-					backgroundValue = parsedArgs.backgroundIntensityValues.get( channel );
+					if ( parsedArgs.backgroundIntensityValues.size() == 1 )
+						backgroundValue = parsedArgs.backgroundIntensityValues.get( 0 ); // keep backwards compatibility with the older usage (allow the same value for all input channels)
+					else
+						backgroundValue = parsedArgs.backgroundIntensityValues.get( channel );
+
 					System.out.println( "User-specified background value for " + PathResolver.getFileName( channelPath ) + ": " + backgroundValue );
 				}
 				else

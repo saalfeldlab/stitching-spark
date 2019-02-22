@@ -99,7 +99,7 @@ public class FlatfieldCorrectionArguments
 			if ( !CloudURI.isCloudURI( inputChannelsPaths.get( i ) ) )
 				inputChannelsPaths.set( i, Paths.get( inputChannelsPaths.get( i ) ).toAbsolutePath().toString() );
 
-		if ( backgroundIntensityValues != null && backgroundIntensityValues.size() != inputChannelsPaths.size() )
+		if ( backgroundIntensityValues != null && backgroundIntensityValues.size() != inputChannelsPaths.size() && backgroundIntensityValues.size() != 1 )
 			throw new IllegalArgumentException( "Background intensity values should be provided for each input channel" );
 	}
 
@@ -108,8 +108,8 @@ public class FlatfieldCorrectionArguments
 	public List< String > inputChannelsPaths() { return inputChannelsPaths; }
 	public String cropMinMaxIntervalStr() { return cropMinMaxInterval; };
 	public boolean use2D() { return use2D; }
-	public Double backgroundIntensityValue( final int channel ) { return backgroundIntensityValues != null ? backgroundIntensityValues.get( channel ) : null; }
 	public Pair< Double, Double > getMinMaxQuantiles() { return new ValuePair<>( histMinQuantile, histMaxQuantile ); }
+
 	public HistogramSettings getHistogramSettings()
 	{
 		return new HistogramSettings(
@@ -117,6 +117,16 @@ public class FlatfieldCorrectionArguments
 				histMaxValue,
 				innerBins + 2  // add two extra bins for tails of the distribution
 			);
+	}
+
+	public Double backgroundIntensityValue( final int channel )
+	{
+		if ( backgroundIntensityValues == null )
+			return null;
+		else if ( backgroundIntensityValues.size() == 1 )
+			return backgroundIntensityValues.get( 0 ); // keep backwards compatibility with the older usage (allow the same value for all input channels)
+		else
+			return backgroundIntensityValues.get( channel );
 	}
 
 	public Interval cropMinMaxInterval( final long[] fullTileSize )
