@@ -34,8 +34,8 @@ public class FlatfieldCorrectionArguments
 	private int innerBins = 256;
 
 	@Option(name = "-v", aliases = { "--backgroundValue" }, required = false,
-			usage = "Background value which will be subtracted from the data. If omitted, it will be estimated automatically (less reliable than if the background intensity is known).")
-	private Double pivotValue = null;
+			usage = "Background intensity value which will be subtracted from the data (one per input channel). If omitted, it will be estimated automatically (less reliable than if the background intensity is known).")
+	private List< Double > backgroundIntensityValues = null;
 
 	@Option(name = "--min", required = false,
 			usage = "Min value of a histogram")
@@ -98,6 +98,9 @@ public class FlatfieldCorrectionArguments
 		for ( int i = 0; i < inputChannelsPaths.size(); ++i )
 			if ( !CloudURI.isCloudURI( inputChannelsPaths.get( i ) ) )
 				inputChannelsPaths.set( i, Paths.get( inputChannelsPaths.get( i ) ).toAbsolutePath().toString() );
+
+		if ( backgroundIntensityValues != null && backgroundIntensityValues.size() != inputChannelsPaths.size() )
+			throw new IllegalArgumentException( "Background intensity values should be provided for each input channel" );
 	}
 
 	public boolean parsedSuccessfully() { return parsedSuccessfully; }
@@ -105,7 +108,7 @@ public class FlatfieldCorrectionArguments
 	public List< String > inputChannelsPaths() { return inputChannelsPaths; }
 	public String cropMinMaxIntervalStr() { return cropMinMaxInterval; };
 	public boolean use2D() { return use2D; }
-	public Double pivotValue() { return pivotValue; }
+	public Double backgroundIntensityValue( final int channel ) { return backgroundIntensityValues != null ? backgroundIntensityValues.get( channel ) : null; }
 	public Pair< Double, Double > getMinMaxQuantiles() { return new ValuePair<>( histMinQuantile, histMaxQuantile ); }
 	public HistogramSettings getHistogramSettings()
 	{

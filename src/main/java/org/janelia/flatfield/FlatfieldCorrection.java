@@ -197,7 +197,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 		final HistogramSettings histogramSettings;
 		final Double pivotValue;
-		if ( !args.getHistogramSettings().isValid() || args.pivotValue() == null )
+		if ( !args.getHistogramSettings().isValid() || args.backgroundIntensityValue( channel ) == null )
 		{
 			// if provided in the cmd args, set user-specified values, otherwise use estimated values
 			final StackHistogram stackHistogram = StackHistogram.getStackHistogram( sparkContext, tiles );
@@ -210,16 +210,16 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				final Pair< Double, Double > intensityRange = stackHistogram.getIntensityRange( args.getMinMaxQuantiles() );
 				histogramSettings = new HistogramSettings( Math.floor( intensityRange.getA() ), Math.ceil( intensityRange.getB() ), args.getHistogramSettings().bins );
 			}
-			pivotValue = args.pivotValue() != null ? args.pivotValue() : Math.round( stackHistogram.getPivotValue() );
+			pivotValue = args.backgroundIntensityValue( channel ) != null ? args.backgroundIntensityValue( channel ) : Math.round( stackHistogram.getPivotValue() );
 		}
 		else
 		{
 			histogramSettings = args.getHistogramSettings();
-			pivotValue = args.pivotValue();
+			pivotValue = args.backgroundIntensityValue( channel );
 		}
 
 		System.out.println( "Histogram intensity range: min=" + histogramSettings.histMinValue + ", max=" + histogramSettings.histMaxValue );
-		System.out.println( "Pivot value: " + pivotValue );
+		System.out.println( "Background intensity value: " + pivotValue );
 
 		final HistogramsProvider histogramsProvider = new HistogramsProvider(
 				sparkContext,
