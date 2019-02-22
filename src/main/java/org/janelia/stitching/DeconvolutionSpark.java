@@ -60,9 +60,9 @@ public class DeconvolutionSpark
 				usage = "Number of iterations to perform for the deconvolution algorithm.")
 		private int numIterations = 10;
 
-		@Option(name = "-b", aliases = { "--backgroundValue" }, required = false,
-				usage = "Background value of the data for each channel. If omitted, the pivot value estimated in the Flatfield Correction step will be used (default).")
-		private Double backgroundValue = null;
+		@Option(name = "-v", aliases = { "--backgroundValue" }, required = false,
+				usage = "Background intensity value which will be subtracted from the data and the PSF (one per input channel). If omitted, the pivot value estimated in the Flatfield Correction step will be used (default).")
+		private List< Double > backgroundIntensityValues = null;
 
 		@Option(name = "-f", aliases = { "--outputFloat" }, required = false,
 				usage = "If specified, the output images are saved as 32-bit float images. If omitted, they are rescaled into the value range of the input datatype (default).")
@@ -95,6 +95,9 @@ public class DeconvolutionSpark
 			for ( int i = 0; i < psfPaths.size(); ++i )
 				if ( !CloudURI.isCloudURI( psfPaths.get( i ) ) )
 					psfPaths.set( i, Paths.get( psfPaths.get( i ) ).toAbsolutePath().toString() );
+
+			if ( backgroundIntensityValues != null && backgroundIntensityValues.size() != inputChannelsPaths.size() && backgroundIntensityValues.size() != 1 )
+				throw new IllegalArgumentException( "Background intensity values should be provided for each input channel" );
 		}
 	}
 
@@ -155,12 +158,18 @@ public class DeconvolutionSpark
 
 			// initialize background value for each channel
 			final List< Double > channelBackgroundValues = new ArrayList<>();
-			for ( final String channelPath : parsedArgs.inputChannelsPaths )
+			for ( int channel = 0; channel < parsedArgs.inputChannelsPaths.size(); ++channel )
 			{
+				final String channelPath = parsedArgs.inputChannelsPaths.get( channel );
+
 				final double backgroundValue;
-				if ( parsedArgs.backgroundValue != null )
+				if ( parsedArgs.backgroundIntensityValues != null )
 				{
-					backgroundValue = parsedArgs.backgroundValue;
+					if ( parsedArgs.backgroundIntensityValues.size() == 1 )
+						backgroundValue = parsedArgs.backgroundIntensityValues.get( 0 ); // keep backwards compatibility with the older usage (allow the same value for all input channels)
+					else
+						backgroundValue = parsedArgs.backgroundIntensityValues.get( channel );
+
 					System.out.println( "User-specified background value for " + PathResolver.getFileName( channelPath ) + ": " + backgroundValue );
 				}
 				else
