@@ -19,6 +19,11 @@ import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 import org.janelia.flatfield.FlatfieldCorrection;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.stitching.TileLoader.TileType;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -28,7 +33,10 @@ import org.scijava.plugin.Parameter;
 import ij.ImagePlus;
 import net.imagej.ops.OpService;
 import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.algorithm.util.Grids;
 import net.imglib2.converter.ClampingConverter;
 import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealConverter;
@@ -37,10 +45,12 @@ import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 import scala.Tuple2;
+import scala.Tuple3;
 
 public class DeconvolutionSpark
 {
@@ -127,6 +137,7 @@ public class DeconvolutionSpark
 		}
 	}
 
+	private static final int[] DEFAULT_BLOCK_SIZE = {128, 128, 64};
 	private static final int MAX_PARTITIONS = 15000;
 	private static final String FILENAME_SUFFIX_FLOAT = "-float";
 
@@ -150,11 +161,10 @@ public class DeconvolutionSpark
 				.set( "spark.speculation", "true" ) // will restart tasks that run for too long (if decon hangs which may happen occasionally)
 			) )
 		{
-			// initialize input tiles
-			final List< Tuple2< TileInfo, Integer > > tilesAndChannelIndices = new ArrayList<>();
-			for ( int ch = 0; ch < parsedArgs.inputChannelsPaths.size(); ++ch )
-				for ( final TileInfo tile : dataProvider.loadTiles( parsedArgs.inputChannelsPaths.get( ch ) ) )
-					tilesAndChannelIndices.add( new Tuple2<>( tile, ch ) );
+			// load input tile metadata
+			final List< TileInfo[] > inputTileChannels = new ArrayList<>();
+			for ( final String inputChannelPath : parsedArgs.inputChannelsPaths )
+				inputTileChannels.add( dataProvider.loadTiles( inputChannelPath ) );
 
 			// initialize background value for each channel
 			final List< Double > channelBackgroundValues = new ArrayList<>();
@@ -183,23 +193,44 @@ public class DeconvolutionSpark
 			// initialize flatfields for each channel
 			final List< RandomAccessiblePairNullable< U, U > > channelFlatfields = new ArrayList<>();
 			for ( final String channelPath : parsedArgs.inputChannelsPaths )
-				channelFlatfields.add( FlatfieldCorrection.loadCorrectionImages( dataProvider, channelPath, tilesAndChannelIndices.iterator().next()._1().numDimensions() ) );
+				channelFlatfields.add( FlatfieldCorrection.loadCorrectionImages( dataProvider, channelPath, inputTileChannels.get( 0 )[ 0 ].numDimensions() ) );
 			final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedChannelFlatfields = sparkContext.broadcast( channelFlatfields );
 
-			final ImageType inputImageType = tilesAndChannelIndices.iterator().next()._1().getType();
+			// get tile image type
+			final ImageType inputImageType = inputTileChannels.get( 0 )[ 0 ].getType();
 			if ( inputImageType.equals( ImageType.GRAY32 ) && !parsedArgs.exportAsFloat )
 			{
 				System.out.println( "Input data type is already float, no conversion is needed" );
 				parsedArgs.exportAsFloat = true;
 			}
 
-			final List< Tuple2< TileInfo, Integer > > deconTilesAndChannelIndices = sparkContext.parallelize(
-					tilesAndChannelIndices,
-					Math.min( tilesAndChannelIndices.size(), MAX_PARTITIONS )
-			).map( tileAndChannelIndex->
+			// set appropriate block size for processing
+			final int[] processingBlockSize;
+			if ( TileLoader.getTileType( inputTileChannels.get( 0 )[ 0 ], dataProvider ) == TileType.N5_DATASET )
+				processingBlockSize = TileLoader.getTileN5DatasetAttributes( inputTileChannels.get( 0 )[ 0 ], dataProvider ).getBlockSize();
+			else
+				processingBlockSize = null;
+
+			// create processing blocks for each tile to be parallelized
+			final List< Tuple3< Integer, TileInfo, Interval > > tileBlocksAndChannelIndices = new ArrayList<>();
+			for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
+				for ( final TileInfo tile : inputTileChannels.get( ch ) )
+					for ( final Interval processingBlock : Grids.collectAllContainedIntervals( tile.getSize(), processingBlockSize ) )
+						tileBlocksAndChannelIndices.add( new Tuple3<>( ch, tile, processingBlock ) );
+
+			// create N5 datasets for output tiles
+			final String n5DeconTilesFloatPath = PathResolver.get( outputImagesPath, "decon-tiles-float.n5" );
+			final N5Writer n5DeconTilesFloatWriter = dataProvider.createN5Writer( n5DeconTilesFloatPath );
+			for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
+				for ( final TileInfo tile : inputTileChannels.get( ch ) )
+					n5DeconTilesFloatWriter.createDataset( PathResolver.getFileName( tile.getFilePath() ), tile.getSize(), processingBlockSize, DataType.FLOAT32, new GzipCompression() );
+
+			sparkContext.parallelize( tileBlocksAndChannelIndices, Math.min( tileBlocksAndChannelIndices.size(), MAX_PARTITIONS ) ).foreach( tileBlockAndChannelIndex->
 				{
-					final TileInfo tile = tileAndChannelIndex._1();
-					final int channelIndex = tileAndChannelIndex._2();
+					final int channelIndex = tileBlockAndChannelIndex._1();
+					final TileInfo tile = tileBlockAndChannelIndex._2();
+					final Interval processingBlock = tileBlockAndChannelIndex._3();
+
 					final DataProvider localDataProvider = DataProviderFactory.create( dataProviderType );
 
 					// load tile image
@@ -209,6 +240,15 @@ public class DeconvolutionSpark
 					final ImagePlus psfImp = localDataProvider.loadImage( parsedArgs.psfPaths.get( channelIndex ) );
 					Utils.workaroundImagePlusNSlices( psfImp );
 					final RandomAccessibleInterval< T > psfImg = ImagePlusImgs.from( psfImp );
+
+					// pad the processing block by half the size of the PSF
+					final long[] paddedProcessingBlockMin = new long[ processingBlock.numDimensions() ], paddedProcessingBlockMax = new long[ processingBlock.numDimensions() ];
+					for ( int d = 0; d < processingBlock.numDimensions(); ++d )
+					{
+						paddedProcessingBlockMin[ d ] = Math.max( processingBlock.min( d ) - psfImg.dimension( d ) / 2, tileImg.min( d ) );
+						paddedProcessingBlockMax[ d ] = Math.min( processingBlock.max( d ) + psfImg.dimension( d ) / 2, tileImg.max( d ) );
+					}
+					final Interval paddedProcessingBlock = new FinalInterval( paddedProcessingBlockMin, paddedProcessingBlockMax );
 
 					// convert to float type for the deconvolution to work properly
 					final RandomAccessibleInterval< FloatType > tileImgFloat = Converters.convert( tileImg, new RealConverter<>(), new FloatType() );
@@ -228,9 +268,12 @@ public class DeconvolutionSpark
 						sourceImgFloat = tileImgFloat;
 					}
 
+					// get padded processing block image
+					final RandomAccessibleInterval< FloatType > paddedProcessingBlockImg = Views.interval( sourceImgFloat, paddedProcessingBlock );
+
 					// subtract background
 					final double backgroundValue = channelBackgroundValues.get( channelIndex );
-					final RandomAccessibleInterval< FloatType > sourceImgNoBackground = subtractBackground( sourceImgFloat, backgroundValue );
+					final RandomAccessibleInterval< FloatType > paddedProcessingBlockImgNoBackground = subtractBackground( paddedProcessingBlockImg, backgroundValue );
 					final RandomAccessibleInterval< FloatType > psfImgNoBackground = subtractBackground( psfImgFloat, backgroundValue );
 
 					// normalize the PSF
@@ -241,34 +284,33 @@ public class DeconvolutionSpark
 						val.set( ( float ) ( val.get() / psfSum ) );
 
 					// run decon
-					final RandomAccessibleInterval< FloatType > deconImg = OpServiceContainer.getInstance().ops().deconvolve().richardsonLucy(
-							sourceImgNoBackground,
+					final RandomAccessibleInterval< FloatType > paddedProcessingBlockDeconImg = OpServiceContainer.getInstance().ops().deconvolve().richardsonLucy(
+							paddedProcessingBlockImgNoBackground,
 							psfImgNoBackground,
 							parsedArgs.numIterations
 						);
 
-					// create output image data
-					final ImagePlus deconImp = Utils.copyToImagePlus( deconImg );
+					// crop the deconvolved processing block from the padded image
+					final RandomAccessibleInterval< FloatType > processingBlockDeconImg =
+							Views.interval( // 3. Crop the unpadded interval
+									Views.translate( // 2. Translated it to its padded position
+											Views.zeroMin( // 1. Set the resulting image position to 0
+													paddedProcessingBlockDeconImg
+												),
+											Intervals.minAsLongArray( paddedProcessingBlock )
+										),
+								processingBlock
+							);
 
-					// save resulting decon tile
-					final String deconTilePath = PathResolver.get( outputImagesPath,
-							Utils.addFilenameSuffix(
-									Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "-decon" ),
-									FILENAME_SUFFIX_FLOAT
-								)
-						);
-					localDataProvider.saveImage( deconImp, deconTilePath );
-
-					// create metadata for resulting decon tile
-					final TileInfo deconTile = tile.clone();
-					deconTile.setFilePath( deconTilePath );
-					deconTile.setType( ImageType.valueOf( deconImp.getType() ) );
-
-					return new Tuple2<>( deconTile, channelIndex );
+					// save the resulting decon block into the N5 dataset for this tile
+					final N5Writer localN5DeconTilesFloatWriter = localDataProvider.createN5Writer( n5DeconTilesFloatPath );
+					N5Utils.saveBlock( processingBlockDeconImg, localN5DeconTilesFloatWriter, PathResolver.getFileName( tile.getFilePath() ) );
 				}
-			).collect();
+			);
 
 			broadcastedChannelFlatfields.destroy();
+
+			// TODO: metadata for decon tiles
 
 			if ( !parsedArgs.exportAsFloat )
 			{
