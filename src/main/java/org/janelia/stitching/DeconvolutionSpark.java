@@ -138,7 +138,6 @@ public class DeconvolutionSpark
 
 	private static final int[] DEFAULT_BLOCK_SIZE = {128, 128, 64};
 	private static final int MAX_PARTITIONS = 15000;
-	private static final String FILENAME_SUFFIX_FLOAT = "-float";
 
 	public static < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > void main( final String[] args ) throws Exception
 	{
@@ -217,14 +216,14 @@ public class DeconvolutionSpark
 					for ( final Interval processingBlock : Grids.collectAllContainedIntervals( tile.getSize(), processingBlockSize ) )
 						channelIndicesAndTileBlocks.add( new Tuple3<>( ch, tile, processingBlock ) );
 
-			// set output N5 dataset paths for decon tiles
-			final List< Map< Integer, String > > channelDeconTilesN5DatasetPaths = new ArrayList<>();
+			// set output N5 dataset paths for float decon tiles
+			final List< Map< Integer, String > > channelDeconTilesFloatN5DatasetPaths = new ArrayList<>();
 			for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
 			{
 				final Map< Integer, String > tileIndexToDatasetPath = new TreeMap<>();
 				for ( final TileInfo tile : inputTileChannels.get( ch ) )
-					tileIndexToDatasetPath.put( tile.getIndex(), PathResolver.get( getChannelName( parsedArgs.inputChannelsPaths.get( ch ) ), PathResolver.getFileName( tile.getFilePath() ) ) );
-				channelDeconTilesN5DatasetPaths.add( tileIndexToDatasetPath );
+					tileIndexToDatasetPath.put( tile.getIndex(), PathResolver.get( getChannelName( parsedArgs.inputChannelsPaths.get( ch ) ), PathResolver.getFileName( tile.getFilePath() ) + "-decon-float" ) );
+				channelDeconTilesFloatN5DatasetPaths.add( tileIndexToDatasetPath );
 			}
 
 			// create N5 datasets for output decon tiles
@@ -232,7 +231,7 @@ public class DeconvolutionSpark
 			final N5Writer n5DeconTilesFloatWriter = dataProvider.createN5Writer( n5DeconTilesFloatPath );
 			for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
 				for ( final TileInfo tile : inputTileChannels.get( ch ) )
-					n5DeconTilesFloatWriter.createDataset( channelDeconTilesN5DatasetPaths.get( ch ).get( tile.getIndex() ), tile.getSize(), processingBlockSize, DataType.FLOAT32, new GzipCompression() );
+					n5DeconTilesFloatWriter.createDataset( channelDeconTilesFloatN5DatasetPaths.get( ch ).get( tile.getIndex() ), tile.getSize(), processingBlockSize, DataType.FLOAT32, new GzipCompression() );
 
 			sparkContext.parallelize( channelIndicesAndTileBlocks, Math.min( channelIndicesAndTileBlocks.size(), MAX_PARTITIONS ) ).foreach( tileBlockAndChannelIndex ->
 				{
@@ -313,7 +312,7 @@ public class DeconvolutionSpark
 
 					// save the resulting decon block into the N5 dataset for this tile
 					final N5Writer localN5DeconTilesFloatWriter = localDataProvider.createN5Writer( n5DeconTilesFloatPath );
-					final String outputDatasetPath = channelDeconTilesN5DatasetPaths.get( channelIndex ).get( tile.getIndex() );
+					final String outputDatasetPath = channelDeconTilesFloatN5DatasetPaths.get( channelIndex ).get( tile.getIndex() );
 					final long[] gridOffset = new long[ processingBlockSize.length ];
 					Arrays.setAll( gridOffset, d -> processingBlockDeconImg.min( d ) / processingBlockSize[ d ] );
 					N5Utils.saveBlock( processingBlockDeconImg, localN5DeconTilesFloatWriter, outputDatasetPath, gridOffset );
@@ -330,7 +329,7 @@ public class DeconvolutionSpark
 				for ( final TileInfo tile : inputTileChannels.get( ch ) )
 				{
 					final TileInfo deconTileFloat = tile.clone();
-					deconTileFloat.setFilePath( PathResolver.get( n5DeconTilesFloatPath, channelDeconTilesN5DatasetPaths.get( ch ).get( tile.getIndex() ) ) );
+					deconTileFloat.setFilePath( PathResolver.get( n5DeconTilesFloatPath, channelDeconTilesFloatN5DatasetPaths.get( ch ).get( tile.getIndex() ) ) );
 					deconTileFloat.setType( ImageType.GRAY32 );
 					tileIndexToDeconTileFloat.put( deconTileFloat.getIndex(), deconTileFloat );
 				}
@@ -395,6 +394,16 @@ public class DeconvolutionSpark
 					for ( final TileInfo deconTileFloat : channelDeconTilesFloatMap.get( ch ).values() )
 						channelIndicesAndDeconTilesFloat.add( new Tuple2<>( ch, deconTileFloat ) );
 
+				// set output N5 dataset paths for converted decon tiles
+				final List< Map< Integer, String > > channelDeconTilesConvertedN5DatasetPaths = new ArrayList<>();
+				for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
+				{
+					final Map< Integer, String > tileIndexToDatasetPath = new TreeMap<>();
+					for ( final TileInfo tile : inputTileChannels.get( ch ) )
+						tileIndexToDatasetPath.put( tile.getIndex(), PathResolver.get( getChannelName( parsedArgs.inputChannelsPaths.get( ch ) ), PathResolver.getFileName( tile.getFilePath() ) + "-decon" ) );
+					channelDeconTilesConvertedN5DatasetPaths.add( tileIndexToDatasetPath );
+				}
+
 				// set output N5 path where converted tiles will be stored
 				final String n5DeconTilesPath = PathResolver.get( outputImagesPath, "decon-tiles.n5" );
 
@@ -418,12 +427,13 @@ public class DeconvolutionSpark
 
 						// save the converted decon tile image as an N5 dataset
 						final N5Writer localN5DeconTilesWriter = localDataProvider.createN5Writer( n5DeconTilesPath );
-						final String outputDatasetPath = channelDeconTilesN5DatasetPaths.get( channelIndex ).get( deconTileFloat.getIndex() );
+						final String outputDatasetPath = channelDeconTilesConvertedN5DatasetPaths.get( channelIndex ).get( deconTileFloat.getIndex() );
 						N5Utils.save( convertedDeconTileImg, localN5DeconTilesWriter, outputDatasetPath, processingBlockSize, new GzipCompression() );
 
 						// delete intermediate 32-bit decon tile N5 dataset
 						final N5Writer localN5DeconTilesFloatWriter = localDataProvider.createN5Writer( n5DeconTilesFloatPath );
-						localN5DeconTilesFloatWriter.remove( outputDatasetPath );
+						final String intermediateFloatDatasetPath = channelDeconTilesFloatN5DatasetPaths.get( channelIndex ).get( deconTileFloat.getIndex() );
+						localN5DeconTilesFloatWriter.remove( intermediateFloatDatasetPath );
 					}
 				);
 
@@ -438,7 +448,7 @@ public class DeconvolutionSpark
 					for ( final TileInfo tile : inputTileChannels.get( ch ) )
 					{
 						final TileInfo deconTile = tile.clone();
-						deconTile.setFilePath( PathResolver.get( n5DeconTilesPath, channelDeconTilesN5DatasetPaths.get( ch ).get( tile.getIndex() ) ) );
+						deconTile.setFilePath( PathResolver.get( n5DeconTilesPath, channelDeconTilesConvertedN5DatasetPaths.get( ch ).get( tile.getIndex() ) ) );
 						tileIndexToDeconTile.put( deconTile.getIndex(), deconTile );
 					}
 					channelDeconTilesMap.add( tileIndexToDeconTile );
