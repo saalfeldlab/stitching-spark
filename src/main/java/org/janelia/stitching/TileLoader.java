@@ -26,7 +26,7 @@ public class TileLoader
 
 	public static TileType getTileType( final TileInfo tile, final DataProvider dataProvider )
 	{
-		final String n5Path  = PathResolver.getParent( PathResolver.getParent( tile.getFilePath() ) );
+		final String n5Path = PathResolver.getParent( PathResolver.getParent( tile.getFilePath() ) ); // n5 tiles are stored this way: /some/path/tiles.n5/ch0/tile0 (tile0 is a dataset, tiles.n5 is the N5 root)
 		final String tileDatasetPath = Paths.get( n5Path ).relativize( Paths.get( tile.getFilePath() ) ).toString();
 
 		try
