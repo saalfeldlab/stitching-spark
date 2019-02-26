@@ -253,8 +253,8 @@ public class DeconvolutionSpark
 					final long[] paddedProcessingBlockMin = new long[ processingBlock.numDimensions() ], paddedProcessingBlockMax = new long[ processingBlock.numDimensions() ];
 					for ( int d = 0; d < processingBlock.numDimensions(); ++d )
 					{
-						paddedProcessingBlockMin[ d ] = Math.max( processingBlock.min( d ) - psfImg.dimension( d ) / 2, tileImg.min( d ) );
-						paddedProcessingBlockMax[ d ] = Math.min( processingBlock.max( d ) + psfImg.dimension( d ) / 2, tileImg.max( d ) );
+						paddedProcessingBlockMin[ d ] = Math.max( processingBlock.min( d ) - psfImg.dimension( d ), tileImg.min( d ) );
+						paddedProcessingBlockMax[ d ] = Math.min( processingBlock.max( d ) + psfImg.dimension( d ), tileImg.max( d ) );
 					}
 					final Interval paddedProcessingBlock = new FinalInterval( paddedProcessingBlockMin, paddedProcessingBlockMax );
 
