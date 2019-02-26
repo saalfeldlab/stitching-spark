@@ -424,6 +424,9 @@ public class DeconvolutionSpark
 					}
 				);
 
+				// delete N5 container for intermediate 32-bit decon
+				n5DeconTilesFloatWriter.remove();
+
 				// create resulting tile configuration for decon N5 converted output
 				channelDeconTilesMap = new ArrayList<>();
 				for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
