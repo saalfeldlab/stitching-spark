@@ -156,7 +156,6 @@ public class DeconvolutionSpark
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "DeconvolutionSpark" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
-				.set( "spark.speculation", "true" ) // will restart tasks that run for too long (if decon hangs which may happen occasionally)
 			) )
 		{
 			// load input tile metadata
