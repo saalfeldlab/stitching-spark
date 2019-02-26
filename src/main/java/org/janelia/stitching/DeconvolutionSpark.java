@@ -3,6 +3,7 @@ package org.janelia.stitching;
 import java.io.Serializable;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -313,7 +314,9 @@ public class DeconvolutionSpark
 					// save the resulting decon block into the N5 dataset for this tile
 					final N5Writer localN5DeconTilesFloatWriter = localDataProvider.createN5Writer( n5DeconTilesFloatPath );
 					final String outputDatasetPath = channelDeconTilesN5DatasetPaths.get( channelIndex ).get( tile.getIndex() );
-					N5Utils.saveBlock( processingBlockDeconImg, localN5DeconTilesFloatWriter, outputDatasetPath );
+					final long[] gridOffset = new long[ processingBlockSize.length ];
+					Arrays.setAll( gridOffset, d -> processingBlockDeconImg.min( d ) / processingBlockSize[ d ] );
+					N5Utils.saveBlock( processingBlockDeconImg, localN5DeconTilesFloatWriter, outputDatasetPath, gridOffset );
 				}
 			);
 
