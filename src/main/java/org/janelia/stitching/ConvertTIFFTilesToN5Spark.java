@@ -26,6 +26,7 @@ import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.util.Intervals;
+import net.imglib2.view.Views;
 import scala.Tuple3;
 
 public class ConvertTIFFTilesToN5Spark
@@ -128,17 +129,19 @@ public class ConvertTIFFTilesToN5Spark
 		final ImagePlus imp = ImageImporter.openImage( inputTile.getFilePath() );
 		final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
 
-		if ( !Intervals.equalDimensions( img, new FinalInterval( inputTile.getSize() ) ) )
+		final RandomAccessibleInterval< T > imgExtendedDimensions = img.numDimensions() < inputTile.numDimensions() && inputTile.getSize( 2 ) == 1 ? Views.stack( img ) : img;
+
+		if ( !Intervals.equalDimensions( imgExtendedDimensions, new FinalInterval( inputTile.getSize() ) ) )
 		{
 			throw new RuntimeException( String.format(
 					"Image size %s does not match the value from metadata %s, filepath: %s",
-					Arrays.toString( Intervals.dimensionsAsLongArray( img ) ),
+					Arrays.toString( Intervals.dimensionsAsLongArray( imgExtendedDimensions ) ),
 					Arrays.toString( inputTile.getSize() ),
 					inputTile.getFilePath()
 				) );
 		}
 
-		N5Utils.save( img, n5, tileDatasetPath, blockSize, n5Compression );
+		N5Utils.save( imgExtendedDimensions, n5, tileDatasetPath, blockSize, n5Compression );
 		return tileDatasetPath;
 	}
 
