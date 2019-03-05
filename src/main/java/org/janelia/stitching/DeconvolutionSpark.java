@@ -34,6 +34,7 @@ import net.imagej.ops.OpService;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.util.Grids;
 import net.imglib2.converter.ClampingConverter;
@@ -41,6 +42,9 @@ import net.imglib2.converter.Converters;
 import net.imglib2.converter.RealConverter;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.realtransform.RealViews;
+import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -64,6 +68,10 @@ public class DeconvolutionSpark
 		@Option(name = "-p", aliases = { "--psfPath" }, required = true,
 				usage = "Path to the point-spread function images. In case of multiple input channels, their corresponding PSFs must be passed in the same order.")
 		private List< String > psfPaths;
+
+		@Option(name = "-z", aliases = { "--psfStepZ" }, required = true,
+				usage = "PSF Z step in microns.")
+		private double psfStepZ;
 
 		@Option(name = "-n", aliases = { "--numIterations" }, required = false,
 				usage = "Number of iterations to perform for the deconvolution algorithm.")
@@ -249,15 +257,6 @@ public class DeconvolutionSpark
 					Utils.workaroundImagePlusNSlices( psfImp );
 					final RandomAccessibleInterval< T > psfImg = ImagePlusImgs.from( psfImp );
 
-					// pad the processing block by half the size of the PSF
-					final long[] paddedProcessingBlockMin = new long[ processingBlock.numDimensions() ], paddedProcessingBlockMax = new long[ processingBlock.numDimensions() ];
-					for ( int d = 0; d < processingBlock.numDimensions(); ++d )
-					{
-						paddedProcessingBlockMin[ d ] = Math.max( processingBlock.min( d ) - psfImg.dimension( d ), tileImg.min( d ) );
-						paddedProcessingBlockMax[ d ] = Math.min( processingBlock.max( d ) + psfImg.dimension( d ), tileImg.max( d ) );
-					}
-					final Interval paddedProcessingBlock = new FinalInterval( paddedProcessingBlockMin, paddedProcessingBlockMax );
-
 					// convert to float type for the deconvolution to work properly
 					final RandomAccessibleInterval< FloatType > tileImgFloat = Converters.convert( tileImg, new RealConverter<>(), new FloatType() );
 					final RandomAccessibleInterval< FloatType > psfImgFloat = Converters.convert( psfImg, new RealConverter<>(), new FloatType() );
@@ -276,13 +275,29 @@ public class DeconvolutionSpark
 						sourceImgFloat = tileImgFloat;
 					}
 
+					// rescale PSF with respect to the pixel resolution
+					final long[] rescaledPsfDimensions = Intervals.dimensionsAsLongArray( psfImgFloat );
+					rescaledPsfDimensions[ 2 ] = Math.round( psfImgFloat.dimension( 2 ) * ( parsedArgs.psfStepZ / tile.getPixelResolution( 2 ) ) );
+					final Scale3D psfScalingTransform = new Scale3D( 1, 1, parsedArgs.psfStepZ / tile.getPixelResolution( 2 ) );
+					final RandomAccessible< FloatType > interpolatedRescaledPsfImg = RealViews.affine( Views.interpolate( Views.extendBorder( psfImgFloat ), new NLinearInterpolatorFactory<>() ), psfScalingTransform );
+					final RandomAccessibleInterval< FloatType > rescaledPsfImg = Views.interval( interpolatedRescaledPsfImg, new FinalInterval( rescaledPsfDimensions ) );
+
+					// pad the processing block by half the size of the rescaled PSF
+					final long[] paddedProcessingBlockMin = new long[ processingBlock.numDimensions() ], paddedProcessingBlockMax = new long[ processingBlock.numDimensions() ];
+					for ( int d = 0; d < processingBlock.numDimensions(); ++d )
+					{
+						paddedProcessingBlockMin[ d ] = Math.max( processingBlock.min( d ) - rescaledPsfDimensions[ d ], tileImg.min( d ) );
+						paddedProcessingBlockMax[ d ] = Math.min( processingBlock.max( d ) + rescaledPsfDimensions[ d ], tileImg.max( d ) );
+					}
+					final Interval paddedProcessingBlock = new FinalInterval( paddedProcessingBlockMin, paddedProcessingBlockMax );
+
 					// get padded processing block image
 					final RandomAccessibleInterval< FloatType > paddedProcessingBlockImg = Views.interval( sourceImgFloat, paddedProcessingBlock );
 
 					// subtract background
 					final double backgroundValue = channelBackgroundValues.get( channelIndex );
 					final RandomAccessibleInterval< FloatType > paddedProcessingBlockImgNoBackground = subtractBackground( paddedProcessingBlockImg, backgroundValue );
-					final RandomAccessibleInterval< FloatType > psfImgNoBackground = subtractBackground( psfImgFloat, backgroundValue );
+					final RandomAccessibleInterval< FloatType > psfImgNoBackground = subtractBackground( rescaledPsfImg, backgroundValue );
 
 					// normalize the PSF
 					double psfSum = 0;
