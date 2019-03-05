@@ -281,6 +281,7 @@ public class DeconvolutionSpark
 					final Scale3D psfScalingTransform = new Scale3D( 1, 1, parsedArgs.psfStepZ / tile.getPixelResolution( 2 ) );
 					final RandomAccessible< FloatType > interpolatedRescaledPsfImg = RealViews.affine( Views.interpolate( Views.extendBorder( psfImgFloat ), new NLinearInterpolatorFactory<>() ), psfScalingTransform );
 					final RandomAccessibleInterval< FloatType > rescaledPsfImg = Views.interval( interpolatedRescaledPsfImg, new FinalInterval( rescaledPsfDimensions ) );
+					System.out.println( "Rescaled PSF size is " + Arrays.toString( rescaledPsfDimensions ) );
 
 					// pad the processing block by half the size of the rescaled PSF
 					final long[] paddedProcessingBlockMin = new long[ processingBlock.numDimensions() ], paddedProcessingBlockMax = new long[ processingBlock.numDimensions() ];
