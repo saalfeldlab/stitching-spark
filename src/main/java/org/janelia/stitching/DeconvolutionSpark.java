@@ -120,7 +120,14 @@ public class DeconvolutionSpark
 
 	private static class OpServiceContainer
 	{
-		private static final OpServiceContainer INSTANCE = new OpServiceContainer();
+		private static final OpServiceContainer INSTANCE;
+		static
+		{
+			synchronized ( OpServiceContainer.class )
+			{
+				INSTANCE = new OpServiceContainer();
+			}
+		}
 
 		public static OpServiceContainer getInstance()
 		{
