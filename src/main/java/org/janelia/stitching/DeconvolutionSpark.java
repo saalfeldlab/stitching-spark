@@ -1,5 +1,6 @@
 package org.janelia.stitching;
 
+import java.io.PrintWriter;
 import java.io.Serializable;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -18,6 +19,8 @@ import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrectedRandomAccessible;
 import org.janelia.flatfield.FlatfieldCorrection;
+import org.janelia.flatfield.HistogramSettings;
+import org.janelia.flatfield.StackHistogram;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -49,7 +52,9 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
+import net.imglib2.util.ValuePair;
 import net.imglib2.view.RandomAccessiblePairNullable;
 import net.imglib2.view.Views;
 import scala.Tuple2;
@@ -153,6 +158,12 @@ public class DeconvolutionSpark
 
 	private static final int[] DEFAULT_BLOCK_SIZE = {128, 128, 64};
 	private static final int MAX_PARTITIONS = 15000;
+
+	private static final String RESCALE_INTENSITY_RANGE_MIN_KEY = "rescaleIntensityRangeMin";
+	private static final String RESCALE_INTENSITY_RANGE_MAX_KEY = "rescaleIntensityRangeMax";
+
+	private static final HistogramSettings stackHistogramSettings = new HistogramSettings( 0., 65535., 16386 );
+	private static final Pair< Double, Double > intensityRangeQuantiles = new ValuePair<>( 0., 0.999999 );
 
 	public static < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > void main( final String[] args ) throws Exception
 	{
@@ -361,41 +372,30 @@ public class DeconvolutionSpark
 
 			if ( !parsedArgs.exportAsFloat )
 			{
-				System.out.println( "Need to convert data from float to " + inputImageType + ", collecting min/max values of the resulting decon stack for each channel..." );
+				System.out.println( "Need to convert data from float to " + inputImageType + ", collecting histogram of the resulting decon stack for each channel..." );
 
-				// collect stack min and max values of the resulting deconvolved collection of tiles for each channel
+				// collect stack min and max quantile values of the resulting deconvolved collection of tiles for each channel
 				final List< Tuple2< Double, Double > > channelGlobalMinMaxIntensityValues = new ArrayList<>();
-				for ( final Map< Integer, TileInfo > deconTilesFloatMap : channelDeconTilesFloatMap )
+				for ( int ch = 0; ch < channelDeconTilesFloatMap.size(); ++ch )
 				{
-					final Tuple2< Double, Double > globalDeconMinMaxValues = sparkContext.parallelize(
-							new ArrayList<>( deconTilesFloatMap.values() ),
-							Math.min( deconTilesFloatMap.size(), MAX_PARTITIONS )
-					).map( deconTile ->
-						{
-							final DataProvider localDataProvider = DataProviderFactory.create( dataProviderType );
-
-							// load 32-bit decon tile image
-							final RandomAccessibleInterval< FloatType > deconTileImg = TileLoader.loadTile( deconTile, localDataProvider );
-
-							// find min and max intensity values of the image
-							double minValue = Double.POSITIVE_INFINITY, maxValue = Double.NEGATIVE_INFINITY;
-							for ( final FloatType val : Views.iterable( deconTileImg ) )
-							{
-								minValue = Math.min( val.get(), minValue );
-								maxValue = Math.max( val.get(), maxValue );
-							}
-
-							return new Tuple2<>( minValue, maxValue );
-						}
-					).treeReduce( ( a, b ) -> new Tuple2<>(
-							Math.min( a._1(), b._1() ),
-							Math.max( a._2(), b._2() )
-						),
-						Integer.MAX_VALUE  // max possible aggregation depth
-					);
-
-					channelGlobalMinMaxIntensityValues.add( globalDeconMinMaxValues );
+					final Map< Integer, TileInfo > deconTilesFloatMap = channelDeconTilesFloatMap.get( ch );
+					final StackHistogram deconStackHistogram = StackHistogram.getStackHistogram(
+							sparkContext,
+							deconTilesFloatMap.values().toArray( new TileInfo[ 0 ] ),
+							stackHistogramSettings
+						);
+					try ( final PrintWriter logWriter = new PrintWriter( dataProvider.getOutputStream( PathResolver.get( outputImagesPath, "ch" + ch + "_stackHistogram.txt" ) ) ) )
+					{
+						logWriter.println( "Stack histogram for channel " + channelGlobalMinMaxIntensityValues.size() + ":" + System.lineSeparator() + deconStackHistogram );
+					}
+					final Pair< Double, Double > globalDeconMinMaxValues = deconStackHistogram.getIntensityRange( intensityRangeQuantiles );
+					channelGlobalMinMaxIntensityValues.add( new Tuple2<>( globalDeconMinMaxValues.getA(), globalDeconMinMaxValues.getB() ) );
 				}
+
+				// check that resulting intensity ranges are valid
+				for ( int ch = 0; ch < channelGlobalMinMaxIntensityValues.size(); ++ch )
+					if ( !Double.isFinite( channelGlobalMinMaxIntensityValues.get( ch )._1() ) || !Double.isFinite( channelGlobalMinMaxIntensityValues.get( ch )._2() ) )
+						throw new RuntimeException( String.format( "Resulting intensity range for channel %d is [%.2f, %.2f]", ch, channelGlobalMinMaxIntensityValues.get( ch )._1(), channelGlobalMinMaxIntensityValues.get( ch )._2() ) );
 
 				// log stats
 				System.out.println( "Rescaling the intensity range of the resulting decon data..." );
@@ -429,6 +429,16 @@ public class DeconvolutionSpark
 
 				// set output N5 path where converted tiles will be stored
 				final String n5DeconTilesPath = PathResolver.get( outputImagesPath, "decon-tiles.n5" );
+				final N5Writer n5DeconTilesWriter = dataProvider.createN5Writer( n5DeconTilesPath );
+
+				// log rescale intensity range into attributes for each channel
+				for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
+				{
+					final String channelOutputGroupName = getChannelName( parsedArgs.inputChannelsPaths.get( ch ) );
+					n5DeconTilesWriter.createGroup( channelOutputGroupName );
+					n5DeconTilesWriter.setAttribute( channelOutputGroupName, RESCALE_INTENSITY_RANGE_MIN_KEY, channelGlobalMinMaxIntensityValues.get( ch )._1() );
+					n5DeconTilesWriter.setAttribute( channelOutputGroupName, RESCALE_INTENSITY_RANGE_MAX_KEY, channelGlobalMinMaxIntensityValues.get( ch )._2() );
+				}
 
 				sparkContext.parallelize( channelIndicesAndDeconTilesFloat, Math.min( channelIndicesAndDeconTilesFloat.size(), MAX_PARTITIONS ) ).foreach( channelIndexAndDeconTileFloat ->
 					{
