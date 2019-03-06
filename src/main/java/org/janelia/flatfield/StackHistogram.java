@@ -2,6 +2,7 @@ package org.janelia.flatfield;
 
 import java.util.Arrays;
 
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.stitching.TileInfo;
@@ -19,6 +20,13 @@ import net.imglib2.view.Views;
 
 public class StackHistogram
 {
+	public static enum QuantileMode
+	{
+		LowerBound,
+		UpperBound,
+		CenterValue
+	}
+
 	private final long[] stackHistogram;
 	private final HistogramSettings stackHistogramSettings;
 
@@ -28,32 +36,66 @@ public class StackHistogram
 		this.stackHistogramSettings = stackHistogramSettings;
 	}
 
+	public Pair< Double, Double > getIntensityRange()
+	{
+		return getIntensityRange( new ValuePair<>( 0., 1.) );
+	}
+
 	public Pair< Double, Double > getIntensityRange( final Pair< Double, Double > minMaxQuantiles )
+	{
+		return getIntensityRange( minMaxQuantiles, new ValuePair<>( QuantileMode.LowerBound, QuantileMode.UpperBound ) );
+	}
+
+	public Pair< Double, Double > getIntensityRange( final Pair< Double, Double > minMaxQuantiles, final Pair< QuantileMode, QuantileMode > minMaxQuantileModes )
+	{
+		return new ValuePair<>(
+				getQuantile( minMaxQuantiles.getA(), minMaxQuantileModes.getA() ),
+				getQuantile( minMaxQuantiles.getB(), minMaxQuantileModes.getB() )
+			);
+	}
+
+	public double getQuantile( final double quantile, final QuantileMode quantileMode )
 	{
 		final Real1dBinMapper< DoubleType > binMapper = new Real1dBinMapper<>( stackHistogramSettings.histMinValue, stackHistogramSettings.histMaxValue, stackHistogramSettings.bins, true );
 		final long totalValuesCount = Arrays.stream( stackHistogram ).sum();
 		long processedValuesCount = 0;
-		final double[] minMaxQuantilesValues = new double[] { minMaxQuantiles.getA(), minMaxQuantiles.getB() };
-		final Double[] minMaxRangeValues = new Double[ 2 ];
+		Double quantileValue = null;
 		for ( int bin = 0; bin < stackHistogramSettings.bins; ++bin )
 		{
 			processedValuesCount += stackHistogram[ bin ];
-			for ( int i = 0; i < 2; ++i )
+			if ( processedValuesCount >= Math.round( totalValuesCount * quantile ) )
 			{
-				if ( minMaxRangeValues[ i ] == null && processedValuesCount >= Math.round( totalValuesCount * minMaxQuantilesValues[ i ] ) )
+				final DoubleType binValue = new DoubleType();
+				switch ( quantileMode )
 				{
-					final DoubleType binValue = new DoubleType();
-					if ( i == 0 )
-						binMapper.getLowerBound( bin, binValue ); // use lower bound for the min value
-					else
-						binMapper.getUpperBound( bin, binValue ); // use upper bound for the max value
-					minMaxRangeValues[ i ] = binValue.get();
+				case LowerBound:
+					binMapper.getLowerBound( bin, binValue );
+					break;
+				case UpperBound:
+					binMapper.getUpperBound( bin, binValue );
+					break;
+				case CenterValue:
+					binMapper.getCenterValue( bin, binValue );
+					break;
+				default:
+					throw new NotImplementedException( "quantile mode " + quantileMode + " is not implemented yet" );
 				}
+				quantileValue = binValue.get();
+				break;
 			}
 		}
-		if ( minMaxRangeValues[ 0 ] == null || minMaxRangeValues[ 1 ] == null )
-			throw new RuntimeException( "min/max range cannot be estimated" );
-		return new ValuePair<>( minMaxRangeValues[ 0 ], minMaxRangeValues[ 1 ] );
+
+		if ( quantileValue == null )
+			throw new RuntimeException( "quantile cannot be estimated" );
+
+		if ( Double.isNaN( quantileValue ) )
+			throw new RuntimeException( "estimated quantile is NaN" );
+
+		// prevent from going to infinity
+		if ( Double.isInfinite( quantileValue ) )
+			quantileValue = quantileValue < 0 ? stackHistogramSettings.histMinValue : stackHistogramSettings.histMaxValue;
+
+		return quantileValue;
 	}
 
 	public double getPivotValue()
@@ -72,9 +114,9 @@ public class StackHistogram
 
 	public static < T extends NativeType< T > & RealType< T > > StackHistogram getStackHistogram(
 			final JavaSparkContext sparkContext,
-			final TileInfo[] tiles )
+			final TileInfo[] tiles,
+			final HistogramSettings stackHistogramSettings )
 	{
-		final HistogramSettings stackHistogramSettings = new HistogramSettings( 0., 16383., 4098 );
 		final long[] stackHistogram = sparkContext.parallelize( Arrays.asList( tiles ), tiles.length ).map( tile ->
 			{
 				final long[] histogram = new long[ stackHistogramSettings.bins ];
@@ -96,5 +138,28 @@ public class StackHistogram
 		);
 
 		return new StackHistogram( stackHistogram, stackHistogramSettings );
+	}
+
+	@Override
+	public String toString()
+	{
+		final StringBuilder sb = new StringBuilder();
+		sb.append( String.format( "[ min=%.2f, max=%.2f, bins=%d (including two tail bins) ]", stackHistogramSettings.histMinValue, stackHistogramSettings.histMaxValue, stackHistogramSettings.bins ) ).append( System.lineSeparator() );
+		final Real1dBinMapper< DoubleType > binMapper = new Real1dBinMapper<>( stackHistogramSettings.histMinValue, stackHistogramSettings.histMaxValue, stackHistogramSettings.bins, true );
+		final DoubleType lowerBinValue = new DoubleType(), upperBinValue = new DoubleType();
+		for ( int bin = 0; bin < stackHistogramSettings.bins; ++bin )
+		{
+			binMapper.getLowerBound( bin, lowerBinValue );
+			binMapper.getUpperBound( bin, upperBinValue );
+			sb.append( String.format(
+					"  %d: %d  [%.2f - %.2f]",
+					bin,
+					stackHistogram[ bin ],
+					lowerBinValue.get(),
+					upperBinValue.get()
+				) )
+			.append( System.lineSeparator() );
+		}
+		return sb.toString();
 	}
 }

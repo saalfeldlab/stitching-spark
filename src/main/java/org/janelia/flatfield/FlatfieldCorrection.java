@@ -61,6 +61,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	private static final int SCALE_LEVEL_MIN_PIXELS = 1;
 //	private static final int AVERAGE_SKIP_SLICES = 5;
 
+	private static final HistogramSettings defaultStackHistogramSettings = new HistogramSettings( 0., 16383., 4098 );
+
 	private transient final JavaSparkContext sparkContext;
 
 	private final FlatfieldCorrectionArguments args;
@@ -200,7 +202,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		if ( !args.getHistogramSettings().isValid() || args.backgroundIntensityValue( channel ) == null )
 		{
 			// if provided in the cmd args, set user-specified values, otherwise use estimated values
-			final StackHistogram stackHistogram = StackHistogram.getStackHistogram( sparkContext, tiles );
+			final StackHistogram stackHistogram = StackHistogram.getStackHistogram( sparkContext, tiles, defaultStackHistogramSettings );
 			if ( args.getHistogramSettings().isValid() )
 			{
 				histogramSettings = args.getHistogramSettings();
