@@ -131,10 +131,13 @@ public class StitchingArguments implements Serializable {
 			if ( !CloudURI.isCloudURI( inputTileConfigurations.get( i ) ) )
 				inputTileConfigurations.set( i, Paths.get( inputTileConfigurations.get( i ) ).toAbsolutePath().toString() );
 
-		if ( registrationChannelIndex == -1 )
-			registrationChannelIndex = null;
-		else if ( registrationChannelIndex != null && ( registrationChannelIndex < 0 || registrationChannelIndex >= inputTileConfigurations.size() ) )
-			throw new IllegalArgumentException( "Registration channel index " + registrationChannelIndex + " is out of bounds [0-" + ( inputTileConfigurations.size() - 1 ) + "]" );
+		if ( !fuseOnly )
+		{
+			if ( registrationChannelIndex != null && registrationChannelIndex == -1 )
+				registrationChannelIndex = null;
+			else if ( registrationChannelIndex != null && ( registrationChannelIndex < 0 || registrationChannelIndex >= inputTileConfigurations.size() ) )
+				throw new IllegalArgumentException( "Registration channel index " + registrationChannelIndex + " is out of bounds [0-" + ( inputTileConfigurations.size() - 1 ) + "]" );
+		}
 	}
 
 	protected StitchingArguments() { }
