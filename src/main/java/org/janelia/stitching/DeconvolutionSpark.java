@@ -177,87 +177,89 @@ public class DeconvolutionSpark
 		final String outputImagesPath = PathResolver.get( PathResolver.getParent( parsedArgs.inputChannelsPaths.iterator().next() ), "decon-tiles" );
 		dataProvider.createFolder( outputImagesPath );
 
+		// to be initialized after the decon is completed
 		final List< Map< Integer, TileInfo > > channelDeconTilesMap;
 
+		// load input tile metadata
+		final List< TileInfo[] > inputTileChannels = new ArrayList<>();
+		for ( final String inputChannelPath : parsedArgs.inputChannelsPaths )
+			inputTileChannels.add( dataProvider.loadTiles( inputChannelPath ) );
+
+		// initialize background value for each channel
+		final List< Double > channelBackgroundValues = new ArrayList<>();
+		for ( int channel = 0; channel < parsedArgs.inputChannelsPaths.size(); ++channel )
+		{
+			final String channelPath = parsedArgs.inputChannelsPaths.get( channel );
+
+			final double backgroundValue;
+			if ( parsedArgs.backgroundIntensityValues != null )
+			{
+				if ( parsedArgs.backgroundIntensityValues.size() == 1 )
+					backgroundValue = parsedArgs.backgroundIntensityValues.get( 0 ); // keep backwards compatibility with the older usage (allow the same value for all input channels)
+				else
+					backgroundValue = parsedArgs.backgroundIntensityValues.get( channel );
+
+				System.out.println( "User-specified background value for " + PathResolver.getFileName( channelPath ) + ": " + backgroundValue );
+			}
+			else
+			{
+				backgroundValue = FlatfieldCorrection.getPivotValue( dataProvider, channelPath );
+				System.out.println( "Get background value from the flatfield attributes for " + PathResolver.getFileName( channelPath ) + ": " + backgroundValue );
+			}
+			channelBackgroundValues.add( backgroundValue );
+		}
+
+		// get tile image type
+		final ImageType inputImageType = inputTileChannels.get( 0 )[ 0 ].getType();
+		if ( inputImageType.equals( ImageType.GRAY32 ) && !parsedArgs.exportAsFloat )
+		{
+			System.out.println( "Input data type is already float, no conversion is needed" );
+			parsedArgs.exportAsFloat = true;
+		}
+
+		// set appropriate block size for processing
+		final int[] processingBlockSize;
+		if ( TileLoader.getTileType( inputTileChannels.get( 0 )[ 0 ], dataProvider ) == TileType.N5_DATASET )
+			processingBlockSize = TileLoader.getTileN5DatasetAttributes( inputTileChannels.get( 0 )[ 0 ], dataProvider ).getBlockSize();
+		else
+			processingBlockSize = DEFAULT_BLOCK_SIZE;
+
+		// create processing blocks for each tile to be parallelized
+		final List< Tuple3< Integer, TileInfo, Interval > > channelIndicesAndTileBlocks = new ArrayList<>();
+		for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
+			for ( final TileInfo tile : inputTileChannels.get( ch ) )
+				for ( final Interval processingBlock : Grids.collectAllContainedIntervals( tile.getSize(), processingBlockSize ) )
+					channelIndicesAndTileBlocks.add( new Tuple3<>( ch, tile, processingBlock ) );
+
+		// set output N5 dataset paths for float decon tiles
+		final List< Map< Integer, String > > channelDeconTilesFloatN5DatasetPaths = new ArrayList<>();
+		for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
+		{
+			final Map< Integer, String > tileIndexToDatasetPath = new TreeMap<>();
+			for ( final TileInfo tile : inputTileChannels.get( ch ) )
+				tileIndexToDatasetPath.put( tile.getIndex(), PathResolver.get( getChannelName( parsedArgs.inputChannelsPaths.get( ch ) ), PathResolver.getFileName( tile.getFilePath() ) + "-decon-float" ) );
+			channelDeconTilesFloatN5DatasetPaths.add( tileIndexToDatasetPath );
+		}
+
+		// create N5 datasets for output decon tiles
+		final String n5DeconTilesFloatPath = PathResolver.get( outputImagesPath, "decon-tiles-float.n5" );
+		final N5Writer n5DeconTilesFloatWriter = dataProvider.createN5Writer( n5DeconTilesFloatPath );
+		for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
+			for ( final TileInfo tile : inputTileChannels.get( ch ) )
+				n5DeconTilesFloatWriter.createDataset( channelDeconTilesFloatN5DatasetPaths.get( ch ).get( tile.getIndex() ), tile.getSize(), processingBlockSize, DataType.FLOAT32, new GzipCompression() );
+
+		// create spark context with speculation mode property
 		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "DeconvolutionSpark" )
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 				.set( "spark.speculation", "true" ) // will restart tasks that run for too long (if decon hangs which may happen occasionally)
 			) )
 		{
-			// load input tile metadata
-			final List< TileInfo[] > inputTileChannels = new ArrayList<>();
-			for ( final String inputChannelPath : parsedArgs.inputChannelsPaths )
-				inputTileChannels.add( dataProvider.loadTiles( inputChannelPath ) );
-
-			// initialize background value for each channel
-			final List< Double > channelBackgroundValues = new ArrayList<>();
-			for ( int channel = 0; channel < parsedArgs.inputChannelsPaths.size(); ++channel )
-			{
-				final String channelPath = parsedArgs.inputChannelsPaths.get( channel );
-
-				final double backgroundValue;
-				if ( parsedArgs.backgroundIntensityValues != null )
-				{
-					if ( parsedArgs.backgroundIntensityValues.size() == 1 )
-						backgroundValue = parsedArgs.backgroundIntensityValues.get( 0 ); // keep backwards compatibility with the older usage (allow the same value for all input channels)
-					else
-						backgroundValue = parsedArgs.backgroundIntensityValues.get( channel );
-
-					System.out.println( "User-specified background value for " + PathResolver.getFileName( channelPath ) + ": " + backgroundValue );
-				}
-				else
-				{
-					backgroundValue = FlatfieldCorrection.getPivotValue( dataProvider, channelPath );
-					System.out.println( "Get background value from the flatfield attributes for " + PathResolver.getFileName( channelPath ) + ": " + backgroundValue );
-				}
-				channelBackgroundValues.add( backgroundValue );
-			}
-
 			// initialize flatfields for each channel
 			final List< RandomAccessiblePairNullable< U, U > > channelFlatfields = new ArrayList<>();
 			for ( final String channelPath : parsedArgs.inputChannelsPaths )
 				channelFlatfields.add( FlatfieldCorrection.loadCorrectionImages( dataProvider, channelPath, inputTileChannels.get( 0 )[ 0 ].numDimensions() ) );
 			final Broadcast< List< RandomAccessiblePairNullable< U, U > > > broadcastedChannelFlatfields = sparkContext.broadcast( channelFlatfields );
-
-			// get tile image type
-			final ImageType inputImageType = inputTileChannels.get( 0 )[ 0 ].getType();
-			if ( inputImageType.equals( ImageType.GRAY32 ) && !parsedArgs.exportAsFloat )
-			{
-				System.out.println( "Input data type is already float, no conversion is needed" );
-				parsedArgs.exportAsFloat = true;
-			}
-
-			// set appropriate block size for processing
-			final int[] processingBlockSize;
-			if ( TileLoader.getTileType( inputTileChannels.get( 0 )[ 0 ], dataProvider ) == TileType.N5_DATASET )
-				processingBlockSize = TileLoader.getTileN5DatasetAttributes( inputTileChannels.get( 0 )[ 0 ], dataProvider ).getBlockSize();
-			else
-				processingBlockSize = DEFAULT_BLOCK_SIZE;
-
-			// create processing blocks for each tile to be parallelized
-			final List< Tuple3< Integer, TileInfo, Interval > > channelIndicesAndTileBlocks = new ArrayList<>();
-			for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
-				for ( final TileInfo tile : inputTileChannels.get( ch ) )
-					for ( final Interval processingBlock : Grids.collectAllContainedIntervals( tile.getSize(), processingBlockSize ) )
-						channelIndicesAndTileBlocks.add( new Tuple3<>( ch, tile, processingBlock ) );
-
-			// set output N5 dataset paths for float decon tiles
-			final List< Map< Integer, String > > channelDeconTilesFloatN5DatasetPaths = new ArrayList<>();
-			for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
-			{
-				final Map< Integer, String > tileIndexToDatasetPath = new TreeMap<>();
-				for ( final TileInfo tile : inputTileChannels.get( ch ) )
-					tileIndexToDatasetPath.put( tile.getIndex(), PathResolver.get( getChannelName( parsedArgs.inputChannelsPaths.get( ch ) ), PathResolver.getFileName( tile.getFilePath() ) + "-decon-float" ) );
-				channelDeconTilesFloatN5DatasetPaths.add( tileIndexToDatasetPath );
-			}
-
-			// create N5 datasets for output decon tiles
-			final String n5DeconTilesFloatPath = PathResolver.get( outputImagesPath, "decon-tiles-float.n5" );
-			final N5Writer n5DeconTilesFloatWriter = dataProvider.createN5Writer( n5DeconTilesFloatPath );
-			for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
-				for ( final TileInfo tile : inputTileChannels.get( ch ) )
-					n5DeconTilesFloatWriter.createDataset( channelDeconTilesFloatN5DatasetPaths.get( ch ).get( tile.getIndex() ), tile.getSize(), processingBlockSize, DataType.FLOAT32, new GzipCompression() );
 
 			sparkContext.parallelize( channelIndicesAndTileBlocks, Math.min( channelIndicesAndTileBlocks.size(), MAX_PARTITIONS ) ).foreach( tileBlockAndChannelIndex ->
 				{
@@ -354,26 +356,33 @@ public class DeconvolutionSpark
 			);
 
 			broadcastedChannelFlatfields.destroy();
+		}
 
-			// create resulting tile configuration for decon N5 float output
-			final List< Map< Integer, TileInfo > > channelDeconTilesFloatMap = new ArrayList<>();
-			for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
+		// create resulting tile configuration for decon N5 float output
+		final List< Map< Integer, TileInfo > > channelDeconTilesFloatMap = new ArrayList<>();
+		for ( int ch = 0; ch < inputTileChannels.size(); ++ch )
+		{
+			final Map< Integer, TileInfo > tileIndexToDeconTileFloat = new TreeMap<>();
+			for ( final TileInfo tile : inputTileChannels.get( ch ) )
 			{
-				final Map< Integer, TileInfo > tileIndexToDeconTileFloat = new TreeMap<>();
-				for ( final TileInfo tile : inputTileChannels.get( ch ) )
-				{
-					final TileInfo deconTileFloat = tile.clone();
-					deconTileFloat.setFilePath( PathResolver.get( n5DeconTilesFloatPath, channelDeconTilesFloatN5DatasetPaths.get( ch ).get( tile.getIndex() ) ) );
-					deconTileFloat.setType( ImageType.GRAY32 );
-					tileIndexToDeconTileFloat.put( deconTileFloat.getIndex(), deconTileFloat );
-				}
-				channelDeconTilesFloatMap.add( tileIndexToDeconTileFloat );
+				final TileInfo deconTileFloat = tile.clone();
+				deconTileFloat.setFilePath( PathResolver.get( n5DeconTilesFloatPath, channelDeconTilesFloatN5DatasetPaths.get( ch ).get( tile.getIndex() ) ) );
+				deconTileFloat.setType( ImageType.GRAY32 );
+				tileIndexToDeconTileFloat.put( deconTileFloat.getIndex(), deconTileFloat );
 			}
+			channelDeconTilesFloatMap.add( tileIndexToDeconTileFloat );
+		}
 
-			if ( !parsedArgs.exportAsFloat )
+		if ( !parsedArgs.exportAsFloat )
+		{
+			System.out.println( "Need to convert data from float to " + inputImageType + ", collecting histogram of the resulting decon stack for each channel..." );
+
+			// create the spark context again, this time without the speculation mode property
+			try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
+					.setAppName( "DeconvolutionSpark" )
+					.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
+				) )
 			{
-				System.out.println( "Need to convert data from float to " + inputImageType + ", collecting histogram of the resulting decon stack for each channel..." );
-
 				// collect stack min and max quantile values of the resulting deconvolved collection of tiles for each channel
 				final List< Tuple2< Double, Double > > channelGlobalMinMaxIntensityValues = new ArrayList<>();
 				for ( int ch = 0; ch < channelDeconTilesFloatMap.size(); ++ch )
@@ -487,11 +496,11 @@ public class DeconvolutionSpark
 					channelDeconTilesMap.add( tileIndexToDeconTile );
 				}
 			}
-			else
-			{
-				// if no conversion is required, use the existing float configuration
-				channelDeconTilesMap = channelDeconTilesFloatMap;
-			}
+		}
+		else
+		{
+			// if no conversion is required, use the existing float configuration
+			channelDeconTilesMap = channelDeconTilesFloatMap;
 		}
 
 		// save resulting decon tiles metadata
