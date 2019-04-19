@@ -5,8 +5,9 @@ import os
 import sys
 import subprocess
 
+from compile import matlab_root_path # use the same runtime that was used for compilation
+
 matlab_program_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'matlab_decon')
-matlab_root_path = '/misc/local/matlab-2018b'
 required_library_paths = [
 	'bin/glnxa64',
 	'runtime/glnxa64',
