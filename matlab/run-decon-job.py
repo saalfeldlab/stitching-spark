@@ -64,8 +64,9 @@ def submit_task(task, output_dirpath, index, cores_per_task):
 		task_file.write(json.dumps(task))
 	subprocess.Popen(['bsub', '-W', '01:00', '-o', '/dev/null', '-n', str(cores_per_task), run_decon_task_script_filepath, task_filepath])
 	return task_filepath
+
 def num_tasks_left(task_filepaths):
-	# check how many task files are still there (completed jobs should remove their task files)
+	# check how many task files are still there (completed jobs remove their task files)
 	tasks_left = 0
 	for task_filepath in task_filepaths:
 		if os.path.exists(task_filepath):
@@ -135,14 +136,15 @@ if __name__ == '__main__':
 				'num_iterations': args.num_iterations
 			})
 
-	# submit tasks
+	# submit tasks (skip tasks where target files already exist)
 	task_filepaths = []
 	for index, task in enumerate(tasks):
-		task_filepaths.append(submit_task(task, output_dirpath, index, args.cores_per_task))
+		if not os.path.exists(task['output_tile_filepath']):
+			task_filepaths.append(submit_task(task, output_dirpath, index, args.cores_per_task))
 
 	# wait until all tasks are completed
 	while num_tasks_left(task_filepaths) > 0:
-		sleep(20)
+		sleep(30)
 
 	# write output tile metadata
 	channels_decon_metadata = save_decon_metadata(channels_tile_metadata, channels_output_tile_filepaths, args)

@@ -48,4 +48,4 @@ if __name__ == '__main__':
 	])
 
 	# completed successfully, delete the task file to mark it as completed
-	os.rename(task_filepath, task_filepath + '_completed')
+	os.remove(task_filepath)
