@@ -54,7 +54,7 @@ public class ConvertCZITilesToN5Spark
 				n5Compression
 			);
 
-		saveTilesChannels( inputTilesPath, outputTilesChannels, outputN5Path );
+		saveTilesChannels( inputTilesPath, outputTilesChannels );
 	}
 
 	public static < T extends NumericType< T > & NativeType< T > > Map< String, TileInfo[] > convertTilesToN5(
@@ -181,14 +181,16 @@ public class ConvertCZITilesToN5Spark
 		return "c" + channel;
 	}
 
-	private static void saveTilesChannels( final String inputPath, final Map< String, TileInfo[] > newTiles, final String n5Path ) throws IOException
+	private static void saveTilesChannels( final String inputPath, final Map< String, TileInfo[] > newTiles ) throws IOException
 	{
-		final DataProvider dataProvider = new CloudN5WriterSupplier( n5Path ).getDataProvider();
+		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputPath ) );
+		final String baseDir = PathResolver.getParent( inputPath );
+		final String filenameSuffix = Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-n5" );
 		for ( final Entry< String, TileInfo[] > tilesChannel : newTiles.entrySet() )
 		{
 			final String channelName = tilesChannel.getKey();
 			final TileInfo[] newChannelTiles = tilesChannel.getValue();
-			final String newConfigPath = PathResolver.get( n5Path, channelName + "_" + Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-n5" ) );
+			final String newConfigPath = PathResolver.get( baseDir, channelName + "_" + filenameSuffix );
 			dataProvider.saveTiles( newChannelTiles, newConfigPath );
 		}
 	}
