@@ -52,7 +52,7 @@ public class ConvertTIFFTilesToN5Spark
 				n5Compression
 			);
 
-		saveTilesChannels( inputChannelsPaths, outputTilesChannels, outputN5Path );
+		saveTilesChannels( inputChannelsPaths, outputTilesChannels );
 	}
 
 	public static < T extends NumericType< T > & NativeType< T > > Map< String, TileInfo[] > convertTilesToN5(
@@ -166,14 +166,14 @@ public class ConvertTIFFTilesToN5Spark
 		return filenameWithoutExtension;
 	}
 
-	private static void saveTilesChannels( final List< String > inputChannelsPath, final Map< String, TileInfo[] > newTiles, final String n5Path ) throws IOException
+	private static void saveTilesChannels( final List< String > inputChannelsPath, final Map< String, TileInfo[] > newTiles ) throws IOException
 	{
-		final DataProvider dataProvider = new CloudN5WriterSupplier( n5Path ).getDataProvider();
 		for ( final String inputPath : inputChannelsPath )
 		{
 			final String channelName = getChannelName( inputPath );
+			final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputPath ) );
 			final TileInfo[] newChannelTiles = newTiles.get( channelName );
-			final String newConfigPath = PathResolver.get( n5Path, Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-n5" ) );
+			final String newConfigPath = Utils.addFilenameSuffix( inputPath, "-n5" );
 			dataProvider.saveTiles( newChannelTiles, newConfigPath );
 		}
 	}

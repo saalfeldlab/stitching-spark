@@ -138,7 +138,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 
 	protected static String getFlatfieldFolderForBasePath( final String basePath )
 	{
-		final String basePathNoExt = basePath.lastIndexOf( '.' ) != -1 ? basePath.substring( 0, basePath.lastIndexOf( '.' ) ) : basePath;
+		final String basePathWithoutN5Suffix = Utils.removeFilenameSuffix( basePath, "-n5" );
+		final String basePathNoExt = basePathWithoutN5Suffix.lastIndexOf( '.' ) != -1 ? basePathWithoutN5Suffix.substring( 0, basePathWithoutN5Suffix.lastIndexOf( '.' ) ) : basePathWithoutN5Suffix;
 		return basePathNoExt + flatfieldFolderSuffix;
 	}
 
@@ -180,8 +181,8 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputChannelPath ) );
 		final TileInfo[] tiles = dataProvider.loadTiles( inputChannelPath );
 
-		final String basePath = inputChannelPath.substring( 0, inputChannelPath.lastIndexOf( "." ) ) + flatfieldFolderSuffix;
-		final String solutionPath = PathResolver.get( basePath, args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr(), "solution" );
+		final String flatfieldFolderPath = getFlatfieldFolderForBasePath( inputChannelPath );
+		final String solutionPath = PathResolver.get( flatfieldFolderPath, args.cropMinMaxIntervalStr() == null ? "fullsize" : args.cropMinMaxIntervalStr(), "solution" );
 
 		if ( !checkSameSizeForAllTiles( tiles ) )
 			throw new RuntimeException( "not all tiles are of the same size" );
@@ -227,7 +228,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 				sparkContext,
 				dataProvider,
 				workingInterval,
-				basePath,
+				flatfieldFolderPath,
 				tiles,
 				fullTileSize,
 				histogramSettings
@@ -375,13 +376,13 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		// save final solution to the main folder for this channel
 		{
 			final ImagePlus sImp = ImageJFunctions.wrap( unpivotedSolution.getA(), scalingTermFilename );
-			final String sImpPath = PathResolver.get( basePath, scalingTermFilename );
+			final String sImpPath = PathResolver.get( flatfieldFolderPath, scalingTermFilename );
 			dataProvider.saveImage( sImp, sImpPath );
 		}
 
 		{
 			final ImagePlus tImp = ImageJFunctions.wrap( unpivotedSolution.getB(), translationTermFilename );
-			final String tImpPath = PathResolver.get( basePath, translationTermFilename );
+			final String tImpPath = PathResolver.get( flatfieldFolderPath, translationTermFilename );
 			dataProvider.saveImage( tImp, tImpPath );
 		}
 
