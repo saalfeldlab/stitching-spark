@@ -206,15 +206,14 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		exportMetadata.setDefaultPixelResolution( new FinalVoxelDimensions( "um", voxelDimensions ) );
 	}
 
+	private boolean isTileConfigurationN5( final TileInfo[] tiles )
+	{
+		return TileLoader.getTileType( tiles[ 0 ], job.getDataProvider() ) == TileType.N5_DATASET;
+	}
 
 	private int[] getOptimalCellSize( final TileInfo[] tiles ) throws IOException
 	{
-		final int[] tileN5BlockSize;
-		if ( TileLoader.getTileType( tiles[ 0 ], job.getDataProvider() ) == TileType.N5_DATASET )
-			tileN5BlockSize = TileLoader.getTileN5DatasetAttributes( tiles[ 0 ], job.getDataProvider() ).getBlockSize();
-		else
-			tileN5BlockSize = null;
-
+		final int[] tileN5BlockSize = isTileConfigurationN5( tiles ) ? TileLoader.getTileN5DatasetAttributes( tiles[ 0 ], job.getDataProvider() ).getBlockSize() : null;
 		final int[] cellSize = new int[ job.getDimensionality() ];
 		for ( int d = 0; d < job.getDimensionality(); d++ )
 		{
@@ -224,6 +223,19 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				);
 		}
 		return cellSize;
+	}
+
+	private int[] getProcessingCellSize( final TileInfo[] tiles ) throws IOException
+	{
+		final int[] processingCellSize = getOptimalCellSize( tiles );
+		if ( !isTileConfigurationN5( tiles ) )
+		{
+			// When stored as .tif, full tile image will be loaded each time. Reduce number of reads by increasing processing block size
+			final int increaseFactor = 2;
+			for ( int d = 0; d < processingCellSize.length; ++d )
+				processingCellSize[ d ] *= increaseFactor * Math.round( normalizedVoxelDimensions[ d ] );
+		}
+		return processingCellSize;
 	}
 
 	private void fuse( final String n5ExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
@@ -249,9 +261,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				new GzipCompression()
 			);
 
-		final List< TileInfo > cells = TileOperations.divideSpace( boundingBox, new FinalDimensions( cellSize ) );
+		final int[] processingCellSize = getProcessingCellSize( tiles );
+		System.out.println( "Fusing tile configuration into an N5 dataset with block size " + Arrays.toString( cellSize ) + " using processing block size " + Arrays.toString( processingCellSize ) );
+		final List< TileInfo > processingCells = TileOperations.divideSpace( boundingBox, new FinalDimensions( processingCellSize ) );
 
-		sparkContext.parallelize( cells, Math.min( cells.size(), MAX_PARTITIONS ) ).foreach( cell ->
+		sparkContext.parallelize( processingCells, Math.min( processingCells.size(), MAX_PARTITIONS ) ).foreach( cell ->
 			{
 				final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( tiles, cell );
 				if ( tilesWithinCell.isEmpty() )
