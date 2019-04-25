@@ -7,6 +7,7 @@ import subprocess
 import copy
 from time import sleep
 
+logfile_dirpath = os.path.join(os.path.expanduser('~'), '.matlab_decon')
 run_decon_task_script_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run-decon-single-task.py')
 
 def load_tile_metadata(args):
@@ -62,7 +63,8 @@ def submit_task(task, output_dirpath, index, cores_per_task):
 	task_filepath = os.path.join(output_dirpath, "task" + str(index))
 	with open(task_filepath, 'w') as task_file:
 		task_file.write(json.dumps(task))
-	subprocess.Popen(['bsub', '-W', '01:00', '-o', '/dev/null', '-n', str(cores_per_task), run_decon_task_script_filepath, task_filepath])
+	logfile_path = os.path.join(logfile_dirpath, 'worker-%J.out')
+	subprocess.call(['bsub', '-W', '01:00', '-o', logfile_path, '-n', str(cores_per_task), run_decon_task_script_filepath, task_filepath])
 	return task_filepath
 
 def num_tasks_left(task_filepaths):
@@ -71,7 +73,8 @@ def num_tasks_left(task_filepaths):
 	for task_filepath in task_filepaths:
 		if os.path.exists(task_filepath):
 			tasks_left += 1
-	print('still ' + str(tasks_left) + ' tasks left')
+	if tasks_left > 0:
+		print('  ' + str(tasks_left) + ' tasks left...')
 	return tasks_left
 
 def get_output_tile_filepaths(input_channels_metadata, output_dirpath):
