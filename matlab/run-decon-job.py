@@ -58,13 +58,15 @@ def get_background_intensities(args, flatfield_paths):
 				background_values.append(None)
 		return background_values
 
-def submit_task(task, output_dirpath, index, cores_per_task):
+def submit_task(task, output_dirpath, index, cores_per_task, lsf_project):
 	# save task to file
 	task_filepath = os.path.join(output_dirpath, "task" + str(index))
 	with open(task_filepath, 'w') as task_file:
 		task_file.write(json.dumps(task))
 	logfile_path = os.path.join(logfile_dirpath, 'worker-%J.out')
-	subprocess.call(['bsub', '-W', '01:00', '-o', logfile_path, '-n', str(cores_per_task), run_decon_task_script_filepath, task_filepath])
+	lsf_project_arg = [] if lsf_project is None else ['-p', lsf_project]
+	program_args = [run_decon_task_script_filepath, task_filepath]
+	subprocess.call(['bsub', '-W', '01:00', '-o', logfile_path, '-n', str(cores_per_task)] + lsf_project_arg + program_args)
 	return task_filepath
 
 def num_tasks_left(task_filepaths):
@@ -108,6 +110,8 @@ if __name__ == '__main__':
 	parser.add_argument('-n', '--numIterations', type=int, default=10, dest='num_iterations', help='Number of deconvolution iterations.')
 	parser.add_argument('-v', '--backgroundValue', type=float, dest='background_intensity', default=None, help='Background intensity value which will be subtracted from the data and the PSF (one per input channel). If omitted, the pivot value estimated in the Flatfield Correction step will be used (default).')
 	parser.add_argument('-c', '--coresPerTask', dest='cores_per_task', type=int, default=8, help='Number of CPU cores used by a single decon task.')
+	parser.add_argument('--lsfproject', dest='lsf_project', default=None, help='LSF project (optional).')
+
 	args = parser.parse_args()
 
 	num_channels = len(args.input_channels_paths)
@@ -143,7 +147,7 @@ if __name__ == '__main__':
 	task_filepaths = []
 	for index, task in enumerate(tasks):
 		if not os.path.exists(task['output_tile_filepath']):
-			task_filepaths.append(submit_task(task, output_dirpath, index, args.cores_per_task))
+			task_filepaths.append(submit_task(task, output_dirpath, index, args.cores_per_task, args.lsf_project))
 
 	# wait until all tasks are completed
 	while num_tasks_left(task_filepaths) > 0:
