@@ -58,26 +58,35 @@ def get_background_intensities(args, flatfield_paths):
 				background_values.append(None)
 		return background_values
 
-def submit_task(task, output_dirpath, index, cores_per_task, lsf_project):
-	# save task to file
+def save_task_to_file(task, output_dirpath, index):
 	task_filepath = os.path.join(output_dirpath, "task" + str(index))
 	with open(task_filepath, 'w') as task_file:
 		task_file.write(json.dumps(task))
-	logfile_path = os.path.join(logfile_dirpath, 'worker-%J.out')
-	lsf_project_arg = [] if lsf_project is None else ['-p', lsf_project]
-	program_args = [run_decon_task_script_filepath, task_filepath]
-	subprocess.call(['bsub', '-W', '01:00', '-o', logfile_path, '-n', str(cores_per_task)] + lsf_project_arg + program_args)
 	return task_filepath
 
-def num_tasks_left(task_filepaths):
-	# check how many task files are still there (completed jobs remove their task files)
-	tasks_left = 0
-	for task_filepath in task_filepaths:
+def submit_task(task_filepath, cores_per_task, lsf_project):
+	logfile_path = os.path.join(logfile_dirpath, 'worker-%J.out')
+	lsf_project_arg = [] if lsf_project is None else ['-P', lsf_project]
+	program_args = [run_decon_task_script_filepath, task_filepath]
+	output = subprocess.check_output(['bsub', '-W', '01:00', '-o', logfile_path, '-n', str(cores_per_task)] + lsf_project_arg + program_args, universal_newlines=True)
+	job_id = output.split(' ')[1].lstrip('<').rstrip('>')
+	return job_id
+
+def check_all_tasks_finished(task_index_to_filepath, job_id_to_task_index, failed_task_indices):
+	finished_jobs = job_id_to_task_index.copy()
+	output = subprocess.check_output(['bjobs', '-X', '-noheader', '-o', 'JOBID'], universal_newlines=True)
+	for output_line in output.splitlines():
+		job_id = output_line.strip()
+		if job_id in finished_jobs:
+			del finished_jobs[job_id]
+	for finished_job_id, finished_task_index in finished_jobs.iteritems():
+		del job_id_to_task_index[finished_job_id]
+		task_filepath = task_index_to_filepath[finished_task_index]
 		if os.path.exists(task_filepath):
-			tasks_left += 1
-	if tasks_left > 0:
-		print('  ' + str(tasks_left) + ' tasks left...')
-	return tasks_left
+			# the task meta file still exists, this means that the task has failed
+			failed_task_indices.add(task_index)
+	# all completed when no active job ids
+	return not job_id_to_task_index
 
 def get_output_tile_filepaths(input_channels_metadata, output_dirpath):
 	output_channels_tile_filepaths = []
@@ -144,14 +153,24 @@ if __name__ == '__main__':
 			})
 
 	# submit tasks (skip tasks where target files already exist)
-	task_filepaths = []
-	for index, task in enumerate(tasks):
+	task_index_to_filepath = {}
+	job_id_to_task_index = {}
+	for task_index, task in enumerate(tasks):
 		if not os.path.exists(task['output_tile_filepath']):
-			task_filepaths.append(submit_task(task, output_dirpath, index, args.cores_per_task, args.lsf_project))
+			task_filepath = save_task_to_file(task, output_dirpath, task_index)
+			job_id = submit_task(task_filepath, args.cores_per_task, args.lsf_project)
+			task_index_to_filepath[task_index] = task_filepath
+			job_id_to_task_index[job_id] = task_index
 
-	# wait until all tasks are completed
-	while num_tasks_left(task_filepaths) > 0:
+	# wait until all tasks are finished
+	failed_task_indices = set()
+	while not check_all_tasks_finished(task_index_to_filepath, job_id_to_task_index, failed_task_indices):
+		failed_tasks_str_or_empty = '' if not failed_task_indices else ', failed tasks: ' + str(len(failed_task_indices))
+		print('Tasks left: ' + str(len(job_id_to_task_index)) + failed_tasks_str_or_empty)
 		sleep(30)
+
+	if len(failed_task_indices) > 0:
+		raise RuntimeError('There are ' + str(len(failed_task_indices)) + ' failed deconvolution tasks. Please check matlab_decon directory in the working directory of the dataset and ' + logfile_dirpath + ' for logs.')
 
 	# write output tile metadata
 	channels_decon_metadata = save_decon_metadata(channels_tile_metadata, channels_output_tile_filepaths, args)
