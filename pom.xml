@@ -21,7 +21,7 @@
 	<parent>
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
-		<version>24.0.0</version>
+		<version>26.0.0</version>
 	</parent>
 
 	<profiles>
@@ -34,7 +34,6 @@
 				<dependency>
 					<groupId>org.apache.spark</groupId>
 					<artifactId>spark-core_2.11</artifactId>
-					<version>2.2.0</version>
 					<scope>provided</scope>
 					
 					<exclusions>
@@ -56,7 +55,6 @@
 				<dependency>
 					<groupId>org.apache.spark</groupId>
 					<artifactId>spark-core_2.11</artifactId>
-					<version>2.2.0</version>
 					
 					<exclusions>
 						<exclusion>
@@ -103,11 +101,6 @@
 		<dependency>
 			<groupId>net.imagej</groupId>
 			<artifactId>ij</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>loci</groupId>
-			<artifactId>bio-formats</artifactId>
-			<version>4.4.9</version>
 		</dependency>
 		<dependency>
 			<groupId>sc.fiji</groupId>
