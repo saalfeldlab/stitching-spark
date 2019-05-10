@@ -84,7 +84,7 @@ def check_all_tasks_finished(task_index_to_filepath, job_id_to_task_index, faile
 		task_filepath = task_index_to_filepath[finished_task_index]
 		if os.path.exists(task_filepath):
 			# the task meta file still exists, this means that the task has failed
-			failed_task_indices.add(task_index)
+			failed_task_indices.add(finished_task_index)
 	# all completed when no active job ids
 	return not job_id_to_task_index
 
