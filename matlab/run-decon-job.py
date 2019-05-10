@@ -116,7 +116,7 @@ if __name__ == '__main__':
 	parser.add_argument('-i', '--inputConfigurationPath', nargs='+', dest='input_channels_paths', help='Path to an input tile configuration file. Multiple configurations (channels) can be passed at once.')
 	parser.add_argument('-p', '--psfPath', nargs='+', dest='psf_paths', help='Path to the point-spread function images. In case of multiple input channels, their corresponding PSFs must be passed in the same order.')
 	parser.add_argument('-z', '--psfStepZ', type=float, dest='psf_z_step', help='PSF Z step in microns.')
-	parser.add_argument('-n', '--numIterations', type=int, default=10, dest='num_iterations', help='Number of deconvolution iterations.')
+	parser.add_argument('-n', '--numIterations', nargs='+', type=int, default=[10], dest='num_iterations', help='Number of deconvolution iterations (can be specified separately for each channel by passing several values).')
 	parser.add_argument('-v', '--backgroundValue', type=float, dest='background_intensity', default=None, help='Background intensity value which will be subtracted from the data and the PSF (one per input channel). If omitted, the pivot value estimated in the Flatfield Correction step will be used (default).')
 	parser.add_argument('-c', '--coresPerTask', dest='cores_per_task', type=int, default=8, help='Number of CPU cores used by a single decon task.')
 	parser.add_argument('--lsfproject', dest='lsf_project', default=None, help='LSF project (optional).')
@@ -124,8 +124,11 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	num_channels = len(args.input_channels_paths)
-	if num_channels != len(args.psf_paths):
+	if len(args.psf_paths) != num_channels:
 		raise Exception('number of provided PSFs should be the same as number of input channels')
+
+	if len(args.num_iterations) != 1 and len(args.num_iterations) != num_channels:
+		raise Exception('number of iterations should be provided as a single value (used by all channels), or separately for each of the input channels')
 
 	# create output folders
 	output_dirpath = os.path.join(os.path.dirname(os.path.abspath(args.input_channels_paths[0])), 'matlab_decon')
@@ -149,7 +152,7 @@ if __name__ == '__main__':
 				'background_value': channels_background_intensities[channel],
 				'data_z_resolution': tile_metadata['pixelResolution'][2],
 				'psf_z_step': args.psf_z_step,
-				'num_iterations': args.num_iterations
+				'num_iterations': args.num_iterations[0] if len(args.num_iterations) == 1 else args.num_iterations[channel]
 			})
 
 	# submit tasks (skip tasks where target files already exist)
