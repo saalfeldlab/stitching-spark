@@ -94,7 +94,12 @@ if nTapering > 0
     end
 end
 
-deconvolved = deconvlucy(rawdata, psf, nIter);
+if nIter > 0
+    deconvolved = deconvlucy(rawdata, psf, nIter);
+else % skip deconvolution
+    deconvolved = rawdata;
+end
+
 deconvolved = deconvolved(31:(31+x_rawdata-1),31:(31+y_rawdata-1),31:(31+z_rawdata-1));
 
 %%
