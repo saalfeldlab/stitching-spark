@@ -6,7 +6,7 @@ import java.util.Arrays;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudResourceManagerClient;
 import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageClient;
 import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.spark.N5WriterSupplier;
+import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 
 public class CloudN5WriterSupplier extends CloudN5ReaderSupplier implements N5WriterSupplier
 {

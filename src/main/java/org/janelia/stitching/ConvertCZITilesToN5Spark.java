@@ -17,7 +17,7 @@ import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.saalfeldlab.n5.spark.N5WriterSupplier;
+import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 import org.janelia.util.ImageImporter;
 
 import ij.ImagePlus;

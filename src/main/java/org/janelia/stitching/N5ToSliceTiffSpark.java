@@ -14,7 +14,7 @@ import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
-import org.janelia.saalfeldlab.n5.spark.N5SliceTiffConverter;
+import org.janelia.saalfeldlab.n5.spark.util.SliceDimension;
 import org.janelia.saalfeldlab.n5.spark.util.TiffUtils.TiffCompression;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -97,7 +97,7 @@ public class N5ToSliceTiffSpark
 			{
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, parsedArgs.scaleLevel );
 				final String outputChannelPath = PathResolver.get( parsedArgs.outputPath, "ch" + channel );
-				N5SliceTiffConverter.convertToSliceTiff(
+				org.janelia.saalfeldlab.n5.spark.N5ToSliceTiffSpark.convert(
 						sparkContext,
 						() -> {
 							try {
@@ -109,7 +109,8 @@ public class N5ToSliceTiffSpark
 						n5DatasetPath,
 						outputChannelPath,
 						tiffCompression,
-						2 // xy slices
+						SliceDimension.Z,
+						"ch" + channel + "_"
 					);
 			}
 		}

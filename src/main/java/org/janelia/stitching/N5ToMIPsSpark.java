@@ -16,7 +16,7 @@ import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
-import org.janelia.saalfeldlab.n5.spark.N5MaxIntensityProjection;
+import org.janelia.saalfeldlab.n5.spark.N5MaxIntensityProjectionSpark;
 import org.janelia.saalfeldlab.n5.spark.util.CmdUtils;
 import org.janelia.saalfeldlab.n5.spark.util.TiffUtils.TiffCompression;
 import org.kohsuke.args4j.CmdLineException;
@@ -133,7 +133,7 @@ public class N5ToMIPsSpark
 							);
 				}
 
-				N5MaxIntensityProjection.createMaxIntensityProjection(
+				N5MaxIntensityProjectionSpark.createMaxIntensityProjection(
 						sparkContext,
 						() -> {
 							try {
