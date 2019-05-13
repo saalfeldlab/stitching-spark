@@ -5,7 +5,9 @@ import os
 import sys
 import subprocess
 
-matlab_root_path = '/misc/local/matlab-2018b'
+sys.dont_write_bytecode = True
+from matlab_config import matlab_root_path
+
 matlab_program_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'matlab_decon')
 required_library_paths = [
 	'bin/glnxa64',
@@ -24,6 +26,7 @@ def set_env_vars():
 	os.environ['MCR_INHIBIT_CTF_LOCK'] = '1'
 
 if __name__ == '__main__':
+	print('matlab root path: ' + matlab_root_path)
 	task_filepath = sys.argv[1]
 
 	# load task from file
