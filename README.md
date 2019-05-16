@@ -13,6 +13,11 @@ Clone the repository with submodules:
 git clone --recursive https://github.com/saalfeldlab/stitching-spark.git
 ```
 
+If you have already cloned the repository, run this after cloning to fetch the submodules:
+```bash
+git submodule update --init --recursive
+```
+
 The application can be executed on Janelia cluster or locally. Build the package for the desired execution environment:
 
 <details>
