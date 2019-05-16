@@ -110,7 +110,7 @@ public class N5ToSliceTiffSpark
 						outputChannelPath,
 						tiffCompression,
 						SliceDimension.Z,
-						"ch" + channel + "_"
+						"slice"
 					);
 			}
 		}
