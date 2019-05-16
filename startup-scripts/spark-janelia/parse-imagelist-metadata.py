@@ -1,23 +1,9 @@
 #!/usr/bin/env python
 
-import os
-import sys
-import subprocess
-
-sys.dont_write_bytecode = True
-curr_script_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(curr_script_dir))
-from jar_path_util import get_jar_path
-bin_path = get_jar_path()
-
-flintstone_relpath = os.path.join('flintstone', 'flintstone.sh')
-flintstone_path = os.path.join(curr_script_dir, flintstone_relpath)
-
-os.environ['SPARK_VERSION'] = 'test'
-os.environ['N_DRIVER_THREADS'] = '16'
-os.environ['TERMINATE'] = '1'
-
 # no parallelization is needed for this step
-nodes = 1
+import sys
+num_workers = 1
+args = sys.argv[1:]
 
-subprocess.call([flintstone_path, str(nodes), bin_path, 'org.janelia.stitching.ParseTilesImageList'] + sys.argv[1:])
+from submit import submit_extended
+submit_extended(num_workers, 'org.janelia.stitching.ParseTilesImageList', args)
