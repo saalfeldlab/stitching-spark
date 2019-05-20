@@ -42,6 +42,11 @@ public class N5ToSliceTiffSpark
 				usage = "Compress generated TIFFs using LZW compression.")
 		private boolean compressTiffs = false;
 
+		@Option(name = "-p", aliases = { "--withPrefix" }, required = false,
+				usage = "Instead of storing each channel in a separate folder, store all TIFFs in the same folder and prepend the filenames with the channel index."
+						+ " (for compatibility with Imaris)")
+		private boolean usePrefix = false;
+
 		private boolean parsedSuccessfully = false;
 
 		public N5ToSliceTiffCmdArgs( final String... args ) throws IllegalArgumentException
@@ -96,7 +101,17 @@ public class N5ToSliceTiffSpark
 			for ( int channel = 0; channel < exportMetadata.getNumChannels(); ++channel )
 			{
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, parsedArgs.scaleLevel );
-				final String outputChannelPath = PathResolver.get( parsedArgs.outputPath, "ch" + channel );
+				final String outputChannelPath, filenamePrefix;
+				if ( parsedArgs.usePrefix )
+				{
+					outputChannelPath = parsedArgs.outputPath;
+					filenamePrefix = "ch" + channel + "_";
+				}
+				else
+				{
+					outputChannelPath = PathResolver.get( parsedArgs.outputPath, "ch" + channel );
+					filenamePrefix = "";
+				}
 				org.janelia.saalfeldlab.n5.spark.N5ToSliceTiffSpark.convert(
 						sparkContext,
 						() -> {
@@ -110,7 +125,7 @@ public class N5ToSliceTiffSpark
 						outputChannelPath,
 						tiffCompression,
 						SliceDimension.Z,
-						"slice"
+						filenamePrefix
 					);
 			}
 		}
