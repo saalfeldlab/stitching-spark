@@ -42,10 +42,14 @@ public class N5ToSliceTiffSpark
 				usage = "Compress generated TIFFs using LZW compression.")
 		private boolean compressTiffs = false;
 
-		@Option(name = "-p", aliases = { "--withPrefix" }, required = false,
+		@Option(name = "-d", aliases = { "--sameDir" }, required = false,
 				usage = "Instead of storing each channel in a separate folder, store all TIFFs in the same folder and prepend the filenames with the channel index."
 						+ " (for compatibility with Imaris)")
-		private boolean usePrefix = false;
+		private boolean storeInSameFolder = false;
+
+		@Option(name = "-z", aliases = { "--leadingZeroes" }, required = false,
+				usage = "Pad slice indices in the output filenames with leading zeroes.")
+		private boolean useLeadingZeroes = false;
 
 		private boolean parsedSuccessfully = false;
 
@@ -102,7 +106,7 @@ public class N5ToSliceTiffSpark
 			{
 				final String n5DatasetPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, parsedArgs.scaleLevel );
 				final String outputChannelPath, filenamePrefix;
-				if ( parsedArgs.usePrefix )
+				if ( parsedArgs.storeInSameFolder )
 				{
 					outputChannelPath = parsedArgs.outputPath;
 					filenamePrefix = "ch" + channel + "_";
@@ -112,6 +116,8 @@ public class N5ToSliceTiffSpark
 					outputChannelPath = PathResolver.get( parsedArgs.outputPath, "ch" + channel );
 					filenamePrefix = "";
 				}
+				final String sliceIndexFormat = parsedArgs.useLeadingZeroes ? "%05d" : "%d";
+				final String filenameFormat = filenamePrefix + sliceIndexFormat + ".tif";
 				org.janelia.saalfeldlab.n5.spark.N5ToSliceTiffSpark.convert(
 						sparkContext,
 						() -> {
@@ -125,7 +131,7 @@ public class N5ToSliceTiffSpark
 						outputChannelPath,
 						tiffCompression,
 						SliceDimension.Z,
-						filenamePrefix
+						filenameFormat
 					);
 			}
 		}
