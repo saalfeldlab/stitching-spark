@@ -226,7 +226,7 @@ public class ParseCZITilesMetadata
 
 		// save the configuration as a JSON file
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
-		final String jsonTileConfigurationFilename = PathResolver.getFileName( metadataFilepath ).substring( 0, PathResolver.getFileName( metadataFilepath ).lastIndexOf( "." ) ) + ".json";
+		final String jsonTileConfigurationFilename = "tiles.json";
 		dataProvider.saveTiles( tiles.toArray( new TileInfo[ 0 ] ), PathResolver.get( baseOutputFolder, jsonTileConfigurationFilename ) );
 
 		System.out.println( "Done" );
