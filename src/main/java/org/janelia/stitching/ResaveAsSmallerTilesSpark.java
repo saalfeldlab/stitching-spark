@@ -113,7 +113,6 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 	}
 
 	private final ResaveAsSmallerTilesCmdArgs args;
-	private final String targetImagesLocation;
 	private final transient JavaSparkContext sparkContext;
 	private final transient PrintWriter logWriter;
 
@@ -121,9 +120,8 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 	{
 		this.args = args;
 
-		targetImagesLocation = PathResolver.get( args.targetLocation, "tile-images-retiled-in-" + AxisMapping.getAxisStr( args.retileDimension ).toUpperCase() );
-		final DataProvider dataProviderTarget = DataProviderFactory.create( DataProviderFactory.detectType( targetImagesLocation ) );
-		dataProviderTarget.createFolder( targetImagesLocation );
+		final DataProvider dataProviderTarget = DataProviderFactory.create( DataProviderFactory.detectType( args.targetLocation ) );
+		dataProviderTarget.createFolder( args.targetLocation );
 
 		sparkContext = new JavaSparkContext( new SparkConf()
 				.setAppName( "ResaveSmallerTiles" )
@@ -172,10 +170,8 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			logWriter.println( "--------------------------------------------" );
 		}
 
-		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.targetLocation ) );
-		final String newTilesConfigurationFilename = Utils.addFilenameSuffix( PathResolver.getFileName( inputTileConfiguration ), "-retiled-in-" + AxisMapping.getAxisStr( args.retileDimension ).toUpperCase() );
-		final String newTilesConfigurationPath = PathResolver.get( args.targetLocation, newTilesConfigurationFilename );
-		targetDataProvider.saveTiles( newTiles.toArray( new TileInfo[ 0 ] ), newTilesConfigurationPath );
+		final String newTilesConfigurationPath = Utils.addFilenameSuffix( inputTileConfiguration, "-retiled" );
+		sourceDataProvider.saveTiles( newTiles.toArray( new TileInfo[ 0 ] ), newTilesConfigurationPath );
 	}
 
 	private < T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > List< TileInfo > resaveTileAsSmallerTiles(
@@ -200,7 +196,7 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			sourceImg = tileImg;
 		}
 
-		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( targetImagesLocation ) );
+		final DataProvider targetDataProvider = DataProviderFactory.create( DataProviderFactory.detectType( args.targetLocation ) );
 		final List< TileInfo > newTilesInSingleTile = new ArrayList<>();
 		for ( final Interval newTileInterval : newTilesIntervalsInSingleTile )
 		{
@@ -212,8 +208,8 @@ public class ResaveAsSmallerTilesSpark implements Serializable, AutoCloseable
 			final ImagePlus newTileImagePlus = newTileImg.getImagePlus();
 			Utils.workaroundImagePlusNSlices( newTileImagePlus );
 
-			final String newTileImageFilename = Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "_retiled-" + newTilesInSingleTile.size() + AxisMapping.getAxisStr( args.retileDimension ) ) + ".tif";
-			final String newTileImagePath = PathResolver.get( targetImagesLocation, newTileImageFilename );
+			final String newTileImageFilename = Utils.addFilenameSuffix( PathResolver.getFileName( tile.getFilePath() ), "_retiled-" + Integer.toString(newTilesInSingleTile.size()) + AxisMapping.getAxisStr( args.retileDimension ) ) + ".tif";
+			final String newTileImagePath = PathResolver.get( args.targetLocation, newTileImageFilename );
 			targetDataProvider.saveImage( newTileImagePlus, newTileImagePath );
 
 			final double[] newTilePosition = new double[ tile.numDimensions() ];
