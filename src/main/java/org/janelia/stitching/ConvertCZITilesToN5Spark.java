@@ -185,12 +185,11 @@ public class ConvertCZITilesToN5Spark
 	{
 		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputPath ) );
 		final String baseDir = PathResolver.getParent( inputPath );
-		final String filenameSuffix = Utils.addFilenameSuffix( PathResolver.getFileName( inputPath ), "-n5" );
 		for ( final Entry< String, TileInfo[] > tilesChannel : newTiles.entrySet() )
 		{
 			final String channelName = tilesChannel.getKey();
 			final TileInfo[] newChannelTiles = tilesChannel.getValue();
-			final String newConfigPath = PathResolver.get( baseDir, channelName + "_" + filenameSuffix );
+			final String newConfigPath = PathResolver.get( baseDir, channelName + "-n5.json" );
 			dataProvider.saveTiles( newChannelTiles, newConfigPath );
 		}
 	}
