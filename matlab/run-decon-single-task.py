@@ -21,7 +21,7 @@ required_library_paths = [
 def set_env_vars():
 	full_required_library_paths = ':'.join([os.path.join(matlab_root_path, library_path) for library_path in required_library_paths])
 	curr_library_path_var = os.environ.get('LD_LIBRARY_PATH') or ''
-	os.environ['LD_LIBRARY_PATH'] = curr_library_path_var + ':' + full_required_library_paths
+	os.environ['LD_LIBRARY_PATH'] = full_required_library_paths + ':' + curr_library_path_var
 	os.environ['XAPPLRESDIR'] = os.path.join(matlab_root_path, 'X11/app-defaults')
 	os.environ['MCR_INHIBIT_CTF_LOCK'] = '1'
 
