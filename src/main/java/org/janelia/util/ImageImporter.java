@@ -3,6 +3,9 @@ package org.janelia.util;
 import java.io.IOException;
 import java.util.Arrays;
 
+import ij.Prefs;
+import loci.formats.in.ZeissCZIReader;
+import loci.plugins.util.LociPrefs;
 import org.janelia.stitching.Utils;
 
 import ij.IJ;
@@ -60,6 +63,9 @@ public class ImageImporter
 
 		// read everything if there are several images stored in a single file
 		options.setOpenAllSeries( true );
+
+		Prefs.set(LociPrefs.PREF_CZI_AUTOSTITCH, false);
+		Prefs.set(LociPrefs.PREF_CZI_ATTACHMENT, false);
 
 		final ImportProcess process = new ImportProcess( options );
 		if ( !process.execute() )
