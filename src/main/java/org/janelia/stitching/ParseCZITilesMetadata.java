@@ -1,13 +1,8 @@
 package org.janelia.stitching;
 
-import java.io.Serializable;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
-
+import ij.ImagePlus;
+import net.imglib2.FinalInterval;
+import net.imglib2.util.Intervals;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -23,7 +18,9 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import ij.ImagePlus;
+import java.io.Serializable;
+import java.nio.file.Paths;
+import java.util.*;
 
 public class ParseCZITilesMetadata
 {
@@ -183,12 +180,31 @@ public class ParseCZITilesMetadata
 		}
 
 		// determine data type by reading metadata of the first tile image
+		System.out.println("Opening image...");
+		long elapsedMsec = System.currentTimeMillis();
 		final ImagePlus[] imps = ImageImporter.openBioformatsImageSeries( tiles.iterator().next().getFilePath() );
+		elapsedMsec = System.currentTimeMillis() - elapsedMsec;
+		System.out.println("Opened, took " + (elapsedMsec / 1000) + "s");
+
 		final ImageType type = ImageType.valueOf( imps[ 0 ].getType() );
 		for ( final TileInfo tile : tiles )
 			tile.setType( type );
 
 		System.out.println( "Parsed metadata for " + tiles.size() + " tiles" );
+
+		if ( tiles.size() != imps.length )
+			throw new RuntimeException( "Number of tiles in the metadata doesn't match actual number of tiles: " +
+					"metadata=" + tiles.size() + ", actual=" + imps.length );
+
+		for ( final ImagePlus imp : imps )
+		{
+			final long[] actualImageSize = { imp.getWidth(), imp.getHeight(), imp.getNSlices() };
+			if (!Intervals.equals(new FinalInterval(tiles.get(0).getSize()), new FinalInterval(actualImageSize)))
+			{
+				throw new RuntimeException("Tile size from metadata doesn't match actual image size: " +
+						"metadata=" + Arrays.toString(tiles.get(0).getSize()) + ", actual=" + Arrays.toString(actualImageSize));
+			}
+		}
 
 		// trace overlaps to ensure that tile positions are accurate
 		System.out.println();
@@ -228,6 +244,15 @@ public class ParseCZITilesMetadata
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 		final String jsonTileConfigurationFilename = "tiles.json";
 		dataProvider.saveTiles( tiles.toArray( new TileInfo[ 0 ] ), PathResolver.get( baseOutputFolder, jsonTileConfigurationFilename ) );
+
+		// Now that we know the number of channels in the CZI file, prepare for the next step
+		// and create the N5 container and datasets for conversion
+		final int numChannels = imps[ 0 ].getNChannels();
+		System.out.println("There are " + numChannels + " channels in the CZI image file(s)");
+		ConvertCZITilesToN5Spark.createTargetDirectories(
+				PathResolver.get( baseOutputFolder, ConvertCZITilesToN5Spark.tilesN5ContainerName ),
+				numChannels
+		);
 
 		System.out.println( "Done" );
 	}

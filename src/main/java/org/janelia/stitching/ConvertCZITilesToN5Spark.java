@@ -33,6 +33,7 @@ import scala.Tuple2;
 
 public class ConvertCZITilesToN5Spark
 {
+	public static final String tilesN5ContainerName = "tiles.n5";
 	public static void convertTilesToN5(
 			final JavaSparkContext sparkContext,
 			final String inputTilesPath,
@@ -55,6 +56,21 @@ public class ConvertCZITilesToN5Spark
 			);
 
 		saveTilesChannels( inputTilesPath, outputTilesChannels );
+	}
+
+	// Used by the parser so this step doesn't need to open the CZI file again to find out the number of channels
+	// before submitting data conversion tasks.
+	public static void createTargetDirectories(
+			final String outputN5Path,
+			final int numChannels) throws IOException
+	{
+		final CloudN5WriterSupplier cloudN5WriterSupplier = new CloudN5WriterSupplier( outputN5Path );
+		final N5Writer n5 = cloudN5WriterSupplier.get();
+		for ( int ch = 0; ch < numChannels; ++ch )
+		{
+			final String channelName = getChannelName( ch );
+			n5.createGroup( channelName );
+		}
 	}
 
 	public static < T extends NumericType< T > & NativeType< T > > Map< String, TileInfo[] > convertTilesToN5(
