@@ -1,6 +1,8 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
+import java.io.Serializable;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -8,15 +10,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.dataaccess.CloudN5WriterSupplier;
-import org.janelia.dataaccess.DataProvider;
-import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.dataaccess.PathResolver;
+import org.janelia.dataaccess.*;
 import org.janelia.saalfeldlab.n5.Compression;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
+import org.janelia.saalfeldlab.n5.spark.util.CmdUtils;
 import org.janelia.util.ImageImporter;
 
 import ij.ImagePlus;
@@ -27,13 +29,90 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
+import org.kohsuke.args4j.Option;
 import scala.Tuple3;
 
 public class ConvertTIFFTilesToN5Spark
 {
+	private static class ConvertTIFFTilesToN5CmdArgs implements Serializable
+	{
+		private static final long serialVersionUID = 215043103837732209L;
+
+		@Option(name = "-i", aliases = { "--inputConfigurationPath" }, required = true,
+				usage = "Path to an input tile configuration file. Multiple configurations (channels) can be passed at once.")
+		private List< String > inputChannelsPaths;
+
+		@Option(name = "-o", aliases = { "--n5OutputPath" }, required = false,
+				usage = "Path to an N5 output container (can be a filesystem path, an Amazon S3 link, or a Google Cloud link).")
+		private String n5OutputPath;
+
+		@Option(name = "-b", aliases = { "--blockSize" }, required = false,
+				usage = "Output block size as a comma-separated list.")
+		private String blockSizeStr = "128,128,64";
+
+		private boolean parsedSuccessfully = false;
+
+		public ConvertTIFFTilesToN5CmdArgs( final String... args ) throws IllegalArgumentException
+		{
+			final CmdLineParser parser = new CmdLineParser( this );
+			try
+			{
+				parser.parseArgument( args );
+				parsedSuccessfully = true;
+			}
+			catch ( final CmdLineException e )
+			{
+				System.err.println( e.getMessage() );
+				parser.printUsage( System.err );
+			}
+
+			// make sure that inputTileConfigurations contains absolute file paths if running on a traditional filesystem
+			for ( int i = 0; i < inputChannelsPaths.size(); ++i )
+				if ( !CloudURI.isCloudURI( inputChannelsPaths.get( i ) ) )
+					inputChannelsPaths.set( i, Paths.get( inputChannelsPaths.get( i ) ).toAbsolutePath().toString() );
+
+			if ( n5OutputPath != null )
+			{
+				// make sure that n5OutputPath is absolute if running on a traditional filesystem
+				if ( !CloudURI.isCloudURI( n5OutputPath ) )
+					n5OutputPath = Paths.get( n5OutputPath ).toAbsolutePath().toString();
+			}
+			else
+			{
+				n5OutputPath = PathResolver.get( PathResolver.getParent( inputChannelsPaths.iterator().next() ), "tiles.n5" );
+			}
+		}
+	}
+
 	private static final int MAX_PARTITIONS = 15000;
 
-	public static void convertTilesToN5(
+	public static void main( final String... args ) throws IOException
+	{
+		final ConvertTIFFTilesToN5CmdArgs parsedArgs = new ConvertTIFFTilesToN5CmdArgs( args );
+		if ( !parsedArgs.parsedSuccessfully )
+			throw new IllegalArgumentException( "argument format mismatch" );
+
+		System.out.println( "Converting tiles to N5..." );
+
+		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
+				.setAppName( "ConvertTIFFTilesToN5Spark" )
+				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
+			) )
+		{
+			run(
+					sparkContext,
+					parsedArgs.inputChannelsPaths,
+					parsedArgs.n5OutputPath,
+					CmdUtils.parseIntArray( parsedArgs.blockSizeStr ),
+					new GzipCompression()
+			);
+		}
+		System.out.println( "Done" );
+	}
+
+	public static void run(
 			final JavaSparkContext sparkContext,
 			final List< String > inputChannelsPaths,
 			final String outputN5Path,

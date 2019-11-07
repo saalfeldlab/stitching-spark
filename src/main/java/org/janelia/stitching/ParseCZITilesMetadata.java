@@ -1,13 +1,8 @@
 package org.janelia.stitching;
 
-import java.io.Serializable;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
-
+import ij.ImagePlus;
+import net.imglib2.FinalInterval;
+import net.imglib2.util.Intervals;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -23,7 +18,10 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import ij.ImagePlus;
+import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
 
 public class ParseCZITilesMetadata
 {
@@ -40,7 +38,8 @@ public class ParseCZITilesMetadata
 		private String basePath;
 
 		@Option(name = "-f", aliases = { "--filenamePattern" }, required = true,
-				usage = "File name pattern for tile images. Tiles are supposed to have their number in the filename (starting from 0), provide it as %d in the filename pattern.")
+				usage = "File name pattern for tile images. Tiles are supposed to have their number in the filename (starting from 0), provide it as %d in the filename pattern. " +
+						"If the filenames contain leading zeroes, the format can be specified, for example, as %02d for a fixed length of two.")
 		private String filenamePattern;
 
 		@Option(name = "-r", aliases = { "--pixelResolution" }, required = true,
@@ -130,10 +129,40 @@ public class ParseCZITilesMetadata
 		final List< TileInfo > tiles = new ArrayList<>();
 
 		// all channels are contained in the same .czi file for each tile, so the parser generates only one tile configuration file, and then CZI->N5 converter will split into channels
+
+		// find starting index of the first tile in the filenames (could be either 0-indexed or 1-indexed, or can be stored in a single .czi container)
+		final List< String > tileFilenames = new ArrayList<>();
+		for ( final int filenameStartIndex : new int[] { 0, 1 } )
+		{
+			for ( int i = 0; i < numTiles; ++i )
+				tileFilenames.add( String.format( filenamePattern, i + filenameStartIndex ) );
+
+			if ( numTiles > 1 && new HashSet<>( tileFilenames ).size() == 1 ) {
+				// Check if all tiles are stored in a single czi container.
+				break;
+			}
+
+			boolean allTilesExist = true;
+			for ( final String tileFilename : tileFilenames ) {
+				if ( !Files.exists( Paths.get( PathResolver.get( basePath, tileFilename ) ) ) ) {
+					allTilesExist = false;
+					break;
+				}
+			}
+
+			if (allTilesExist) // check if found the right indexing scheme
+				break;
+
+			tileFilenames.clear();
+		}
+
+		if ( tileFilenames.isEmpty() )
+			throw new RuntimeException( "Could not find correct file paths to all tile images" );
+
 		for ( int i = 0; i < numTiles; ++i )
 		{
 			final Element tileElement = tileListElement.getChild( String.format( TILE_TAG_PATTERN, i ) );
-			final String filepath = PathResolver.get( basePath, String.format( filenamePattern, i ) );
+			final String filepath = PathResolver.get( basePath, tileFilenames.get( i ) );
 
 			final double[] objCoords = new double[] {
 					Double.parseDouble( tileElement.getAttributeValue( TILE_OBJECTIVE_X_POSITION_TAG ) ),
@@ -183,12 +212,27 @@ public class ParseCZITilesMetadata
 		}
 
 		// determine data type by reading metadata of the first tile image
+		System.out.println("Opening image...");
+		long elapsedMsec = System.currentTimeMillis();
 		final ImagePlus[] imps = ImageImporter.openBioformatsImageSeries( tiles.iterator().next().getFilePath() );
+		elapsedMsec = System.currentTimeMillis() - elapsedMsec;
+		System.out.println("Opened, took " + (elapsedMsec / 1000) + "s");
+
 		final ImageType type = ImageType.valueOf( imps[ 0 ].getType() );
 		for ( final TileInfo tile : tiles )
 			tile.setType( type );
 
 		System.out.println( "Parsed metadata for " + tiles.size() + " tiles" );
+
+		for ( final ImagePlus imp : imps )
+		{
+			final long[] actualImageSize = { imp.getWidth(), imp.getHeight(), imp.getNSlices() };
+			if (!Intervals.equals(new FinalInterval(tiles.get(0).getSize()), new FinalInterval(actualImageSize)))
+			{
+				throw new RuntimeException("Tile size from metadata doesn't match actual image size: " +
+						"metadata=" + Arrays.toString(tiles.get(0).getSize()) + ", actual=" + Arrays.toString(actualImageSize));
+			}
+		}
 
 		// trace overlaps to ensure that tile positions are accurate
 		System.out.println();
@@ -228,6 +272,15 @@ public class ParseCZITilesMetadata
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 		final String jsonTileConfigurationFilename = "tiles.json";
 		dataProvider.saveTiles( tiles.toArray( new TileInfo[ 0 ] ), PathResolver.get( baseOutputFolder, jsonTileConfigurationFilename ) );
+
+		// Now that we know the number of channels in the CZI file, prepare for the next step
+		// and create the N5 container and datasets for conversion
+		final int numChannels = imps[ 0 ].getNChannels();
+		System.out.println("There are " + numChannels + " channels in the CZI image file(s)");
+		ConvertCZITilesToN5Spark.createTargetDirectories(
+				PathResolver.get( baseOutputFolder, ConvertCZITilesToN5Spark.tilesN5ContainerName ),
+				numChannels
+		);
 
 		System.out.println( "Done" );
 	}
