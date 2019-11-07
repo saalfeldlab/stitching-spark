@@ -38,7 +38,8 @@ public class ParseCZITilesMetadata
 		private String basePath;
 
 		@Option(name = "-f", aliases = { "--filenamePattern" }, required = true,
-				usage = "File name pattern for tile images. Tiles are supposed to have their number in the filename (starting from 0), provide it as %d in the filename pattern.")
+				usage = "File name pattern for tile images. Tiles are supposed to have their number in the filename (starting from 0), provide it as %d in the filename pattern. " +
+						"If the filenames contain leading zeroes, the format can be specified, for example, as %02d for a fixed length of two.")
 		private String filenamePattern;
 
 		@Option(name = "-r", aliases = { "--pixelResolution" }, required = true,
