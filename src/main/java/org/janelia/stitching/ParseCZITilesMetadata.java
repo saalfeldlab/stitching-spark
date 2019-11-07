@@ -19,6 +19,7 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import java.io.Serializable;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
@@ -127,10 +128,40 @@ public class ParseCZITilesMetadata
 		final List< TileInfo > tiles = new ArrayList<>();
 
 		// all channels are contained in the same .czi file for each tile, so the parser generates only one tile configuration file, and then CZI->N5 converter will split into channels
+
+		// find starting index of the first tile in the filenames (could be either 0-indexed or 1-indexed, or can be stored in a single .czi container)
+		final List< String > tileFilenames = new ArrayList<>();
+		for ( final int filenameStartIndex : new int[] { 0, 1 } )
+		{
+			for ( int i = 0; i < numTiles; ++i )
+				tileFilenames.add( String.format( filenamePattern, i + filenameStartIndex ) );
+
+			if ( numTiles > 1 && new HashSet<>( tileFilenames ).size() == 1 ) {
+				// Check if all tiles are stored in a single czi container.
+				break;
+			}
+
+			boolean allTilesExist = true;
+			for ( final String tileFilename : tileFilenames ) {
+				if ( !Files.exists( Paths.get( PathResolver.get( basePath, tileFilename ) ) ) ) {
+					allTilesExist = false;
+					break;
+				}
+			}
+
+			if (allTilesExist) // check if found the right indexing scheme
+				break;
+
+			tileFilenames.clear();
+		}
+
+		if ( tileFilenames.isEmpty() )
+			throw new RuntimeException( "Could not find correct file paths to all tile images" );
+
 		for ( int i = 0; i < numTiles; ++i )
 		{
 			final Element tileElement = tileListElement.getChild( String.format( TILE_TAG_PATTERN, i ) );
-			final String filepath = PathResolver.get( basePath, String.format( filenamePattern, i ) );
+			final String filepath = PathResolver.get( basePath, tileFilenames.get( i ) );
 
 			final double[] objCoords = new double[] {
 					Double.parseDouble( tileElement.getAttributeValue( TILE_OBJECTIVE_X_POSITION_TAG ) ),
@@ -191,10 +222,6 @@ public class ParseCZITilesMetadata
 			tile.setType( type );
 
 		System.out.println( "Parsed metadata for " + tiles.size() + " tiles" );
-
-		if ( tiles.size() != imps.length )
-			throw new RuntimeException( "Number of tiles in the metadata doesn't match actual number of tiles: " +
-					"metadata=" + tiles.size() + ", actual=" + imps.length );
 
 		for ( final ImagePlus imp : imps )
 		{
