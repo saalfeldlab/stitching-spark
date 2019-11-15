@@ -79,7 +79,7 @@ def check_all_tasks_finished(task_index_to_filepath, job_id_to_task_index, faile
 		job_id = output_line.strip()
 		if job_id in finished_jobs:
 			del finished_jobs[job_id]
-	for finished_job_id, finished_task_index in finished_jobs.iteritems():
+	for finished_job_id, finished_task_index in finished_jobs.items():
 		del job_id_to_task_index[finished_job_id]
 		task_filepath = task_index_to_filepath[finished_task_index]
 		if os.path.exists(task_filepath):
