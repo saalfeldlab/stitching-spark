@@ -201,7 +201,7 @@ This will convert the images into N5 and will create new tile configuration file
 <summary><b>Run on Janelia cluster</b></summary>
 
 ```bash
-spark-janelia/flatfield.py <number of cluster nodes> -i ch0.json
+spark-janelia/flatfield.py <number of cluster nodes> -i 488nm-n5.json -i 560nm-n5.json ...
 ```
 </details>
 
@@ -209,12 +209,12 @@ spark-janelia/flatfield.py <number of cluster nodes> -i ch0.json
 <summary><b>Run on local machine</b></summary>
 
 ```bash
-spark-local/flatfield.py -i ch0.json
+spark-local/flatfield.py -i 488nm-n5.json -i 560nm-n5.json ...
 ```
 </details>
 
-This will create a folder named `ch0-flatfield/` near the provided `ch0.json` file. After the application is finished, it will store two files `S.tif` and `T.tif` (the brightfield and the offset respectively).
-The next steps will detect the flatfield folder and will automatically use the estimated flatfields for on-the-fly correction.
+This will create a folder for each channel named such as `488nm-flatfield/` near the provided input files. After the application is finished, it will store two files `S.tif` and `T.tif` in each of the created folders (the brightfield and the offset respectively).
+The next steps will detect the flatfield folder and will automatically use the estimated flatfields to perform the flatfield correction on the fly.
 
 The full list of available parameters for the flatfield script is available [here](https://github.com/saalfeldlab/stitching-spark/wiki/Flatfield-parameters).
 
@@ -224,7 +224,7 @@ The full list of available parameters for the flatfield script is available [her
 <summary><b>Run on Janelia cluster</b></summary>
 
 ```bash
-spark-janelia/stitch.py <number of cluster nodes> -i ch0.json -i ch1.json
+spark-janelia/stitch.py <number of cluster nodes> -i 488nm-n5.json -i 560nm-n5.json ...
 ```
 </details>
 
@@ -232,13 +232,13 @@ spark-janelia/stitch.py <number of cluster nodes> -i ch0.json -i ch1.json
 <summary><b>Run on local machine</b></summary>
 
 ```bash
-spark-local/stitch.py -i ch0.json -i ch1.json
+spark-local/stitch.py -i 488nm-n5.json -i 560nm-n5.json ...
 ```
 </details>
 
-This will run the stitching performing a number of iterations until it cannot improve the solution anymore. The multichannel data will be averaged on-the-fly before computing pairwise shifts in order to get higher correlations because of denser signal.
+This will run the stitching performing a number of iterations until it cannot improve the solution anymore. The images channels will be averaged on-the-fly before computing pairwise shifts in order to get higher correlations because of denser signal.
 
-As a result, it will create files `ch0-final.json` and `ch1-final.json` near the input tile configuration files.
+As a result, it will create files `488nm-n5-final.json`, `560nm-n5-final.json`, etc. near the input tile configuration files.
 It will also store a file named `optimizer.txt` that will contain the statistics on average and max errors, number of retained tiles and edges in the final graph, and cross correlation and variance threshold values that were used to obtain the final solution.
 
 The current stitching method is iterative translation-based (improving the solution by building the prediction model).
@@ -252,7 +252,7 @@ The full list of available parameters for the stitch script is available [here](
 <summary><b>Run on Janelia cluster</b></summary>
 
 ```bash
-spark-janelia/export.py <number of cluster nodes> -i ch0-final.json -i ch1-final.json
+spark-janelia/export.py <number of cluster nodes> -i 488nm-n5-final.json -i 560nm-n5-final.json ...
 ```
 </details>
 
@@ -260,7 +260,7 @@ spark-janelia/export.py <number of cluster nodes> -i ch0-final.json -i ch1-final
 <summary><b>Run on local machine</b></summary>
 
 ```bash
-spark-local/export.py -i ch0-final.json -i ch1-final.json
+spark-local/export.py -i 488nm-n5-final.json -i 560nm-n5-final.json ...
 ```
 </details>
 
