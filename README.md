@@ -54,7 +54,8 @@ The application uses JSON to store metadata about tile configurations. These met
 * position and size of each tile in pixels
 * pixel resolution (physical size of the pixel/voxel) in nanometers
 * image data type
-There is a converter for Zeiss Z1 acquisitions, but in general case an input file needs to be converted or generated (depending on how you store metadata for your acquisitions). The application expects a separate JSON file for each image channel in the following format:
+
+Example of the JSON metadata file (one JSON file per image channel):
 
 *ch0.json:*
 ```json
@@ -78,7 +79,7 @@ There is a converter for Zeiss Z1 acquisitions, but in general case an input fil
 ]
 ```
 
-Currently supported converters:
+The application provides automated converters for commonly used formats, but in general case an input metadata file needs to be converted or generated (depending on how you store metadata for your acquisitions).
 
 #### Zeiss Z1
 The parser requires an .mvl metadata file. Image tiles can be stored in separate .czi files (one 4D image file per tile that includes all channels), or in a single .czi file.
@@ -104,7 +105,6 @@ spark-local/parse-zeiss-z1-metadata.py \
   -r <voxel size in nanometers, for example, 0.114,0.114,0.996>
 ```
 </details>
-
 
 #### ImageList.csv objective-scan acquisitions
 *ImageList.csv* metadata file lists image tile filenames in all channels and contains stage and objective coordinates of each tile. Image tiles are expected to be stored as .tif files (separate files for each channel).
