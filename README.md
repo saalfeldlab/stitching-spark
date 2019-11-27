@@ -1,5 +1,5 @@
 # stitching-spark
-Reconstruct big images from overlapping tiled images on a Spark cluster.
+Reconstructing large microscopy images from overlapping image tiles on a high-performance Spark cluster.
 
 The code is based on the Stitching plugin for Fiji https://github.com/fiji/Stitching
 
@@ -44,13 +44,19 @@ If running locally, you can access the Spark job tracker at http://localhost:404
 #### If running on public platforms such as AWS or Google Cloud:
 * Compile with `python build.py`. This will include embed required dependencies into the final package, except for the Spark which is provided by the respective target platform at runtime.
 * For running the pipeline, refer to the wiki page [Running on Google Cloud](https://github.com/saalfeldlab/stitching-spark/wiki/Running-on-Google-Cloud)
-* The currently used Spark version is **2.2.0** — make sure you're requesting the same version when submitting a job
+* The currently used Spark version is **2.3.1** — make sure you're requesting the same version when submitting a job
 
 
 ### 2. Preparing input tile configuration files
 
-The application requires an input file containing the registered tiles configuration for each channel. It should be a JSON formatted as follows:
+The application uses JSON to store metadata about tile configurations. These metadata include:
+* list of all tiles in the acquisition grouped by channel
+* position and size of each tile in pixels
+* pixel resolution (physical size of the pixel/voxel) in nanometers
+* image data type
+There is a converter for Zeiss Z1 acquisitions, but in general case an input file needs to be converted or generated (depending on how you store metadata for your acquisitions). The application expects a separate JSON file for each image channel in the following format:
 
+*ch0.json:*
 ```json
 [
 {
@@ -64,13 +70,72 @@ The application requires an input file containing the registered tiles configura
 {
   "index" : 1,
   "file" : "FCF_CSMH__54383_20121206_35_C3_zb15_zt01_63X_0-0-0_R1_L087_20130108192825183.lsm.tif",
-  "position" : [716.932762003862, -694.0887500300357, -77.41783189603937],
-  "size" : [991, 992, 953],
+  "position" : [700, -694.0887500300357, -77.41783189603937],
+  "size" : [991, 992, 880],
   "pixelResolution" : [0.097,0.097,0.18],
   "type" : "GRAY16"
 }
 ]
 ```
+
+Currently supported converters:
+
+#### Zeiss Z1
+The parser requires an .mvl metadata file. Image tiles can be stored in separate .czi files (one 4D image file per tile that includes all channels), or in a single .czi file.
+<details>
+<summary><b>Run on Janelia cluster</b></summary>
+
+```
+spark-janelia/parse-zeiss-z1-metadata.py \
+  -i <path to metadata.mvl> \
+  -b <path to directory with image files> \
+  -f <images.czi for single file, or image%d.czi for multiple files that contain an index> \
+  -r <voxel size in nanometers, for example, 0.114,0.114,0.996>
+```
+</details>
+<details>
+<summary><b>Run on local machine</b></summary>
+
+```
+spark-local/parse-zeiss-z1-metadata.py \
+  -i <path to metadata.mvl> \
+  -b <path to directory with image files> \
+  -f <images.czi for single file, or image%d.czi for multiple files that contain an index> \
+  -r <voxel size in nanometers, for example, 0.114,0.114,0.996>
+```
+</details>
+
+
+#### ImageList.csv objective-scan acquisitions
+*ImageList.csv* metadata file lists image tile filenames in all channels and contains stage and objective coordinates of each tile. Image tiles are expected to be stored as .tif files (separate files for each channel).
+
+Objective coordinates from the metadata file are converted into pixel coordinates based on the provided physical size of a voxel (in nanometers) and axis mapping which specifies flips and swaps between the two coordinate systems. For example, `-y,x,z` would mean that the objective X and Y should be swapped, and objective Y should be flipped.
+
+<details>
+<summary><b>Run on Janelia cluster</b></summary>
+
+```
+spark-janelia/parse-imagelist-metadata.py \
+  -i <path to ImageList.csv> \
+  -b <path to directory with image files> \
+  -r <voxel size in nanometers, for example, 0.097,0.097,0.18> \
+  -a <axis mapping from objective coordinates to pixel coordinates, for example, -y,x,z> \
+  [--skipMissingTiles to exclude non-existing tile images from configuration instead of raising an error]
+```
+</details>
+<details>
+<summary><b>Run on local machine</b></summary>
+
+```
+spark-local/parse-imagelist-metadata.py \
+  -i <path to ImageList.csv> \
+  -b <path to directory with image files> \
+  -r <voxel size in nanometers, for example, 0.097,0.097,0.18> \
+  -a <axis mapping from objective coordinates to pixel coordinates, for example, -y,x,z> \
+  [--skipMissingTiles to exclude non-existing tile images from configuration instead of raising an error]
+```
+</details>
+
 
 ### 3. Flatfield estimation
 
