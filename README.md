@@ -106,6 +106,8 @@ spark-local/parse-zeiss-z1-metadata.py \
 ```
 </details>
 
+This will create a single `tiles.json` file in the same directory as the existing .mvl file. Separate JSON tile configuration files for each channel will be created in the next step when the images are split into channel during conversion.
+
 #### ImageList.csv objective-scan acquisitions
 *ImageList.csv* metadata file lists image tile filenames in all channels and contains stage and objective coordinates of each tile. Image tiles are expected to be stored as .tif files (separate files for each channel).
 
@@ -136,8 +138,64 @@ spark-local/parse-imagelist-metadata.py \
 ```
 </details>
 
+This will create a number of JSON configuration files (one per channel), named as `488nm.json`, `560nm.json`, etc. if the corresponding laser frequency can be parsed from the image filenames, or simply `c0.json`, `c1.json`, etc. otherwise. 
 
-### 3. Flatfield estimation
+
+### 3. Conversion of image tiles into N5
+
+The application requires to convert all tiles in the acquisition into [N5](https://github.com/saalfeldlab/n5) in order to make the processing in the next steps faster. This also allows to work with different image file formats more easily.
+
+#### .czi (Zeiss Z1) -> N5:
+
+<details>
+<summary><b>Run on Janelia cluster</b></summary>
+
+```bash
+spark-janelia/convert-czi-tiles-n5.py \
+  <number of cluster nodes> \
+  -i <path to tiles.json created in the previous step> \
+  [--blockSize to override the default block size 128,128,64]
+```
+</details>
+<details>
+<summary><b>Run on local machine</b></summary>
+
+```bash
+spark-local/convert-czi-tiles-n5.py \
+  -i <path to tiles.json created in the previous step> \
+  [--blockSize to override the default block size 128,128,64]
+```
+</details>
+
+This will convert the images into N5 and will create new tile configuration files that correspond to the converted tiles. The new configuration files will be named as `c0-n5.json`, `c1-n5.json`, etc. and should be used as inputs in the next steps.
+
+#### .tif -> N5:
+
+<details>
+<summary><b>Run on Janelia cluster</b></summary>
+
+```bash
+spark-janelia/convert-tiff-tiles-n5.py \
+  <number of cluster nodes> \
+  -i 488nm.json -i 560nm.json ... \
+  [--blockSize to override the default block size 128,128,64]
+```
+</details>
+<details>
+<summary><b>Run on local machine</b></summary>
+
+```bash
+spark-local/convert-tiff-tiles-n5.py \
+  -i 488nm.json -i 560nm.json ... \
+  [--blockSize to override the default block size 128,128,64]
+```
+</details>
+
+This will convert the images into N5 and will create new tile configuration files that correspond to the converted tiles. The new configuration files will be named as `488nm-n5.json`, `488nm-n5.json`, etc. and should be used as inputs in the next steps.
+
+
+
+### 4. Flatfield estimation
 
 <details>
 <summary><b>Run on Janelia cluster</b></summary>
@@ -160,7 +218,7 @@ The next steps will detect the flatfield folder and will automatically use the e
 
 The full list of available parameters for the flatfield script is available [here](https://github.com/saalfeldlab/stitching-spark/wiki/Flatfield-parameters).
 
-### 4. Stitch
+### 5. Stitching
 
 <details>
 <summary><b>Run on Janelia cluster</b></summary>
@@ -188,7 +246,7 @@ The pipeline incorporating a higher-order model is currently under development i
 
 The full list of available parameters for the stitch script is available [here](https://github.com/saalfeldlab/stitching-spark/wiki/Stitching-parameters).
 
-### 5. Export
+### 6. Exporting
 
 <details>
 <summary><b>Run on Janelia cluster</b></summary>
