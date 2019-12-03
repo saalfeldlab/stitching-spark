@@ -150,7 +150,7 @@ The application requires to convert all tiles in the acquisition into [N5](https
 <details>
 <summary><b>Run on Janelia cluster</b></summary>
 
-```bash
+```
 spark-janelia/convert-czi-tiles-n5.py \
   <number of cluster nodes> \
   -i <path to tiles.json created in the previous step> \
@@ -160,7 +160,7 @@ spark-janelia/convert-czi-tiles-n5.py \
 <details>
 <summary><b>Run on local machine</b></summary>
 
-```bash
+```
 spark-local/convert-czi-tiles-n5.py \
   -i <path to tiles.json created in the previous step> \
   [--blockSize to override the default block size 128,128,64]
@@ -174,7 +174,7 @@ This will convert the images into N5 and will create new tile configuration file
 <details>
 <summary><b>Run on Janelia cluster</b></summary>
 
-```bash
+```
 spark-janelia/convert-tiff-tiles-n5.py \
   <number of cluster nodes> \
   -i 488nm.json -i 560nm.json ... \
@@ -184,7 +184,7 @@ spark-janelia/convert-tiff-tiles-n5.py \
 <details>
 <summary><b>Run on local machine</b></summary>
 
-```bash
+```
 spark-local/convert-tiff-tiles-n5.py \
   -i 488nm.json -i 560nm.json ... \
   [--blockSize to override the default block size 128,128,64]
@@ -200,7 +200,7 @@ This will convert the images into N5 and will create new tile configuration file
 <details>
 <summary><b>Run on Janelia cluster</b></summary>
 
-```bash
+```
 spark-janelia/flatfield.py <number of cluster nodes> -i 488nm-n5.json -i 560nm-n5.json ...
 ```
 </details>
@@ -208,7 +208,7 @@ spark-janelia/flatfield.py <number of cluster nodes> -i 488nm-n5.json -i 560nm-n
 <details>
 <summary><b>Run on local machine</b></summary>
 
-```bash
+```
 spark-local/flatfield.py -i 488nm-n5.json -i 560nm-n5.json ...
 ```
 </details>
@@ -223,7 +223,7 @@ The full list of available parameters for the flatfield script is available [her
 <details>
 <summary><b>Run on Janelia cluster</b></summary>
 
-```bash
+```
 spark-janelia/stitch.py <number of cluster nodes> -i 488nm-n5.json -i 560nm-n5.json ...
 ```
 </details>
@@ -231,7 +231,7 @@ spark-janelia/stitch.py <number of cluster nodes> -i 488nm-n5.json -i 560nm-n5.j
 <details>
 <summary><b>Run on local machine</b></summary>
 
-```bash
+```
 spark-local/stitch.py -i 488nm-n5.json -i 560nm-n5.json ...
 ```
 </details>
@@ -251,7 +251,7 @@ The full list of available parameters for the stitch script is available [here](
 <details>
 <summary><b>Run on Janelia cluster</b></summary>
 
-```bash
+```
 spark-janelia/export.py <number of cluster nodes> -i 488nm-n5-final.json -i 560nm-n5-final.json ...
 ```
 </details>
@@ -259,7 +259,7 @@ spark-janelia/export.py <number of cluster nodes> -i 488nm-n5-final.json -i 560n
 <details>
 <summary><b>Run on local machine</b></summary>
 
-```bash
+```
 spark-local/export.py -i 488nm-n5-final.json -i 560nm-n5-final.json ...
 ```
 </details>
@@ -267,3 +267,34 @@ spark-local/export.py -i 488nm-n5-final.json -i 560nm-n5-final.json ...
 This will generate an [N5](https://github.com/saalfeldlab/n5) export under `export.n5/` folder. The export is fully compatible  with [N5 Viewer](https://github.com/saalfeldlab/n5-viewer) for browsing.
 
 The full list of available parameters for the export script is available [here](https://github.com/saalfeldlab/stitching-spark/wiki/Export-parameters).
+
+### 7. Converting N5 export to slice TIFF
+
+<details>
+<summary><b>Run on Janelia cluster</b></summary>
+
+```
+spark-janelia/n5-slice-tiff.py \
+  <number of cluster nodes> \
+  -i <path to export.n5 directory> \
+  [-s <index of scale level, 0 means full resolution>] \
+  [--compress to enable LZW compression. Can be much slower than uncompressed] \
+  [--sameDir to prepend all filenames with channel and store all slices in the same directory] \
+  [--leadingZeroes to pad slice indices in filenames with leading zeroes]
+```
+</details>
+
+<details>
+<summary><b>Run on local machine</b></summary>
+
+```
+spark-local/n5-slice-tiff.py \
+  -i <path to export.n5 directory> \
+  [-s <index of scale level, 0 means full resolution>] \
+  [--compress to enable LZW compression. Can be much slower than uncompressed] \
+  [--sameDir to prepend all filenames with channel and store all slices in the same directory] \
+  [--leadingZeroes to pad slice indices in filenames with leading zeroes]
+```
+</details>
+
+This will create a directory named such as `slice-tiff-s0` based on the requested scale level index, where the generated stitched N5 export will be converted into a series of slice TIFF images. The resulting TIFF images will be XY slices.
