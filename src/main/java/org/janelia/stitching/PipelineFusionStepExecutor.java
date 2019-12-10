@@ -18,6 +18,8 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrection;
+import org.janelia.flatfield.HistogramSettings;
+import org.janelia.flatfield.StackHistogram;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
@@ -58,6 +60,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 	Broadcast< Map< Integer, Set< Integer > > > broadcastedPairwiseConnectionsMap;
 	Broadcast< RandomAccessiblePairNullable< U, U > > broadcastedFlatfieldCorrection;
+
+	private final HistogramSettings stackHistogramSettings = new HistogramSettings( 0., 16383., 4098 );
 
 	public PipelineFusionStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
@@ -155,7 +159,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final String absoluteChannelPath = job.getArgs().inputTileConfigurations().get( channel );
 			final String absoluteChannelPathNoFinal = Utils.removeFilenameSuffix( absoluteChannelPath, "-final" ); // adjust the path in order to use original flatfields
 
-			n5.createGroup( N5ExportMetadata.getChannelGroupPath( channel ) );
+			final String outputChannelGroupPath = N5ExportMetadata.getChannelGroupPath( channel );
+			n5.createGroup( outputChannelGroupPath );
 
 			// special mode which allows to export only overlaps of tile pairs that have been used for final stitching
 			final Map< Integer, Set< Integer > > pairwiseConnectionsMap = getPairwiseConnectionsMap( absoluteChannelPath );
@@ -177,7 +182,14 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final Number backgroundValue;
 			if ( job.getArgs().fillBackground() )
 			{
-				backgroundValue = FlatfieldCorrection.getPivotValue( dataProvider, absoluteChannelPathNoFinal );
+				final Double flatfieldBackgroundValue = FlatfieldCorrection.getPivotValue( dataProvider, absoluteChannelPathNoFinal );
+				if ( flatfieldBackgroundValue != null ) {
+					backgroundValue = flatfieldBackgroundValue;
+				} else {
+					// The background value is not available and needs to be estimated.
+					// This is the case for deconvolved data, because in the Flatfield Correction step the background value is estimated only for raw data.
+					backgroundValue = estimateBackgroundValue( job.getTiles( channel ) );
+				}
 				System.out.println( "Using background intensity value of " + backgroundValue + " for filling in channel " + channel );
 			}
 			else
@@ -348,5 +360,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		}
 
 		return pairwiseConnectionsMap;
+	}
+
+	private double estimateBackgroundValue( final TileInfo[] tiles )
+	{
+		final StackHistogram stackHistogram = StackHistogram.getStackHistogram( sparkContext, tiles, stackHistogramSettings );
+		return stackHistogram.getPivotValue();
 	}
 }
