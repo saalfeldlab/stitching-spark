@@ -83,6 +83,10 @@ public class StitchingArguments implements Serializable {
 			usage = "Export the dataset using blending strategy instead of hardcut (max.min.distance)")
 	private boolean blending = false;
 
+	@Option(name = "--fillBackground", required = false,
+			usage = "Fill the outer space in N5 export with the background value of the data instead of zero")
+	private boolean fillBackground = false;
+
 	/**
 	 * Toggle pipeline stages. By default all stages are executed.
 	 */
@@ -167,6 +171,7 @@ public class StitchingArguments implements Serializable {
 	public boolean noLeaves() { return noLeaves; }
 	public boolean exportOverlaps() { return exportOverlaps; }
 	public boolean blending() { return blending; }
+	public boolean fillBackground() { return fillBackground; }
 	public boolean allowFusingStage() { return allowFusingStage; }
 
 	public boolean stitchOnly() { return stitchOnly; }

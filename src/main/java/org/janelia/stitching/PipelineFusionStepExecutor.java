@@ -174,10 +174,26 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				System.out.println( "[Flatfield correction] Broadcasting flatfield correction images" );
 			broadcastedFlatfieldCorrection = sparkContext.broadcast( flatfieldCorrection );
 
+			final Number backgroundValue;
+			if ( job.getArgs().fillBackground() )
+			{
+				backgroundValue = FlatfieldCorrection.getPivotValue( dataProvider, absoluteChannelPathNoFinal );
+				System.out.println( "Using background intensity value of " + backgroundValue + " for filling in channel " + channel );
+			}
+			else
+			{
+				backgroundValue = null;
+			}
+
 			final String fullScaleOutputPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, 0 );
 
 			// Generate export of the first scale level
-			fuse( n5ExportPath, fullScaleOutputPath, job.getTiles( channel ) );
+			fuse(
+					n5ExportPath,
+					fullScaleOutputPath,
+					job.getTiles( channel ),
+					backgroundValue
+				);
 
 			// Generate lower scale levels
 			downsampledDatasets = N5NonIsotropicScalePyramidSpark.downsampleNonIsotropicScalePyramid(
@@ -238,7 +254,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		return processingCellSize;
 	}
 
-	private void fuse( final String n5ExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
+	private void fuse(
+			final String n5ExportPath,
+			final String fullScaleOutputPath,
+			final TileInfo[] tiles,
+			final Number backgroundValue ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		final int[] cellSize = getOptimalCellSize( tiles );
@@ -286,6 +306,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 						job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
 						tilesWithinCell,
 						cellBox,
+						backgroundValue,
 						broadcastedFlatfieldCorrection.value(),
 						broadcastedPairwiseConnectionsMap.value()
 					);
