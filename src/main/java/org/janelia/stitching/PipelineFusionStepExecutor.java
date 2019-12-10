@@ -21,6 +21,7 @@ import org.janelia.flatfield.FlatfieldCorrection;
 import org.janelia.flatfield.HistogramSettings;
 import org.janelia.flatfield.StackHistogram;
 import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
@@ -49,6 +50,8 @@ import net.imglib2.view.RandomAccessiblePairNullable;
 public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T >, U extends NativeType< U > & RealType< U > > extends PipelineStepExecutor
 {
 	private static final long serialVersionUID = -8151178964876747760L;
+
+	private static String BACKGROUND_VALUE_ATTRIBUTE_KEY = "backgroundValue";
 
 	private static final int MAX_PARTITIONS = 15000;
 
@@ -191,6 +194,9 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 					backgroundValue = estimateBackgroundValue( job.getTiles( channel ) );
 				}
 				System.out.println( "Using background intensity value of " + backgroundValue + " for filling in channel " + channel );
+
+				// save the used background value in group attributes so it can be also used when converting to slice TIFF
+				n5.setAttribute( outputChannelGroupPath, BACKGROUND_VALUE_ATTRIBUTE_KEY, backgroundValue.doubleValue() );
 			}
 			else
 			{
@@ -366,5 +372,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 	{
 		final StackHistogram stackHistogram = StackHistogram.getStackHistogram( sparkContext, tiles, stackHistogramSettings );
 		return stackHistogram.getPivotValue();
+	}
+
+	public static Double getBackgroundValue( final N5Reader n5, final int channel ) throws IOException
+	{
+		final String channelGroupPath = N5ExportMetadata.getChannelGroupPath( channel );
+		return n5.getAttribute( channelGroupPath, BACKGROUND_VALUE_ATTRIBUTE_KEY, Double.class );
 	}
 }
