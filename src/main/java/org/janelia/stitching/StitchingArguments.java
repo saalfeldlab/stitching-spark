@@ -83,7 +83,7 @@ public class StitchingArguments implements Serializable {
 			usage = "Export the dataset using blending strategy instead of hardcut (max.min.distance)")
 	private boolean blending = false;
 
-	@Option(name = "--fillBackground", required = false,
+	@Option(name = "--fillBackground", aliases = { "--fill" }, required = false,
 			usage = "Fill the outer space in N5 export with the background value of the data instead of zero")
 	private boolean fillBackground = false;
 
