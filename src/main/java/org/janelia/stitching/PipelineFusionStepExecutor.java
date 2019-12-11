@@ -18,7 +18,10 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.dataaccess.PathResolver;
 import org.janelia.flatfield.FlatfieldCorrection;
+import org.janelia.flatfield.HistogramSettings;
+import org.janelia.flatfield.StackHistogram;
 import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataWriter;
@@ -48,6 +51,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 {
 	private static final long serialVersionUID = -8151178964876747760L;
 
+	private static String BACKGROUND_VALUE_ATTRIBUTE_KEY = "backgroundValue";
+
 	private static final int MAX_PARTITIONS = 15000;
 
 	private static final int MIN_BLOCK_SIZE = 64;
@@ -58,6 +63,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 	Broadcast< Map< Integer, Set< Integer > > > broadcastedPairwiseConnectionsMap;
 	Broadcast< RandomAccessiblePairNullable< U, U > > broadcastedFlatfieldCorrection;
+
+	private final HistogramSettings stackHistogramSettings = new HistogramSettings( 0., 16383., 4098 );
 
 	public PipelineFusionStepExecutor( final StitchingJob job, final JavaSparkContext sparkContext )
 	{
@@ -155,7 +162,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final String absoluteChannelPath = job.getArgs().inputTileConfigurations().get( channel );
 			final String absoluteChannelPathNoFinal = Utils.removeFilenameSuffix( absoluteChannelPath, "-final" ); // adjust the path in order to use original flatfields
 
-			n5.createGroup( N5ExportMetadata.getChannelGroupPath( channel ) );
+			final String outputChannelGroupPath = N5ExportMetadata.getChannelGroupPath( channel );
+			n5.createGroup( outputChannelGroupPath );
 
 			// special mode which allows to export only overlaps of tile pairs that have been used for final stitching
 			final Map< Integer, Set< Integer > > pairwiseConnectionsMap = getPairwiseConnectionsMap( absoluteChannelPath );
@@ -174,10 +182,36 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				System.out.println( "[Flatfield correction] Broadcasting flatfield correction images" );
 			broadcastedFlatfieldCorrection = sparkContext.broadcast( flatfieldCorrection );
 
+			final Number backgroundValue;
+			if ( job.getArgs().fillBackground() )
+			{
+				final Double flatfieldBackgroundValue = FlatfieldCorrection.getPivotValue( dataProvider, absoluteChannelPathNoFinal );
+				if ( flatfieldBackgroundValue != null ) {
+					backgroundValue = flatfieldBackgroundValue;
+				} else {
+					// The background value is not available and needs to be estimated.
+					// This is the case for deconvolved data, because in the Flatfield Correction step the background value is estimated only for raw data.
+					backgroundValue = estimateBackgroundValue( job.getTiles( channel ) );
+				}
+				System.out.println( "Using background intensity value of " + backgroundValue + " for filling in channel " + channel );
+
+				// save the used background value in group attributes so it can be also used when converting to slice TIFF
+				n5.setAttribute( outputChannelGroupPath, BACKGROUND_VALUE_ATTRIBUTE_KEY, backgroundValue.doubleValue() );
+			}
+			else
+			{
+				backgroundValue = null;
+			}
+
 			final String fullScaleOutputPath = N5ExportMetadata.getScaleLevelDatasetPath( channel, 0 );
 
 			// Generate export of the first scale level
-			fuse( n5ExportPath, fullScaleOutputPath, job.getTiles( channel ) );
+			fuse(
+					n5ExportPath,
+					fullScaleOutputPath,
+					job.getTiles( channel ),
+					backgroundValue
+				);
 
 			// Generate lower scale levels
 			downsampledDatasets = N5NonIsotropicScalePyramidSpark.downsampleNonIsotropicScalePyramid(
@@ -238,7 +272,11 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		return processingCellSize;
 	}
 
-	private void fuse( final String n5ExportPath, final String fullScaleOutputPath, final TileInfo[] tiles ) throws IOException
+	private void fuse(
+			final String n5ExportPath,
+			final String fullScaleOutputPath,
+			final TileInfo[] tiles,
+			final Number backgroundValue ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		final int[] cellSize = getOptimalCellSize( tiles );
@@ -268,7 +306,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		sparkContext.parallelize( processingCells, Math.min( processingCells.size(), MAX_PARTITIONS ) ).foreach( cell ->
 			{
 				final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( tiles, cell );
-				if ( tilesWithinCell.isEmpty() )
+				if ( tilesWithinCell.isEmpty() && backgroundValue == null )
 					return;
 
 				final Boundaries cellBox = cell.getBoundaries();
@@ -281,11 +319,15 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				cellGrid.getCellPosition( cellOffsetCoordinates, cellGridPosition );
 
 				final DataProvider dataProviderLocal = job.getDataProvider();
+				final T dataType = ( T ) tiles[ 0 ].getType().getType();
+
 				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
 						dataProviderLocal,
 						job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
 						tilesWithinCell,
 						cellBox,
+						dataType,
+						backgroundValue,
 						broadcastedFlatfieldCorrection.value(),
 						broadcastedPairwiseConnectionsMap.value()
 					);
@@ -327,5 +369,17 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		}
 
 		return pairwiseConnectionsMap;
+	}
+
+	private double estimateBackgroundValue( final TileInfo[] tiles )
+	{
+		final StackHistogram stackHistogram = StackHistogram.getStackHistogram( sparkContext, tiles, stackHistogramSettings );
+		return stackHistogram.getPivotValue();
+	}
+
+	public static Double getBackgroundValue( final N5Reader n5, final int channel ) throws IOException
+	{
+		final String channelGroupPath = N5ExportMetadata.getChannelGroupPath( channel );
+		return n5.getAttribute( channelGroupPath, BACKGROUND_VALUE_ATTRIBUTE_KEY, Double.class );
 	}
 }

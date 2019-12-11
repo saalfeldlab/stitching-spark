@@ -3,6 +3,7 @@ package org.janelia.stitching;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Paths;
+import java.util.Optional;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -118,6 +119,10 @@ public class N5ToSliceTiffSpark
 				}
 				final String sliceIndexFormat = parsedArgs.useLeadingZeroes ? "%05d" : "%d";
 				final String filenameFormat = filenamePrefix + sliceIndexFormat + ".tif";
+
+				// load fill intensity value from n5 export attributes if a custom value was used
+				final Number fillValue = PipelineFusionStepExecutor.getBackgroundValue( n5, channel );
+
 				org.janelia.saalfeldlab.n5.spark.N5ToSliceTiffSpark.convert(
 						sparkContext,
 						() -> {
@@ -131,7 +136,8 @@ public class N5ToSliceTiffSpark
 						outputChannelPath,
 						tiffCompression,
 						SliceDimension.Z,
-						filenameFormat
+						filenameFormat,
+						Optional.ofNullable( fillValue )
 					);
 			}
 		}

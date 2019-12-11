@@ -266,6 +266,10 @@ spark-local/export.py -i 488nm-n5-final.json -i 560nm-n5-final.json ...
 
 This will generate an [N5](https://github.com/saalfeldlab/n5) export under `export.n5/` folder. The export is fully compatible  with [N5 Viewer](https://github.com/saalfeldlab/n5-viewer) for browsing.
 
+The most common optional parameters are:
+* `--blending`: smoothes transitions between the tiles instead of making a hard cut between them
+* `--fill`: fills the extra space with the background intensity value instead of 0
+
 The full list of available parameters for the export script is available [here](https://github.com/saalfeldlab/stitching-spark/wiki/Export-parameters).
 
 ### 7. Converting N5 export to slice TIFF
