@@ -131,9 +131,12 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		return dst;
 	}
 
-	public static double getPivotValue( final DataProvider dataProvider, final String basePath ) throws IOException
+	public static Double getPivotValue( final DataProvider dataProvider, final String basePath ) throws IOException
 	{
-		return dataProvider.createN5Reader( getFlatfieldFolderForBasePath( basePath ) ).getAttribute( "/", pivotValueAttributeKey, Double.class );
+		final String flatfieldFolderPath = getFlatfieldFolderForBasePath( basePath );
+		if ( !dataProvider.fileExists( flatfieldFolderPath ) )
+			return null;
+		return dataProvider.createN5Reader( flatfieldFolderPath ).getAttribute( "/", pivotValueAttributeKey, Double.class );
 	}
 
 	protected static String getFlatfieldFolderForBasePath( final String basePath )
