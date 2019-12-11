@@ -306,7 +306,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 		sparkContext.parallelize( processingCells, Math.min( processingCells.size(), MAX_PARTITIONS ) ).foreach( cell ->
 			{
 				final List< TileInfo > tilesWithinCell = TileOperations.findTilesWithinSubregion( tiles, cell );
-				if ( tilesWithinCell.isEmpty() )
+				if ( tilesWithinCell.isEmpty() && backgroundValue == null )
 					return;
 
 				final Boundaries cellBox = cell.getBoundaries();
@@ -319,11 +319,14 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				cellGrid.getCellPosition( cellOffsetCoordinates, cellGridPosition );
 
 				final DataProvider dataProviderLocal = job.getDataProvider();
+				final T dataType = ( T ) tiles[ 0 ].getType().getType();
+
 				final ImagePlusImg< T, ? > outImg = FusionPerformer.fuseTilesWithinCell(
 						dataProviderLocal,
 						job.getArgs().blending() ? FusionMode.BLENDING : FusionMode.MAX_MIN_DISTANCE,
 						tilesWithinCell,
 						cellBox,
+						dataType,
 						backgroundValue,
 						broadcastedFlatfieldCorrection.value(),
 						broadcastedPairwiseConnectionsMap.value()

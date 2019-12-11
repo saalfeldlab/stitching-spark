@@ -57,9 +57,10 @@ public class FusionPerformer
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
+			final T dataType,
 			final Number backgroundValue ) throws Exception
 	{
-		return fuseTilesWithinCell( dataProvider, mode, tilesWithinCell, targetInterval, backgroundValue, null );
+		return fuseTilesWithinCell( dataProvider, mode, tilesWithinCell, targetInterval, dataType, backgroundValue, null );
 	}
 
 	public static <
@@ -70,21 +71,22 @@ public class FusionPerformer
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
+			final T dataType,
 			final Number backgroundValue,
 			final RandomAccessiblePairNullable< U, U > flatfield ) throws Exception
 	{
-		return fuseTilesWithinCell( dataProvider, mode, tilesWithinCell, targetInterval, backgroundValue, flatfield, null );
+		return fuseTilesWithinCell( dataProvider, mode, tilesWithinCell, targetInterval, dataType, backgroundValue, flatfield, null );
 	}
 
 	public static <
 		T extends RealType< T > & NativeType< T >,
-		U extends RealType< U > & NativeType< U >,
-		R extends RealType< R > & NativeType< R > >
+		U extends RealType< U > & NativeType< U > >
 	ImagePlusImg< T, ? > fuseTilesWithinCell(
 			final DataProvider dataProvider,
 			final FusionMode mode,
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
+			final T dataType,
 			final Number backgroundValue,
 			final RandomAccessiblePairNullable< U, U > flatfield,
 			final Map< Integer, Set< Integer > > pairwiseConnectionsMap ) throws Exception
@@ -92,9 +94,9 @@ public class FusionPerformer
 		switch ( mode )
 		{
 		case MAX_MIN_DISTANCE:
-			return fuseTilesWithinCellUsingMaxMinDistance( dataProvider, tilesWithinCell, targetInterval, backgroundValue, flatfield, pairwiseConnectionsMap );
+			return fuseTilesWithinCellUsingMaxMinDistance( dataProvider, tilesWithinCell, targetInterval, dataType, backgroundValue, flatfield, pairwiseConnectionsMap );
 		case BLENDING:
-			return fuseTilesWithinCellUsingBlending( dataProvider, tilesWithinCell, targetInterval, backgroundValue, flatfield, pairwiseConnectionsMap );
+			return fuseTilesWithinCellUsingBlending( dataProvider, tilesWithinCell, targetInterval, dataType, backgroundValue, flatfield, pairwiseConnectionsMap );
 		default:
 			throw new RuntimeException( "Unknown fusion mode" );
 		}
@@ -109,14 +111,11 @@ public class FusionPerformer
 			final DataProvider dataProvider,
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
+			final T dataType,
 			final Number backgroundValue,
 			final RandomAccessiblePairNullable< U, U > flatfield,
 			final Map< Integer, Set< Integer > > pairwiseConnectionsMap ) throws Exception
 	{
-		final ImageType imageType = Utils.getImageType( tilesWithinCell );
-		if ( imageType == null )
-			throw new Exception( "Can't fuse images of different or unknown types" );
-
 		// initialize helper images for blending fusion strategy
 		final RandomAccessibleInterval< FloatType > weights = ArrayImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
 		final RandomAccessibleInterval< FloatType > values = ArrayImgs.floats( Intervals.dimensionsAsLongArray( targetInterval ) );
@@ -218,12 +217,12 @@ public class FusionPerformer
 			}
 		}
 
-		final T fillType = ( T ) imageType.getType().createVariable();
+		final T fillType = dataType.createVariable();
 		if ( backgroundValue != null)
 			fillType.setReal( backgroundValue.doubleValue() );
 
 		// initialize output image
-		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), fillType.createVariable() );
+		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), dataType.createVariable() );
 		final Cursor< FloatType > weightsCursor = Views.flatIterable( weights ).cursor();
 		final Cursor< FloatType > valuesCursor = Views.flatIterable( values ).cursor();
 		final Cursor< T > outCursor = Views.flatIterable( out ).cursor();
@@ -300,20 +299,17 @@ public class FusionPerformer
 			final DataProvider dataProvider,
 			final List< TileInfo > tilesWithinCell,
 			final Interval targetInterval,
+			final T dataType,
 			final Number backgroundValue,
 			final RandomAccessiblePairNullable< U, U > flatfield,
 			final Map< Integer, Set< Integer > > pairwiseConnectionsMap ) throws Exception
 	{
-		final ImageType imageType = Utils.getImageType( tilesWithinCell );
-		if ( imageType == null )
-			throw new Exception( "Can't fuse images of different or unknown types" );
+		// initialize output image
+		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), dataType.createVariable() );
 
-		final T fillType = ( T ) imageType.getType().createVariable();
+		final T fillType = dataType.createVariable();
 		if ( backgroundValue != null)
 			fillType.setReal( backgroundValue.doubleValue() );
-
-		// initialize output image
-		final ImagePlusImg< T, ? > out = new ImagePlusImgFactory< T >().create( Intervals.dimensionsAsLongArray( targetInterval ), fillType.createVariable() );
 
 		// fill with default value
 		if ( backgroundValue != null )
