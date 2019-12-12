@@ -1,18 +1,15 @@
 package org.janelia.stitching.analysis;
 
-import javafx.util.Pair;
-import net.imglib2.util.SerializablePair;
-import net.imglib2.util.ValuePair;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.dataaccess.PathResolver;
 import org.janelia.stitching.SerializablePairWiseStitchingResult;
-import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 public class ComparePairwiseCorrelations
 {
