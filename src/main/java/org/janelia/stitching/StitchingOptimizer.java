@@ -53,16 +53,16 @@ public class StitchingOptimizer implements Serializable
 	private static final class OptimizationResult implements Comparable< OptimizationResult >
 	{
 		public final OptimizationParameters optimizationParameters;
-		public final double score;
-
+		public final double maxAllowedError;
+		public final int fullGraphSize;
 		public final int remainingGraphSize;
 		public final int remainingPairs;
 		public final double maxDisplacement;
 		public final double avgDisplacement;
 
 		public OptimizationResult(
-				final double maxAllowedError,
 				final OptimizationParameters optimizationParameters,
+				final double maxAllowedError,
 				final int fullGraphSize,
 				final int remainingGraphSize,
 				final int remainingPairs,
@@ -70,20 +70,12 @@ public class StitchingOptimizer implements Serializable
 				final double maxDisplacement )
 		{
 			this.optimizationParameters = optimizationParameters;
+			this.maxAllowedError = maxAllowedError;
+			this.fullGraphSize = fullGraphSize;
 			this.remainingGraphSize = remainingGraphSize;
 			this.remainingPairs = remainingPairs;
 			this.avgDisplacement = avgDisplacement;
 			this.maxDisplacement = maxDisplacement;
-
-			final double remainingGraphToFullGraphRatio = ( double ) remainingGraphSize / fullGraphSize;
-			assert remainingGraphToFullGraphRatio >= 0 && remainingGraphToFullGraphRatio <= 0;
-
-//			assert maxDisplacement >= 0;
-//			final double displacementScore = 1 - maxDisplacement / MAX_DISPLACEMENT_LIMIT;
-//
-//			score = remainingGraphToFullGraphRatio * displacementScore;
-
-			score = remainingGraphSize == 0 || maxDisplacement > maxAllowedError ? Double.NEGATIVE_INFINITY : remainingGraphToFullGraphRatio;
 		}
 
 		/*
@@ -92,7 +84,41 @@ public class StitchingOptimizer implements Serializable
 		@Override
 		public int compareTo( final OptimizationResult other )
 		{
-			return Double.compare( other.score, score );
+			// if both are above the error threshold, the order is determined by the resulting graph size and max.error
+			if ( maxDisplacement > maxAllowedError && other.maxDisplacement > other.maxAllowedError )
+			{
+				if ( remainingGraphSize != other.remainingGraphSize )
+					return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
+
+				return Double.compare( maxDisplacement, other.maxDisplacement );
+			}
+			// otherwise, the one that is above the error threshold goes last
+			else if ( maxDisplacement > maxAllowedError )
+			{
+				return 1;
+			}
+			else if ( other.maxDisplacement > other.maxAllowedError )
+			{
+				return -1;
+			}
+
+			// both are within the accepted error range
+
+			// better if the resulting graph is larger
+			if ( remainingGraphSize != other.remainingGraphSize )
+				return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
+
+			// additionally consider the remaining number of pairwise connections if the max error is within the acceptable range (no more than 10px)
+			// it's better when the resulting graph has more edges (the solution may be more stable)
+			if ( Math.round( maxAllowedError ) <= 10 )
+			{
+				// better when the resulting graph has more edges
+				if ( remainingPairs != other.remainingPairs )
+					return -Integer.compare( remainingPairs, other.remainingPairs );
+			}
+
+			// if everything above is the same, the order is determined by smaller or higher error
+			return Double.compare( maxDisplacement, other.maxDisplacement );
 		}
 	}
 
@@ -235,8 +261,8 @@ public class StitchingOptimizer implements Serializable
 				final GlobalOptimizationPerformer optimizationPerformer = new GlobalOptimizationPerformer();
 				optimizationPerformer.optimize( comparePairs, broadcastedStitchingParameters.value() );
 				final OptimizationResult optimizationResult = new OptimizationResult(
-						maxAllowedError,
 						optimizationParameters,
+						maxAllowedError,
 						job.getTiles( job.getMainChannelIndex() ).length,
 						optimizationPerformer.remainingGraphSize,
 						validPairs,
@@ -273,7 +299,7 @@ public class StitchingOptimizer implements Serializable
 			logWriter.println();
 			for ( final OptimizationResult optimizationResult : optimizationResultList )
 				logWriter.println(
-						"score=" + String.format( "%.2f", optimizationResult.score ) +
+						"ratio=" + String.format( "%.2f", ( double ) optimizationResult.remainingGraphSize / optimizationResult.fullGraphSize ) +
 						", graph=" + optimizationResult.remainingGraphSize +
 						", pairs=" + optimizationResult.remainingPairs +
 						", avg.error=" + String.format( "%.2f", optimizationResult.avgDisplacement ) +
