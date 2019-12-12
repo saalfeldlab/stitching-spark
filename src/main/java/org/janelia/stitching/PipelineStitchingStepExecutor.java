@@ -15,6 +15,9 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import net.imglib2.converter.RealConverter;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.imageplus.ImagePlusImgFactory;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
@@ -577,7 +580,9 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					else
 						channelIndices = IntStream.range( 0, job.getChannels() ).boxed().collect( Collectors.toList() ); // all channels
 
-					final ImagePlusImg< FloatType, ? > dst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( overlaps[ j ] ) );
+					T inputType = null;
+					final RandomAccessibleInterval< FloatType > avgChannelImg = ArrayImgs.floats( Intervals.dimensionsAsLongArray( overlaps[ j ] ) );
+
 					for ( final int channel : channelIndices )
 					{
 						final TileInfo tileInfo = broadcastedTileChannelMappingByIndex.value().get( channel ).get( tileIndex );
@@ -600,6 +605,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							throw new PipelineExecutionException( "Cannot load tile image: " + tileInfo.getFilePath() );
 
 						final T type = Util.getTypeFromInterval( img );
+
+						// store input type
+						if ( inputType == null )
+							inputType = type;
+
 //						if ( imp != null )
 						{
 							// warn if image type and/or size do not match metadata
@@ -625,7 +635,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 							}
 
 							final Cursor< FloatType > srcCursor = Views.flatIterable( sourceInterval ).cursor();
-							final Cursor< FloatType > dstCursor = Views.flatIterable( dst ).cursor();
+							final Cursor< FloatType > dstCursor = Views.flatIterable( avgChannelImg ).cursor();
 							while ( dstCursor.hasNext() || srcCursor.hasNext() )
 								dstCursor.next().add( srcCursor.next() );
 
@@ -640,19 +650,20 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					if ( channelsUsed > 1 )
 					{
 						final FloatType denom = new FloatType( channelsUsed );
-						final Cursor< FloatType > dstCursor = Views.iterable( dst ).cursor();
+						final Cursor< FloatType > dstCursor = Views.iterable( avgChannelImg ).cursor();
 						while ( dstCursor.hasNext() )
 							dstCursor.next().div( denom );
 					}
 
 					if ( blurSigma > 0 )
 					{
-						System.out.println( String.format( "Blurring the overlap area of size %s with sigmas=%s (s=%f)", Arrays.toString( Intervals.dimensionsAsLongArray( dst ) ), Arrays.toString( blurSigmas ), blurSigma ) );
-						blur( dst, blurSigmas );
+						System.out.println( String.format( "Blurring the overlap area of size %s with sigmas=%s (s=%f)", Arrays.toString( Intervals.dimensionsAsLongArray( avgChannelImg ) ), Arrays.toString( blurSigmas ), blurSigma ) );
+						blur( avgChannelImg, blurSigmas );
 					}
 
-					imps[ j ] = dst.getImagePlus();
-					Utils.workaroundImagePlusNSlices( imps[ j ] );
+					// convert the output image to the input datatype
+					final RandomAccessibleInterval< T > convertedResultingImgToInputType = Converters.convert( avgChannelImg, new RealConverter<>(), inputType );
+					imps[ j ] = Utils.copyToImagePlus( convertedResultingImgToInputType );
 				}
 
 				// divide hyperplane with long edges into subintervals
@@ -673,11 +684,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					{
 						if ( roiParts.size() > 1 )
 						{
-							final RandomAccessibleInterval< FloatType > roiImg = ImagePlusImgs.from( imps[ i ] );
-							final RandomAccessibleInterval< FloatType > roiPartImg = Views.offsetInterval( roiImg, roiPartInterval );
-							final ImagePlusImg< FloatType, ? > roiPartDst = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( roiPartInterval ) );
-							final Cursor< FloatType > srcCursor = Views.flatIterable( roiPartImg ).cursor();
-							final Cursor< FloatType > dstCursor = Views.flatIterable( roiPartDst ).cursor();
+							final RandomAccessibleInterval< T > roiImg = ImagePlusImgs.from( imps[ i ] );
+							final RandomAccessibleInterval< T > roiPartImg = Views.offsetInterval( roiImg, roiPartInterval );
+							final ImagePlusImg< T, ? > roiPartDst = new ImagePlusImgFactory<>( Util.getTypeFromInterval( roiImg ) ).create( Intervals.dimensionsAsLongArray( roiPartInterval ) );
+							final Cursor< T > srcCursor = Views.flatIterable( roiPartImg ).cursor();
+							final Cursor< T > dstCursor = Views.flatIterable( roiPartDst ).cursor();
 							while ( dstCursor.hasNext() || srcCursor.hasNext() )
 								dstCursor.next().set( srcCursor.next() );
 							roiPartImps[ i ] = roiPartDst.getImagePlus();
@@ -694,11 +705,11 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 					long pixelCount = 0;
 					for ( int i = 0; i < 2; ++i )
 					{
-						final ImagePlusImg< FloatType, ? > roiImg = ImagePlusImgs.from( roiPartImps[ i ] );
-						final Cursor< FloatType > roiImgCursor = Views.iterable( roiImg ).cursor();
+						final ImagePlusImg< T, ? > roiImg = ImagePlusImgs.from( roiPartImps[ i ] );
+						final Cursor< T > roiImgCursor = Views.iterable( roiImg ).cursor();
 						while ( roiImgCursor.hasNext() )
 						{
-							final double val = roiImgCursor.next().get();
+							final double val = roiImgCursor.next().getRealDouble();
 							pixelSum += val;
 							pixelSumSquares += Math.pow( val, 2 );
 						}
