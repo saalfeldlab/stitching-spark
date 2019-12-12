@@ -108,11 +108,14 @@ public class StitchingOptimizer implements Serializable
 			if ( remainingGraphSize != other.remainingGraphSize )
 				return -Integer.compare( remainingGraphSize, other.remainingGraphSize );
 
-			/*
-			// better when the resulting graph has more edges
-			if ( remainingPairs != other.remainingPairs )
-				return -Integer.compare( remainingPairs, other.remainingPairs );
-			*/
+			// additionally consider the remaining number of pairwise connections if the max error is within the acceptable range (no more than 10px)
+			// it's better when the resulting graph has more edges (the solution may be more stable)
+			if ( Math.round( maxAllowedError ) <= 10 )
+			{
+				// better when the resulting graph has more edges
+				if ( remainingPairs != other.remainingPairs )
+					return -Integer.compare( remainingPairs, other.remainingPairs );
+			}
 
 			// if everything above is the same, the order is determined by smaller or higher error
 			return Double.compare( maxDisplacement, other.maxDisplacement );
