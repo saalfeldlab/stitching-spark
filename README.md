@@ -52,7 +52,7 @@ If running locally, you can access the Spark job tracker at http://localhost:404
 The application uses JSON to store metadata about tile configurations. These metadata include:
 * list of all tiles in the acquisition grouped by channel
 * position and size of each tile in pixels
-* pixel resolution (physical size of the pixel/voxel) in nanometers
+* pixel resolution (physical size of the pixel/voxel) in microns
 * image data type
 
 Example of the JSON metadata file (one JSON file per image channel):
@@ -91,7 +91,7 @@ spark-janelia/parse-zeiss-z1-metadata.py \
   -i <path to metadata.mvl> \
   -b <path to directory with image files> \
   -f <images.czi for single file, or image%d.czi for multiple files that contain an index> \
-  -r <voxel size in nanometers, for example, 0.114,0.114,0.996>
+  -r <voxel size in microns, for example, 0.114,0.114,0.996>
 ```
 </details>
 <details>
@@ -102,7 +102,7 @@ spark-local/parse-zeiss-z1-metadata.py \
   -i <path to metadata.mvl> \
   -b <path to directory with image files> \
   -f <images.czi for single file, or image%d.czi for multiple files that contain an index> \
-  -r <voxel size in nanometers, for example, 0.114,0.114,0.996>
+  -r <voxel size in microns, for example, 0.114,0.114,0.996>
 ```
 </details>
 
@@ -111,7 +111,7 @@ This will create a single `tiles.json` file in the same directory as the existin
 #### ImageList.csv objective-scan acquisitions
 *ImageList.csv* metadata file lists image tile filenames in all channels and contains stage and objective coordinates of each tile. Image tiles are expected to be stored as .tif files (separate files for each channel).
 
-Objective coordinates from the metadata file are converted into pixel coordinates based on the provided physical size of a voxel (in nanometers) and axis mapping which specifies flips and swaps between the two coordinate systems. For example, `-y,x,z` would mean that the objective X and Y should be swapped, and objective Y should be flipped.
+Objective coordinates from the metadata file are converted into pixel coordinates based on the provided physical size of a voxel (in microns) and axis mapping which specifies flips and swaps between the two coordinate systems. For example, `-y,x,z` would mean that the objective X and Y should be swapped, and objective Y should be flipped.
 
 <details>
 <summary><b>Run on Janelia cluster</b></summary>
@@ -120,7 +120,7 @@ Objective coordinates from the metadata file are converted into pixel coordinate
 spark-janelia/parse-imagelist-metadata.py \
   -i <path to ImageList.csv> \
   -b <path to directory with image files> \
-  -r <voxel size in nanometers, for example, 0.097,0.097,0.18> \
+  -r <voxel size in microns, for example, 0.097,0.097,0.18> \
   -a <axis mapping from objective coordinates to pixel coordinates, for example, -y,x,z> \
   [--skipMissingTiles to exclude non-existing tile images from configuration instead of raising an error]
 ```
@@ -132,7 +132,7 @@ spark-janelia/parse-imagelist-metadata.py \
 spark-local/parse-imagelist-metadata.py \
   -i <path to ImageList.csv> \
   -b <path to directory with image files> \
-  -r <voxel size in nanometers, for example, 0.097,0.097,0.18> \
+  -r <voxel size in microns, for example, 0.097,0.097,0.18> \
   -a <axis mapping from objective coordinates to pixel coordinates, for example, -y,x,z> \
   [--skipMissingTiles to exclude non-existing tile images from configuration instead of raising an error]
 ```
