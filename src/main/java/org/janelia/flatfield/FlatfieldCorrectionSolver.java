@@ -209,7 +209,7 @@ public class FlatfieldCorrectionSolver implements Serializable
 				// open histograms dataset
 				final DataProvider dataProviderLocal = DataProviderFactory.create( histogramsProvider.getDataProviderType() );
 				final N5Writer n5Local = dataProviderLocal.createN5Writer( histogramsProvider.getHistogramsN5BasePath() );
-				final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval< T > ) N5Utils.open( n5Local, currentScaleHistogramsDataset );
+				final RandomAccessibleInterval< T > histogramsStorageImg = ( RandomAccessibleInterval ) N5Utils.open( n5Local, currentScaleHistogramsDataset );
 				final CompositeIntervalView< T, RealComposite< T > > histogramsImg = Views.collapseReal( histogramsStorageImg );
 				final IntervalView< RealComposite< T > > histogramsBlockImg = Views.interval( histogramsImg, cellInterval );
 
