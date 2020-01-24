@@ -172,7 +172,7 @@ public class ParseCZITilesMetadata
 
 			final double[] pixelCoords = new double[ objCoords.length ];
 			for ( int d = 0; d < pixelCoords.length; ++d )
-				pixelCoords[ d ] = objCoords[ axisMapping.axisMapping[ d ] ] / pixelResolution[ axisMapping.axisMapping[ d ] ] * ( axisMapping.flip[ d ] ? -1 : 1 );
+				pixelCoords[ d ] = objCoords[ axisMapping.axisMapping[ d ] ] / pixelResolution[ d ] * ( axisMapping.flip[ d ] ? -1 : 1 );
 
 			final long[] tileSize = new long[] {
 					Long.parseLong( tileElement.getAttributeValue( TILE_SIZE_X_TAG ) ),
