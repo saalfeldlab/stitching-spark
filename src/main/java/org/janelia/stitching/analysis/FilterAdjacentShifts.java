@@ -184,6 +184,14 @@ public class FilterAdjacentShifts
 		return filterAdjacentPairs( overlappingPairs, null );
 	}
 
+	/**
+	 * Filters adjacent pairs of tiles, possibly in particular dimension if specified.
+	 * A pair of tiles is considered adjacent in the grid if the overlap is larger than half of the tile size in at least two dimensions.
+	 *
+	 * @param overlappingPairs
+	 * @param dim
+	 * @return
+	 */
 	private static List< TilePair > filterAdjacentPairs( final List< TilePair > overlappingPairs, final Integer dim )
 	{
 		final List< TilePair > adjacentPairs = new ArrayList<>();
@@ -206,7 +214,7 @@ public class FilterAdjacentShifts
 			}
 			else
 			{
-				if ( shortEdgeDims.size() == 1 && dim.equals( shortEdgeDims.get( 0 ) ) )
+				if ( shortEdgeDims.size() == 0 || ( shortEdgeDims.size() == 1 && dim.equals( shortEdgeDims.get( 0 ) ) ) )
 					adjacentPairs.add( pair );
 			}
 		}
