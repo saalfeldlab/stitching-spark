@@ -8,7 +8,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +15,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
@@ -112,7 +113,7 @@ public class ParseTilesImageList
 		System.out.println( "Pixel resolution: " + Arrays.toString( pixelResolution ) );
 		System.out.println( "Axis mapping: " + Arrays.toString( axisMappingStr ) );
 
-		final String fileNamePattern = "^.*?_(\\d{3})nm_.*?_(\\d{3}x_\\d{3}y_\\d{3}z)_.*?\\.tif$";
+		final String fileNamePatternStr = "^.*?_(\\d{3})nm_.*?_(\\d{3}x_\\d{3}y_\\d{3}z)_.*?\\.tif$";
 		final String baseOutputFolder = Paths.get( imageListFilepath ).getParent().toString();
 
 		final TreeMap< Integer, List< TileInfo > > tiles = new TreeMap<>();
@@ -148,8 +149,22 @@ public class ParseTilesImageList
 
 				final String filename = Paths.get( filepath ).getFileName().toString();
 
+				// TODO: find a way to use the grid coordinates or remove it
+//				final Pattern fileNamePattern = Pattern.compile( fileNamePatternStr );
+//				final Matcher matcher = fileNamePattern.matcher( filename );
+//				if ( matcher.find() )
+//				{
+//					final int[] parsedGridCoords = new int[] {
+//							Integer.parseInt( matcher.group( 2 ) ),
+//							Integer.parseInt( matcher.group( 3 ) ),
+//							Integer.parseInt( matcher.group( 4 ) )
+//						};
+//					final int[] gridCoords = new int[ 3 ];
+//					for ( int d = 0; d < gridCoords.length; ++d )
+//						gridCoords[ d ] = parsedGridCoords[ axisMapping.axisMapping[ d ] ];
+//				}
+
 				// get objective coordinates from the last three columns
-				// FIXME: Utils.getTileCoordinates() still returns y/x/z grid coordinates. Instead, it needs to account for the axis mapping that is used here
 				final double[] objCoords = new double[] {
 						Double.parseDouble( columns[ columns.length - 3 ] ),
 						Double.parseDouble( columns[ columns.length - 2 ] ),
@@ -160,7 +175,7 @@ public class ParseTilesImageList
 				for ( int d = 0; d < pixelCoords.length; ++d )
 					pixelCoords[ d ] = objCoords[ axisMapping.axisMapping[ d ] ] / pixelResolution[ d ] * ( axisMapping.flip[ d ] ? -1 : 1 );
 
-				final int nm = Integer.parseInt( filename.replaceAll( fileNamePattern, "$1" ) );
+				final int nm = Integer.parseInt( filename.replaceAll( fileNamePatternStr, "$1" ) );
 
 				if ( !tiles.containsKey( nm ) )
 					tiles.put( nm, new ArrayList<>() );
@@ -259,23 +274,24 @@ public class ParseTilesImageList
 				System.out.println( String.format( "No overlapping adjacent pairs in [%c]", new char[] { 'x', 'y', 'z' }[ d ] ) );
 			}
 
+			// TODO: perhaps this can be removed
 			// verify against grid coordinates
-			final Set< TilePair > adjacentPairsDimSet = new HashSet<>( adjacentPairsDim );
-			for ( final TilePair pair : overlappingPairs )
-			{
-				final TreeMap< Integer, Integer > diff = new TreeMap<>();
-				for ( int k = 0; k < Math.max( pair.getA().numDimensions(), pair.getB().numDimensions() ); ++k )
-					if ( Utils.getTileCoordinates( pair.getB() )[ k ] != Utils.getTileCoordinates( pair.getA() )[ k ] )
-						diff.put( k, Utils.getTileCoordinates( pair.getB() )[ k ] - Utils.getTileCoordinates( pair.getA() )[ k ] );
-				if ( diff.size() == 1 && diff.firstKey().intValue() == d && Math.abs( diff.firstEntry().getValue().intValue() ) == 1 )
-				{
-					if ( !adjacentPairsDimSet.contains( pair ) )
-						throw new RuntimeException( "adjacent pairs don't match with grid coordinates" );
-					adjacentPairsDimSet.remove( pair );
-				}
-			}
-			if ( !adjacentPairsDimSet.isEmpty() )
-				throw new RuntimeException( "some extra pairs have been added that are not adjacent in the grid" );
+//			final Set< TilePair > adjacentPairsDimSet = new HashSet<>( adjacentPairsDim );
+//			for ( final TilePair pair : overlappingPairs )
+//			{
+//				final TreeMap< Integer, Integer > diff = new TreeMap<>();
+//				for ( int k = 0; k < Math.max( pair.getA().numDimensions(), pair.getB().numDimensions() ); ++k )
+//					if ( Utils.getTileCoordinates( pair.getB() )[ k ] != Utils.getTileCoordinates( pair.getA() )[ k ] )
+//						diff.put( k, Utils.getTileCoordinates( pair.getB() )[ k ] - Utils.getTileCoordinates( pair.getA() )[ k ] );
+//				if ( diff.size() == 1 && diff.firstKey().intValue() == d && Math.abs( diff.firstEntry().getValue().intValue() ) == 1 )
+//				{
+//					if ( !adjacentPairsDimSet.contains( pair ) )
+//						throw new RuntimeException( "adjacent pairs don't match with grid coordinates" );
+//					adjacentPairsDimSet.remove( pair );
+//				}
+//			}
+//			if ( !adjacentPairsDimSet.isEmpty() )
+//				throw new RuntimeException( "some extra pairs have been added that are not adjacent in the grid" );
 		}
 		System.out.println();
 
