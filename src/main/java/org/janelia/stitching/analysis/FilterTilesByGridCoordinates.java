@@ -8,27 +8,26 @@ import java.util.TreeMap;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.stitching.AxisMapping;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
 
 public class FilterTilesByGridCoordinates
 {
-	private static final char[] DIMENSION_STR = new char[] { 'x', 'y', 'z' };
-
 	public static void main( final String[] args ) throws Exception
 	{
 		final String tileConfigPath = args[ 0 ];
+		final AxisMapping axisMapping = new AxisMapping( args[ 1 ] );
+		final int dimension = AxisMapping.getDimension( args[ 2 ] );
+		if ( dimension == -1 )
+			throw new IllegalArgumentException( "Expected x/y/z, got " + args[ 2 ] );
 
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 		final Map< Integer, TileInfo > tiles = Utils.createTilesMap( TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( tileConfigPath ) ) );
-		final Map< Integer, int[] > tileGridCoordinates = Utils.getTilesCoordinatesMap( tiles.values().toArray( new TileInfo[ 0 ] ) );
+		final Map< Integer, int[] > tileGridCoordinates = Utils.getTilesCoordinatesMap( tiles.values().toArray( new TileInfo[ 0 ] ), axisMapping );
 
-		final int dimension = new String( DIMENSION_STR ).indexOf( args[ 1 ].toLowerCase() );
-		if ( dimension == -1 )
-			throw new IllegalArgumentException( "Expected x/y/z, got " + args[ 1 ] );
-
-		if ( args.length <= 2 || args[ 2 ].isEmpty() )
+		if ( args.length <= 3 || args[ 3 ].isEmpty() )
 		{
 			// no range requested, only print the min and max grid coordinates in the specified dimension
 			int minGridPosition = Integer.MAX_VALUE, maxGridPosition = Integer.MIN_VALUE;
@@ -37,13 +36,13 @@ public class FilterTilesByGridCoordinates
 				minGridPosition = Math.min( gridCoords[ dimension ], minGridPosition );
 				maxGridPosition = Math.max( gridCoords[ dimension ], maxGridPosition );
 			}
-			System.err.println( "Please provide a range of grid positions to extract in the format of <from>-<to> between " + minGridPosition + " and " + maxGridPosition + " in " + DIMENSION_STR[ dimension ] );
+			System.err.println( "Please provide a range of grid positions to extract in the format of <from>-<to> between " + minGridPosition + " and " + maxGridPosition + " in " + AxisMapping.getAxisStr( dimension ) );
 			System.exit( 1 );
 		}
 
 		final int filteredGridPositionMin, filteredGridPositionMax;
 		{
-			final String gridPositionRangeStr = args[ 2 ].trim();
+			final String gridPositionRangeStr = args[ 3 ].trim();
 			final int delimiterIndex = gridPositionRangeStr.indexOf( "-" );
 			if ( delimiterIndex == -1 )
 			{
@@ -81,9 +80,9 @@ public class FilterTilesByGridCoordinates
 
 		final String filteredFilenameSuffix;
 		if ( filteredGridPositionMin == filteredGridPositionMax )
-			filteredFilenameSuffix = String.valueOf( Math.min( filteredGridPositionMin, filteredGridPositionMax ) ) + DIMENSION_STR[ dimension ];
+			filteredFilenameSuffix = String.valueOf( Math.min( filteredGridPositionMin, filteredGridPositionMax ) ) + AxisMapping.getAxisStr( dimension );
 		else
-			filteredFilenameSuffix = String.valueOf( filteredGridPositionMin ) + "-" + String.valueOf( filteredGridPositionMax ) + DIMENSION_STR[ dimension ];
+			filteredFilenameSuffix = String.valueOf( filteredGridPositionMin ) + "-" + String.valueOf( filteredGridPositionMax ) + AxisMapping.getAxisStr( dimension );
 
 		TileInfoJSONProvider.saveTilesConfiguration(
 				filteredTiles.toArray( new TileInfo[ 0 ] ),

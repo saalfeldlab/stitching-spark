@@ -9,6 +9,7 @@ import java.util.TreeMap;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.stitching.AxisMapping;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -22,13 +23,14 @@ public class FilterTileDuplicates
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
 		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
+		final AxisMapping axisMapping = new AxisMapping( args[ 1 ] );
 		System.out.println( "Total number of tiles = " + tiles.length );
 
 		// build a map of tile coordinates to find duplicates
 		final TreeMap< ComparableTuple< Integer >, List< TileInfo > > coordinatesToTiles = new TreeMap<>();
 		for ( final TileInfo tile : tiles )
 		{
-			final int[] coordinates = Utils.getTileCoordinates( tile );
+			final int[] coordinates = Utils.getTileCoordinates( tile, axisMapping );
 			final ComparableTuple< Integer > key = new ComparableTuple<>( Conversions.toBoxedArray( coordinates ) );
 			if ( !coordinatesToTiles.containsKey( key ) )
 				coordinatesToTiles.put( key, new ArrayList<>() );

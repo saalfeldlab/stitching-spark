@@ -14,6 +14,11 @@ public final class AxisMapping implements Serializable
 	public final int[] axisMapping;
 	public final boolean[] flip;
 
+	public AxisMapping( final String axisMappingStr )
+	{
+		this( axisMappingStr.split( "," ) );
+	}
+
 	public AxisMapping( final String[] axisMappingStr )
 	{
 		axisMapping = new int[ axisMappingStr.length ];
@@ -39,5 +44,10 @@ public final class AxisMapping implements Serializable
 	public static String getAxisStr( final int dimension )
 	{
 		return axesStr.get( dimension );
+	}
+
+	public static int getDimension( final String axisStr )
+	{
+		return axesStr.indexOf( axisStr.toLowerCase() );
 	}
 }

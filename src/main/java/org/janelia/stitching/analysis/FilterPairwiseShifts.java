@@ -7,10 +7,7 @@ import java.util.Map;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.stitching.SerializablePairWiseStitchingResult;
-import org.janelia.stitching.TileInfo;
-import org.janelia.stitching.TileInfoJSONProvider;
-import org.janelia.stitching.Utils;
+import org.janelia.stitching.*;
 
 import net.imglib2.util.Pair;
 
@@ -24,8 +21,9 @@ public class FilterPairwiseShifts
 		final List< SerializablePairWiseStitchingResult > shifts = TileInfoJSONProvider.loadPairwiseShifts( dataProvider.getJsonReader( args[ 0 ] ) );
 
 		final TileInfo[] tiles = Utils.createTilesMap( shifts, true ).values().toArray( new TileInfo[ 0 ] );
+		final AxisMapping axisMapping = new AxisMapping( args[ 1 ] );
 		final Map< Integer, int[] > tileIndexToCoordinates = new HashMap<>();
-		for ( final Pair< TileInfo, int[] > tileCoordinates : Utils.getTilesCoordinates( tiles ) )
+		for ( final Pair< TileInfo, int[] > tileCoordinates : Utils.getTilesCoordinates( tiles, axisMapping ) )
 			tileIndexToCoordinates.put( tileCoordinates.getA().getIndex(), tileCoordinates.getB() );
 
 		final int sizeBefore = shifts.size();

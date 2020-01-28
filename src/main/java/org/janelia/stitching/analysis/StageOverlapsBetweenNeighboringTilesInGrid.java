@@ -7,6 +7,7 @@ import java.util.Map.Entry;
 import java.util.TreeMap;
 
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.stitching.AxisMapping;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TilePair;
 import org.janelia.stitching.Utils;
@@ -20,10 +21,11 @@ public class StageOverlapsBetweenNeighboringTilesInGrid
 	public static void main( final String[] args ) throws Exception
 	{
 		final TileInfo[] tiles = DataProviderFactory.createFSDataProvider().loadTiles( args[ 0 ] );
+		final AxisMapping axisMapping = new AxisMapping( args[ 1 ] );
 
 		final Map< ComparableTuple< Integer >, TileInfo > gridPositionsToTiles = new TreeMap<>();
 		for ( final TileInfo tile : tiles )
-			gridPositionsToTiles.put( new ComparableTuple<>( Conversions.toBoxedArray( Utils.getTileCoordinates( tile ) ) ), tile );
+			gridPositionsToTiles.put( new ComparableTuple<>( Conversions.toBoxedArray( Utils.getTileCoordinates( tile, axisMapping ) ) ), tile );
 
 		final List< TilePair > nonOverlappingTilePairs = new ArrayList<>();
 

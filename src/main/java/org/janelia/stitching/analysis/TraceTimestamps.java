@@ -8,6 +8,7 @@ import java.util.TreeSet;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.stitching.AxisMapping;
 import org.janelia.stitching.TileInfo;
 import org.janelia.stitching.TileInfoJSONProvider;
 import org.janelia.stitching.Utils;
@@ -22,8 +23,10 @@ public class TraceTimestamps
 		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
 
 		final TileInfo[] tiles = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( args[ 0 ] ) );
+		final AxisMapping axisMapping = new AxisMapping( args[ 1 ] );
+
 		final List< Pair< TileInfo, Long > > timestamps = Utils.getTilesTimestamps( tiles );
-		final List< Pair< TileInfo, int[] > > coordinates = Utils.getTilesCoordinates( tiles );
+		final List< Pair< TileInfo, int[] > > coordinates = Utils.getTilesCoordinates( tiles, axisMapping );
 
 		final int[][] coordsMinMax = new int[ 3 ][ 2 ];
 		for ( int d = 0; d < coordsMinMax.length; d++ )

@@ -1,21 +1,15 @@
 package org.janelia.stitching;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Random;
-import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.janelia.util.Conversions;
 import org.janelia.util.concurrent.MultithreadedExecutor;
@@ -835,7 +829,7 @@ public class SearchRadiusEstimatorTest
 		final TileInfo[] stitchedTiles3d = TileInfoJSONProvider.loadTilesConfiguration( dataProvider.getJsonReader( "/nrs/saalfeld/igor/sample1_c2/automated-stitching/restitching-incremental/iter12/ch0-stitched.json" ) );
 
 		// list all Z grid coordinates to randomly choose XY plane
-		final Map< Integer, int[] > stageTilesCoordinatesMap = Utils.getTilesCoordinatesMap( stageTiles3d );
+		final Map< Integer, int[] > stageTilesCoordinatesMap = Utils.getTilesCoordinatesMap( stageTiles3d, new AxisMapping( "-y,x,z" ) );
 		final Map< Integer, List< TileInfo > > zCoordToStitchedTiles = new HashMap<>();
 		for ( final TileInfo stitchedTile : stitchedTiles3d )
 		{

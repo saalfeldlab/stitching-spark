@@ -210,11 +210,25 @@ public class Utils {
 	}
 
 
-	public static int[] getTileCoordinates( final TileInfo tile ) throws Exception
+	public static int[] getTileCoordinates( final TileInfo tile, final AxisMapping axisMapping ) throws Exception
 	{
-		return getTileCoordinates( PathResolver.getFileName( tile.getFilePath() ) );
+		return getTileCoordinates( PathResolver.getFileName( tile.getFilePath() ), axisMapping );
 	}
-	public static int[] getTileCoordinates( final String filename ) throws Exception
+	public static List< Pair< TileInfo, int[] > > getTilesCoordinates( final TileInfo[] tiles, final AxisMapping axisMapping ) throws Exception
+	{
+		final List< Pair< TileInfo, int[] > > tileCoordinates = new ArrayList<>();
+		for ( final TileInfo tile : tiles )
+			tileCoordinates.add( new ValuePair<>( tile, getTileCoordinates( tile, axisMapping ) ) );
+		return tileCoordinates;
+	}
+	public static TreeMap< Integer, int[] > getTilesCoordinatesMap( final TileInfo[] tiles, final AxisMapping axisMapping ) throws Exception
+	{
+		final TreeMap< Integer, int[] > coordinatesMap = new TreeMap<>();
+		for ( final TileInfo tile : tiles )
+			coordinatesMap.put( tile.getIndex(), getTileCoordinates( tile, axisMapping ) );
+		return coordinatesMap;
+	}
+	public static int[] getTileCoordinates( final String filename, final AxisMapping axisMapping ) throws Exception
 	{
 		final String coordsPatternStr = ".*(\\d{3})x_(\\d{3})y_(\\d{3})z.*";
 		final Pattern coordsPattern = Pattern.compile( coordsPatternStr );
@@ -222,15 +236,20 @@ public class Utils {
 		if ( !matcher.find() )
 			throw new Exception( "Can't parse coordinates" );
 
-		// don't forget to swap X and Y axes
-		final int[] coordinates = new int[]
+		final int[] parsedCoords = new int[]
 				{
-					Integer.parseInt( matcher.group( 2 ) ),
 					Integer.parseInt( matcher.group( 1 ) ),
+					Integer.parseInt( matcher.group( 2 ) ),
 					Integer.parseInt( matcher.group( 3 ) )
 				};
-		return coordinates;
+
+		// apply axis swaps and flips if there are any
+		final int[] gridCoords = new int[ 3 ];
+		Arrays.setAll( gridCoords, d -> parsedCoords[ axisMapping.axisMapping[ d ] ] * ( axisMapping.flip[ d ] ? -1 : 1 ) );
+
+		return gridCoords;
 	}
+
 	public static String getTileCoordinatesString( final TileInfo tile ) throws Exception
 	{
 		return getTileCoordinatesString( PathResolver.getFileName( tile.getFilePath() ) );
@@ -243,20 +262,6 @@ public class Utils {
 		if ( !matcher.find() )
 			throw new Exception( "Can't parse coordinates" );
 		return matcher.group( 1 );
-	}
-	public static List< Pair< TileInfo, int[] > > getTilesCoordinates( final TileInfo[] tiles ) throws Exception
-	{
-		final List< Pair< TileInfo, int[] > > tileCoordinates = new ArrayList<>();
-		for ( final TileInfo tile : tiles )
-			tileCoordinates.add( new ValuePair<>( tile, getTileCoordinates( tile ) ) );
-		return tileCoordinates;
-	}
-	public static TreeMap< Integer, int[] > getTilesCoordinatesMap( final TileInfo[] tiles ) throws Exception
-	{
-		final TreeMap< Integer, int[] > coordinatesMap = new TreeMap<>();
-		for ( final TileInfo tile : tiles )
-			coordinatesMap.put( tile.getIndex(), getTileCoordinates( tile ) );
-		return coordinatesMap;
 	}
 
 	public static long getTileTimestamp( final TileInfo tile ) throws Exception
