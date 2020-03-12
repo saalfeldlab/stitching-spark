@@ -7,9 +7,8 @@ import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgFactory;
-import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.NumericType;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
@@ -153,7 +152,7 @@ public class ConvertCZITilesToN5Spark
 		}
 	}
 
-	public static < T extends NumericType< T > & NativeType< T > > Map< String, TileInfo[] > convertTilesToN5(
+	public static < T extends RealType< T > & NativeType< T > > Map< String, TileInfo[] > convertTilesToN5(
 			final JavaSparkContext sparkContext,
 			final TileInfo[] inputTiles,
 			final String outputN5Path,
@@ -259,17 +258,22 @@ public class ConvertCZITilesToN5Spark
 									Intervals.minAsLongArray( interval )
 								);
 
+							// Process the image slice by slice. If the full image wrapped into an imglib2-based image format,
+							// the entire image file is read into memory, which often leads to OutOfMemory errors.
 							for ( int zPos = ( int ) interval.min( 2 ); zPos <= interval.max( 2 ); ++zPos )
 							{
 								imp.setPosition( channel + 1, zPos + 1, imp.getT() );
-								final ImageProcessor processor = imp.getProcessor();
-								final ImagePlus sliceImp = new ImagePlus( "tile" + inputTile.getIndex() + ",c" + channel + ",z" + zPos, processor );
-								final RandomAccessibleInterval< T > srcSliceImg = ImagePlusImgs.from( sliceImp );
-								final Cursor< T > srcCursor = Views.flatIterable( srcSliceImg ).cursor();
+								final ImageProcessor sliceProcessor = imp.getProcessor();
+
 								final IntervalView< T > dstSliceImg = Views.hyperSlice( dstImg, 2, zPos );
-								final Cursor<T> dstCursor = Views.flatIterable( dstSliceImg ).cursor();
-								while ( srcCursor.hasNext() || dstCursor.hasNext() )
-									dstCursor.next().set( srcCursor.next() );
+								final Cursor< T > dstSliceCursor = Views.iterable( dstSliceImg ).localizingCursor();
+								final int[] positionInSlice = new int[ 2 ];
+								while ( dstSliceCursor.hasNext() )
+								{
+									dstSliceCursor.fwd();
+									dstSliceCursor.localize( positionInSlice );
+									dstSliceCursor.get().setReal( sliceProcessor.getf( positionInSlice[ 0 ], positionInSlice[ 1 ] ) );
+								}
 							}
 
 							System.out.println("Saving interval into N5...");
