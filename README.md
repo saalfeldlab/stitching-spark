@@ -43,7 +43,7 @@ If running locally, you can access the Spark job tracker at http://localhost:404
 
 #### If running on public platforms such as AWS or Google Cloud:
 * Compile with `python build.py`. This will include embed required dependencies into the final package, except for the Spark which is provided by the respective target platform at runtime.
-* For running the pipeline, refer to the wiki page [Running on Google Cloud](https://github.com/saalfeldlab/stitching-spark/wiki/Running-on-Google-Cloud)
+* For running the pipeline, refer to the wiki pages [Running on AWS](https://github.com/saalfeldlab/stitching-spark/wiki/Running-on-Amazon-Web-Services) and [Running on Google Cloud](https://github.com/saalfeldlab/stitching-spark/wiki/Running-on-Google-Cloud)
 * The currently used Spark version is **2.3.1** — make sure you're requesting the same version when submitting a job
 
 
