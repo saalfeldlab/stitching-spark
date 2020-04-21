@@ -91,7 +91,7 @@ public class StitchingArguments implements Serializable {
 
 	@Option(name = "-m", aliases = { "--stitching-mode" }, required = false,
 			usage = "Stitching mode for rematching tile pairs (can be 'incremental' or 'full')")
-	private String stitchingModeStr = "";
+	private String stitchingModeStr = "incremental";
 	private StitchingMode stitchingMode = null;
 
 	@Option(name = "-f", aliases = { "--fusion-mode" }, required = false,
