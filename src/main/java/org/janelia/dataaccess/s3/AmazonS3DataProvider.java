@@ -248,37 +248,29 @@ public class AmazonS3DataProvider extends AbstractJSONDataProvider
 	@Override
 	public N5Reader createN5Reader( final String baseLink ) throws IOException
 	{
-		return new N5AmazonS3Reader( s3, getBucketName( baseLink ) );
+		return new N5AmazonS3Reader( s3, decodeS3Uri( baseLink ) );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final String baseLink ) throws IOException
 	{
-		return new N5AmazonS3Writer( s3, getBucketName( baseLink ) );
+		return new N5AmazonS3Writer( s3, decodeS3Uri( baseLink ) );
 	}
 
 	@Override
 	public N5Reader createN5Reader( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5AmazonS3Reader( s3, getBucketName( baseLink ), gsonBuilder );
+		return new N5AmazonS3Reader( s3, decodeS3Uri( baseLink ), gsonBuilder );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5AmazonS3Writer( s3, getBucketName( baseLink ), gsonBuilder );
+		return new N5AmazonS3Writer( s3, decodeS3Uri( baseLink ), gsonBuilder );
 	}
 
 	public static AmazonS3URI decodeS3Uri( final String link ) throws IOException
 	{
 		return new AmazonS3URI( URLDecoder.decode( link, StandardCharsets.UTF_8.name() ) );
-	}
-
-	private String getBucketName( final String link ) throws IOException
-	{
-		final AmazonS3URI uri = decodeS3Uri( link );
-		if ( uri.getKey() != null && !uri.getKey().isEmpty() )
-			throw new IllegalArgumentException( "expected link to a bucket" );
-		return uri.getBucket();
 	}
 }

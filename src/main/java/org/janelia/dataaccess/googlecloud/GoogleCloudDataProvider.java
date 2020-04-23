@@ -211,32 +211,24 @@ public class GoogleCloudDataProvider extends AbstractJSONDataProvider
 	@Override
 	public N5Reader createN5Reader( final String baseLink ) throws IOException
 	{
-		return new N5GoogleCloudStorageReader( storage, getBucketName( baseLink ) );
+		return new N5GoogleCloudStorageReader( storage, new GoogleCloudStorageURI( baseLink ) );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final String baseLink ) throws IOException
 	{
-		return new N5GoogleCloudStorageWriter( storage, getBucketName( baseLink ) );
+		return new N5GoogleCloudStorageWriter( storage, new GoogleCloudStorageURI( baseLink ) );
 	}
 
 	@Override
 	public N5Reader createN5Reader( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5GoogleCloudStorageReader( storage, getBucketName( baseLink ), gsonBuilder );
+		return new N5GoogleCloudStorageReader( storage, new GoogleCloudStorageURI( baseLink ), gsonBuilder );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5GoogleCloudStorageWriter( storage, getBucketName( baseLink ), gsonBuilder );
-	}
-
-	private String getBucketName( final String link )
-	{
-		final GoogleCloudStorageURI uri = new GoogleCloudStorageURI( link );
-		if ( uri.getKey() != null && !uri.getKey().isEmpty() )
-			throw new IllegalArgumentException( "expected link to a bucket" );
-		return uri.getBucket();
+		return new N5GoogleCloudStorageWriter( storage, new GoogleCloudStorageURI( baseLink ), gsonBuilder );
 	}
 }

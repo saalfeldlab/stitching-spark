@@ -1,27 +1,22 @@
 package org.janelia.dataaccess;
 
-import java.net.URI;
-import java.net.URL;
-import java.net.URLStreamHandlerFactory;
-
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.google.cloud.storage.Storage;
 import org.apache.commons.lang.NotImplementedException;
 import org.janelia.dataaccess.fs.FSDataProvider;
 import org.janelia.dataaccess.googlecloud.GoogleCloudDataProvider;
 import org.janelia.dataaccess.googlecloud.GoogleCloudURLStreamHandlerFactory;
 import org.janelia.dataaccess.s3.AmazonS3DataProvider;
 import org.janelia.dataaccess.s3.AmazonS3URLStreamHandlerFactory;
+import org.janelia.saalfeldlab.googlecloud.GoogleCloudStorageClient;
 
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLStreamHandlerFactory;
 
 public abstract class DataProviderFactory
 {
-	private static final String localFileProtocol = "file";
-	private static final String s3Protocol = "s3";
-	private static final String googleCloudProtocol = "gs";
-
 	private static boolean initializedCustomURLStreamHandlerFactory = false;
 
 	/**
@@ -60,7 +55,7 @@ public abstract class DataProviderFactory
 	/**
 	 * Constructs a Google Cloud Storage {@link DataProvider} using a given {@link Storage} client.
 	 *
-	 * @param storage
+	 * @param googleCloudStorage
 	 * @return
 	 */
 	public static DataProvider createGoogleCloudDataProvider( final Storage googleCloudStorage )
@@ -76,7 +71,7 @@ public abstract class DataProviderFactory
 	 */
 	public static DataProvider createGoogleCloudDataProvider()
 	{
-		return createGoogleCloudDataProvider( StorageOptions.getDefaultInstance().getService() );
+		return createGoogleCloudDataProvider( new GoogleCloudStorageClient().create() );
 	}
 
 	/**
@@ -105,25 +100,6 @@ public abstract class DataProviderFactory
 			return new CloudURI( URI.create( link ) ).getType();
 		else
 			return DataProviderType.FILESYSTEM;
-	}
-
-	public static URI createBucketUri( final DataProviderType type, final String bucketName )
-	{
-		final String protocol;
-		switch ( type )
-		{
-		case AMAZON_S3:
-			protocol = s3Protocol;
-			break;
-		case GOOGLE_CLOUD:
-			protocol = googleCloudProtocol;
-			break;
-		case FILESYSTEM:
-			throw new IllegalArgumentException( "Not supported for filesystem storage" );
-		default:
-			throw new NotImplementedException( "Not implemented for type " + type );
-		}
-		return URI.create( protocol + "://" + bucketName + "/" );
 	}
 
 	private synchronized static void initCustomURLStreamHandlerFactory( final URLStreamHandlerFactory urlStreamHandlerFactory )
