@@ -185,7 +185,7 @@ public class ReferenceHistogramTest
 
 		final double[] referenceHistogram = HistogramsProvider.estimateReferenceHistogram(
 				sparkContext,
-				dataProvider, dataProviderType,
+				dataProviderType,
 				histogramsN5BasePath, histogramsDataset,
 				dimensions, blockSize,
 				REFERENCE_HISTOGRAM_POINTS_PERCENT,

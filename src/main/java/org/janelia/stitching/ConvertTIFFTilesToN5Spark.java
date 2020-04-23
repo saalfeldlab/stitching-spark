@@ -36,6 +36,8 @@ import scala.Tuple3;
 
 public class ConvertTIFFTilesToN5Spark
 {
+	private static final String tilesN5ContainerName = "tiles.n5";
+
 	private static class ConvertTIFFTilesToN5CmdArgs implements Serializable
 	{
 		private static final long serialVersionUID = 215043103837732209L;
@@ -81,7 +83,7 @@ public class ConvertTIFFTilesToN5Spark
 			}
 			else
 			{
-				n5OutputPath = PathResolver.get( PathResolver.getParent( inputChannelsPaths.iterator().next() ), "tiles.n5" );
+				n5OutputPath = PathResolver.get( PathResolver.getParent( inputChannelsPaths.iterator().next() ), tilesN5ContainerName );
 			}
 		}
 	}
