@@ -24,6 +24,10 @@
 		<version>27.0.1</version>
 	</parent>
 
+	<properties>
+		<package-name>org.janelia.stitching</package-name>
+	</properties>
+
 	<profiles>
 		<profile>
 			<id>spark-provided</id>
