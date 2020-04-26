@@ -3,6 +3,8 @@ package org.janelia.stitching;
 import ij.ImagePlus;
 import net.imglib2.FinalInterval;
 import net.imglib2.util.Intervals;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -92,6 +94,11 @@ public class ParseCZITilesMetadata
 		final ParseCZITilesMetadataCmdArgs parsedArgs = new ParseCZITilesMetadataCmdArgs( args );
 		if ( !parsedArgs.parsedSuccessfully )
 			throw new IllegalArgumentException( "argument format mismatch" );
+
+		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf().setAppName( "ParseCZITilesMetadata" ) ) )
+		{
+			// even though Spark is not used in this step, AWS requires to initialize SparkContext if running in the cloud
+		}
 
 		run(
 				parsedArgs.metadataFilepath,

@@ -1,5 +1,7 @@
 package org.janelia.stitching;
 
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
@@ -78,6 +80,11 @@ public class ParseTilesImageList
 		final ParseTilesImageListCmdArgs parsedArgs = new ParseTilesImageListCmdArgs( args );
 		if ( !parsedArgs.parsedSuccessfully )
 			throw new IllegalArgumentException( "argument format mismatch" );
+
+		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf().setAppName( "ParseTilesImageList" ) ) )
+		{
+			// even though Spark is not used in this step, AWS requires to initialize SparkContext if running in the cloud
+		}
 
 		run(
 				parsedArgs.imageListFilepath,
