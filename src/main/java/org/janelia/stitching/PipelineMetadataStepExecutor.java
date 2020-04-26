@@ -165,23 +165,6 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		}
 	}
 
-	private static void fillMetadataForCloudBackends( final TreeMap< Integer, List< TileInfo > > tileChannels, final DataProviderType dataProviderType ) throws Exception
-	{
-		final DataProvider dataProvider = DataProviderFactory.create( dataProviderType );
-		fillSizeAndImageType( tileChannels, dataProvider );
-
-		makeIndexesConsistentAcrossChannels( tileChannels );
-
-		if ( !checkSortedTimestampOrder( tileChannels ) )
-		throw new PipelineExecutionException( "Some tiles are not sorted by their timestamp" );
-
-		if ( !checkIndexesConsistency( tileChannels ) )
-		throw new PipelineExecutionException( "Some tiles have different indexes in the same iteration order, cannot do index-based matching" );
-
-		if ( !checkCoordinatesConsistency( tileChannels ) )
-		throw new PipelineExecutionException( "Some tiles with the same index have different stage coordinates, cannot do index-based matching" );
-	}
-
 	private static Map< Integer, Integer > removeDuplicateTiles( final TreeMap< Integer, List< TileInfo > > tileChannels ) throws Exception
 	{
 		final Map< Integer, Integer > duplicates = new TreeMap<>();
