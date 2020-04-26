@@ -59,7 +59,9 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		{
 			// do not scan for missing tiles in the current configuration if stored in the cloud
 			System.out.println( "Skip searching for missing tiles for cloud backends" );
-			missingTilesAdded = Collections.EMPTY_MAP;
+			missingTilesAdded = new TreeMap<>();
+			for ( final int channel : tileChannels.keySet() )
+				missingTilesAdded.put( channel, 0 );
 		}
 
 		System.out.println( "Searching for duplicate tiles to remove..." );
