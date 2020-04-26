@@ -110,7 +110,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		}
 
 		System.out.println( "Filling metadata..." );
-		final Map< Integer, Integer > noMetadataTiles = fillSizeAndImageType( tileChannels, DataProviderFactory.createFSDataProvider() );
+		final Map< Integer, Integer > noMetadataTiles = fillSizeAndImageType( tileChannels, dataProvider );
 
 		boolean somethingChanged = false;
 		for ( final int channel : tileChannels.keySet() )
