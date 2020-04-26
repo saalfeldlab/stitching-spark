@@ -137,7 +137,7 @@ public class ParseTilesImageList
 						else
 						{
 							// relative file path or cloud link
-							tileImagePath = PathResolver.get( PathResolver.getParent( imageListFilepath ), columns[ 0 ] );
+							tileImagePath = PathResolver.get( baseOutputFolder, columns[ 0 ] );
 						}
 					}
 				}
