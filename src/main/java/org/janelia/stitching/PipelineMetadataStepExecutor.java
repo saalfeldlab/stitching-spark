@@ -195,7 +195,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		{
 			final List< TileInfo > existingTiles = new ArrayList<>();
 			for ( final TileInfo tile : tileChannels.get( channel ) )
-				if ( dataProvider.fileExists( tile.getFilePath() ) )
+				if ( dataProvider.exists( tile.getFilePath() ) )
 					existingTiles.add( tile );
 			nonExistingTiles.put( channel, tileChannels.get( channel ).size() - existingTiles.size() );
 			tileChannels.put( channel, existingTiles );

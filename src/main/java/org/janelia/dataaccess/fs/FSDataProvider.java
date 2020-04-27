@@ -41,7 +41,7 @@ public class FSDataProvider extends AbstractJSONDataProvider
 	}
 
 	@Override
-	public boolean fileExists( final String link )
+	public boolean exists( final String link )
 	{
 		return Files.exists( Paths.get( link ) );
 	}

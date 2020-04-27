@@ -95,7 +95,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		System.out.println( "  " + scalingTermPath );
 		System.out.println( "  " + translationTermPath );
 
-		if ( !dataProvider.fileExists( scalingTermPath ) || !dataProvider.fileExists( translationTermPath ) )
+		if ( !dataProvider.exists( scalingTermPath ) || !dataProvider.exists( translationTermPath ) )
 		{
 			System.out.println( "  -- Flat-field images do not exist" );
 			return null;
@@ -134,7 +134,7 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 	public static Double getPivotValue( final DataProvider dataProvider, final String basePath ) throws IOException
 	{
 		final String flatfieldFolderPath = getFlatfieldFolderForBasePath( basePath );
-		if ( !dataProvider.fileExists( flatfieldFolderPath ) )
+		if ( !dataProvider.exists( flatfieldFolderPath ) )
 			return null;
 		return dataProvider.createN5Reader( flatfieldFolderPath ).getAttribute( "/", pivotValueAttributeKey, Double.class );
 	}

@@ -78,7 +78,7 @@ public class GoogleCloudDataProvider extends AbstractJSONDataProvider
 	}
 
 	@Override
-	public boolean fileExists( final String link ) throws IOException
+	public boolean exists( final String link ) throws IOException
 	{
 		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( link );
 		final Blob blob = storage.get( BlobId.of( googleCloudUri.getBucket(), googleCloudUri.getKey() ) );

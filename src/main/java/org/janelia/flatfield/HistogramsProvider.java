@@ -474,7 +474,7 @@ public class HistogramsProvider implements Serializable
 	{
 		// check if histograms exist in old slice-based format
 		for ( int slice = 1; slice <= getNumSlices(); slice++ )
-			if ( !dataProvider.fileExists( generateSliceHistogramsPath( 0, slice ) ) )
+			if ( !dataProvider.exists( generateSliceHistogramsPath( 0, slice ) ) )
 				return false;
 		return true;
 	}

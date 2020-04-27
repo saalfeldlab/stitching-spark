@@ -68,7 +68,7 @@ public class TileLoader
 			return N5Utils.open( n5, tileDatasetPath );
 
 		// if it is a file, try to read it as an image file
-		if ( dataProvider.fileExists( tile.getFilePath() ) )
+		if ( dataProvider.exists( tile.getFilePath() ) )
 		{
 			final ImagePlus imp = dataProvider.loadImage( tile.getFilePath() );
 			return ImagePlusImgs.from( imp );

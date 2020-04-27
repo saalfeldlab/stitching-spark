@@ -92,7 +92,7 @@ public class AmazonS3DataProvider extends AbstractJSONDataProvider
 	}
 
 	@Override
-	public boolean fileExists( final String link ) throws IOException
+	public boolean exists( final String link ) throws IOException
 	{
 		final AmazonS3URI s3Uri = decodeS3Uri( link );
 		if ( s3.doesObjectExist( s3Uri.getBucket(), s3Uri.getKey() ) )
