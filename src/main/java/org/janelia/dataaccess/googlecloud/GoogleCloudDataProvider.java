@@ -82,13 +82,34 @@ public class GoogleCloudDataProvider extends AbstractJSONDataProvider
 	{
 		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( link );
 		final Blob blob = storage.get( BlobId.of( googleCloudUri.getBucket(), googleCloudUri.getKey() ) );
-		return blob != null && blob.exists();
+		if ( blob != null && blob.exists() )
+			return true;
+
+		// Could be a directory, meaning that the bucket has an object with the key containing the given link as a prefix.
+		// Try to find such an object.
+		final String prefix = googleCloudUri.getKey().isEmpty() ? "" : addTrailingSlash( googleCloudUri.getKey() );
+		final BlobListOption[] blobListOptions = {
+				BlobListOption.prefix( prefix ),
+				BlobListOption.pageSize( 1 )
+			};
+		final Page< Blob > blobListing = storage.list( googleCloudUri.getBucket(), blobListOptions );
+		return blobListing.getValues().iterator().hasNext();
 	}
 
 	@Override
 	public void createFolder( final String link ) throws IOException
 	{
-		// folders are reflected by the object key structure, so no need to create them explicitly
+		// In Google Cloud Storage, there are no explicit folders, and they are implicitly represented by the '/' delimeters in the object key.
+		// But, there is a way to create the folder in this representation by creating an empty object ending with '/'.
+		// Do this only for the target path specified by the link parameter, but not for the intermediate folders
+		// since it's not necessary, and it may have potential problems with access permissions in upper levels of the bucket.
+
+		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( link );
+		final BlobInfo blobInfo = BlobInfo.newBuilder(
+				googleCloudUri.getBucket(),
+				addTrailingSlash( googleCloudUri.getKey() )
+			).build();
+		storage.create( blobInfo, ( byte[] ) null );
 	}
 
 	@Override
@@ -230,5 +251,10 @@ public class GoogleCloudDataProvider extends AbstractJSONDataProvider
 	public N5Writer createN5Writer( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
 		return new N5GoogleCloudStorageWriter( storage, new GoogleCloudStorageURI( baseLink ), gsonBuilder );
+	}
+
+	private static String addTrailingSlash( final String link )
+	{
+		return link.endsWith( "/" ) ? link : link + "/";
 	}
 }
