@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.Arrays;
 
 import ij.Prefs;
-import loci.formats.in.ZeissCZIReader;
 import loci.plugins.util.LociPrefs;
 import org.janelia.stitching.Utils;
 

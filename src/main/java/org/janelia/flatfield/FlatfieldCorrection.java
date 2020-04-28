@@ -7,6 +7,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
 
+import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.util.Util;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.DataProvider;
@@ -104,13 +106,29 @@ public class FlatfieldCorrection implements Serializable, AutoCloseable
 		final ImagePlus scalingTermImp = dataProvider.loadImage( scalingTermPath );
 		final ImagePlus translationTermImp = dataProvider.loadImage( translationTermPath );
 
-		final RandomAccessibleInterval< U > scalingTermImg = ImagePlusImgs.from( scalingTermImp );
-		final RandomAccessibleInterval< U > translationTermImg = ImagePlusImgs.from( translationTermImp );
+		final RandomAccessibleInterval< U > scalingTermWrappedImg = ImagePlusImgs.from( scalingTermImp );
+		final RandomAccessibleInterval< U > translationTermWrappedImg = ImagePlusImgs.from( translationTermImp );
+
+		// NOTE: these images could be broadcasted by the caller, and this may cause problems with Cloud backends.
+		// Copy the images to avoid this problem. See the following issues for more details: https://github.com/saalfeldlab/stitching-spark/issues/27
+		final RandomAccessibleInterval< U > scalingTermImg = copyImage( scalingTermWrappedImg );
+		final RandomAccessibleInterval< U > translationTermImg = copyImage( translationTermWrappedImg );
 
 		final RandomAccessible< U > scalingTermImgExtended = ( scalingTermImg.numDimensions() < dimensionality ? Views.extendBorder( Views.stack( scalingTermImg ) ) : scalingTermImg );
 		final RandomAccessible< U > translationTermImgExtended = ( translationTermImg.numDimensions() < dimensionality ? Views.extendBorder( Views.stack( translationTermImg ) ) : translationTermImg );
 
 		return new RandomAccessiblePairNullable<>( scalingTermImgExtended, translationTermImgExtended );
+	}
+
+	private static < U extends NativeType< U > & RealType< U > > RandomAccessibleInterval< U > copyImage( final RandomAccessibleInterval< U > img )
+	{
+		final U type = Util.getTypeFromInterval( img );
+		final RandomAccessibleInterval< U > imgCopy = new ArrayImgFactory<>( type ).create( img );
+		final Cursor< U > srcCursor = Views.flatIterable( img ).cursor();
+		final Cursor< U > dstCursor = Views.flatIterable( imgCopy ).cursor();
+		while ( dstCursor.hasNext() || srcCursor.hasNext() )
+			dstCursor.next().set( srcCursor.next() );
+		return imgCopy;
 	}
 
 	public static <
