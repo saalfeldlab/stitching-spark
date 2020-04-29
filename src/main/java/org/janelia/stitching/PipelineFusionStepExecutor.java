@@ -1,18 +1,15 @@
 package org.janelia.stitching;
 
-import java.io.IOException;
-import java.net.URI;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-
+import mpicbg.spim.data.sequence.FinalVoxelDimensions;
+import net.imglib2.FinalDimensions;
+import net.imglib2.img.cell.CellGrid;
+import net.imglib2.img.imageplus.ImagePlusImg;
+import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.RealType;
+import net.imglib2.util.Intervals;
+import net.imglib2.view.RandomAccessiblePairNullable;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
-import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
@@ -31,14 +28,8 @@ import org.janelia.stitching.FusionPerformer.FusionMode;
 import org.janelia.stitching.TileLoader.TileType;
 import org.janelia.util.Conversions;
 
-import mpicbg.spim.data.sequence.FinalVoxelDimensions;
-import net.imglib2.FinalDimensions;
-import net.imglib2.img.cell.CellGrid;
-import net.imglib2.img.imageplus.ImagePlusImg;
-import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.RealType;
-import net.imglib2.util.Intervals;
-import net.imglib2.view.RandomAccessiblePairNullable;
+import java.io.IOException;
+import java.util.*;
 
 /**
  * Fuses a set of tiles within a set of small square cells using linear blending.
@@ -99,43 +90,22 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				throw new RuntimeException( "The filename of the input configuration indicates that stitching has not been performed. If you intend to export the initial (stage) configuration, supply an additional parameter '--fusestage'." );
 
 		// determine the best location for storing the export files (near the tile configurations by default)
-		// for cloud backends, the export is stored in a separate bucket to be compatible with n5-viewer
 		String baseExportPath = null;
-		if ( dataProviderType == DataProviderType.FILESYSTEM )
+		for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
 		{
-			for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+			final String inputFolderPath = PathResolver.getParent( inputFilePath );
+			if ( baseExportPath == null )
 			{
-				final String inputFolderPath = PathResolver.getParent( inputFilePath );
-				if ( baseExportPath == null )
-				{
-					baseExportPath = inputFolderPath;
-				}
-				else if ( !baseExportPath.equals( inputFolderPath ) )
-				{
-					// go one level upper since channels are stored in individual subfolders
-					baseExportPath = PathResolver.getParent( inputFolderPath );
-					break;
-				}
+				baseExportPath = inputFolderPath;
 			}
-			baseExportPath = PathResolver.get( baseExportPath, "export.n5" + overlapsPathSuffix );
-		}
-		else
-		{
-			for ( final String inputFilePath : job.getArgs().inputTileConfigurations() )
+			else if ( !baseExportPath.equals( inputFolderPath ) )
 			{
-				final String bucket = new CloudURI( URI.create( inputFilePath ) ).getBucket();
-				if ( baseExportPath == null )
-				{
-					baseExportPath = bucket;
-				}
-				else if ( !baseExportPath.equals( bucket ) )
-				{
-					throw new PipelineExecutionException( "cannot generate export bucket name" );
-				}
+				// go one level upper since channels are stored in individual subfolders
+				baseExportPath = PathResolver.getParent( inputFolderPath );
+				break;
 			}
-			final String exportBucket = baseExportPath + "-export-n5" + overlapsPathSuffix;
-			baseExportPath = DataProviderFactory.createBucketUri( dataProviderType, exportBucket ).toString();
 		}
+		baseExportPath = PathResolver.get( baseExportPath, "export.n5" + overlapsPathSuffix );
 
 		final String n5ExportPath = baseExportPath;
 

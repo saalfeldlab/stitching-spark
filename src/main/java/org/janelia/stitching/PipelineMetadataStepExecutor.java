@@ -1,28 +1,19 @@
 package org.janelia.stitching;
 
+import ij.ImagePlus;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.DataProviderType;
+import org.janelia.util.ComparableTuple;
+import org.janelia.util.Conversions;
+
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeMap;
-
-import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.util.ComparableTuple;
-import org.janelia.util.Conversions;
-import org.janelia.util.ImageImporter;
-
-import ij.ImagePlus;
 
 /**
  * Modifies tile configurations in the following ways:
@@ -50,13 +41,27 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 
 	public static void process( final TreeMap< Integer, List< TileInfo > > tileChannels, final boolean skipNonExistingTiles ) throws Exception
 	{
-		System.out.println( "Searching for missing tiles..." );
-		final Map< Integer, Integer > missingTilesAdded = addMissingTiles( tileChannels );
+		final DataProviderType dataProviderType = DataProviderFactory.detectType( tileChannels.firstEntry().getValue().get( 0 ).getFilePath() );
+		final DataProvider dataProvider = DataProviderFactory.create( dataProviderType );
+
+		final Map< Integer, Integer > missingTilesAdded;
+		if ( dataProviderType == DataProviderType.FILESYSTEM )
 		{
+			System.out.println( "Searching for missing tiles..." );
+			missingTilesAdded = addMissingTiles( tileChannels );
+
 			final StringBuilder sb = new StringBuilder( "  tiles added:" );
 			for ( final int channel : tileChannels.keySet() )
 				sb.append( channel != tileChannels.firstKey() ? ", " : " " ).append( "ch" + channel ).append( "=" ).append( missingTilesAdded.get( channel ) );
 			System.out.println( sb.toString() );
+		}
+		else
+		{
+			// do not scan for missing tiles in the current configuration if stored in the cloud
+			System.out.println( "Skip searching for missing tiles for cloud backends" );
+			missingTilesAdded = new TreeMap<>();
+			for ( final int channel : tileChannels.keySet() )
+				missingTilesAdded.put( channel, 0 );
 		}
 
 		System.out.println( "Searching for duplicate tiles to remove..." );
@@ -68,7 +73,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			System.out.println( sb.toString() );
 		}
 
-		System.out.println( "Searching for lost tiles to remove (that don't exist on the hard drive)..." );
+		System.out.println( "Searching for lost tiles to remove (where actual files do not exist)..." );
 		final Map< Integer, Set< String > > tilePathsBeforeRemoving = new TreeMap<>();
 		for ( final int channel : tileChannels.keySet() )
 		{
@@ -77,7 +82,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 				tilePathsForChannel.add( tile.getFilePath() );
 			tilePathsBeforeRemoving.put( channel, tilePathsForChannel );
 		}
-		final Map< Integer, Integer > nonExistingTilesRemoved = removeNonExistingTiles( tileChannels );
+		final Map< Integer, Integer > nonExistingTilesRemoved = removeNonExistingTiles( tileChannels, dataProvider );
 		{
 			final StringBuilder sb = new StringBuilder( "  tiles removed:" );
 			for ( final int channel : tileChannels.keySet() )
@@ -107,27 +112,22 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		}
 
 		System.out.println( "Filling metadata..." );
-		final Map< Integer, Integer > noMetadataTiles = fillSizeAndImageType( tileChannels );
+		final Map< Integer, Integer > noMetadataTiles = fillSizeAndImageType( tileChannels, dataProvider );
 
 		boolean somethingChanged = false;
 		for ( final int channel : tileChannels.keySet() )
 			if ( duplicateTilesRemoved.get( channel ) + nonExistingTilesRemoved.get( channel ) + missingTilesAdded.get( channel ) + noMetadataTiles.get( channel ) > 0 )
 				somethingChanged = true;
-		final Map< Integer, Integer > nonIntersectingTilesRemoved;
 		if ( somethingChanged )
 		{
 			System.out.println( "Tile configuration has changed, intersecting tile sets across channels..." );
-			nonIntersectingTilesRemoved = makeIndexesConsistentAcrossChannels( tileChannels );
+			final Map< Integer, Integer > nonIntersectingTilesRemoved = makeIndexesConsistentAcrossChannels( tileChannels );
 			{
 				final StringBuilder sb = new StringBuilder( "  tiles removed:" );
 				for ( final int channel : tileChannels.keySet() )
 					sb.append( channel != tileChannels.firstKey() ? ", " : " " ).append( "ch" + channel ).append( "=" ).append( nonIntersectingTilesRemoved.get( channel ) );
 				System.out.println( sb.toString() );
 			}
-		}
-		else
-		{
-			nonIntersectingTilesRemoved = new TreeMap<>();
 		}
 
 		if ( !checkSortedTimestampOrder( tileChannels ) )
@@ -188,14 +188,14 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		return duplicates;
 	}
 
-	private static Map< Integer, Integer > removeNonExistingTiles( final TreeMap< Integer, List< TileInfo > > tileChannels ) throws Exception
+	private static Map< Integer, Integer > removeNonExistingTiles( final TreeMap< Integer, List< TileInfo > > tileChannels, final DataProvider dataProvider ) throws Exception
 	{
 		final Map< Integer, Integer > nonExistingTiles = new TreeMap<>();
 		for ( final int channel : tileChannels.keySet() )
 		{
 			final List< TileInfo > existingTiles = new ArrayList<>();
 			for ( final TileInfo tile : tileChannels.get( channel ) )
-				if ( Files.exists( Paths.get( tile.getFilePath() ) ) )
+				if ( dataProvider.exists( tile.getFilePath() ) )
 					existingTiles.add( tile );
 			nonExistingTiles.put( channel, tileChannels.get( channel ).size() - existingTiles.size() );
 			tileChannels.put( channel, existingTiles );
@@ -256,14 +256,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 			final File imagesBaseDir = Paths.get( tileChannels.get( channel ).get( 0 ).getFilePath() ).getParent().toFile();
 
 			final String fileNameChannelPattern = String.format( "^.*?_%dnm_.*?\\.tif$", channel );
-			final FilenameFilter fileNameChannelFilter = new FilenameFilter()
-			{
-				@Override
-				public boolean accept( final File dir, final String name )
-				{
-					return name.matches( fileNameChannelPattern );
-				}
-			};
+			final FilenameFilter fileNameChannelFilter = (dir, name) -> name.matches( fileNameChannelPattern );
 
 			final String[] fileList = imagesBaseDir.list( fileNameChannelFilter );
 			for ( final String fileName : fileList )
@@ -312,7 +305,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		return missingTiles;
 	}
 
-	private static Map< Integer, Integer > fillSizeAndImageType( final TreeMap< Integer, List< TileInfo > > tileChannels )
+	private static Map< Integer, Integer > fillSizeAndImageType( final TreeMap< Integer, List< TileInfo > > tileChannels, final DataProvider dataProvider ) throws IOException
 	{
 		final Map< Integer, Integer > noMetadataTiles = new TreeMap<>();
 		for ( final int channel : tileChannels.keySet() )
@@ -327,7 +320,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 				continue;
 
 			// Determine tile dimensions and image type by opening the first tile image
-			final ImagePlus impTest = ImageImporter.openImage( tileChannels.get( channel ).get( 0 ).getFilePath() );
+			final ImagePlus impTest = dataProvider.loadImage( tileChannels.get( channel ).get( 0 ).getFilePath() );
 			final long[] size = Conversions.toLongArray( Utils.getImagePlusDimensions( impTest ) );
 			final ImageType imageType = ImageType.valueOf( impTest.getType() );
 			impTest.close();

@@ -1,20 +1,18 @@
 package org.janelia.stitching;
 
-import java.io.IOException;
-import java.nio.file.Paths;
-
-import org.janelia.dataaccess.DataProvider;
-import org.janelia.dataaccess.PathResolver;
-import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5Reader;
-import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.util.ImageImporter;
-
 import ij.ImagePlus;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
+import org.janelia.dataaccess.DataProvider;
+import org.janelia.dataaccess.PathResolver;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+
+import java.io.IOException;
+import java.nio.file.Paths;
 
 public class TileLoader
 {
@@ -70,9 +68,9 @@ public class TileLoader
 			return N5Utils.open( n5, tileDatasetPath );
 
 		// if it is a file, try to read it as an image file
-		if ( dataProvider.fileExists( tile.getFilePath() ) )
+		if ( dataProvider.exists( tile.getFilePath() ) )
 		{
-			final ImagePlus imp = ImageImporter.openImage( tile.getFilePath() );
+			final ImagePlus imp = dataProvider.loadImage( tile.getFilePath() );
 			return ImagePlusImgs.from( imp );
 		}
 

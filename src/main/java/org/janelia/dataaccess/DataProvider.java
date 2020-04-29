@@ -25,7 +25,7 @@ public interface DataProvider
 {
 	public DataProviderType getType();
 
-	public boolean fileExists( final String link ) throws IOException;
+	public boolean exists( final String link ) throws IOException;
 	public void createFolder( final String link ) throws IOException;
 
 	public void copyFile( final String srcLink, final String dstLink ) throws IOException;

@@ -78,17 +78,38 @@ public class GoogleCloudDataProvider extends AbstractJSONDataProvider
 	}
 
 	@Override
-	public boolean fileExists( final String link ) throws IOException
+	public boolean exists( final String link ) throws IOException
 	{
 		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( link );
 		final Blob blob = storage.get( BlobId.of( googleCloudUri.getBucket(), googleCloudUri.getKey() ) );
-		return blob != null && blob.exists();
+		if ( blob != null && blob.exists() )
+			return true;
+
+		// Could be a directory, meaning that the bucket has an object with the key containing the given link as a prefix.
+		// Try to find such an object.
+		final String prefix = googleCloudUri.getKey().isEmpty() ? "" : addTrailingSlash( googleCloudUri.getKey() );
+		final BlobListOption[] blobListOptions = {
+				BlobListOption.prefix( prefix ),
+				BlobListOption.pageSize( 1 )
+			};
+		final Page< Blob > blobListing = storage.list( googleCloudUri.getBucket(), blobListOptions );
+		return blobListing.getValues().iterator().hasNext();
 	}
 
 	@Override
 	public void createFolder( final String link ) throws IOException
 	{
-		// folders are reflected by the object key structure, so no need to create them explicitly
+		// In Google Cloud Storage, there are no explicit folders, and they are implicitly represented by the '/' delimeters in the object key.
+		// But, there is a way to create the folder in this representation by creating an empty object ending with '/'.
+		// Do this only for the target path specified by the link parameter, but not for the intermediate folders
+		// since it's not necessary, and it may have potential problems with access permissions in upper levels of the bucket.
+
+		final GoogleCloudStorageURI googleCloudUri = new GoogleCloudStorageURI( link );
+		final BlobInfo blobInfo = BlobInfo.newBuilder(
+				googleCloudUri.getBucket(),
+				addTrailingSlash( googleCloudUri.getKey() )
+			).build();
+		storage.create( blobInfo, ( byte[] ) null );
 	}
 
 	@Override
@@ -211,32 +232,29 @@ public class GoogleCloudDataProvider extends AbstractJSONDataProvider
 	@Override
 	public N5Reader createN5Reader( final String baseLink ) throws IOException
 	{
-		return new N5GoogleCloudStorageReader( storage, getBucketName( baseLink ) );
+		return new N5GoogleCloudStorageReader( storage, new GoogleCloudStorageURI( baseLink ) );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final String baseLink ) throws IOException
 	{
-		return new N5GoogleCloudStorageWriter( storage, getBucketName( baseLink ) );
+		return new N5GoogleCloudStorageWriter( storage, new GoogleCloudStorageURI( baseLink ) );
 	}
 
 	@Override
 	public N5Reader createN5Reader( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5GoogleCloudStorageReader( storage, getBucketName( baseLink ), gsonBuilder );
+		return new N5GoogleCloudStorageReader( storage, new GoogleCloudStorageURI( baseLink ), gsonBuilder );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5GoogleCloudStorageWriter( storage, getBucketName( baseLink ), gsonBuilder );
+		return new N5GoogleCloudStorageWriter( storage, new GoogleCloudStorageURI( baseLink ), gsonBuilder );
 	}
 
-	private String getBucketName( final String link )
+	private static String addTrailingSlash( final String link )
 	{
-		final GoogleCloudStorageURI uri = new GoogleCloudStorageURI( link );
-		if ( uri.getKey() != null && !uri.getKey().isEmpty() )
-			throw new IllegalArgumentException( "expected link to a bucket" );
-		return uri.getBucket();
+		return link.endsWith( "/" ) ? link : link + "/";
 	}
 }

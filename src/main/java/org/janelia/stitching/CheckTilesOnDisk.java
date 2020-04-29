@@ -19,7 +19,7 @@ public class CheckTilesOnDisk
 		{
 			final List< TileInfo > missingTiles = new ArrayList<>();
 			for ( final TileInfo tile : channels.get( ch ) )
-				if ( !dataProvider.fileExists( tile.getFilePath() ) )
+				if ( !dataProvider.exists( tile.getFilePath() ) )
 					missingTiles.add( tile );
 			if ( !missingTiles.isEmpty() )
 				channelsToMissingTiles.put( ch, missingTiles );

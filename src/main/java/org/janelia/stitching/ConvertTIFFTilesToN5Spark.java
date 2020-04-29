@@ -1,15 +1,13 @@
 package org.janelia.stitching;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-
+import ij.ImagePlus;
+import net.imglib2.FinalInterval;
+import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.NumericType;
+import net.imglib2.util.Intervals;
+import net.imglib2.view.Views;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.*;
@@ -19,23 +17,21 @@ import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 import org.janelia.saalfeldlab.n5.spark.util.CmdUtils;
-import org.janelia.util.ImageImporter;
-
-import ij.ImagePlus;
-import net.imglib2.FinalInterval;
-import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.img.imageplus.ImagePlusImgs;
-import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.NumericType;
-import net.imglib2.util.Intervals;
-import net.imglib2.view.Views;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 import scala.Tuple3;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.Map.Entry;
+
 public class ConvertTIFFTilesToN5Spark
 {
+	private static final String tilesN5ContainerName = "tiles.n5";
+
 	private static class ConvertTIFFTilesToN5CmdArgs implements Serializable
 	{
 		private static final long serialVersionUID = 215043103837732209L;
@@ -81,7 +77,7 @@ public class ConvertTIFFTilesToN5Spark
 			}
 			else
 			{
-				n5OutputPath = PathResolver.get( PathResolver.getParent( inputChannelsPaths.iterator().next() ), "tiles.n5" );
+				n5OutputPath = PathResolver.get( PathResolver.getParent( inputChannelsPaths.iterator().next() ), tilesN5ContainerName );
 			}
 		}
 	}
@@ -205,7 +201,8 @@ public class ConvertTIFFTilesToN5Spark
 		// TODO: can consider pixel resolution to calculate isotropic block size in Z
 
 		final String tileDatasetPath = PathResolver.get( outputGroupPath, PathResolver.getFileName( inputTile.getFilePath() ) );
-		final ImagePlus imp = ImageImporter.openImage( inputTile.getFilePath() );
+		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( inputTile.getFilePath() ) );
+		final ImagePlus imp = dataProvider.loadImage( inputTile.getFilePath() );
 		final RandomAccessibleInterval< T > img = ImagePlusImgs.from( imp );
 
 		final RandomAccessibleInterval< T > imgExtendedDimensions = img.numDimensions() < inputTile.numDimensions() && inputTile.getSize( 2 ) == 1 ? Views.stack( img ) : img;

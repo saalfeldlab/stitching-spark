@@ -102,7 +102,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 				final String iterationDirname = getIterationFolderName( iteration );
 				final String stitchedTilesFilepath = PathResolver.get( basePath, iterationDirname, Utils.addFilenameSuffix( filename, "-stitched" ) );
 
-				if ( !dataProvider.fileExists( stitchedTilesFilepath ) )
+				if ( !dataProvider.exists( stitchedTilesFilepath ) )
 				{
 					System.out.println( "************** Iteration " + iteration + " **************" );
 					preparePairwiseShiftsMulti( overlappingTiles, iteration );
@@ -213,7 +213,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		{
 			// use the pairwise file from the previous run in the old mode if exists
 			final String oldPairwiseFile = PathResolver.get( basePath, pairwiseFilename );
-			if ( dataProvider.fileExists( oldPairwiseFile ) )
+			if ( dataProvider.exists( oldPairwiseFile ) )
 				dataProvider.moveFile( oldPairwiseFile, pairwisePath );
 		}
 		else
@@ -222,7 +222,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 			{
 				System.out.println( "Rematching only excluded pairs" );
 				// use pairwise-used from the previous iteration, so they will not be rematched
-				if ( !dataProvider.fileExists( pairwisePath ) )
+				if ( !dataProvider.exists( pairwisePath ) )
 					dataProvider.copyFile(
 							PathResolver.get( basePath, previousIterationDirname, Utils.addFilenameSuffix( pairwiseFilename, "-used" ) ),
 							pairwisePath
@@ -237,7 +237,7 @@ public class PipelineStitchingStepExecutor extends PipelineStepExecutor
 		// Try to load precalculated shifts for some pairs of tiles
 		final List< SerializablePairWiseStitchingResult[] > pairwiseShiftsMulti = new ArrayList<>();
 
-		if ( dataProvider.fileExists( pairwisePath ) )
+		if ( dataProvider.exists( pairwisePath ) )
 		{
 			try
 			{

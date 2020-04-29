@@ -92,16 +92,39 @@ public class AmazonS3DataProvider extends AbstractJSONDataProvider
 	}
 
 	@Override
-	public boolean fileExists( final String link ) throws IOException
+	public boolean exists( final String link ) throws IOException
 	{
 		final AmazonS3URI s3Uri = decodeS3Uri( link );
-		return s3.doesObjectExist( s3Uri.getBucket(), s3Uri.getKey() );
+		if ( s3.doesObjectExist( s3Uri.getBucket(), s3Uri.getKey() ) )
+			return true;
+
+		// Could be a directory, meaning that the bucket has an object with the key containing the given link as a prefix.
+		// Try to find such an object.
+		final String prefix = s3Uri.getKey().isEmpty() ? "" : addTrailingSlash( s3Uri.getKey() );
+		final ListObjectsV2Request listObjectsRequest = new ListObjectsV2Request()
+				.withBucketName( s3Uri.getBucket() )
+				.withPrefix( prefix )
+				.withMaxKeys( 1 );
+		final ListObjectsV2Result objectsListing = s3.listObjectsV2( listObjectsRequest );
+		return objectsListing.getKeyCount() > 0;
 	}
 
 	@Override
 	public void createFolder( final String link ) throws IOException
 	{
-		// folders are reflected by the object key structure, so no need to create them explicitly
+		// In S3, there are no explicit folders, and they are implicitly represented by the '/' delimeters in the object key.
+		// But, there is a way to create the folder in this representation by creating an empty object ending with '/'.
+		// Do this only for the target path specified by the link parameter, but not for the intermediate folders
+		// since it's not necessary, and it may have potential problems with access permissions in upper levels of the bucket.
+
+		final AmazonS3URI s3Uri = decodeS3Uri( link );
+		final ObjectMetadata metadata = new ObjectMetadata();
+		metadata.setContentLength( 0 );
+		s3.putObject(
+				s3Uri.getBucket(),
+				addTrailingSlash( s3Uri.getKey() ),
+				new ByteArrayInputStream( new byte[ 0 ] ),
+				metadata );
 	}
 
 	@Override
@@ -248,25 +271,25 @@ public class AmazonS3DataProvider extends AbstractJSONDataProvider
 	@Override
 	public N5Reader createN5Reader( final String baseLink ) throws IOException
 	{
-		return new N5AmazonS3Reader( s3, getBucketName( baseLink ) );
+		return new N5AmazonS3Reader( s3, decodeS3Uri( baseLink ) );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final String baseLink ) throws IOException
 	{
-		return new N5AmazonS3Writer( s3, getBucketName( baseLink ) );
+		return new N5AmazonS3Writer( s3, decodeS3Uri( baseLink ) );
 	}
 
 	@Override
 	public N5Reader createN5Reader( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5AmazonS3Reader( s3, getBucketName( baseLink ), gsonBuilder );
+		return new N5AmazonS3Reader( s3, decodeS3Uri( baseLink ), gsonBuilder );
 	}
 
 	@Override
 	public N5Writer createN5Writer( final String baseLink, final GsonBuilder gsonBuilder ) throws IOException
 	{
-		return new N5AmazonS3Writer( s3, getBucketName( baseLink ), gsonBuilder );
+		return new N5AmazonS3Writer( s3, decodeS3Uri( baseLink ), gsonBuilder );
 	}
 
 	public static AmazonS3URI decodeS3Uri( final String link ) throws IOException
@@ -274,11 +297,8 @@ public class AmazonS3DataProvider extends AbstractJSONDataProvider
 		return new AmazonS3URI( URLDecoder.decode( link, StandardCharsets.UTF_8.name() ) );
 	}
 
-	private String getBucketName( final String link ) throws IOException
+	private static String addTrailingSlash( final String link )
 	{
-		final AmazonS3URI uri = decodeS3Uri( link );
-		if ( uri.getKey() != null && !uri.getKey().isEmpty() )
-			throw new IllegalArgumentException( "expected link to a bucket" );
-		return uri.getBucket();
+		return link.endsWith( "/" ) ? link : link + "/";
 	}
 }

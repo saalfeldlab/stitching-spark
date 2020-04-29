@@ -7,11 +7,7 @@ import java.util.Optional;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.dataaccess.CloudURI;
-import org.janelia.dataaccess.DataProvider;
-import org.janelia.dataaccess.DataProviderFactory;
-import org.janelia.dataaccess.DataProviderType;
-import org.janelia.dataaccess.PathResolver;
+import org.janelia.dataaccess.*;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadata;
 import org.janelia.saalfeldlab.n5.bdv.N5ExportMetadataReader;
@@ -134,6 +130,7 @@ public class N5ToSliceTiffSpark
 						},
 						n5DatasetPath,
 						outputChannelPath,
+						new MultiBackendTiffWriter(),
 						tiffCompression,
 						SliceDimension.Z,
 						filenameFormat,

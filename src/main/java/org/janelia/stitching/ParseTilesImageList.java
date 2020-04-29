@@ -1,26 +1,11 @@
 package org.janelia.stitching;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.Serializable;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.CloudURI;
 import org.janelia.dataaccess.DataProvider;
 import org.janelia.dataaccess.DataProviderFactory;
+import org.janelia.dataaccess.PathResolver;
 import org.janelia.saalfeldlab.n5.spark.util.CmdUtils;
 import org.janelia.stitching.PipelineMetadataStepExecutor.NonExistingTilesException;
 import org.janelia.stitching.analysis.CheckConnectedGraphs;
@@ -28,6 +13,13 @@ import org.janelia.stitching.analysis.FilterAdjacentShifts;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.Serializable;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.Map.Entry;
 
 public class ParseTilesImageList
 {
@@ -89,6 +81,11 @@ public class ParseTilesImageList
 		if ( !parsedArgs.parsedSuccessfully )
 			throw new IllegalArgumentException( "argument format mismatch" );
 
+		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf().setAppName( "ParseTilesImageList" ) ) )
+		{
+			// even though Spark is not used in this step, AWS requires to initialize SparkContext if running in the cloud
+		}
+
 		run(
 				parsedArgs.imageListFilepath,
 				parsedArgs.basePath,
@@ -114,11 +111,13 @@ public class ParseTilesImageList
 		System.out.println( "Axis mapping: " + Arrays.toString( axisMappingStr ) );
 
 		final String fileNamePatternStr = "^.*?_(\\d{3})nm_.*?_(\\d{3}x_\\d{3}y_\\d{3}z)_.*?\\.tif$";
-		final String baseOutputFolder = Paths.get( imageListFilepath ).getParent().toString();
+		final String baseOutputFolder = PathResolver.getParent( imageListFilepath );
 
 		final TreeMap< Integer, List< TileInfo > > tiles = new TreeMap<>();
 
-		try ( final BufferedReader imageListReader = new BufferedReader( new FileReader( imageListFilepath ) ) )
+		final DataProvider dataProvider = DataProviderFactory.create( DataProviderFactory.detectType( imageListFilepath ) );
+
+		try ( final BufferedReader imageListReader = new BufferedReader( new InputStreamReader( dataProvider.getInputStream( imageListFilepath ) ) ) )
 		{
 			String line = imageListReader.readLine();	//!< headers
 
@@ -126,28 +125,41 @@ public class ParseTilesImageList
 			{
 				final String[] columns = line.split( "," );
 
-				final String filepath;
+				final String tileImagePath;
 				if ( tileImagesFolder == null || tileImagesFolder.isEmpty() )
 				{
 					// base images dir is not provided, use the filepath column
-					final Path tileImagePath = Paths.get( columns[ 0 ] );
-					if ( tileImagePath.isAbsolute() )
-						filepath = tileImagePath.toString();
+					if ( CloudURI.isCloudURI( columns[0] ) )
+					{
+						// full cloud link
+						tileImagePath = columns[0];
+					}
 					else
-						filepath = Paths.get( imageListFilepath ).getParent().resolve( tileImagePath ).toString();
+					{
+						if ( Paths.get( columns[ 0 ] ).isAbsolute() )
+						{
+							// full file path
+							tileImagePath = columns[ 0 ];
+						}
+						else
+						{
+							// relative file path or cloud link
+							tileImagePath = PathResolver.get( baseOutputFolder, columns[ 0 ] );
+						}
+					}
 				}
 				else if ( columns.length >= NUM_COLUMNS_FULL )
 				{
 					// all columns are present, join base images dir and the filename column
-					filepath = Paths.get( tileImagesFolder, columns[ 1 ] ).toString();
+					tileImagePath = PathResolver.get( tileImagesFolder, columns[ 1 ] );
 				}
 				else
 				{
 					// workaround when the filename column is possibly omitted, join base images dir and filename obtained from the filepath column
-					filepath = Paths.get( tileImagesFolder, Paths.get( columns[ 0 ] ).getFileName().toString() ).toString();
+					tileImagePath = PathResolver.get( tileImagesFolder, PathResolver.getFileName( columns[ 0 ] ) );
 				}
 
-				final String filename = Paths.get( filepath ).getFileName().toString();
+				final String tileImageFilename = PathResolver.getFileName( tileImagePath );
 
 				// TODO: find a way to use the grid coordinates or remove it
 //				final Pattern fileNamePattern = Pattern.compile( fileNamePatternStr );
@@ -175,14 +187,14 @@ public class ParseTilesImageList
 				for ( int d = 0; d < pixelCoords.length; ++d )
 					pixelCoords[ d ] = objCoords[ axisMapping.axisMapping[ d ] ] / pixelResolution[ d ] * ( axisMapping.flip[ d ] ? -1 : 1 );
 
-				final int nm = Integer.parseInt( filename.replaceAll( fileNamePatternStr, "$1" ) );
+				final int nm = Integer.parseInt( tileImageFilename.replaceAll( fileNamePatternStr, "$1" ) );
 
 				if ( !tiles.containsKey( nm ) )
 					tiles.put( nm, new ArrayList<>() );
 
 				final TileInfo tile = new TileInfo( 3 );
 				tile.setIndex( tiles.get( nm ).size() );
-				tile.setFilePath( filepath );
+				tile.setFilePath( tileImagePath );
 				tile.setPosition( pixelCoords );
 				tile.setSize( null );
 				tile.setPixelResolution( pixelResolution.clone() );
@@ -296,9 +308,14 @@ public class ParseTilesImageList
 		System.out.println();
 
 		// finally save the configurations as JSON files
-		final DataProvider dataProvider = DataProviderFactory.createFSDataProvider();
+
 		for ( final int channel : tiles.keySet() )
-			dataProvider.saveTiles( tiles.get( channel ).toArray( new TileInfo[ 0 ] ), Paths.get( baseOutputFolder, channel + "nm.json" ).toString() );
+		{
+			dataProvider.saveTiles(
+					tiles.get( channel ).toArray( new TileInfo[ 0 ] ),
+					PathResolver.get( baseOutputFolder, channel + "nm.json" )
+			);
+		}
 
 		System.out.println( "Done" );
 	}
