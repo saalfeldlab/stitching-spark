@@ -9,4 +9,4 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from jar_path_util import get_jar_path
 bin_path = get_jar_path()
 
-subprocess.call(['java', '-Xss1g', '-cp', bin_path, 'org.janelia.stitching.ParseTilesImageList'] + sys.argv[1:])
+subprocess.call(['java', '-Dspark.master=local[1]', '-Xss1g', '-cp', bin_path, 'org.janelia.stitching.ParseTilesImageList'] + sys.argv[1:])
