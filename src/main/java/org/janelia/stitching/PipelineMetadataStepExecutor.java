@@ -7,6 +7,7 @@ import org.janelia.dataaccess.DataProviderFactory;
 import org.janelia.dataaccess.DataProviderType;
 import org.janelia.util.ComparableTuple;
 import org.janelia.util.Conversions;
+import scala.Tuple2;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -39,7 +40,10 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		super( job, sparkContext );
 	}
 
-	public static void process( final TreeMap< Integer, List< TileInfo > > tileChannels, final boolean skipNonExistingTiles ) throws Exception
+	public static void process(
+			final JavaSparkContext sparkContext,
+			final TreeMap< Integer, List< TileInfo > > tileChannels,
+			final boolean skipNonExistingTiles ) throws Exception
 	{
 		final DataProviderType dataProviderType = DataProviderFactory.detectType( tileChannels.firstEntry().getValue().get( 0 ).getFilePath() );
 		final DataProvider dataProvider = DataProviderFactory.create( dataProviderType );
@@ -112,7 +116,7 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		}
 
 		System.out.println( "Filling metadata..." );
-		final Map< Integer, Integer > noMetadataTiles = fillSizeAndImageType( tileChannels, dataProvider );
+		final Map< Integer, Integer > noMetadataTiles = fillSizeAndImageType( sparkContext, tileChannels, dataProvider );
 
 		boolean somethingChanged = false;
 		for ( final int channel : tileChannels.keySet() )
@@ -305,7 +309,10 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 		return missingTiles;
 	}
 
-	private static Map< Integer, Integer > fillSizeAndImageType( final TreeMap< Integer, List< TileInfo > > tileChannels, final DataProvider dataProvider ) throws IOException
+	private static Map< Integer, Integer > fillSizeAndImageType(
+			final JavaSparkContext sparkContext,
+			final TreeMap< Integer, List< TileInfo > > tileChannels,
+			final DataProvider dataProvider ) throws IOException
 	{
 		final Map< Integer, Integer > noMetadataTiles = new TreeMap<>();
 		for ( final int channel : tileChannels.keySet() )
@@ -320,15 +327,25 @@ public class PipelineMetadataStepExecutor extends PipelineStepExecutor
 				continue;
 
 			// Determine tile dimensions and image type by opening the first tile image
-			final ImagePlus impTest = dataProvider.loadImage( tileChannels.get( channel ).get( 0 ).getFilePath() );
-			final long[] size = Conversions.toLongArray( Utils.getImagePlusDimensions( impTest ) );
-			final ImageType imageType = ImageType.valueOf( impTest.getType() );
-			impTest.close();
+			final DataProviderType dataProviderType = dataProvider.getType();
+			final Tuple2< ImageType, long[] > tileImageMetadata = sparkContext
+					.parallelize( Collections.singletonList( tileChannels.get( channel ).get( 0 ).getFilePath() ) )
+					.map( tileImagePath -> {
+						final ImagePlus tileImage = DataProviderFactory.create( dataProviderType ).loadImage( tileImagePath );
+						final ImageType tileImageType = ImageType.valueOf( tileImage.getType() );
+						final long[] tileImageSize = Conversions.toLongArray( Utils.getImagePlusDimensions( tileImage ) );
+						tileImage.close();
+						return new Tuple2<>( tileImageType, tileImageSize );
+					} )
+					.collect().get( 0 );
+
+			final ImageType tileImageType = tileImageMetadata._1();
+			final long[] tileImageSize = tileImageMetadata._2();
 
 			for ( final TileInfo tile : tilesWithoutMetadata )
 			{
-				tile.setSize( size );
-				tile.setType( imageType );
+				tile.setType( tileImageType );
+				tile.setSize( tileImageSize );
 			}
 		}
 		return noMetadataTiles;
