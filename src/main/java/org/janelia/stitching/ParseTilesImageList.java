@@ -81,21 +81,24 @@ public class ParseTilesImageList
 		if ( !parsedArgs.parsedSuccessfully )
 			throw new IllegalArgumentException( "argument format mismatch" );
 
-		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf().setAppName( "ParseTilesImageList" ) ) )
+		try ( final JavaSparkContext sparkContext = new JavaSparkContext( new SparkConf()
+				.setAppName( "ParseTilesImageList" )
+				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
+		) )
 		{
-			// even though Spark is not used in this step, AWS requires to initialize SparkContext if running in the cloud
-		}
-
-		run(
-				parsedArgs.imageListFilepath,
-				parsedArgs.basePath,
-				CmdUtils.parseDoubleArray( parsedArgs.pixelResolutionStr ),
-				parsedArgs.axisMappingStr.trim().split( "," ),
-				parsedArgs.skipMissingTiles
+			run(
+					sparkContext,
+					parsedArgs.imageListFilepath,
+					parsedArgs.basePath,
+					CmdUtils.parseDoubleArray(parsedArgs.pixelResolutionStr),
+					parsedArgs.axisMappingStr.trim().split(","),
+					parsedArgs.skipMissingTiles
 			);
+		}
 	}
 
 	public static void run(
+			final JavaSparkContext sparkContext,
 			final String imageListFilepath,
 			final String tileImagesFolder,
 			final double[] pixelResolution,
@@ -225,7 +228,7 @@ public class ParseTilesImageList
 		// run metadata step
 		try
 		{
-			PipelineMetadataStepExecutor.process( tiles, skipMissingTiles );
+			PipelineMetadataStepExecutor.process( sparkContext, tiles, skipMissingTiles );
 		}
 		catch ( final NonExistingTilesException e )
 		{
