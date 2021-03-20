@@ -264,7 +264,7 @@ spark-local/export.py -i 488nm-n5-final.json -i 560nm-n5-final.json ...
 ```
 </details>
 
-This will generate an [N5](https://github.com/saalfeldlab/n5) export under `export.n5/` folder. The export is fully compatible  with [N5 Viewer](https://github.com/saalfeldlab/n5-viewer) for browsing.
+This will generate an [N5](https://github.com/saalfeldlab/n5) export under `export.n5/` folder. The export is fully compatible  with [N5 Viewer](https://github.com/saalfeldlab/n5-viewer) and the [N5 Fiji plugin](https://github.com/saalfeldlab/n5-ij) for browsing.
 
 The most common optional parameters are:
 * `--blending`: smoothes transitions between the tiles instead of making a hard cut between them
