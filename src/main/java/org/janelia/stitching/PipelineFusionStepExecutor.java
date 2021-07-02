@@ -48,6 +48,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 
 	private static final int MIN_BLOCK_SIZE = 64;
 
+	private static final String PIXEL_RESOLUTION_ATTRIBUTE_KEY = "pixelResolution";
+
 	final TreeMap< Integer, long[] > levelToImageDimensions = new TreeMap<>(), levelToCellSize = new TreeMap<>();
 
 	double[] normalizedVoxelDimensions;
@@ -180,7 +182,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 					n5ExportPath,
 					fullScaleOutputPath,
 					job.getTiles( channel ),
-					backgroundValue
+					backgroundValue,
+					voxelDimensions
 				);
 
 			// Generate lower scale levels
@@ -246,7 +249,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final String n5ExportPath,
 			final String fullScaleOutputPath,
 			final TileInfo[] tiles,
-			final Number backgroundValue ) throws IOException
+			final Number backgroundValue,
+			final double[] voxelDimensions ) throws IOException
 	{
 		final DataProvider dataProvider = job.getDataProvider();
 		final int[] cellSize = getOptimalCellSize( tiles );
@@ -268,6 +272,8 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 				N5Utils.dataType( ( T ) tiles[ 0 ].getType().getType() ),
 				new GzipCompression()
 			);
+
+		n5.setAttribute( fullScaleOutputPath, PIXEL_RESOLUTION_ATTRIBUTE_KEY, voxelDimensions );
 
 		final int[] processingCellSize = getProcessingCellSize( tiles );
 		System.out.println( "Fusing tile configuration into an N5 dataset with block size " + Arrays.toString( cellSize ) + " using processing block size " + Arrays.toString( processingCellSize ) );
