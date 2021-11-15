@@ -3,6 +3,9 @@
 .project
 .settings
 
+# Intellij files
+.idea
+
 *.class
 dependency-reduced-pom.xml
 

@@ -131,14 +131,15 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final int channel = ch;
 			System.out.println( "Processing channel #" + channel );
 
-			final String absoluteChannelPath = job.getArgs().inputTileConfigurations().get( channel );
-			final String absoluteChannelPathNoFinal = Utils.removeFilenameSuffix( absoluteChannelPath, "-final" ); // adjust the path in order to use original flatfields
+			final String channelInputPath = job.getArgs().inputTileConfigurations().get( channel );
+			// get the path to the correction images for the channel and adjust it if necessary (remove '-final' suffix)
+			final String channelCorrectionPath = Utils.removeFilenameSuffix( job.getArgs().correctionImagesPaths().get(channel), "-final");
 
 			final String outputChannelGroupPath = N5ExportMetadata.getChannelGroupPath( channel );
 			n5.createGroup( outputChannelGroupPath );
 
 			// special mode which allows to export only overlaps of tile pairs that have been used for final stitching
-			final Map< Integer, Set< Integer > > pairwiseConnectionsMap = getPairwiseConnectionsMap( absoluteChannelPath );
+			final Map< Integer, Set< Integer > > pairwiseConnectionsMap = getPairwiseConnectionsMap( channelInputPath );
 			if ( pairwiseConnectionsMap != null )
 				System.out.println( "[Export overlaps mode] Broadcasting pairwise connections map" );
 			broadcastedPairwiseConnectionsMap = sparkContext.broadcast( pairwiseConnectionsMap );
@@ -147,7 +148,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			// use it as a folder with the input file's name
 			final RandomAccessiblePairNullable< U, U >  flatfieldCorrection = FlatfieldCorrection.loadCorrectionImages(
 					dataProvider,
-					absoluteChannelPathNoFinal,
+					channelCorrectionPath,
 					job.getDimensionality()
 				);
 			if ( flatfieldCorrection != null )
@@ -157,7 +158,7 @@ public class PipelineFusionStepExecutor< T extends NativeType< T > & RealType< T
 			final Number backgroundValue;
 			if ( job.getArgs().fillBackground() )
 			{
-				final Double flatfieldBackgroundValue = FlatfieldCorrection.getPivotValue( dataProvider, absoluteChannelPathNoFinal );
+				final Double flatfieldBackgroundValue = FlatfieldCorrection.getPivotValue( dataProvider, channelCorrectionPath );
 				if ( flatfieldBackgroundValue != null ) {
 					backgroundValue = flatfieldBackgroundValue;
 				} else {

@@ -2,6 +2,7 @@ package org.janelia.stitching;
 
 import java.io.Serializable;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.janelia.dataaccess.CloudURI;
@@ -28,6 +29,10 @@ public class StitchingArguments implements Serializable {
 	@Option(name = "-i", aliases = { "--input" }, required = true,
 			usage = "Path/link to a tile configuration JSON file. Multiple configurations can be passed at once.")
 	private List< String > inputTileConfigurations;
+
+	@Option(name = "--correction-images-paths", required = false,
+			usage = "Path/link to correction images")
+	private List< String > correctionImagesPaths;
 
 	@Option(name = "-r", aliases = { "--registrationChannelIndex" }, required = false,
 			usage = "Index of the input channel to be used for registration (indexing starts from 0). If omitted or equal to -1, all input channels will be used for registration by averaging the tile images.")
@@ -135,6 +140,14 @@ public class StitchingArguments implements Serializable {
 			if ( !CloudURI.isCloudURI( inputTileConfigurations.get( i ) ) )
 				inputTileConfigurations.set( i, Paths.get( inputTileConfigurations.get( i ) ).toAbsolutePath().toString() );
 
+		if (correctionImagesPaths != null && correctionImagesPaths.size() > 0)
+			if (correctionImagesPaths.size() != inputTileConfigurations.size())
+				throw new IllegalArgumentException("Correction images must match input tile configurations");
+			else
+			{
+				correctionImagesPaths = new ArrayList<>(inputTileConfigurations);
+			}
+
 		if ( !fuseOnly )
 		{
 			if ( registrationChannelIndex != null && registrationChannelIndex == -1 )
@@ -163,6 +176,7 @@ public class StitchingArguments implements Serializable {
 	}
 
 	public List< String > inputTileConfigurations() { return inputTileConfigurations; }
+	public List< String > correctionImagesPaths() { return correctionImagesPaths; }
 	public Integer registrationChannelIndex() { return registrationChannelIndex; }
 	public int minStatsNeighborhood() { return minStatsNeighborhood; }
 	public int fusionCellSize() { return fusionCellSize; }
