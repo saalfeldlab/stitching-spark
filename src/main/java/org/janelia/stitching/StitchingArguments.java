@@ -140,13 +140,11 @@ public class StitchingArguments implements Serializable {
 			if ( !CloudURI.isCloudURI( inputTileConfigurations.get( i ) ) )
 				inputTileConfigurations.set( i, Paths.get( inputTileConfigurations.get( i ) ).toAbsolutePath().toString() );
 
-		if (correctionImagesPaths != null && correctionImagesPaths.size() > 0)
+		if (correctionImagesPaths != null && correctionImagesPaths.size() > 0) {
 			if (correctionImagesPaths.size() != inputTileConfigurations.size())
 				throw new IllegalArgumentException("Correction images must match input tile configurations");
-			else
-			{
-				correctionImagesPaths = new ArrayList<>(inputTileConfigurations);
-			}
+		} else
+			correctionImagesPaths = new ArrayList<>(inputTileConfigurations);
 
 		if ( !fuseOnly )
 		{
