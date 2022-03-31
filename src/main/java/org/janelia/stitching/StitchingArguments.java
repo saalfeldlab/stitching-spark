@@ -1,6 +1,12 @@
 package org.janelia.stitching;
 
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.io.Serializable;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,6 +15,10 @@ import org.janelia.dataaccess.CloudURI;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 /**
  * Command line arguments parser for a stitching job.
@@ -104,11 +114,15 @@ public class StitchingArguments implements Serializable {
 	@Option(name = "--fusestage", required = false,
 			usage = "Allow fusing tiles using their stage coordinates (when there is no '-final' suffix in the tile configuration filename), i.e. when exporting initial tile configuration.")
 	private boolean allowFusingStage = false;
+	
+	@Option(name = "--applyRawStitchingToDecon", required = false,
+		usage = "Apply stitching parameters obtained from raw tiles to deconvolved tiles.")
+	private boolean applyRawStitchingToDecon = false;
 
 
 	private boolean parsedSuccessfully = false;
 
-	public StitchingArguments( final String[] args ) throws IllegalArgumentException
+	public StitchingArguments( final String[] args ) throws IllegalArgumentException, IOException
 	{
 		final CmdLineParser parser = new CmdLineParser( this );
 		try {
@@ -139,7 +153,30 @@ public class StitchingArguments implements Serializable {
 		for ( int i = 0; i < inputTileConfigurations.size(); ++i )
 			if ( !CloudURI.isCloudURI( inputTileConfigurations.get( i ) ) )
 				inputTileConfigurations.set( i, Paths.get( inputTileConfigurations.get( i ) ).toAbsolutePath().toString() );
-
+		
+		if ( applyRawStitchingToDecon )
+		{
+		    	for ( int channel = 0; channel < inputTileConfigurations.size(); channel++ )
+		    	{
+		    		String inputTileConfiguration = inputTileConfigurations.get( channel );
+			    	JsonArray jsonArray = (JsonArray) new JsonParser().parse( new FileReader( inputTileConfiguration ) );
+			    	JsonObject firstTile = (JsonObject) jsonArray.get( 0 );
+			    	String parentDirectory = new File( firstTile.get( "file" ).toString() ).getParent();
+			    	
+		    		String content = new String( Files.readAllBytes( Paths.get( inputTileConfiguration ) ), StandardCharsets.UTF_8);
+		    		content = content.replaceAll( parentDirectory, parentDirectory + "/matlab_decon" );
+		    		content = content.replaceAll( ".tif", "_decon.tif" );
+		    		String outputTileConfiguration;
+		    		if ( inputTileConfiguration.contains( "-final.json" ) )
+		    			outputTileConfiguration = inputTileConfiguration.replace( "-final.json", "-rawToDecon-final.json" );
+		    		else 
+		    			outputTileConfiguration = inputTileConfiguration.replace( ".json", "-rawToDecon.json" );
+		    		
+		    		Files.write( Paths.get( outputTileConfiguration ), content.getBytes( StandardCharsets.UTF_8 ) );
+		    		inputTileConfigurations.set(channel, outputTileConfiguration);
+		    	}
+		}
+		
 		if (correctionImagesPaths != null && correctionImagesPaths.size() > 0)
 		{
 			if (correctionImagesPaths.size() != inputTileConfigurations.size())
@@ -189,6 +226,8 @@ public class StitchingArguments implements Serializable {
 
 	public boolean stitchOnly() { return stitchOnly; }
 	public boolean fuseOnly() { return fuseOnly; }
+	
+	public boolean applyRawStitchingToDecon() { return applyRawStitchingToDecon; }
 
 	public RematchingMode rematchingMode() { return rematchingMode; }
 
