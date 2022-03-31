@@ -158,17 +158,20 @@ public class StitchingArguments implements Serializable {
 		{
 		    	for ( int channel = 0; channel < inputTileConfigurations.size(); channel++ )
 		    	{
+		    	    	//Need to replace eg. /base/path/tiles.n5/488nm/Tile.tif with /base/path/matlab_decon/Tile.tif
 		    		String inputTileConfiguration = inputTileConfigurations.get( channel );
 			    	JsonArray jsonArray = (JsonArray) new JsonParser().parse( new FileReader( inputTileConfiguration ) );
 			    	JsonObject firstTile = (JsonObject) jsonArray.get( 0 );
-			    	String parentDirectory = new File( firstTile.get( "file" ).toString() ).getParent();
+			    	File firstTileFile = new File( firstTile.get( "file" ).toString() );
+			    	String parentDir = firstTileFile.getParent();
+			    	String greatGrandparentDirectory = firstTileFile.getParentFile().getParentFile().getParent();
 			    	
 		    		String content = new String( Files.readAllBytes( Paths.get( inputTileConfiguration ) ), StandardCharsets.UTF_8);
-		    		content = content.replaceAll( parentDirectory, parentDirectory + "/matlab_decon" );
+		    		content = content.replaceAll( parentDir, greatGrandparentDirectory + "/matlab_decon" );
 		    		content = content.replaceAll( ".tif", "_decon.tif" );
 		    		String outputTileConfiguration;
 		    		if ( inputTileConfiguration.contains( "-final.json" ) )
-		    			outputTileConfiguration = inputTileConfiguration.replace( "-final.json", "-rawToDecon-final.json" );
+		    			outputTileConfiguration = inputTileConfiguration.replace( "-n5-final.json", "-rawToDecon-final.json" );
 		    		else 
 		    			outputTileConfiguration = inputTileConfiguration.replace( ".json", "-rawToDecon.json" );
 		    		
