@@ -1,5 +1,6 @@
 package org.janelia.stitching;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -19,7 +20,7 @@ import mpicbg.stitching.StitchingParameters;
 
 public class StitchingSpark implements Serializable, AutoCloseable
 {
-	public static void main( final String[] args )
+	public static void main( final String[] args ) throws IllegalArgumentException, IOException
 	{
 		final StitchingArguments stitchingArgs = new StitchingArguments( args );
 		if ( !stitchingArgs.parsedSuccessfully() )
