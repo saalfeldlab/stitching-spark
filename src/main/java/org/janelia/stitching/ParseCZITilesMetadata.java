@@ -3,6 +3,7 @@ package org.janelia.stitching;
 import ij.ImagePlus;
 import net.imglib2.FinalInterval;
 import net.imglib2.util.Intervals;
+import org.apache.commons.lang.StringUtils;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.dataaccess.CloudURI;
@@ -47,6 +48,10 @@ public class ParseCZITilesMetadata
 		@Option(name = "-r", aliases = { "--pixelResolution" }, required = true,
 				usage = "Physical pixel resolution in mm (comma-separated, for example, '0.097,0.097,0.18').")
 		private String pixelResolutionStr;
+
+		@Option(name = "-o", aliases = { "--outputPath" }, required = false,
+				usage = "Path to the base folder containing output. If this is not provided, the parent directory of the --input file will be used for output.")
+		private String outputPath;
 
 		@Option(name = "-a", aliases = { "--axes" }, required = false,
 				usage = "Axis mapping for the objective->pixel coordinates conversion (comma-separated axis specification with optional flips, for example, '-x,y,z').")
@@ -101,6 +106,7 @@ public class ParseCZITilesMetadata
 		}
 
 		run(
+				parsedArgs.outputPath,
 				parsedArgs.metadataFilepath,
 				parsedArgs.basePath,
 				parsedArgs.filenamePattern,
@@ -110,6 +116,7 @@ public class ParseCZITilesMetadata
 	}
 
 	public static void run(
+			final String outputFilepath,
 			final String metadataFilepath,
 			final String basePath,
 			final String filenamePattern,
@@ -124,7 +131,8 @@ public class ParseCZITilesMetadata
 		System.out.println( "Pixel resolution: " + Arrays.toString( pixelResolution ) );
 		System.out.println( "Axis mapping: " + Arrays.toString( axisMappingStr ) );
 
-		final String baseOutputFolder = Paths.get( metadataFilepath ).getParent().toString();
+		final String baseOutputFolder = StringUtils.isBlank(outputFilepath) ?
+				Paths.get( metadataFilepath ).getParent().toString() : outputFilepath;
 
 		final SAXBuilder sax = new SAXBuilder();
 		final Document doc = sax.build( metadataFilepath );
